@@ -22,12 +22,15 @@ export const TEMPLATE_VARIABLES = {
   eprint: '',
   eprinttype: '',
   eventPlace: 'Location of event',
+  language: 'Language code (e.g. en, ru)',
   note: '',
   page: 'Page or page range',
   publisher: '',
   publisherPlace: 'Location of publisher',
+  source: 'Source of the reference (e.g. YouTube, arXiv.org)',
   title: '',
   titleShort: '',
+  type: 'CSL type of the reference (e.g. article-journal, webpage, motion_picture)',
   URL: '',
   year: 'Publication year',
   zoteroSelectURI: 'URI to open the reference in Zotero',
@@ -56,12 +59,15 @@ export class Library {
       eprint: entry.eprint,
       eprinttype: entry.eprinttype,
       eventPlace: entry.eventPlace,
+      language: entry.language,
       note: entry.note,
       page: entry.page,
       publisher: entry.publisher,
       publisherPlace: entry.publisherPlace,
+      source: entry.source,
       title: entry.title,
       titleShort: entry.titleShort,
+      type: entry.type,
       URL: entry.URL,
       year: entry.year?.toString(),
       zoteroSelectURI: entry.zoteroSelectURI,
@@ -168,6 +174,10 @@ export abstract class Entry {
 
   public abstract eventPlace?: string;
 
+  public abstract language?: string;
+
+  public abstract source?: string;
+
   public abstract publisher?: string;
   public abstract publisherPlace?: string;
 
@@ -234,9 +244,11 @@ export interface EntryDataCSL {
   'event-place'?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   issued?: { 'date-parts': [any[]] };
+  language?: string;
   page?: string;
   publisher?: string;
   'publisher-place'?: string;
+  source?: string;
   title?: string;
   'title-short'?: string;
   URL?: string;
@@ -281,6 +293,14 @@ export class EntryCSLAdapter extends Entry {
 
   get eventPlace() {
     return this.data['event-place'];
+  }
+
+  get language() {
+    return this.data.language;
+  }
+
+  get source() {
+    return this.data.source;
   }
 
   get issuedDate() {
@@ -377,9 +397,11 @@ export class EntryBibLaTeXAdapter extends Entry {
   event?: string;
   eventPlace?: string;
   issued?: string;
+  language?: string;
   page?: string;
   publisher?: string;
   publisherPlace?: string;
+  source?: string;
   title?: string;
   titleShort?: string;
   URL?: string;
