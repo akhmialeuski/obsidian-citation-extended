@@ -8,7 +8,7 @@ import {
 } from 'obsidian';
 
 import CitationPlugin from './main';
-import { IIndexable, DatabaseType, TEMPLATE_VARIABLES } from './types';
+import { DatabaseType, TEMPLATE_VARIABLES } from './types';
 import { DataSourceDefinition, MergeStrategy } from './data-source';
 
 const CITATION_DATABASE_FORMAT_LABELS: Record<DatabaseType, string> = {
@@ -17,7 +17,7 @@ const CITATION_DATABASE_FORMAT_LABELS: Record<DatabaseType, string> = {
 };
 
 export class CitationsPluginSettings {
-  public citationExportPath: string;
+  public citationExportPath!: string;
   citationExportFormat: DatabaseType = 'csl-json';
 
   // Multi-source configuration (optional, for backward compatibility)
@@ -40,9 +40,9 @@ export class CitationsPluginSettings {
 export class CitationSettingTab extends PluginSettingTab {
   private plugin: CitationPlugin;
 
-  citationPathLoadingEl: HTMLElement;
-  citationPathErrorEl: HTMLElement;
-  citationPathSuccessEl: HTMLElement;
+  citationPathLoadingEl!: HTMLElement;
+  citationPathErrorEl!: HTMLElement;
+  citationPathSuccessEl!: HTMLElement;
 
   constructor(app: App, plugin: CitationPlugin) {
     super(app, plugin);
@@ -57,11 +57,13 @@ export class CitationSettingTab extends PluginSettingTab {
 
   addValueChangeCallback<T extends HTMLTextAreaElement | HTMLInputElement>(
     component: AbstractTextComponent<T> | DropdownComponent,
-    settingsKey: string,
+    settingsKey: keyof CitationsPluginSettings,
     cb?: (value: string) => void,
   ): void {
     component.onChange(async (value) => {
-      (this.plugin.settings as IIndexable)[settingsKey] = value;
+      ((this.plugin.settings as unknown) as Record<string, unknown>)[
+        settingsKey
+      ] = value;
       this.plugin.saveSettings().then(() => {
         if (cb) {
           cb(value);
@@ -72,10 +74,14 @@ export class CitationSettingTab extends PluginSettingTab {
 
   buildValueInput<T extends HTMLTextAreaElement | HTMLInputElement>(
     component: AbstractTextComponent<T> | DropdownComponent,
-    settingsKey: string,
+    settingsKey: keyof CitationsPluginSettings,
     cb?: (value: string) => void,
   ): void {
-    component.setValue((this.plugin.settings as IIndexable)[settingsKey]);
+    component.setValue(
+      ((this.plugin.settings as unknown) as Record<string, unknown>)[
+        settingsKey
+      ] as string,
+    );
     this.addValueChangeCallback(component, settingsKey, cb);
   }
 
@@ -93,7 +99,7 @@ export class CitationSettingTab extends PluginSettingTab {
         this.buildValueInput(
           component.addOptions(CITATION_DATABASE_FORMAT_LABELS),
           'citationExportFormat',
-          (value) => {
+          () => {
             this.checkCitationExportPath(
               this.plugin.settings.citationExportPath,
             ).then((success) => {
@@ -116,21 +122,21 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Citation database path')
       .setDesc(
         'Path to citation library exported by your reference manager. ' +
-        'Can be an absolute path or a path relative to the current vault root folder. ' +
-        'Citations will be automatically reloaded whenever this file updates.',
+          'Can be an absolute path or a path relative to the current vault root folder. ' +
+          'Citations will be automatically reloaded whenever this file updates.',
       )
       .addText((input) =>
         this.buildValueInput(
           input.setPlaceholder('/path/to/export.json'),
           'citationExportPath',
           (value) => {
-            this.checkCitationExportPath(value).then(
-              (success) =>
-                success &&
+            this.checkCitationExportPath(value).then((success) => {
+              if (success) {
                 this.plugin.libraryService
                   .load()
-                  .then(() => this.showCitationExportPathSuccess()),
-            );
+                  .then(() => this.showCitationExportPathSuccess());
+              }
+            });
           },
         ),
       );

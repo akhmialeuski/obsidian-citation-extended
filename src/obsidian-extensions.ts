@@ -7,5 +7,5 @@ import { Notice } from 'obsidian';
 export class NoticeExt extends Notice {
   static DISAPPEARING_CLASS = 'mod-disappearing';
 
-  noticeEl: HTMLElement;
+  noticeEl!: HTMLElement;
 }

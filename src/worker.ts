@@ -1,9 +1,9 @@
 import registerPromiseWorker from 'promise-worker/register';
 
-import { DatabaseType, EntryData, loadEntries } from './types';
+import { loadEntries, WorkerRequest, WorkerResponse } from './types';
 
 registerPromiseWorker(
-  (msg: { databaseRaw: string; databaseType: DatabaseType }): EntryData[] => {
+  (msg: WorkerRequest): WorkerResponse => {
     return loadEntries(msg.databaseRaw, msg.databaseType);
   },
 );

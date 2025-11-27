@@ -18,6 +18,9 @@ interface FuzzySuggestModalExt<T> extends FuzzySuggestModal<T> {
 interface ChooserExt {
   useSelectedItem(evt: MouseEvent | KeyboardEvent): void;
 }
+interface FuzzySuggestModalWithUpdate<T> extends FuzzySuggestModal<T> {
+  updateSuggestions(): void;
+}
 
 class SearchModal extends FuzzySuggestModal<Entry> {
   plugin: CitationPlugin;
@@ -25,7 +28,7 @@ class SearchModal extends FuzzySuggestModal<Entry> {
 
   loadingEl: HTMLElement;
 
-  eventRefs: EventRef[];
+  eventRefs!: EventRef[];
 
   constructor(app: App, plugin: CitationPlugin) {
     super(app);
@@ -35,9 +38,17 @@ class SearchModal extends FuzzySuggestModal<Entry> {
 
     this.inputEl.setAttribute('spellcheck', 'false');
 
-    this.loadingEl = this.resultContainerEl.parentElement.createEl('div', {
-      cls: 'zoteroModalLoading',
-    });
+    const parent = this.resultContainerEl.parentElement;
+    if (parent) {
+      this.loadingEl = parent.createEl('div', {
+        cls: 'zoteroModalLoading',
+      });
+    } else {
+      // Fallback or error, but for now just create in container if parent missing (unlikely)
+      this.loadingEl = this.resultContainerEl.createEl('div', {
+        cls: 'zoteroModalLoading',
+      });
+    }
     this.loadingEl.createEl('div', { cls: 'zoteroModalLoadingAnimation' });
     this.loadingEl.createEl('p', {
       text: 'Loading citation database. Please wait...',
@@ -94,8 +105,7 @@ class SearchModal extends FuzzySuggestModal<Entry> {
       this.inputEl.disabled = false;
       this.inputEl.focus();
 
-      // @ts-ignore: not exposed in API.
-      this.updateSuggestions();
+      ((this as unknown) as FuzzySuggestModalWithUpdate<Entry>).updateSuggestions();
     }
   }
 
@@ -145,7 +155,7 @@ class SearchModal extends FuzzySuggestModal<Entry> {
           ] as SearchMatchPart;
         })
         .filter((match: SearchMatchPart) => {
-          const [matchStart, matchEnd] = match;
+          const [matchStart] = match;
           return matchStart >= 0;
         });
     };

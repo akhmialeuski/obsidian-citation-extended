@@ -4,7 +4,7 @@
     "inlineSourceMap": true,
     "inlineSources": true,
     "module": "ESNext",
-    "target": "es5",
+    "target": "es6",
     "allowJs": true,
     "noImplicitAny": true,
     "moduleResolution": "node",
@@ -14,7 +14,8 @@
       "es5",
       "scripthost",
       "es2020"
-    ]
+    ],
+    "strict": true
   },
   "include": [
     "**/*.ts"

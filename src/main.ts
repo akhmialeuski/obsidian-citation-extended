@@ -2,18 +2,9 @@ import {
   Editor,
   FileSystemAdapter,
   MarkdownView,
-  normalizePath,
   Notice,
   Plugin,
-  TFile,
 } from 'obsidian';
-import * as path from 'path';
-
-import {
-  compile as compileTemplate,
-  TemplateDelegate as Template,
-} from 'handlebars';
-
 
 import CitationEvents from './events';
 import { TemplateService } from './services/template.service';
@@ -22,31 +13,23 @@ import { LibraryService } from './services/library.service';
 import { UIService } from './services/ui.service';
 import { LocalFileSource, VaultFileSource } from './sources';
 import { DataSource, DataSourceDefinition, MergeStrategy } from './data-source';
+import { DatabaseType } from './types';
 
 import { VaultExt } from './obsidian-extensions.d';
 import { CitationSettingTab, CitationsPluginSettings } from './settings';
 import {
-  Entry,
-  EntryData,
-  EntryBibLaTeXAdapter,
-  EntryCSLAdapter,
-  IIndexable,
-  Library,
-} from './types';
-import {
   DISALLOWED_FILENAME_CHARACTERS_RE,
   Notifier,
   WorkerManager,
-  WorkerManagerBlocked,
 } from './util';
 import LoadWorker from 'web-worker:./worker';
 
 export default class CitationPlugin extends Plugin {
-  settings: CitationsPluginSettings;
-  templateService: TemplateService;
-  noteService: NoteService;
-  libraryService: LibraryService;
-  uiService: UIService;
+  settings!: CitationsPluginSettings;
+  templateService!: TemplateService;
+  noteService!: NoteService;
+  libraryService!: LibraryService;
+  uiService!: UIService;
 
   events = new CitationEvents();
 
@@ -55,7 +38,7 @@ export default class CitationPlugin extends Plugin {
   );
 
   /**
-   * Получает текущий активный редактор Markdown
+   * Gets the current active Markdown editor
    */
   private getActiveEditor(): Editor | null {
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
@@ -63,7 +46,7 @@ export default class CitationPlugin extends Plugin {
   }
 
   /**
-   * Проверяет, есть ли активный редактор
+   * Checks if there is an active editor
    */
   private hasActiveEditor(): boolean {
     return this.getActiveEditor() !== null;
@@ -75,7 +58,7 @@ export default class CitationPlugin extends Plugin {
     const loadedSettings = await this.loadData();
     if (!loadedSettings) return;
 
-    const toLoad = [
+    const toLoad: (keyof CitationsPluginSettings)[] = [
       'citationExportPath',
       'citationExportFormat',
       'literatureNoteTitleTemplate',
@@ -88,7 +71,11 @@ export default class CitationPlugin extends Plugin {
     ];
     toLoad.forEach((setting) => {
       if (setting in loadedSettings) {
-        (this.settings as IIndexable)[setting] = loadedSettings[setting];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (this.settings as any)[setting] = (loadedSettings as Record<
+          string,
+          unknown
+        >)[setting];
       }
     });
   }
@@ -100,22 +87,29 @@ export default class CitationPlugin extends Plugin {
   onload(): void {
     this.loadSettings().then(() => {
       this.templateService = new TemplateService(this.settings);
-      this.noteService = new NoteService(this.app, this.settings, this.templateService);
+      this.noteService = new NoteService(
+        this.app,
+        this.settings,
+        this.templateService,
+      );
 
       // Create worker manager
       const workerManager = new WorkerManager(new LoadWorker());
 
       // Create data sources
       const sources = this.createDataSources(workerManager);
-      const mergeStrategy = this.settings.mergeStrategy || MergeStrategy.LastWins;
+      const mergeStrategy =
+        this.settings.mergeStrategy || MergeStrategy.LastWins;
 
       this.libraryService = new LibraryService(
         this.settings,
         this.events,
-        this.app.vault.adapter instanceof FileSystemAdapter ? this.app.vault.adapter : null,
+        this.app.vault.adapter instanceof FileSystemAdapter
+          ? this.app.vault.adapter
+          : null,
         workerManager,
         sources,
-        mergeStrategy
+        mergeStrategy,
       );
       this.uiService = new UIService(this.app, this);
       this.init();
@@ -128,28 +122,41 @@ export default class CitationPlugin extends Plugin {
    */
   private createDataSources(workerManager: WorkerManager): DataSource[] {
     const sources: DataSource[] = [];
-    const vaultAdapter = this.app.vault.adapter instanceof FileSystemAdapter
-      ? this.app.vault.adapter
-      : null;
+    const vaultAdapter =
+      this.app.vault.adapter instanceof FileSystemAdapter
+        ? this.app.vault.adapter
+        : null;
 
     // Check if new multi-source config exists
     if (this.settings.dataSources && this.settings.dataSources.length > 0) {
       // Use new multi-source configuration
-      this.settings.dataSources.forEach((def: DataSourceDefinition, index: number) => {
-        const source = this.createDataSource(def, `source-${index}`, vaultAdapter, workerManager);
-        if (source) {
-          sources.push(source);
-        }
-      });
+      this.settings.dataSources.forEach(
+        (def: DataSourceDefinition, index: number) => {
+          const source = this.createDataSource(
+            def,
+            `source-${index}`,
+            vaultAdapter,
+            workerManager,
+          );
+          if (source) {
+            sources.push(source);
+          }
+        },
+      );
     } else if (this.settings.citationExportPath) {
       // Backward compatibility: use citationExportPath
       // Detect mobile by checking if FileSystemAdapter is available
       const sourceType = vaultAdapter ? 'local-file' : 'vault-file';
-      const source = this.createDataSource({
-        type: sourceType,
-        path: this.settings.citationExportPath,
-        format: this.settings.citationExportFormat
-      }, 'default', vaultAdapter, workerManager);
+      const source = this.createDataSource(
+        {
+          type: sourceType,
+          path: this.settings.citationExportPath,
+          format: this.settings.citationExportFormat,
+        },
+        'default',
+        vaultAdapter,
+        workerManager,
+      );
 
       if (source) {
         sources.push(source);
@@ -163,10 +170,10 @@ export default class CitationPlugin extends Plugin {
    * Create a single data source from a definition
    */
   private createDataSource(
-    def: { type: string; path: string; format: any },
+    def: { type: string; path: string; format: DatabaseType },
     id: string,
     vaultAdapter: FileSystemAdapter | null,
-    workerManager: WorkerManager
+    workerManager: WorkerManager,
   ): DataSource | null {
     try {
       if (def.type === 'local-file') {
@@ -175,7 +182,7 @@ export default class CitationPlugin extends Plugin {
           def.path,
           def.format,
           workerManager,
-          vaultAdapter
+          vaultAdapter,
         );
       } else if (def.type === 'vault-file') {
         return new VaultFileSource(
@@ -183,7 +190,7 @@ export default class CitationPlugin extends Plugin {
           def.path,
           def.format,
           workerManager,
-          this.app.vault
+          this.app.vault,
         );
       } else {
         console.error(`Unknown data source type: ${def.type}`);
@@ -209,18 +216,12 @@ export default class CitationPlugin extends Plugin {
     this.addSettingTab(new CitationSettingTab(this.app, this));
   }
 
-
-
-
-
   getTitleForCitekey(citekey: string): string {
     const entry = this.libraryService.library.entries[citekey];
     const variables = this.templateService.getTemplateVariables(entry);
     const unsafeTitle = this.templateService.getTitle(variables);
     return unsafeTitle.replace(DISALLOWED_FILENAME_CHARACTERS_RE, '_');
   }
-
-
 
   getInitialContentForCitekey(citekey: string): string {
     const entry = this.libraryService.library.entries[citekey];
@@ -245,9 +246,12 @@ export default class CitationPlugin extends Plugin {
    * the given citekey. If no corresponding file is found, create one.
    */
 
-
   async openLiteratureNote(citekey: string, newPane: boolean): Promise<void> {
-    await this.noteService.openLiteratureNote(citekey, this.libraryService.library, newPane);
+    await this.noteService.openLiteratureNote(
+      citekey,
+      this.libraryService.library,
+      newPane,
+    );
   }
 
   async insertLiteratureNoteLink(citekey: string): Promise<void> {
@@ -258,14 +262,19 @@ export default class CitationPlugin extends Plugin {
     }
 
     try {
-      const file = await this.noteService.getOrCreateLiteratureNoteFile(citekey, this.libraryService.library);
-      const useMarkdown = (this.app.vault as VaultExt).getConfig('useMarkdownLinks');
+      const file = await this.noteService.getOrCreateLiteratureNoteFile(
+        citekey,
+        this.libraryService.library,
+      );
+      const useMarkdown = (this.app.vault as VaultExt).getConfig(
+        'useMarkdownLinks',
+      );
       const title = this.getTitleForCitekey(citekey);
 
       let linkText: string;
       if (useMarkdown) {
         const uri = encodeURI(
-          this.app.metadataCache.fileToLinktext(file, '', false)
+          this.app.metadataCache.fileToLinktext(file, '', false),
         );
         linkText = `[${title}](${uri})`;
       } else {

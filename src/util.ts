@@ -3,6 +3,7 @@ import { Notice } from 'obsidian';
 import PromiseWorker from 'promise-worker';
 
 import { NoticeExt } from './obsidian-extensions';
+import { WorkerRequest, WorkerResponse } from './types';
 
 export const DISALLOWED_FILENAME_CHARACTERS_RE = /[*"\\/<>:|?]/g;
 
@@ -12,10 +13,10 @@ export const DISALLOWED_FILENAME_CHARACTERS_RE = /[*"\\/<>:|?]/g;
  */
 export class Notifier {
   static DISAPPEARING_CLASS = 'mod-disappearing';
-  currentNotice?: NoticeExt;
-  mutationObserver?: MutationObserver;
+  currentNotice?: NoticeExt | null;
+  mutationObserver?: MutationObserver | null;
 
-  constructor(public defaultMessage: string) { }
+  constructor(public defaultMessage: string) {}
 
   unload(): void {
     this.hide();
@@ -49,6 +50,7 @@ export class Notifier {
     this.mutationObserver.observe(this.currentNotice.noticeEl, {
       attributeFilter: ['class'],
     });
+    return true;
   }
 
   hide(): void {
@@ -66,17 +68,17 @@ export class Notifier {
  */
 export class WorkerManager {
   private worker = new PromiseWorker(this._worker);
-  private queue: Array<() => Promise<any>> = [];
+  private queue: Array<() => Promise<unknown>> = [];
   private isProcessing = false;
 
-  constructor(private _worker: Worker) { }
+  constructor(private _worker: Worker) {}
 
   /**
    * Post a message to the worker.
    * The message will be added to a queue and processed sequentially.
    * If an AbortSignal is provided, the task can be cancelled (ignored) if it hasn't completed.
    */
-  async post<TResult = any, TInput = any>(
+  async post<TResult = WorkerResponse, TInput = WorkerRequest>(
     msg: TInput,
     signal?: AbortSignal,
   ): Promise<TResult> {
@@ -129,11 +131,3 @@ export class WorkerManager {
     this.isProcessing = false;
   }
 }
-
-export class WorkerManagerBlocked extends Error {
-  constructor() {
-    super('WorkerManager: discarded message because channel is blocked');
-    Object.setPrototypeOf(this, WorkerManagerBlocked.prototype);
-  }
-}
-
