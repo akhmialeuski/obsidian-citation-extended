@@ -8,7 +8,6 @@ import {
   TFile,
 } from 'obsidian';
 import * as path from 'path';
-import * as chokidar from 'chokidar';
 
 import {
   compile as compileTemplate,
@@ -112,35 +111,12 @@ export default class CitationPlugin extends Plugin {
     if (this.settings.citationExportPath) {
       // Load library for the first time
       this.libraryService.load();
-
-      // Set up a watcher to refresh whenever the export is updated
-      try {
-        // Wait until files are finished being written before going ahead with
-        // the refresh -- here, we request that `change` events be accumulated
-        // until nothing shows up for 500 ms
-        // TODO magic number
-        const watchOptions = {
-          awaitWriteFinish: {
-            stabilityThreshold: 500,
-          },
-        };
-
-        chokidar
-          .watch(
-            this.libraryService.resolveLibraryPath(this.settings.citationExportPath),
-            watchOptions,
-          )
-          .on('change', () => {
-            this.libraryService.load();
-          });
-      } catch {
-        this.libraryService.loadErrorNotifier.show();
-      }
+      this.libraryService.initWatcher();
     } else {
       // TODO show warning?
     }
 
-    this.uiService.registerCommands();
+    this.uiService.init();
 
     this.addSettingTab(new CitationSettingTab(this.app, this));
   }

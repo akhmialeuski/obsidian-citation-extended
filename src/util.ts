@@ -15,7 +15,7 @@ export class Notifier {
   currentNotice?: NoticeExt;
   mutationObserver?: MutationObserver;
 
-  constructor(public defaultMessage: string) {}
+  constructor(public defaultMessage: string) { }
 
   unload(): void {
     this.hide();
@@ -66,41 +66,67 @@ export class Notifier {
  */
 export class WorkerManager {
   private worker = new PromiseWorker(this._worker);
-  options: WorkerManagerOptions;
+  private queue: Array<() => Promise<any>> = [];
+  private isProcessing = false;
+
+  constructor(private _worker: Worker) { }
 
   /**
-   * Only relevant when `blockingChannel` option is true.
-   * Then this property is true iff the worker is currently processing a
-   * received message, and has not yet posted a response.
+   * Post a message to the worker.
+   * The message will be added to a queue and processed sequentially.
+   * If an AbortSignal is provided, the task can be cancelled (ignored) if it hasn't completed.
    */
-  blocked = false;
+  async post<TResult = any, TInput = any>(
+    msg: TInput,
+    signal?: AbortSignal,
+  ): Promise<TResult> {
+    return new Promise<TResult>((resolve, reject) => {
+      const task = async () => {
+        if (signal?.aborted) {
+          reject(new DOMException('Aborted', 'AbortError'));
+          return;
+        }
 
-  constructor(private _worker: Worker, options: WorkerManagerOptions) {
-    this.options = { ...workerManagerDefaultOptions, ...options };
+        try {
+          // We can't truly "cancel" the worker thread operation once sent,
+          // but we can ignore the result if aborted.
+          const result = await this.worker.postMessage(msg);
+
+          if (signal?.aborted) {
+            reject(new DOMException('Aborted', 'AbortError'));
+          } else {
+            resolve(result);
+          }
+        } catch (error) {
+          if (signal?.aborted) {
+            reject(new DOMException('Aborted', 'AbortError'));
+          } else {
+            reject(error);
+          }
+        }
+      };
+
+      this.queue.push(task);
+      this.processQueue();
+    });
   }
 
-  /**
-   * Attempt to post a message to the worker and return a promise response.
-   *
-   * If `blockingChannel` option is true and the channel is currently blocked,
-   * the message will be discarded and an error will be thrown.
-   */
-  async post<TResult = any, TInput = any>(msg: TInput): Promise<TResult> {
-    if (this.options.blockingChannel && this.blocked) {
-      throw new WorkerManagerBlocked();
+  private async processQueue() {
+    if (this.isProcessing) return;
+    this.isProcessing = true;
+
+    while (this.queue.length > 0) {
+      const task = this.queue.shift();
+      if (task) {
+        try {
+          await task();
+        } catch (e) {
+          console.error('WorkerManager: Error processing task', e);
+        }
+      }
     }
 
-    this.blocked = true;
-    return this.worker.postMessage(msg).then(
-      (result) => {
-        this.blocked = false;
-        return result;
-      },
-      (error) => {
-        this.blocked = false;
-        throw error;
-      },
-    );
+    this.isProcessing = false;
   }
 }
 
@@ -111,15 +137,3 @@ export class WorkerManagerBlocked extends Error {
   }
 }
 
-export interface WorkerManagerOptions {
-  /**
-   * If true, treat the worker channel as blocking -- when the worker receives
-   * a message, no other messages can be sent until the worker sends a message.
-   * Messages which are sent during the blocking period will be discarded.
-   */
-  blockingChannel: boolean;
-}
-
-const workerManagerDefaultOptions: WorkerManagerOptions = {
-  blockingChannel: false,
-};
