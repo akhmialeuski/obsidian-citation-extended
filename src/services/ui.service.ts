@@ -1,4 +1,4 @@
-import { App, Plugin } from 'obsidian';
+import { App, Plugin, Editor, MarkdownView } from 'obsidian';
 import {
     InsertCitationModal,
     InsertNoteLinkModal,
@@ -37,7 +37,7 @@ export class UIService {
             id: 'insert-citation',
             name: 'Insert literature note link',
             hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'e' }],
-            callback: () => {
+            editorCallback: (editor: Editor, view: MarkdownView) => {
                 const modal = new InsertNoteLinkModal(this.app, this.plugin);
                 modal.open();
             },
@@ -46,7 +46,7 @@ export class UIService {
         this.plugin.addCommand({
             id: 'insert-literature-note-content',
             name: 'Insert literature note content in the current pane',
-            callback: () => {
+            editorCallback: (editor: Editor, view: MarkdownView) => {
                 const modal = new InsertNoteContentModal(this.app, this.plugin);
                 modal.open();
             },
@@ -55,7 +55,7 @@ export class UIService {
         this.plugin.addCommand({
             id: 'insert-markdown-citation',
             name: 'Insert Markdown citation',
-            callback: () => {
+            editorCallback: (editor: Editor, view: MarkdownView) => {
                 const modal = new InsertCitationModal(this.app, this.plugin);
                 modal.open();
             },

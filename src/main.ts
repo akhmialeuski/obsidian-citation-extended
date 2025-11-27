@@ -1,14 +1,14 @@
 import {
+  Editor,
   FileSystemAdapter,
-  MarkdownSourceView,
   MarkdownView,
   normalizePath,
+  Notice,
   Plugin,
   TFile,
 } from 'obsidian';
 import * as path from 'path';
 import * as chokidar from 'chokidar';
-import * as CodeMirror from 'codemirror';
 
 import {
   compile as compileTemplate,
@@ -53,12 +53,19 @@ export default class CitationPlugin extends Plugin {
     'Unable to access literature note. Please check that the literature note folder exists, or update the Citations plugin settings.',
   );
 
-  get editor(): CodeMirror.Editor {
-    const view = this.app.workspace.activeLeaf.view;
-    if (!(view instanceof MarkdownView)) return null;
+  /**
+   * Получает текущий активный редактор Markdown
+   */
+  private getActiveEditor(): Editor | null {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    return view?.editor ?? null;
+  }
 
-    const sourceView = view.sourceMode;
-    return (sourceView as MarkdownSourceView).cmEditor;
+  /**
+   * Проверяет, есть ли активный редактор
+   */
+  private hasActiveEditor(): boolean {
+    return this.getActiveEditor() !== null;
   }
 
   async loadSettings(): Promise<void> {
@@ -180,26 +187,32 @@ export default class CitationPlugin extends Plugin {
   }
 
   async insertLiteratureNoteLink(citekey: string): Promise<void> {
-    this.noteService.getOrCreateLiteratureNoteFile(citekey, this.libraryService.library)
-      .then((file: TFile) => {
-        const useMarkdown: boolean = (<VaultExt>this.app.vault).getConfig(
-          'useMarkdownLinks',
+    const editor = this.getActiveEditor();
+    if (!editor) {
+      new Notice('No active editor found');
+      return;
+    }
+
+    try {
+      const file = await this.noteService.getOrCreateLiteratureNoteFile(citekey, this.libraryService.library);
+      const useMarkdown = (this.app.vault as VaultExt).getConfig('useMarkdownLinks');
+      const title = this.getTitleForCitekey(citekey);
+
+      let linkText: string;
+      if (useMarkdown) {
+        const uri = encodeURI(
+          this.app.metadataCache.fileToLinktext(file, '', false)
         );
-        const title = this.getTitleForCitekey(citekey);
+        linkText = `[${title}](${uri})`;
+      } else {
+        linkText = `[[${title}]]`;
+      }
 
-        let linkText: string;
-        if (useMarkdown) {
-          const uri = encodeURI(
-            this.app.metadataCache.fileToLinktext(file, '', false),
-          );
-          linkText = `[${title}](${uri})`;
-        } else {
-          linkText = `[[${title}]]`;
-        }
-
-        this.editor.replaceSelection(linkText);
-      })
-      .catch(console.error);
+      editor.replaceSelection(linkText);
+    } catch (error) {
+      console.error('Failed to insert literature note link:', error);
+      new Notice('Failed to insert literature note link');
+    }
   }
 
   /**
@@ -207,19 +220,43 @@ export default class CitationPlugin extends Plugin {
    * currently active pane.
    */
   async insertLiteratureNoteContent(citekey: string): Promise<void> {
-    const content = this.getInitialContentForCitekey(citekey);
-    this.editor.replaceRange(content, this.editor.getCursor());
+    const editor = this.getActiveEditor();
+    if (!editor) {
+      new Notice('No active editor found');
+      return;
+    }
+
+    try {
+      const content = this.getInitialContentForCitekey(citekey);
+      const cursor = editor.getCursor();
+      editor.replaceRange(content, cursor);
+    } catch (error) {
+      console.error('Failed to insert literature note content:', error);
+      new Notice('Failed to insert literature note content');
+    }
   }
 
   async insertMarkdownCitation(
     citekey: string,
     alternative = false,
   ): Promise<void> {
-    const func = alternative
-      ? this.getAlternativeMarkdownCitationForCitekey
-      : this.getMarkdownCitationForCitekey;
-    const citation = func.bind(this)(citekey);
+    const editor = this.getActiveEditor();
+    if (!editor) {
+      new Notice('No active editor found');
+      return;
+    }
 
-    this.editor.replaceRange(citation, this.editor.getCursor());
+    try {
+      const func = alternative
+        ? this.getAlternativeMarkdownCitationForCitekey
+        : this.getMarkdownCitationForCitekey;
+      const citation = func.bind(this)(citekey);
+
+      const cursor = editor.getCursor();
+      editor.replaceRange(citation, cursor);
+    } catch (error) {
+      console.error('Failed to insert markdown citation:', error);
+      new Notice('Failed to insert markdown citation');
+    }
   }
 }
