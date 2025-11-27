@@ -57,7 +57,7 @@ class SearchModal extends FuzzySuggestModal<Entry> {
       }),
     ];
 
-    this.setLoading(this.plugin.isLibraryLoading);
+    this.setLoading(this.plugin.libraryService.isLibraryLoading);
 
     // Don't immediately register keyevent listeners. If the modal was triggered
     // by an "Enter" keystroke (e.g. via the Obsidian command dialog), this event
@@ -73,11 +73,11 @@ class SearchModal extends FuzzySuggestModal<Entry> {
   }
 
   getItems(): Entry[] {
-    if (this.plugin.isLibraryLoading) {
+    if (this.plugin.libraryService.isLibraryLoading) {
       return [];
     }
 
-    return Object.values(this.plugin.library.entries);
+    return Object.values(this.plugin.libraryService.library.entries);
   }
 
   getItemText(item: Entry): string {
