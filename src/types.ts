@@ -179,7 +179,7 @@ export abstract class Entry {
   }
 
   toJSON(): Record<string, unknown> {
-    const jsonObj: Record<string, unknown> = Object.assign({}, this);
+    const jsonObj = { ...this } as Record<string, unknown>;
 
     // add getter values
     const proto = Object.getPrototypeOf(this);

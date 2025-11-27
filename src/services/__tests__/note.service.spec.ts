@@ -10,6 +10,7 @@ jest.mock('obsidian', () => ({
     normalizePath: (path: string) => path,
     Notice: class { },
     PluginSettingTab: class { },
+    Setting: class { },
 }), { virtual: true });
 
 describe('NoteService', () => {

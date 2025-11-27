@@ -3,11 +3,17 @@ import { CitationsPluginSettings } from '../../settings';
 import { LoadingStatus } from '../../library-state';
 import { App } from 'obsidian';
 import * as fs from 'fs';
+import { TextDecoder } from 'util';
+
+// Polyfill for Node.js environment
+global.TextDecoder = TextDecoder as any;
+global.DataView = DataView;
 
 // Mock obsidian
 jest.mock('obsidian', () => ({
     App: class { },
     PluginSettingTab: class { },
+    Setting: class { },
     FileSystemAdapter: class {
         static readLocalFile = jest.fn();
         getBasePath = jest.fn().mockReturnValue('/');
@@ -35,6 +41,8 @@ jest.mock('fs', () => {
 });
 
 // Mock util
+const mockWorkerManagerPost = jest.fn().mockResolvedValue([]);
+
 jest.mock('../../util', () => {
     return {
         Notifier: class {
@@ -42,13 +50,26 @@ jest.mock('../../util', () => {
             hide = jest.fn();
         },
         WorkerManager: class {
-            post = jest.fn();
+            post = mockWorkerManagerPost;
+            constructor(worker: any) {
+                // Mock constructor
+            }
         },
     };
 });
 
 // Mock worker
-jest.mock('web-worker:../worker', () => class { }, { virtual: true });
+jest.mock('web-worker:../worker', () => {
+    const MockWorker = class {
+        constructor() {
+            // Mock worker constructor
+        }
+    };
+    return {
+        __esModule: true,
+        default: MockWorker,
+    };
+}, { virtual: true });
 
 describe('LibraryService', () => {
     let service: LibraryService;
@@ -57,36 +78,25 @@ describe('LibraryService', () => {
     let vaultAdapter: any;
 
     beforeEach(() => {
-        try {
-            settings = new CitationsPluginSettings();
-            settings.citationExportPath = 'library.bib';
-            settings.citationExportFormat = 'biblatex';
+        settings = new CitationsPluginSettings();
+        settings.citationExportPath = 'library.bib';
+        settings.citationExportFormat = 'biblatex';
 
-            events = {
-                trigger: jest.fn(),
-                on: jest.fn(),
-            };
+        events = {
+            trigger: jest.fn(),
+            on: jest.fn(),
+        };
 
-            vaultAdapter = {
-                getBasePath: jest.fn().mockReturnValue('/vault'),
-            };
+        vaultAdapter = {
+            getBasePath: jest.fn().mockReturnValue('/vault'),
+        };
 
-            console.log('Creating LibraryService...');
-            service = new LibraryService(settings, events, vaultAdapter);
-            console.log('LibraryService created:', !!service);
+        service = new LibraryService(settings, events, vaultAdapter);
 
-            // @ts-ignore
-            if (service.loadWorker && service.loadWorker.post) {
-                // @ts-ignore
-                service.loadWorker.post.mockReset();
-            } else {
-                console.error('loadWorker or post is undefined');
-            }
-
-            (fs.promises.stat as jest.Mock).mockReset();
-        } catch (e) {
-            console.error('beforeEach failed:', e);
-        }
+        // Reset mocks
+        (fs.promises.stat as jest.Mock).mockReset();
+        mockWorkerManagerPost.mockReset();
+        mockWorkerManagerPost.mockResolvedValue([]);
     });
 
     test('initial state is Idle', () => {
@@ -99,8 +109,7 @@ describe('LibraryService', () => {
         const readLocalFileSpy = require('obsidian').FileSystemAdapter.readLocalFile;
         readLocalFileSpy.mockResolvedValue(new ArrayBuffer(10));
 
-        // @ts-ignore
-        service.loadWorker.post.mockResolvedValue([]);
+        mockWorkerManagerPost.mockResolvedValue([]);
 
         const promise = service.load();
 
@@ -126,8 +135,8 @@ describe('LibraryService', () => {
         (fs.promises.stat as jest.Mock).mockResolvedValue({ size: 100 });
         // @ts-ignore
         require('obsidian').FileSystemAdapter.readLocalFile.mockResolvedValue(new ArrayBuffer(10));
-        // @ts-ignore
-        service.loadWorker.post.mockRejectedValue(new Error('Worker failed'));
+
+        mockWorkerManagerPost.mockRejectedValue(new Error('Worker failed'));
 
         await service.load();
 

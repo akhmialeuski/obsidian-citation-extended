@@ -45,7 +45,6 @@ export class CitationSettingTab extends PluginSettingTab {
   }
 
   open(): void {
-    super.open();
     this.checkCitationExportPath(
       this.plugin.settings.citationExportPath,
     ).then(() => this.showCitationExportPathSuccess());
