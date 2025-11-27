@@ -4,12 +4,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { DataSource } from '../data-source';
 import {
-    Entry,
-    EntryData,
-    EntryBibLaTeXAdapter,
-    EntryCSLAdapter,
-    DatabaseType,
-    IIndexable,
+  Entry,
+  EntryData,
+  EntryBibLaTeXAdapter,
+  EntryCSLAdapter,
+  DatabaseType,
 } from '../types';
 import { WorkerManager } from '../util';
 
@@ -18,155 +17,166 @@ import { WorkerManager } from '../util';
  * This is suitable for desktop platforms where file system access is available
  */
 export class LocalFileSource implements DataSource {
-    private watcher: chokidar.FSWatcher | null = null;
-    private watchCallback: (() => void) | null = null;
-    private debounceTimer: number | null = null;
+  private watcher: chokidar.FSWatcher | null = null;
+  private watchCallback: (() => void) | null = null;
+  private debounceTimer: number | null = null;
 
-    constructor(
-        public readonly id: string,
-        private filePath: string,
-        private format: DatabaseType,
-        private loadWorker: WorkerManager,
-        private vaultAdapter: FileSystemAdapter | null,
-    ) { }
+  constructor(
+    public readonly id: string,
+    private filePath: string,
+    private format: DatabaseType,
+    private loadWorker: WorkerManager,
+    private vaultAdapter: FileSystemAdapter | null,
+  ) {}
 
-    /**
-     * Resolve the file path, allowing for relative paths from vault root
-     */
-    private resolveFilePath(): string {
-        const vaultRoot =
-            this.vaultAdapter instanceof FileSystemAdapter
-                ? this.vaultAdapter.getBasePath()
-                : '/';
-        return path.resolve(vaultRoot, this.filePath);
+  /**
+   * Resolve the file path, allowing for relative paths from vault root
+   */
+  private resolveFilePath(): string {
+    const vaultRoot =
+      this.vaultAdapter instanceof FileSystemAdapter
+        ? this.vaultAdapter.getBasePath()
+        : '/';
+    return path.resolve(vaultRoot, this.filePath);
+  }
+
+  /**
+   * Load entries from the local file
+   */
+  async load(): Promise<Entry[]> {
+    const resolvedPath = this.resolveFilePath();
+
+    try {
+      // Integrity check: File exists and not empty
+      const stats = await fs.promises.stat(resolvedPath);
+      if (!stats || stats.size === 0) {
+        throw new Error(
+          `Library file is empty or does not exist: ${resolvedPath}`,
+        );
+      }
+
+      // Read file using FileSystemAdapter
+      const buffer = await FileSystemAdapter.readLocalFile(resolvedPath);
+
+      // Decode file as UTF-8
+      const dataView = new DataView(buffer);
+      const decoder = new TextDecoder('utf8');
+      const value = decoder.decode(dataView);
+
+      // Parse using worker
+      const entries: EntryData[] = await this.loadWorker.post({
+        databaseRaw: value,
+        databaseType: this.format,
+      });
+
+      // Convert to Entry objects using appropriate adapter
+      return this.convertToEntries(entries);
+    } catch (error) {
+      console.error(`Failed to load from ${this.filePath}:`, error);
+      throw new Error(
+        `Failed to load from ${this.filePath}: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * Convert EntryData to Entry objects using the appropriate adapter
+   */
+  private convertToEntries(entries: EntryData[]): Entry[] {
+    let adapter: new (data: EntryData) => Entry;
+
+    // The original switch statement is replaced with an if/else if structure
+    // to apply the requested type casting and resolve type mismatches.
+    if (this.format === 'biblatex') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      adapter = EntryBibLaTeXAdapter as any;
+    } else if (this.format === 'csl-json') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      adapter = EntryCSLAdapter as any;
+    } else {
+      // Fallback or error handling for unknown formats if necessary
+      // Based on the original code, only 'biblatex' and 'csl-json' were handled.
+      throw new Error(`Unsupported database format: ${this.format}`);
     }
 
-    /**
-     * Load entries from the local file
-     */
-    async load(): Promise<Entry[]> {
-        const resolvedPath = this.resolveFilePath();
+    return entries.map((e) => new adapter(e));
+  }
 
-        try {
-            // Integrity check: File exists and not empty
-            const stats = await fs.promises.stat(resolvedPath);
-            if (!stats || stats.size === 0) {
-                throw new Error(`Library file is empty or does not exist: ${resolvedPath}`);
-            }
-
-            // Read file using FileSystemAdapter
-            const buffer = await FileSystemAdapter.readLocalFile(resolvedPath);
-
-            // Decode file as UTF-8
-            const dataView = new DataView(buffer);
-            const decoder = new TextDecoder('utf8');
-            const value = decoder.decode(dataView);
-
-            // Parse using worker
-            const entries: EntryData[] = await this.loadWorker.post({
-                databaseRaw: value,
-                databaseType: this.format,
-            });
-
-            // Convert to Entry objects using appropriate adapter
-            return this.convertToEntries(entries);
-        } catch (error) {
-            console.error(`LocalFileSource: Error loading from ${resolvedPath}:`, error);
-            throw new Error(`Failed to load from ${this.filePath}: ${error.message}`);
-        }
+  /**
+   * Watch for file changes using chokidar
+   */
+  watch(callback: () => void): void {
+    if (this.watcher) {
+      console.warn(`LocalFileSource: Watcher already exists for ${this.id}`);
+      return;
     }
 
-    /**
-     * Convert EntryData to Entry objects using the appropriate adapter
-     */
-    private convertToEntries(entries: EntryData[]): Entry[] {
-        let adapter: new (data: EntryData) => Entry;
-        let idKey: string;
+    this.watchCallback = callback;
+    const resolvedPath = this.resolveFilePath();
 
-        switch (this.format) {
-            case 'biblatex':
-                adapter = EntryBibLaTeXAdapter;
-                idKey = 'key';
-                break;
-            case 'csl-json':
-                adapter = EntryCSLAdapter;
-                idKey = 'id';
-                break;
-        }
+    // Watcher options
+    const watchOptions = {
+      awaitWriteFinish: {
+        stabilityThreshold: 500,
+        pollInterval: 100,
+      },
+      ignoreInitial: true,
+    };
 
-        return entries.map((e) => new adapter(e));
+    try {
+      this.watcher = chokidar.watch(resolvedPath, watchOptions);
+
+      this.watcher.on('change', () => {
+        this.triggerCallbackWithDebounce();
+      });
+
+      this.watcher.on('add', () => {
+        this.triggerCallbackWithDebounce();
+      });
+
+      console.debug(`LocalFileSource: Watching ${resolvedPath}`);
+    } catch (error) {
+      console.error(
+        `LocalFileSource: Error setting up watcher for ${resolvedPath}:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Trigger the watch callback with debounce to avoid excessive reloads
+   */
+  private triggerCallbackWithDebounce(): void {
+    if (this.debounceTimer) {
+      window.clearTimeout(this.debounceTimer);
     }
 
-    /**
-     * Watch for file changes using chokidar
-     */
-    watch(callback: () => void): void {
-        if (this.watcher) {
-            console.warn(`LocalFileSource: Watcher already exists for ${this.id}`);
-            return;
-        }
+    this.debounceTimer = window.setTimeout(() => {
+      if (this.watchCallback) {
+        console.debug(
+          `LocalFileSource: File changed, triggering reload for ${this.id}`,
+        );
+        this.watchCallback();
+      }
+    }, 1000); // 1s debounce
+  }
 
-        this.watchCallback = callback;
-        const resolvedPath = this.resolveFilePath();
-
-        // Watcher options
-        const watchOptions = {
-            awaitWriteFinish: {
-                stabilityThreshold: 500,
-                pollInterval: 100,
-            },
-            ignoreInitial: true,
-        };
-
-        try {
-            this.watcher = chokidar.watch(resolvedPath, watchOptions);
-
-            this.watcher.on('change', () => {
-                this.triggerCallbackWithDebounce();
-            });
-
-            this.watcher.on('add', () => {
-                this.triggerCallbackWithDebounce();
-            });
-
-            console.debug(`LocalFileSource: Watching ${resolvedPath}`);
-        } catch (error) {
-            console.error(`LocalFileSource: Error setting up watcher for ${resolvedPath}:`, error);
-            throw error;
-        }
+  /**
+   * Clean up resources
+   */
+  dispose(): void {
+    if (this.debounceTimer) {
+      window.clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
     }
 
-    /**
-     * Trigger the watch callback with debounce to avoid excessive reloads
-     */
-    private triggerCallbackWithDebounce(): void {
-        if (this.debounceTimer) {
-            window.clearTimeout(this.debounceTimer);
-        }
-
-        this.debounceTimer = window.setTimeout(() => {
-            if (this.watchCallback) {
-                console.debug(`LocalFileSource: File changed, triggering reload for ${this.id}`);
-                this.watchCallback();
-            }
-        }, 1000); // 1s debounce
+    if (this.watcher) {
+      this.watcher.close();
+      this.watcher = null;
+      console.debug(`LocalFileSource: Disposed watcher for ${this.id}`);
     }
 
-    /**
-     * Clean up resources
-     */
-    dispose(): void {
-        if (this.debounceTimer) {
-            window.clearTimeout(this.debounceTimer);
-            this.debounceTimer = null;
-        }
-
-        if (this.watcher) {
-            this.watcher.close();
-            this.watcher = null;
-            console.debug(`LocalFileSource: Disposed watcher for ${this.id}`);
-        }
-
-        this.watchCallback = null;
-    }
+    this.watchCallback = null;
+  }
 }
