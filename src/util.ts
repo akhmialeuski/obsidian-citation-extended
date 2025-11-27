@@ -12,10 +12,11 @@ export const DISALLOWED_FILENAME_CHARACTERS_RE = /[*"\\/<>:|?]/g;
  */
 export class Notifier {
   static DISAPPEARING_CLASS = 'mod-disappearing';
-  currentNotice?: NoticeExt;
-  mutationObserver?: MutationObserver;
+  private currentNotice?: NoticeExt;
+  private mutationObserver?: MutationObserver;
+  private isDestroyed = false;
 
-  constructor(public defaultMessage: string) {}
+  constructor(public defaultMessage: string) { }
 
   unload(): void {
     this.hide();
@@ -26,6 +27,10 @@ export class Notifier {
    */
   show(message?: string): boolean {
     message = message || this.defaultMessage;
+    if (this.isDestroyed) {
+      console.warn('Notifier: attempting to show notice after destruction');
+      return false;
+    }
     if (this.currentNotice) return false;
 
     this.currentNotice = new Notice(message) as NoticeExt;
@@ -58,6 +63,11 @@ export class Notifier {
     this.currentNotice = null;
     this.mutationObserver = null;
   }
+
+  destroy(): void {
+    this.hide();
+    this.isDestroyed = true;
+  }
 }
 
 /**
@@ -77,6 +87,15 @@ export class WorkerManager {
 
   constructor(private _worker: Worker, options: WorkerManagerOptions) {
     this.options = { ...workerManagerDefaultOptions, ...options };
+  }
+
+  terminate(): void {
+    if (this._worker) {
+      this._worker.terminate();
+      this._worker = null;
+      // @ts-ignore
+      this.worker = null;
+    }
   }
 
   /**

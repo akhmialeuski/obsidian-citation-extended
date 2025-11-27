@@ -125,4 +125,9 @@ export class LibraryService {
     get isLibraryLoading(): boolean {
         return this.loadWorker.blocked;
     }
+
+    destroy(): void {
+        this.loadWorker.terminate();
+        this.loadErrorNotifier.destroy();
+    }
 }

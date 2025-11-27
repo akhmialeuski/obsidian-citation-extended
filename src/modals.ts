@@ -19,11 +19,13 @@ interface ChooserExt {
   useSelectedItem(evt: MouseEvent | KeyboardEvent): void;
 }
 
-class SearchModal extends FuzzySuggestModal<Entry> {
+export class SearchModal extends FuzzySuggestModal<Entry> {
   plugin: CitationPlugin;
   limit = 50;
-
   loadingEl: HTMLElement;
+  private keydownHandler?: (ev: KeyboardEvent) => void;
+  private keyupHandler?: (ev: KeyboardEvent) => void;
+  private timeoutId?: number;
 
   eventRefs: EventRef[];
 
@@ -62,14 +64,37 @@ class SearchModal extends FuzzySuggestModal<Entry> {
     // Don't immediately register keyevent listeners. If the modal was triggered
     // by an "Enter" keystroke (e.g. via the Obsidian command dialog), this event
     // will be received here erroneously.
-    setTimeout(() => {
-      this.inputEl.addEventListener('keydown', (ev) => this.onInputKeydown(ev));
-      this.inputEl.addEventListener('keyup', (ev) => this.onInputKeyup(ev));
+    this.keydownHandler = (ev: KeyboardEvent) => this.onInputKeydown(ev);
+    this.keyupHandler = (ev: KeyboardEvent) => this.onInputKeyup(ev);
+
+    this.timeoutId = window.setTimeout(() => {
+      if (this.inputEl) {
+        this.inputEl.addEventListener('keydown', this.keydownHandler!);
+        this.inputEl.addEventListener('keyup', this.keyupHandler!);
+      }
     }, 200);
   }
 
   onClose() {
+    if (this.timeoutId) {
+      window.clearTimeout(this.timeoutId);
+      this.timeoutId = undefined;
+    }
+
+    if (this.inputEl) {
+      if (this.keydownHandler) {
+        this.inputEl.removeEventListener('keydown', this.keydownHandler);
+      }
+      if (this.keyupHandler) {
+        this.inputEl.removeEventListener('keyup', this.keyupHandler);
+      }
+    }
+
+    this.keydownHandler = undefined;
+    this.keyupHandler = undefined;
+
     this.eventRefs?.forEach((e) => this.plugin.events.offref(e));
+    this.eventRefs = [];
   }
 
   getItems(): Entry[] {

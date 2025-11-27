@@ -5,6 +5,7 @@ import {
   normalizePath,
   Plugin,
   TFile,
+  debounce,
 } from 'obsidian';
 import * as path from 'path';
 import * as chokidar from 'chokidar';
@@ -48,10 +49,9 @@ export default class CitationPlugin extends Plugin {
   uiService: UIService;
 
   events = new CitationEvents();
+  private fileWatcher?: chokidar.FSWatcher;
 
-  literatureNoteErrorNotifier = new Notifier(
-    'Unable to access literature note. Please check that the literature note folder exists, or update the Citations plugin settings.',
-  );
+  literatureNoteErrorNotifier: Notifier;
 
   get editor(): CodeMirror.Editor {
     const view = this.app.workspace.activeLeaf.view;
@@ -87,55 +87,108 @@ export default class CitationPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
-  onload(): void {
-    this.loadSettings().then(() => {
-      this.templateService = new TemplateService(this.settings);
-      this.noteService = new NoteService(this.app, this.settings, this.templateService);
-      this.libraryService = new LibraryService(
-        this.settings,
-        this.events,
-        this.app.vault.adapter instanceof FileSystemAdapter ? this.app.vault.adapter : null
-      );
-      this.uiService = new UIService(this.app, this);
-      this.init();
-    });
+  async onload(): Promise<void> {
+    await this.loadSettings();
+
+    this.literatureNoteErrorNotifier = new Notifier(
+      'Unable to access literature note. Please check that the literature note folder exists, or update the Citations plugin settings.',
+    );
+
+    this.templateService = new TemplateService(this.settings);
+    this.noteService = new NoteService(this.app, this.settings, this.templateService);
+    this.libraryService = new LibraryService(
+      this.settings,
+      this.events,
+      this.app.vault.adapter instanceof FileSystemAdapter ? this.app.vault.adapter : null
+    );
+    this.uiService = new UIService(this.app, this);
+
+    await this.initializeLibrary();
+
+    this.uiService.registerCommands();
+    this.addSettingTab(new CitationSettingTab(this.app, this));
   }
 
-  async init(): Promise<void> {
+  onunload(): void {
+    this.cleanup();
+  }
+
+  private async initializeLibrary(): Promise<void> {
     if (this.settings.citationExportPath) {
-      // Load library for the first time
       this.libraryService.load();
-
-      // Set up a watcher to refresh whenever the export is updated
-      try {
-        // Wait until files are finished being written before going ahead with
-        // the refresh -- here, we request that `change` events be accumulated
-        // until nothing shows up for 500 ms
-        // TODO magic number
-        const watchOptions = {
-          awaitWriteFinish: {
-            stabilityThreshold: 500,
-          },
-        };
-
-        chokidar
-          .watch(
-            this.libraryService.resolveLibraryPath(this.settings.citationExportPath),
-            watchOptions,
-          )
-          .on('change', () => {
-            this.libraryService.load();
-          });
-      } catch {
-        this.libraryService.loadErrorNotifier.show();
-      }
+      this.setupFileWatcher();
     } else {
       // TODO show warning?
     }
+  }
 
-    this.uiService.registerCommands();
+  private setupFileWatcher(): void {
+    if (this.fileWatcher) {
+      this.fileWatcher.close();
+      this.fileWatcher = null;
+    }
 
-    this.addSettingTab(new CitationSettingTab(this.app, this));
+    const watchOptions = {
+      awaitWriteFinish: {
+        stabilityThreshold: 500,
+      },
+      ignoreInitial: true,
+    };
+
+    const libraryPath = this.libraryService.resolveLibraryPath(
+      this.settings.citationExportPath
+    );
+
+    try {
+      this.fileWatcher = chokidar.watch(libraryPath, watchOptions);
+
+      const debouncedLoad = debounce(
+        () => {
+          console.debug('Citation library file changed, reloading...');
+          this.libraryService.load();
+        },
+        1000,
+        true
+      );
+
+      this.fileWatcher.on('change', () => {
+        debouncedLoad();
+      });
+
+      this.fileWatcher.on('error', (error) => {
+        console.error('Citation plugin: watcher error:', error);
+        this.libraryService.loadErrorNotifier.show(
+          'Error watching citation library file. Please check plugin settings.'
+        );
+      });
+    } catch (error) {
+      console.error('Citation plugin: failed to create watcher:', error);
+      this.libraryService.loadErrorNotifier.show();
+    }
+  }
+
+  private cleanup(): void {
+    console.debug('Citation plugin: cleaning up resources');
+
+    // Close file watcher
+    if (this.fileWatcher) {
+      this.fileWatcher.close();
+      this.fileWatcher = null;
+    }
+
+    // Destroy notifiers
+    if (this.literatureNoteErrorNotifier) {
+      this.literatureNoteErrorNotifier.destroy();
+      this.literatureNoteErrorNotifier = null;
+    }
+
+    // Destroy services (which handle their own cleanup)
+    if (this.libraryService) {
+      this.libraryService.destroy();
+    }
+
+    // Clear events
+    // this.events = null; // Optional, as it's garbage collected
   }
 
 

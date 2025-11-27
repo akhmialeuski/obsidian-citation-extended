@@ -59,7 +59,9 @@
   },
   "jest": {
     "moduleNameMapper": {
-      "src/(.*)": "<rootDir>/src/$1"
+      "src/(.*)": "<rootDir>/src/$1",
+      "^obsidian$": "<rootDir>/test/obsidian-mock.ts",
+      "^web-worker:(.*)": "<rootDir>/test/worker-mock.ts"
     },
     "moduleFileExtensions": [
       "js",
