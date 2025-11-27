@@ -97,7 +97,7 @@ export class CitationSettingTab extends PluginSettingTab {
                 this.citationPathSuccessEl.addClass('d-none');
                 this.citationPathLoadingEl.removeClass('d-none');
 
-                this.plugin.loadLibrary().then(() => {
+                this.plugin.libraryService.load().then(() => {
                   this.citationPathLoadingEl.addClass('d-none');
                   this.showCitationExportPathSuccess();
                 });
@@ -112,8 +112,8 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Citation database path')
       .setDesc(
         'Path to citation library exported by your reference manager. ' +
-          'Can be an absolute path or a path relative to the current vault root folder. ' +
-          'Citations will be automatically reloaded whenever this file updates.',
+        'Can be an absolute path or a path relative to the current vault root folder. ' +
+        'Citations will be automatically reloaded whenever this file updates.',
       )
       .addText((input) =>
         this.buildValueInput(
@@ -123,8 +123,8 @@ export class CitationSettingTab extends PluginSettingTab {
             this.checkCitationExportPath(value).then(
               (success) =>
                 success &&
-                this.plugin
-                  .loadLibrary()
+                this.plugin.libraryService
+                  .load()
                   .then(() => this.showCitationExportPathSuccess()),
             );
           },
@@ -248,7 +248,7 @@ export class CitationSettingTab extends PluginSettingTab {
 
     try {
       await FileSystemAdapter.readLocalFile(
-        this.plugin.resolveLibraryPath(filePath),
+        this.plugin.libraryService.resolveLibraryPath(filePath),
       );
       this.citationPathErrorEl.addClass('d-none');
     } catch (e) {
@@ -261,10 +261,10 @@ export class CitationSettingTab extends PluginSettingTab {
   }
 
   showCitationExportPathSuccess(): void {
-    if (!this.plugin.library) return;
+    if (!this.plugin.libraryService.library) return;
 
     this.citationPathSuccessEl.setText(
-      `Loaded library with ${this.plugin.library.size} references.`,
+      `Loaded library with ${this.plugin.libraryService.library.size} references.`,
     );
     this.citationPathSuccessEl.removeClass('d-none');
   }

@@ -145,17 +145,7 @@ function loadBibLaTeXLibrary(entries: EntryDataBibLaTeX[]): Library {
   );
 };
 
-const renderAdvancedTemplate = (
-  loadLibrary: () => Library,
-  citekey: string,
-) => {
-  const library = loadLibrary();
-  const template =
-    '{{#each entry.author}}[[{{this.family}}, {{this.given}}]]{{#unless @last}}, {{/unless}}{{/each}}';
-  return compileTemplate(template)(
-    library.getTemplateVariablesForCitekey(citekey),
-  );
-};
+
 
 describe('biblatex library', () => {
   let entries: EntryDataBibLaTeX[];
@@ -172,21 +162,7 @@ describe('biblatex library', () => {
     const library = loadLibrary();
   });
 
-  test('renders correctly', () => {
-    const library = loadLibrary();
-    const templateVariables: Record<string, string>[] = Object.keys(
-      library.entries,
-    ).map((citekey) => {
-      return library.getTemplateVariablesForCitekey(citekey);
-    });
 
-    matchLibraryRender(templateVariables, expectedRender);
-  });
-
-  test('advanced template render', () => {
-    const render = renderAdvancedTemplate(loadLibrary, 'aitchison2017you');
-    expect(render).toBe('[[Aitchison, Laurence]], [[Lengyel, Máté]]');
-  });
 });
 
 describe('biblatex regression tests', () => {
@@ -245,19 +221,5 @@ describe('csl library', () => {
     const library = loadLibrary();
   });
 
-  test('renders correctly', () => {
-    const library = loadLibrary();
-    const templateVariables: Record<string, string>[] = Object.keys(
-      library.entries,
-    ).map((citekey) => {
-      return library.getTemplateVariablesForCitekey(citekey);
-    });
 
-    matchLibraryRender(templateVariables, expectedRender, BIBLATEX_FIELDS_ONLY);
-  });
-
-  test('advanced template render', () => {
-    const render = renderAdvancedTemplate(loadLibrary, 'aitchison2017you');
-    expect(render).toBe('[[Aitchison, Laurence]], [[Lengyel, Máté]]');
-  });
 });

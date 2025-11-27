@@ -37,44 +37,13 @@ export const TEMPLATE_VARIABLES = {
 };
 
 export class Library {
-  constructor(public entries: { [citekey: string]: Entry }) {}
+  constructor(public entries: { [citekey: string]: Entry }) { }
 
   get size(): number {
     return Object.keys(this.entries).length;
   }
 
-  /**
-   * For the given citekey, find the corresponding `Entry` and return a
-   * collection of template variable assignments.
-   */
-  getTemplateVariablesForCitekey(citekey: string): Record<string, any> {
-    const entry: Entry = this.entries[citekey];
-    const shortcuts = {
-      citekey: citekey,
 
-      abstract: entry.abstract,
-      authorString: entry.authorString,
-      containerTitle: entry.containerTitle,
-      DOI: entry.DOI,
-      eprint: entry.eprint,
-      eprinttype: entry.eprinttype,
-      eventPlace: entry.eventPlace,
-      language: entry.language,
-      note: entry.note,
-      page: entry.page,
-      publisher: entry.publisher,
-      publisherPlace: entry.publisherPlace,
-      source: entry.source,
-      title: entry.title,
-      titleShort: entry.titleShort,
-      type: entry.type,
-      URL: entry.URL,
-      year: entry.year?.toString(),
-      zoteroSelectURI: entry.zoteroSelectURI,
-    };
-
-    return { entry: entry.toJSON(), ...shortcuts };
-  }
 }
 
 /**
@@ -109,7 +78,7 @@ export function loadEntries(
     parsed.errors.forEach((error) => {
       console.error(
         `Citation plugin: fatal error loading BibLaTeX entry` +
-          ` (line ${error.line}, column ${error.column}):`,
+        ` (line ${error.line}, column ${error.column}):`,
         error.message,
       );
     });
