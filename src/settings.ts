@@ -9,6 +9,7 @@ import {
 
 import CitationPlugin from './main';
 import { IIndexable, DatabaseType, TEMPLATE_VARIABLES } from './types';
+import { DataSourceDefinition, MergeStrategy } from './data-source';
 
 const CITATION_DATABASE_FORMAT_LABELS: Record<DatabaseType, string> = {
   'csl-json': 'CSL-JSON',
@@ -18,6 +19,10 @@ const CITATION_DATABASE_FORMAT_LABELS: Record<DatabaseType, string> = {
 export class CitationsPluginSettings {
   public citationExportPath: string;
   citationExportFormat: DatabaseType = 'csl-json';
+
+  // Multi-source configuration (optional, for backward compatibility)
+  dataSources?: DataSourceDefinition[];
+  mergeStrategy?: MergeStrategy;
 
   literatureNoteTitleTemplate = '@{{citekey}}';
   literatureNoteFolder = 'Reading notes';

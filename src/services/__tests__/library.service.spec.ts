@@ -76,6 +76,8 @@ describe('LibraryService', () => {
     let settings: CitationsPluginSettings;
     let events: any;
     let vaultAdapter: any;
+    let workerManager: any;
+    let mockSource: any;
 
     beforeEach(() => {
         settings = new CitationsPluginSettings();
@@ -91,7 +93,18 @@ describe('LibraryService', () => {
             getBasePath: jest.fn().mockReturnValue('/vault'),
         };
 
-        service = new LibraryService(settings, events, vaultAdapter);
+        workerManager = {
+            post: mockWorkerManagerPost,
+        };
+
+        mockSource = {
+            id: 'mock-source',
+            load: jest.fn().mockResolvedValue([]),
+            watch: jest.fn(),
+            dispose: jest.fn(),
+        };
+
+        service = new LibraryService(settings, events, vaultAdapter, workerManager, [mockSource]);
 
         // Reset mocks
         (fs.promises.stat as jest.Mock).mockReset();
@@ -104,12 +117,7 @@ describe('LibraryService', () => {
     });
 
     test('load() transitions to Loading then Success', async () => {
-        (fs.promises.stat as jest.Mock).mockResolvedValue({ size: 100 });
-        // @ts-ignore
-        const readLocalFileSpy = require('obsidian').FileSystemAdapter.readLocalFile;
-        readLocalFileSpy.mockResolvedValue(new ArrayBuffer(10));
-
-        mockWorkerManagerPost.mockResolvedValue([]);
+        mockSource.load.mockResolvedValue([]);
 
         const promise = service.load();
 
@@ -120,26 +128,25 @@ describe('LibraryService', () => {
 
         expect(service.state.status).toBe(LoadingStatus.Success);
         expect(events.trigger).toHaveBeenCalledWith('library-load-complete');
+        expect(mockSource.load).toHaveBeenCalled();
     });
 
-    test('load() handles empty file error', async () => {
-        (fs.promises.stat as jest.Mock).mockResolvedValue({ size: 0 });
+    test('load() handles source error gracefully', async () => {
+        mockSource.load.mockRejectedValue(new Error('Source failed'));
 
         await service.load();
 
-        expect(service.state.status).toBe(LoadingStatus.Error);
-        expect(service.state.error).toBeDefined();
+        // Should still succeed but with empty library
+        expect(service.state.status).toBe(LoadingStatus.Success);
+        expect(service.library.size).toBe(0);
     });
 
-    test('load() handles worker error', async () => {
-        (fs.promises.stat as jest.Mock).mockResolvedValue({ size: 100 });
-        // @ts-ignore
-        require('obsidian').FileSystemAdapter.readLocalFile.mockResolvedValue(new ArrayBuffer(10));
-
-        mockWorkerManagerPost.mockRejectedValue(new Error('Worker failed'));
+    test('load() handles worker error via source gracefully', async () => {
+        mockSource.load.mockRejectedValue(new Error('Worker failed'));
 
         await service.load();
 
-        expect(service.state.status).toBe(LoadingStatus.Error);
+        expect(service.state.status).toBe(LoadingStatus.Success);
+        expect(service.library.size).toBe(0);
     });
 });
