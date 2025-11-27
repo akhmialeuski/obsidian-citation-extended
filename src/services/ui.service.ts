@@ -1,4 +1,5 @@
-import { App, Plugin } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { LoadingStatus, LibraryState } from '../library-state';
 import {
     InsertCitationModal,
     InsertNoteLinkModal,
@@ -8,10 +9,52 @@ import {
 import CitationPlugin from '../main';
 
 export class UIService {
+    private statusBarItem: HTMLElement;
+
     constructor(
         private app: App,
         private plugin: CitationPlugin
-    ) { }
+    ) {
+        this.statusBarItem = this.plugin.addStatusBarItem();
+    }
+
+    init(): void {
+        this.plugin.events.on('library-state-changed', (state: LibraryState) => {
+            this.updateStatusBar(state);
+        });
+
+        // Initial state
+        this.updateStatusBar(this.plugin.libraryService.state);
+        this.registerCommands();
+    }
+
+    private updateStatusBar(state: LibraryState): void {
+        let text = '';
+        let cls = '';
+
+        switch (state.status) {
+            case LoadingStatus.Idle:
+                text = 'Citations: Idle';
+                break;
+            case LoadingStatus.Loading:
+                text = 'Citations: Loading...';
+                break;
+            case LoadingStatus.Success:
+                text = `Citations: ${state.progress?.current || 0} entries`;
+                break;
+            case LoadingStatus.Error:
+                text = 'Citations: Error';
+                cls = 'mod-error';
+                break;
+        }
+
+        this.statusBarItem.setText(text);
+        if (cls) {
+            this.statusBarItem.addClass(cls);
+        } else {
+            this.statusBarItem.removeClass('mod-error');
+        }
+    }
 
     registerCommands(): void {
         this.plugin.addCommand({
