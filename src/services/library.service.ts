@@ -1,14 +1,7 @@
 import { FileSystemAdapter } from 'obsidian';
-import * as path from 'path';
-import * as fs from 'fs';
-import * as chokidar from 'chokidar';
 import { CitationsPluginSettings } from '../settings';
 import {
     Entry,
-    EntryData,
-    EntryBibLaTeXAdapter,
-    EntryCSLAdapter,
-    IIndexable,
     Library,
 } from '../types';
 import {
@@ -17,13 +10,13 @@ import {
 } from '../util';
 import { LoadingStatus, LibraryState } from '../library-state';
 import CitationEvents from '../events';
-import LoadWorker from 'web-worker:../worker';
+import { DataSource, MergeStrategy } from '../data-source';
 
 export class LibraryService {
     library: Library;
-    private loadWorker = new WorkerManager(new LoadWorker());
+    private loadWorker: WorkerManager;
     private abortController: AbortController | null = null;
-    private watcher: chokidar.FSWatcher | null = null;
+    private sources: DataSource[] = [];
     private loadDebounceTimer: number | null = null;
     private retryTimer: number | null = null;
     private retryCount = 0;
@@ -40,19 +33,60 @@ export class LibraryService {
     constructor(
         private settings: CitationsPluginSettings,
         private events: CitationEvents,
-        private vaultAdapter: FileSystemAdapter | null // To resolve path
-    ) { }
+        private vaultAdapter: FileSystemAdapter | null, // To resolve path
+        workerManager: WorkerManager,
+        sources: DataSource[] = [],
+        private mergeStrategy: MergeStrategy = MergeStrategy.LastWins,
+    ) {
+        this.loadWorker = workerManager;
+        this.sources = sources;
+    }
+
+    /**
+     * Get the worker manager for creating data sources
+     */
+    getWorkerManager(): WorkerManager {
+        return this.loadWorker;
+    }
+
+    /**
+     * Add a data source to the library service
+     */
+    addSource(source: DataSource): void {
+        this.sources.push(source);
+        console.debug(`LibraryService: Added source ${source.id}`);
+    }
+
+    /**
+     * Remove a data source by ID
+     */
+    removeSource(sourceId: string): void {
+        const index = this.sources.findIndex(s => s.id === sourceId);
+        if (index !== -1) {
+            const source = this.sources[index];
+            source.dispose();
+            this.sources.splice(index, 1);
+            console.debug(`LibraryService: Removed source ${sourceId}`);
+        }
+    }
+
+    /**
+     * Get all data sources
+     */
+    getSources(): DataSource[] {
+        return [...this.sources];
+    }
 
     /**
      * Resolve a provided library path, allowing for relative paths rooted at
-     * the vault directory.
+     * the vault directory. (Helper method for settings tab)
      */
     resolveLibraryPath(rawPath: string): string {
         const vaultRoot =
             this.vaultAdapter instanceof FileSystemAdapter
                 ? this.vaultAdapter.getBasePath()
                 : '/';
-        return path.resolve(vaultRoot, rawPath);
+        return require('path').resolve(vaultRoot, rawPath);
     }
 
     private setState(newState: Partial<LibraryState>) {
@@ -60,10 +94,51 @@ export class LibraryService {
         this.events.trigger('library-state-changed', this.state);
     }
 
+    /**
+     * Merge entries from multiple sources according to the merge strategy
+     */
+    private mergeEntries(results: Entry[][]): Library {
+        const entriesMap = new Map<string, Entry>();
+
+        switch (this.mergeStrategy) {
+            case MergeStrategy.LastWins:
+                // Later sources override earlier ones
+                for (const entries of results) {
+                    for (const entry of entries) {
+                        entriesMap.set(entry.id, entry);
+                    }
+                }
+                break;
+
+            case MergeStrategy.FirstWins:
+                // Earlier sources take precedence
+                for (const entries of results) {
+                    for (const entry of entries) {
+                        if (!entriesMap.has(entry.id)) {
+                            entriesMap.set(entry.id, entry);
+                        }
+                    }
+                }
+                break;
+
+            case MergeStrategy.MostRecent:
+                // Compare modification dates (for now, use LastWins as fallback)
+                // TODO: Implement proper date comparison when sources provide timestamps
+                for (const entries of results) {
+                    for (const entry of entries) {
+                        entriesMap.set(entry.id, entry);
+                    }
+                }
+                break;
+        }
+
+        return new Library(Object.fromEntries(entriesMap));
+    }
+
     async load(isRetry = false): Promise<Library | null> {
-        if (!this.settings.citationExportPath) {
+        if (this.sources.length === 0) {
             console.warn(
-                'Citations plugin: citation export path is not set. Please update plugin settings.',
+                'Citations plugin: No data sources configured. Please update plugin settings.',
             );
             return null;
         }
@@ -84,52 +159,32 @@ export class LibraryService {
         }
 
         this.setState({ status: LoadingStatus.Loading, error: undefined });
-        console.debug('Citation plugin: Reloading library');
+        console.debug('Citation plugin: Reloading library from all sources');
         this.events.trigger('library-load-start');
 
-        const filePath = this.resolveLibraryPath(this.settings.citationExportPath);
-
         try {
-            // Integrity check: File exists and not empty
-            const stats = await fs.promises.stat(filePath);
-            if (!stats || stats.size === 0) {
-                throw new Error('Library file is empty or does not exist');
-            }
+            // Load from all sources in parallel
+            const loadPromises = this.sources.map(async (source) => {
+                try {
+                    console.debug(`LibraryService: Loading from source ${source.id}`);
+                    const entries = await source.load();
+                    console.debug(`LibraryService: Loaded ${entries.length} entries from ${source.id}`);
+                    return entries;
+                } catch (error) {
+                    console.error(`LibraryService: Error loading from source ${source.id}:`, error);
+                    // Return empty array for failed sources, don't fail entire load
+                    return [];
+                }
+            });
 
-            const buffer = await FileSystemAdapter.readLocalFile(filePath);
-            if (signal.aborted) return null;
-
-            // Decode file as UTF-8.
-            const dataView = new DataView(buffer);
-            const decoder = new TextDecoder('utf8');
-            const value = decoder.decode(dataView);
-
-            const entries: EntryData[] = await this.loadWorker.post({
-                databaseRaw: value,
-                databaseType: this.settings.citationExportFormat,
-            }, signal);
+            const results = await Promise.all(loadPromises);
 
             if (signal.aborted) return null;
 
-            let adapter: new (data: EntryData) => Entry;
-            let idKey: string;
+            // Merge results according to strategy
+            this.library = this.mergeEntries(results);
 
-            switch (this.settings.citationExportFormat) {
-                case 'biblatex':
-                    adapter = EntryBibLaTeXAdapter;
-                    idKey = 'key';
-                    break;
-                case 'csl-json':
-                    adapter = EntryCSLAdapter;
-                    idKey = 'id';
-                    break;
-            }
-
-            this.library = new Library(
-                Object.fromEntries(
-                    entries.map((e) => [(e as IIndexable)[idKey], new adapter(e)]),
-                ),
-            );
+            const totalEntries = results.reduce((sum, entries) => sum + entries.length, 0);
 
             this.setState({
                 status: LoadingStatus.Success,
@@ -138,7 +193,7 @@ export class LibraryService {
             });
 
             console.debug(
-                `Citation plugin: successfully loaded library with ${this.library.size} entries.`,
+                `Citation plugin: successfully loaded library with ${this.library.size} unique entries from ${totalEntries} total entries across ${this.sources.length} sources.`,
             );
 
             this.events.trigger('library-load-complete');
@@ -174,32 +229,26 @@ export class LibraryService {
         }
     }
 
+    /**
+     * Initialize watchers for all data sources
+     */
     initWatcher() {
-        if (this.watcher) {
-            this.watcher.close();
+        if (this.sources.length === 0) {
+            console.warn('LibraryService: No sources to watch');
+            return;
         }
 
-        if (!this.settings.citationExportPath) return;
-
-        const filePath = this.resolveLibraryPath(this.settings.citationExportPath);
-
-        // Watcher options
-        const watchOptions = {
-            awaitWriteFinish: {
-                stabilityThreshold: 500,
-                pollInterval: 100
-            },
-            ignoreInitial: true
-        };
-
-        this.watcher = chokidar.watch(filePath, watchOptions);
-
-        this.watcher.on('change', () => {
-            this.triggerLoadWithDebounce();
-        });
-        this.watcher.on('add', () => {
-            this.triggerLoadWithDebounce();
-        });
+        // Set up watchers for all sources
+        for (const source of this.sources) {
+            try {
+                source.watch(() => {
+                    this.triggerLoadWithDebounce();
+                });
+                console.debug(`LibraryService: Initialized watcher for source ${source.id}`);
+            } catch (error) {
+                console.error(`LibraryService: Error setting up watcher for source ${source.id}:`, error);
+            }
+        }
     }
 
     private triggerLoadWithDebounce() {
@@ -210,6 +259,40 @@ export class LibraryService {
         this.loadDebounceTimer = window.setTimeout(() => {
             this.load();
         }, 1000); // 1s debounce
+    }
+
+    /**
+     * Clean up all resources
+     */
+    dispose(): void {
+        // Clear timers
+        if (this.loadDebounceTimer) {
+            window.clearTimeout(this.loadDebounceTimer);
+            this.loadDebounceTimer = null;
+        }
+
+        if (this.retryTimer) {
+            window.clearTimeout(this.retryTimer);
+            this.retryTimer = null;
+        }
+
+        // Abort any ongoing load
+        if (this.abortController) {
+            this.abortController.abort();
+            this.abortController = null;
+        }
+
+        // Dispose all sources
+        for (const source of this.sources) {
+            try {
+                source.dispose();
+            } catch (error) {
+                console.error(`LibraryService: Error disposing source ${source.id}:`, error);
+            }
+        }
+
+        this.sources = [];
+        console.debug('LibraryService: Disposed all resources');
     }
 
     /**
