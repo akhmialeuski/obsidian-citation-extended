@@ -53,7 +53,7 @@ describe('biblatex regression tests', () => {
     const warnCallback = jest.fn();
     jest.spyOn(global.console, 'warn').mockImplementation(warnCallback);
 
-    expect(load).not.toThrowError();
+    expect(load).not.toThrow();
     expect(warnCallback.mock.calls.length).toBe(1);
   });
 
@@ -66,7 +66,7 @@ describe('biblatex regression tests', () => {
     const warnCallback = jest.fn();
     jest.spyOn(global.console, 'error').mockImplementation(warnCallback);
 
-    expect(load).not.toThrowError();
+    expect(load).not.toThrow();
     expect(warnCallback.mock.calls.length).toBe(1);
   });
 });

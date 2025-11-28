@@ -1,4 +1,4 @@
-# obsidian-citation-plugin
+# Obsidian Citation Extended
 
 This plugin for [Obsidian](https://obsidian.md) integrates your academic reference manager with the Obsidian editing experience.
 
@@ -64,12 +64,9 @@ year: {{year}}
 
 MIT License.
 
-## Contributors
+## Support
 
-- Jon Gauthier ([hans](https://github.com/hans))
-- [raineszm](https://github.com/raineszm)
-- [Luke Murray](https://lukesmurray.com/)
-- [valmaev](https://github.com/valmaev)
+If you find this plugin useful and would like to support its development, please consider [buying me a coffee](https://coff.ee/akhmelevskiy).
 
 [1]: https://github.com/citation-style-language/schema#csl-json-schema
 [2]: https://retorque.re/zotero-better-bibtex/
