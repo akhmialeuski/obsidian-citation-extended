@@ -6,9 +6,11 @@ import { Notifier, WorkerManager } from '../util';
 import { LoadingStatus, LibraryState } from '../library-state';
 import CitationEvents from '../events';
 import { DataSource, MergeStrategy } from '../data-source';
+import { SearchService } from '../search/search.service';
 
 export class LibraryService {
   library!: Library;
+  public searchService: SearchService;
   private loadWorker: WorkerManager;
   private abortController: AbortController | null = null;
   private sources: DataSource[] = [];
@@ -35,6 +37,7 @@ export class LibraryService {
   ) {
     this.loadWorker = workerManager;
     this.sources = sources;
+    this.searchService = new SearchService();
   }
 
   /**
@@ -183,6 +186,10 @@ export class LibraryService {
 
       // Merge results according to strategy
       this.library = this.mergeEntries(results);
+
+      // Build search index
+      console.debug('Citation plugin: Building search index');
+      this.searchService.buildIndex(Object.values(this.library.entries));
 
       const totalEntries = results.reduce(
         (sum, entries) => sum + entries.length,
