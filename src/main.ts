@@ -37,10 +37,9 @@ export default class CitationPlugin extends Plugin {
   uiService!: UIService;
 
   events = new CitationEvents();
+  private fileWatcher?: chokidar.FSWatcher;
 
-  literatureNoteErrorNotifier = new Notifier(
-    'Unable to access literature note. Please check that the literature note folder exists, or update the Citations plugin settings.',
-  );
+  literatureNoteErrorNotifier: Notifier;
 
   /**
    * Gets the current active Markdown editor
@@ -163,6 +162,7 @@ export default class CitationPlugin extends Plugin {
         sources.push(source);
       }
     }
+  }
 
     return sources;
   }
