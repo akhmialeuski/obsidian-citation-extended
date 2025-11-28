@@ -7,10 +7,12 @@ import { LoadingStatus, LibraryState } from '../library-state';
 import CitationEvents from '../events';
 import { DataSource, MergeStrategy } from '../data-source';
 import { SearchService } from '../search/search.service';
+import { IntrospectionService, VariableDefinition } from './introspection.service';
 
 export class LibraryService {
   library!: Library;
   public searchService: SearchService;
+  public introspectionService: IntrospectionService;
   private loadWorker: WorkerManager;
   private abortController: AbortController | null = null;
   private sources: DataSource[] = [];
@@ -38,6 +40,7 @@ export class LibraryService {
     this.loadWorker = workerManager;
     this.sources = sources;
     this.searchService = new SearchService();
+    this.introspectionService = new IntrospectionService();
   }
 
   /**
@@ -73,6 +76,13 @@ export class LibraryService {
    */
   getSources(): DataSource[] {
     return [...this.sources];
+  }
+
+  /**
+   * Get available template variables from the current library
+   */
+  getTemplateVariables(): VariableDefinition[] {
+    return this.introspectionService.getTemplateVariables(this.library);
   }
 
   /**
