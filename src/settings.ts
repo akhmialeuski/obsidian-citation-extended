@@ -9,7 +9,7 @@ import {
 } from 'obsidian';
 
 import CitationPlugin from './main';
-import { DatabaseType, TEMPLATE_VARIABLES } from './types';
+import { DatabaseType } from './types';
 import { DataSourceDefinition, MergeStrategy } from './data-source';
 
 const CITATION_DATABASE_FORMAT_LABELS: Record<DatabaseType, string> = {
@@ -206,10 +206,6 @@ export class CitationSettingTab extends PluginSettingTab {
     });
   }
 
-
-
-
-
   private displayLiteratureNoteSettings(containerEl: HTMLElement): void {
     this.buildSetting(
       containerEl,
@@ -264,22 +260,49 @@ export class CitationSettingTab extends PluginSettingTab {
       }),
     );
 
-    const templateVariableUl = containerEl.createEl('ul', {
+    const variableContainer = containerEl.createDiv({
       attr: { id: 'citationTemplateVariables' },
     });
-    Object.entries(TEMPLATE_VARIABLES).forEach((variableData) => {
-      const [key, description] = variableData,
-        templateVariableItem = templateVariableUl.createEl('li');
 
-      templateVariableItem.createEl('span', {
-        cls: 'text-monospace',
-        text: '{{' + key + '}}',
-      });
+    const variables = this.plugin.libraryService.getTemplateVariables();
 
-      templateVariableItem.createEl('span', {
-        text: description ? ` — ${description}` : '',
+    // Group variables
+    const standardVariables = variables.filter(v => v.description);
+    const otherVariables = variables.filter(v => !v.description);
+
+    const createVariableList = (vars: typeof variables) => {
+      const list = variableContainer.createEl('ul');
+      list.style.marginTop = '5px';
+      list.style.marginBottom = '15px';
+
+      vars.forEach(v => {
+        const item = list.createEl('li');
+        item.createEl('code', {
+          text: '{{' + v.key + '}}',
+        });
+        if (v.description) {
+          item.createEl('span', {
+            text: ` — ${v.description}`,
+          });
+        }
+        if (v.example) {
+          item.createEl('span', {
+            text: ` (e.g. ${v.example})`,
+            cls: 'text-muted',
+          });
+        }
       });
-    });
+    };
+
+    if (standardVariables.length > 0) {
+      variableContainer.createEl('strong', { text: 'Standard Variables' });
+      createVariableList(standardVariables);
+    }
+
+    if (otherVariables.length > 0) {
+      variableContainer.createEl('strong', { text: 'Detected Variables (from library)' });
+      createVariableList(otherVariables);
+    }
 
     const templateEntryInstructionsEl = containerEl.createEl('p');
     templateEntryInstructionsEl.append(

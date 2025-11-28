@@ -6,31 +6,6 @@ export { Entry as EntryDataBibLaTeX } from '@retorquere/bibtex-parser';
 const databaseTypes = ['csl-json', 'biblatex'] as const;
 export type DatabaseType = typeof databaseTypes[number];
 
-export const TEMPLATE_VARIABLES = {
-  citekey: 'Unique citekey',
-  abstract: '',
-  authorString: 'Comma-separated list of author names',
-  containerTitle:
-    'Title of the container holding the reference (e.g. book title for a book chapter, or the journal title for a journal article)',
-  DOI: '',
-  eprint: '',
-  eprinttype: '',
-  eventPlace: 'Location of event',
-  language: 'Language code (e.g. en, ru)',
-  note: '',
-  page: 'Page or page range',
-  publisher: '',
-  publisherPlace: 'Location of publisher',
-  source: 'Source of the reference (e.g. YouTube, arXiv.org)',
-  title: '',
-  titleShort: '',
-  type:
-    'CSL type of the reference (e.g. article-journal, webpage, motion_picture)',
-  URL: '',
-  year: 'Publication year',
-  zoteroSelectURI: 'URI to open the reference in Zotero',
-};
-
 export interface TemplateContext {
   citekey: string;
   abstract?: string;
@@ -57,7 +32,7 @@ export interface TemplateContext {
 }
 
 export class Library {
-  constructor(public entries: { [citekey: string]: Entry }) {}
+  constructor(public entries: { [citekey: string]: Entry }) { }
 
   get size(): number {
     return Object.keys(this.entries).length;
@@ -96,7 +71,7 @@ export function loadEntries(
     parsed.errors.forEach((error) => {
       console.error(
         `Citation plugin: fatal error loading BibLaTeX entry` +
-          ` (line ${error.line}, column ${error.column}):`,
+        ` (line ${error.line}, column ${error.column}):`,
         error.message,
       );
     });
