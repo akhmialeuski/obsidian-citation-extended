@@ -1,8 +1,7 @@
 import {
   App,
   EventRef,
-  FuzzyMatch,
-  FuzzySuggestModal,
+  SuggestModal,
   Notice,
   renderMatches,
   SearchMatches,
@@ -12,13 +11,13 @@ import CitationPlugin from './main';
 import { Entry } from './types';
 
 // Stub some methods we know are there..
-interface FuzzySuggestModalExt<T> extends FuzzySuggestModal<T> {
+interface SuggestModalExt<T> extends SuggestModal<T> {
   chooser: ChooserExt;
 }
 interface ChooserExt {
   useSelectedItem(evt: MouseEvent | KeyboardEvent): void;
 }
-interface FuzzySuggestModalWithUpdate<T> extends FuzzySuggestModal<T> {
+interface SuggestModalWithUpdate<T> extends SuggestModal<T> {
   updateSuggestions(): void;
 }
 
@@ -29,7 +28,7 @@ export interface SearchAction {
   getInstructions?(): { command: string; purpose: string }[];
 }
 
-export class CitationSearchModal extends FuzzySuggestModal<Entry> {
+export class CitationSearchModal extends SuggestModal<Entry> {
   plugin: CitationPlugin;
   action: SearchAction;
   limit = 50;
@@ -89,15 +88,18 @@ export class CitationSearchModal extends FuzzySuggestModal<Entry> {
     this.eventRefs?.forEach((e) => this.plugin.events.offref(e));
   }
 
-  getItems(): Entry[] {
+  getSuggestions(query: string): Entry[] {
     if (this.plugin.libraryService.isLibraryLoading) {
       return [];
     }
-    return Object.values(this.plugin.libraryService.library.entries);
-  }
 
-  getItemText(item: Entry): string {
-    return `${item.title} ${item.authorString} ${item.year}`;
+    if (!query) {
+      return Object.values(this.plugin.libraryService.library.entries).slice(0, this.limit);
+    }
+
+    const ids = this.plugin.libraryService.searchService.search(query);
+    // Limit results here if SearchService doesn't
+    return ids.slice(0, this.limit).map(id => this.plugin.libraryService.library.entries[id]).filter(Boolean);
   }
 
   setLoading(loading: boolean): void {
@@ -109,33 +111,30 @@ export class CitationSearchModal extends FuzzySuggestModal<Entry> {
       this.loadingEl.addClass('d-none');
       this.inputEl.disabled = false;
       this.inputEl.focus();
-      ((this as unknown) as FuzzySuggestModalWithUpdate<Entry>).updateSuggestions();
+      ((this as unknown) as SuggestModalWithUpdate<Entry>).updateSuggestions();
     }
   }
 
-  onChooseItem(item: Entry, evt: MouseEvent | KeyboardEvent): void {
+  onChooseSuggestion(item: Entry, evt: MouseEvent | KeyboardEvent): void {
     this.action.onChoose(item, evt).catch(console.error);
   }
 
-  renderSuggestion(match: FuzzyMatch<Entry>, el: HTMLElement): void {
+  renderSuggestion(entry: Entry, el: HTMLElement): void {
     if (this.action.renderItem) {
-      this.action.renderItem(match.item, el);
+      this.action.renderItem(entry, el);
       return;
     }
 
     // Default rendering logic
     el.empty();
-    const entry = match.item;
     const entryTitle = entry.title || '';
 
     let authorString = entry.authorString || '';
     let displayedAuthorString = authorString;
-    let isTruncated = false;
 
     if (entry.author && entry.author.length > 3) {
       const firstAuthors = entry.author.slice(0, 3).map(a => [a.given, a.family].filter(Boolean).join(' '));
       displayedAuthorString = firstAuthors.join(', ') + ' et al.';
-      isTruncated = true;
     }
 
     const yearString = entry.year?.toString() || '';
@@ -143,86 +142,24 @@ export class CitationSearchModal extends FuzzySuggestModal<Entry> {
     const container = el.createEl('div', { cls: 'zoteroResult' });
     const titleEl = container.createEl('span', {
       cls: 'zoteroTitle',
+      text: entryTitle
     });
     container.createEl('span', { cls: 'zoteroCitekey', text: entry.id });
 
     if (yearString) {
-      const yearEl = container.createEl('span', {
+      container.createEl('span', {
         cls: 'zoteroYear',
+        text: yearString
       });
-      // We will render matches for year later
     }
 
     const authorsCls = entry.authorString
       ? 'zoteroAuthors'
       : 'zoteroAuthors zoteroAuthorsEmpty';
-    const authorsEl = container.createEl('span', {
+    container.createEl('span', {
       cls: authorsCls,
+      text: displayedAuthorString
     });
-
-    const allMatches = match.match.matches;
-    const authorStringOffset = 1 + entryTitle.length;
-    const yearOffset = authorStringOffset + authorString.length + 1;
-
-    const shiftMatches = (
-      matches: SearchMatches,
-      start: number,
-      end: number,
-    ) => {
-      return matches
-        .map((match: SearchMatchPart) => {
-          const [matchStart, matchEnd] = match;
-          return [
-            matchStart - start,
-            Math.min(matchEnd - start, end),
-          ] as SearchMatchPart;
-        })
-        .filter((match: SearchMatchPart) => {
-          const [matchStart] = match;
-          return matchStart >= 0;
-        });
-    };
-
-    renderMatches(
-      titleEl,
-      entryTitle,
-      shiftMatches(allMatches, 0, entryTitle.length),
-    );
-
-    if (entry.authorString) {
-      let authorMatches = shiftMatches(
-        allMatches,
-        authorStringOffset,
-        authorStringOffset + entry.authorString.length,
-      );
-
-      if (isTruncated) {
-        // Filter matches to only those that fit in the truncated string (excluding " et al.")
-        const visibleLength = displayedAuthorString.length - 7; // " et al.".length = 7
-        authorMatches = authorMatches.filter(m => m[1] <= visibleLength);
-      }
-
-      renderMatches(
-        authorsEl,
-        displayedAuthorString,
-        authorMatches,
-      );
-    }
-
-    if (yearString) {
-      const yearEl = container.querySelector('.zoteroYear') as HTMLElement;
-      if (yearEl) {
-        renderMatches(
-          yearEl,
-          yearString,
-          shiftMatches(
-            allMatches,
-            yearOffset,
-            yearOffset + yearString.length,
-          ),
-        );
-      }
-    }
   }
 
   onInputKeydown(ev: KeyboardEvent) {
@@ -233,7 +170,7 @@ export class CitationSearchModal extends FuzzySuggestModal<Entry> {
 
   onInputKeyup(ev: KeyboardEvent) {
     if (ev.key == 'Enter' || ev.key == 'Tab') {
-      ((this as unknown) as FuzzySuggestModalExt<Entry>).chooser.useSelectedItem(
+      ((this as unknown) as SuggestModalExt<Entry>).chooser.useSelectedItem(
         ev,
       );
     }

@@ -49,6 +49,7 @@
     "@retorquere/bibtex-parser": "^3.2.30",
     "chokidar": "^3.5.0",
     "handlebars": "^4.7.6",
+    "minisearch": "^7.2.0",
     "open": "^7.3.0",
     "promise-worker": "^2.0.1",
     "zod": "^3.25.76"
