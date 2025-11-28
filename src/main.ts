@@ -16,7 +16,12 @@ import { DataSource, DataSourceDefinition, MergeStrategy } from './data-source';
 import { DatabaseType } from './types';
 
 import { VaultExt } from './obsidian-extensions.d';
-import { CitationSettingTab, CitationsPluginSettings } from './settings';
+import {
+  CitationSettingTab,
+  CitationsPluginSettings,
+  DEFAULT_SETTINGS,
+  validateSettings,
+} from './settings';
 import {
   DISALLOWED_FILENAME_CHARACTERS_RE,
   Notifier,
@@ -58,26 +63,22 @@ export default class CitationPlugin extends Plugin {
     const loadedSettings = await this.loadData();
     if (!loadedSettings) return;
 
-    const toLoad: (keyof CitationsPluginSettings)[] = [
-      'citationExportPath',
-      'citationExportFormat',
-      'literatureNoteTitleTemplate',
-      'literatureNoteFolder',
-      'literatureNoteContentTemplate',
-      'markdownCitationTemplate',
-      'alternativeMarkdownCitationTemplate',
-      'dataSources',
-      'mergeStrategy',
-    ];
-    toLoad.forEach((setting) => {
-      if (setting in loadedSettings) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (this.settings as any)[setting] = (loadedSettings as Record<
-          string,
-          unknown
-        >)[setting];
-      }
-    });
+    const mergedSettings = { ...DEFAULT_SETTINGS, ...loadedSettings };
+    const validationResult = validateSettings(mergedSettings);
+
+    if (validationResult.success) {
+      Object.assign(this.settings, validationResult.data);
+    } else {
+      console.warn(
+        'Citations Plugin: Settings validation failed',
+        validationResult.error,
+      );
+      new Notice(
+        'Citations Plugin: Invalid settings detected. Please check your configuration.',
+      );
+      // Fallback to best-effort loading
+      Object.assign(this.settings, mergedSettings);
+    }
   }
 
   async saveSettings(): Promise<void> {

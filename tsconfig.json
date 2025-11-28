@@ -15,7 +15,8 @@
       "scripthost",
       "es2020"
     ],
-    "strict": true
+    "strict": true,
+    "outDir": "dist"
   },
   "include": [
     "**/*.ts"

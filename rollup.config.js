@@ -30,7 +30,9 @@ export default {
       "require('fs')": "require('original-fs')",
     }),
 
-    typescript(),
+    typescript({
+      outputToFilesystem: false,
+    }),
     nodeResolve({ browser: true }),
     commonjs({ ignore: ['original-fs'] }),
     json(),
