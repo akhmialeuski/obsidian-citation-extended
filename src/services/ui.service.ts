@@ -1,10 +1,11 @@
 import { App } from 'obsidian';
 import { LoadingStatus, LibraryState } from '../library-state';
 import {
-  InsertCitationModal,
-  InsertNoteLinkModal,
-  InsertNoteContentModal,
-  OpenNoteModal,
+  CitationSearchModal,
+  InsertCitationAction,
+  InsertNoteLinkAction,
+  InsertNoteContentAction,
+  OpenNoteAction,
 } from '../modals';
 import CitationPlugin from '../main';
 
@@ -59,7 +60,11 @@ export class UIService {
       name: 'Open literature note',
       hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'o' }],
       callback: () => {
-        const modal = new OpenNoteModal(this.app, this.plugin);
+        const modal = new CitationSearchModal(
+          this.app,
+          this.plugin,
+          new OpenNoteAction(this.plugin),
+        );
         modal.open();
       },
     });
@@ -78,7 +83,11 @@ export class UIService {
       name: 'Insert literature note link',
       hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'e' }],
       editorCallback: () => {
-        const modal = new InsertNoteLinkModal(this.app, this.plugin);
+        const modal = new CitationSearchModal(
+          this.app,
+          this.plugin,
+          new InsertNoteLinkAction(this.plugin),
+        );
         modal.open();
       },
     });
@@ -87,7 +96,11 @@ export class UIService {
       id: 'insert-literature-note-content',
       name: 'Insert literature note content in the current pane',
       editorCallback: () => {
-        const modal = new InsertNoteContentModal(this.app, this.plugin);
+        const modal = new CitationSearchModal(
+          this.app,
+          this.plugin,
+          new InsertNoteContentAction(this.plugin),
+        );
         modal.open();
       },
     });
@@ -96,7 +109,11 @@ export class UIService {
       id: 'insert-markdown-citation',
       name: 'Insert Markdown citation',
       editorCallback: () => {
-        const modal = new InsertCitationModal(this.app, this.plugin);
+        const modal = new CitationSearchModal(
+          this.app,
+          this.plugin,
+          new InsertCitationAction(this.plugin),
+        );
         modal.open();
       },
     });

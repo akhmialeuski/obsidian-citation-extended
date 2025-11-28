@@ -2,13 +2,14 @@ import typescript from '@rollup/plugin-typescript';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
 import json from '@rollup/plugin-json';
+
 import replace from '@rollup/plugin-replace';
 import webWorkerLoader from 'rollup-plugin-web-worker-loader';
 
 export default {
   input: 'src/main.ts',
   output: {
-    dir: '.',
+    dir: 'dist',
     sourcemap: 'inline',
     format: 'cjs',
     exports: 'default',
@@ -39,5 +40,26 @@ export default {
       preserveSource: true,
       sourcemap: true,
     }),
+    {
+      name: 'copy-static-files',
+      writeBundle() {
+        const fs = require('fs');
+
+        // Ensure dist exists (rollup should create it, but just in case)
+        if (!fs.existsSync('dist')) {
+          fs.mkdirSync('dist');
+        }
+
+        if (fs.existsSync('styles/styles.css')) {
+          fs.copyFileSync('styles/styles.css', 'dist/styles.css');
+        }
+        if (fs.existsSync('manifest.json')) {
+          fs.copyFileSync('manifest.json', 'dist/manifest.json');
+        }
+        if (fs.existsSync('versions.json')) {
+          fs.copyFileSync('versions.json', 'dist/versions.json');
+        }
+      }
+    }
   ],
 };
