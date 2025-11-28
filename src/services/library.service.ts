@@ -7,7 +7,10 @@ import { LoadingStatus, LibraryState } from '../library-state';
 import CitationEvents from '../events';
 import { DataSource, MergeStrategy } from '../data-source';
 import { SearchService } from '../search/search.service';
-import { IntrospectionService, VariableDefinition } from './introspection.service';
+import {
+  IntrospectionService,
+  VariableDefinition,
+} from './introspection.service';
 
 export class LibraryService {
   library!: Library;

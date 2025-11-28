@@ -123,10 +123,10 @@ describe('LibraryService', () => {
 
     service = new LibraryService(
       settings,
-      (events as unknown) as CitationEvents,
-      (vaultAdapter as unknown) as FileSystemAdapter,
-      (workerManager as unknown) as WorkerManager,
-      [(mockSource as unknown) as DataSource],
+      events as unknown as CitationEvents,
+      vaultAdapter as unknown as FileSystemAdapter,
+      workerManager as unknown as WorkerManager,
+      [mockSource as unknown as DataSource],
     );
 
     // Reset mocks
@@ -171,5 +171,57 @@ describe('LibraryService', () => {
 
     expect(service.state.status).toBe(LoadingStatus.Success);
     expect(service.library.size).toBe(0);
+  });
+  test('addSource() adds a source', () => {
+    const newSource = { ...mockSource, id: 'new-source' };
+    service.addSource(newSource as unknown as DataSource);
+    expect(service.getSources()).toHaveLength(2);
+    expect(service.getSources()[1].id).toBe('new-source');
+  });
+
+  test('removeSource() removes a source and disposes it', () => {
+    service.removeSource('mock-source');
+    expect(service.getSources()).toHaveLength(0);
+    expect(mockSource.dispose).toHaveBeenCalled();
+  });
+
+  test('load() merges entries from multiple sources (LastWins)', async () => {
+    const source1 = {
+      ...mockSource,
+      id: 'source1',
+      load: jest.fn().mockResolvedValue([{ id: '1', title: 'A' }]),
+    };
+    const source2 = {
+      ...mockSource,
+      id: 'source2',
+      load: jest.fn().mockResolvedValue([
+        { id: '1', title: 'B' },
+        { id: '2', title: 'C' },
+      ]),
+    };
+
+    service = new LibraryService(
+      settings,
+      events as unknown as CitationEvents,
+      vaultAdapter as unknown as FileSystemAdapter,
+      workerManager as unknown as WorkerManager,
+      [source1 as unknown as DataSource, source2 as unknown as DataSource],
+    );
+
+    await service.load();
+
+    expect(service.library.size).toBe(2);
+    expect(service.library.entries['1'].title).toBe('B'); // LastWins
+    expect(service.library.entries['2'].title).toBe('C');
+  });
+
+  test('initWatcher() sets up watchers for all sources', () => {
+    service.initWatcher();
+    expect(mockSource.watch).toHaveBeenCalled();
+  });
+
+  test('dispose() cleans up resources', () => {
+    service.dispose();
+    expect(mockSource.dispose).toHaveBeenCalled();
   });
 });

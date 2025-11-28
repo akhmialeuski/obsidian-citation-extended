@@ -2,6 +2,7 @@ import typescript from '@rollup/plugin-typescript';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
 import json from '@rollup/plugin-json';
+import fs from 'fs';
 
 import replace from '@rollup/plugin-replace';
 import webWorkerLoader from 'rollup-plugin-web-worker-loader';
@@ -23,6 +24,7 @@ export default {
      * and we need to make a platform-general build here.
      */
     replace({
+      preventAssignment: true,
       delimiters: ['', ''],
       include: "node_modules/chokidar/**/*.js",
 
@@ -45,8 +47,6 @@ export default {
     {
       name: 'copy-static-files',
       writeBundle() {
-        const fs = require('fs');
-
         // Ensure dist exists (rollup should create it, but just in case)
         if (!fs.existsSync('dist')) {
           fs.mkdirSync('dist');

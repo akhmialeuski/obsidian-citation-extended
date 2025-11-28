@@ -3,8 +3,8 @@ import { Entry as EntryDataBibLaTeX } from '@retorquere/bibtex-parser';
 // Also make EntryDataBibLaTeX available to other modules
 export { Entry as EntryDataBibLaTeX } from '@retorquere/bibtex-parser';
 
-const databaseTypes = ['csl-json', 'biblatex'] as const;
-export type DatabaseType = typeof databaseTypes[number];
+export const databaseTypes = ['csl-json', 'biblatex'] as const;
+export type DatabaseType = (typeof databaseTypes)[number];
 
 export interface TemplateContext {
   citekey: string;
@@ -32,7 +32,7 @@ export interface TemplateContext {
 }
 
 export class Library {
-  constructor(public entries: { [citekey: string]: Entry }) { }
+  constructor(public entries: { [citekey: string]: Entry }) {}
 
   get size(): number {
     return Object.keys(this.entries).length;
@@ -71,7 +71,7 @@ export function loadEntries(
     parsed.errors.forEach((error) => {
       console.error(
         `Citation plugin: fatal error loading BibLaTeX entry` +
-        ` (line ${error.line}, column ${error.column}):`,
+          ` (line ${error.line}, column ${error.column}):`,
         error.message,
       );
     });
@@ -183,9 +183,9 @@ export abstract class Entry {
       .forEach(([key, descriptor]) => {
         if (descriptor && key[0] !== '_') {
           try {
-            const val = ((this as unknown) as Record<string, unknown>)[key];
+            const val = (this as unknown as Record<string, unknown>)[key];
             jsonObj[key] = val;
-          } catch (error) {
+          } catch {
             return;
           }
         }

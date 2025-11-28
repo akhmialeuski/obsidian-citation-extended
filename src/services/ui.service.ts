@@ -12,7 +12,10 @@ import CitationPlugin from '../main';
 export class UIService {
   private statusBarItem: HTMLElement;
 
-  constructor(private app: App, private plugin: CitationPlugin) {
+  constructor(
+    private app: App,
+    private plugin: CitationPlugin,
+  ) {
     this.statusBarItem = this.plugin.addStatusBarItem();
   }
 

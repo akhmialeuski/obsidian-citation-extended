@@ -34,7 +34,7 @@ describe('NoteService', () => {
     jest
       .spyOn(templateService, 'getTemplateVariables')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .mockReturnValue(({} as unknown) as any); // TemplateContext is complex to mock fully
+      .mockReturnValue({} as unknown as any); // TemplateContext is complex to mock fully
     jest.spyOn(templateService, 'getTitle').mockReturnValue('My Title');
     jest.spyOn(templateService, 'getContent').mockReturnValue('My Content');
 

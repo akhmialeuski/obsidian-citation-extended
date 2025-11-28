@@ -1,12 +1,4 @@
-import {
-  App,
-  EventRef,
-  SuggestModal,
-  Notice,
-  renderMatches,
-  SearchMatches,
-  SearchMatchPart,
-} from 'obsidian';
+import { App, EventRef, Notice, SuggestModal } from 'obsidian';
 import CitationPlugin from './main';
 import { Entry } from './types';
 
@@ -94,12 +86,18 @@ export class CitationSearchModal extends SuggestModal<Entry> {
     }
 
     if (!query) {
-      return Object.values(this.plugin.libraryService.library.entries).slice(0, this.limit);
+      return Object.values(this.plugin.libraryService.library.entries).slice(
+        0,
+        this.limit,
+      );
     }
 
     const ids = this.plugin.libraryService.searchService.search(query);
     // Limit results here if SearchService doesn't
-    return ids.slice(0, this.limit).map(id => this.plugin.libraryService.library.entries[id]).filter(Boolean);
+    return ids
+      .slice(0, this.limit)
+      .map((id) => this.plugin.libraryService.library.entries[id])
+      .filter(Boolean);
   }
 
   setLoading(loading: boolean): void {
@@ -111,7 +109,7 @@ export class CitationSearchModal extends SuggestModal<Entry> {
       this.loadingEl.addClass('d-none');
       this.inputEl.disabled = false;
       this.inputEl.focus();
-      ((this as unknown) as SuggestModalWithUpdate<Entry>).updateSuggestions();
+      (this as unknown as SuggestModalWithUpdate<Entry>).updateSuggestions();
     }
   }
 
@@ -129,27 +127,29 @@ export class CitationSearchModal extends SuggestModal<Entry> {
     el.empty();
     const entryTitle = entry.title || '';
 
-    let authorString = entry.authorString || '';
+    const authorString = entry.authorString || '';
     let displayedAuthorString = authorString;
 
     if (entry.author && entry.author.length > 3) {
-      const firstAuthors = entry.author.slice(0, 3).map(a => [a.given, a.family].filter(Boolean).join(' '));
+      const firstAuthors = entry.author
+        .slice(0, 3)
+        .map((a) => [a.given, a.family].filter(Boolean).join(' '));
       displayedAuthorString = firstAuthors.join(', ') + ' et al.';
     }
 
     const yearString = entry.year?.toString() || '';
 
     const container = el.createEl('div', { cls: 'zoteroResult' });
-    const titleEl = container.createEl('span', {
+    container.createEl('span', {
       cls: 'zoteroTitle',
-      text: entryTitle
+      text: entryTitle,
     });
     container.createEl('span', { cls: 'zoteroCitekey', text: entry.id });
 
     if (yearString) {
       container.createEl('span', {
         cls: 'zoteroYear',
-        text: yearString
+        text: yearString,
       });
     }
 
@@ -158,7 +158,7 @@ export class CitationSearchModal extends SuggestModal<Entry> {
       : 'zoteroAuthors zoteroAuthorsEmpty';
     container.createEl('span', {
       cls: authorsCls,
-      text: displayedAuthorString
+      text: displayedAuthorString,
     });
   }
 
@@ -170,16 +170,14 @@ export class CitationSearchModal extends SuggestModal<Entry> {
 
   onInputKeyup(ev: KeyboardEvent) {
     if (ev.key == 'Enter' || ev.key == 'Tab') {
-      ((this as unknown) as SuggestModalExt<Entry>).chooser.useSelectedItem(
-        ev,
-      );
+      (this as unknown as SuggestModalExt<Entry>).chooser.useSelectedItem(ev);
     }
   }
 }
 
 export class OpenNoteAction implements SearchAction {
   name = 'Open literature note';
-  constructor(private plugin: CitationPlugin) { }
+  constructor(private plugin: CitationPlugin) {}
 
   async onChoose(item: Entry, evt: MouseEvent | KeyboardEvent) {
     if (evt instanceof MouseEvent || evt.key == 'Enter') {
@@ -217,7 +215,7 @@ export class OpenNoteAction implements SearchAction {
 
 export class InsertNoteLinkAction implements SearchAction {
   name = 'Insert literature note link';
-  constructor(private plugin: CitationPlugin) { }
+  constructor(private plugin: CitationPlugin) {}
 
   async onChoose(item: Entry) {
     await this.plugin.insertLiteratureNoteLink(item.id);
@@ -234,7 +232,7 @@ export class InsertNoteLinkAction implements SearchAction {
 
 export class InsertNoteContentAction implements SearchAction {
   name = 'Insert literature note content';
-  constructor(private plugin: CitationPlugin) { }
+  constructor(private plugin: CitationPlugin) {}
 
   async onChoose(item: Entry) {
     await this.plugin.insertLiteratureNoteContent(item.id);
@@ -254,7 +252,7 @@ export class InsertNoteContentAction implements SearchAction {
 
 export class InsertCitationAction implements SearchAction {
   name = 'Insert citation';
-  constructor(private plugin: CitationPlugin) { }
+  constructor(private plugin: CitationPlugin) {}
 
   async onChoose(item: Entry, evt: MouseEvent | KeyboardEvent) {
     const isAlternative = evt instanceof KeyboardEvent && evt.shiftKey;

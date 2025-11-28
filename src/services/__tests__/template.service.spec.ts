@@ -191,14 +191,14 @@ describe('TemplateService', () => {
     test('renderTitle', () => {
       settings.literatureNoteTitleTemplate = 'Title: {{title}}';
       settings.literatureNoteTitleTemplate = 'Title: {{title}}';
-      const variables = ({ title: 'My Title' } as unknown) as TemplateContext;
+      const variables = { title: 'My Title' } as unknown as TemplateContext;
       expect(service.getTitle(variables)).toBe('Title: My Title');
     });
 
     test('renderContent', () => {
       settings.literatureNoteContentTemplate = 'Content: {{year}}';
       settings.literatureNoteContentTemplate = 'Content: {{year}}';
-      const variables = ({ year: '2023' } as unknown) as TemplateContext;
+      const variables = { year: '2023' } as unknown as TemplateContext;
       expect(service.getContent(variables)).toBe('Content: 2023');
     });
   });
