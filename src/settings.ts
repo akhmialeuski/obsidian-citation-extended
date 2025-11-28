@@ -1,11 +1,9 @@
 import {
-  AbstractTextComponent,
   App,
-  DropdownComponent,
+  debounce,
   FileSystemAdapter,
   PluginSettingTab,
   Setting,
-  debounce,
 } from 'obsidian';
 
 import CitationPlugin from './main';
@@ -124,9 +122,9 @@ export class CitationSettingTab extends PluginSettingTab {
   }
 
   open(): void {
-    this.checkCitationExportPath(
-      this.plugin.settings.citationExportPath,
-    ).then(() => this.showCitationExportPathSuccess());
+    this.checkCitationExportPath(this.plugin.settings.citationExportPath).then(
+      () => this.showCitationExportPathSuccess(),
+    );
   }
 
   display(): void {
@@ -172,8 +170,8 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Citation database path')
       .setDesc(
         'Path to citation library exported by your reference manager. ' +
-        'Can be an absolute path or a path relative to the current vault root folder. ' +
-        'Citations will be automatically reloaded whenever this file updates.',
+          'Can be an absolute path or a path relative to the current vault root folder. ' +
+          'Citations will be automatically reloaded whenever this file updates.',
       )
       .addText((input) => {
         input.setPlaceholder('/path/to/export.json');
@@ -197,8 +195,7 @@ export class CitationSettingTab extends PluginSettingTab {
     });
     this.citationPathErrorEl = containerEl.createEl('p', {
       cls: 'zoteroSettingCitationPathError d-none',
-      text:
-        'The citation export file cannot be found. Please check the path above.',
+      text: 'The citation export file cannot be found. Please check the path above.',
     });
     this.citationPathSuccessEl = containerEl.createEl('p', {
       cls: 'zoteroSettingCitationPathSuccess d-none',
@@ -267,27 +264,27 @@ export class CitationSettingTab extends PluginSettingTab {
     const variables = this.plugin.libraryService.getTemplateVariables();
 
     // Group variables
-    const standardVariables = variables.filter(v => v.description);
-    const otherVariables = variables.filter(v => !v.description);
+    const standardVariables = variables.filter((v) => v.description);
+    const otherVariables = variables.filter((v) => !v.description);
 
     const createVariableList = (vars: typeof variables) => {
       const list = variableContainer.createEl('ul');
       list.style.marginTop = '5px';
       list.style.marginBottom = '15px';
 
-      vars.forEach(v => {
+      vars.forEach((v) => {
         const item = list.createEl('li');
         item.createEl('code', {
           text: '{{' + v.key + '}}',
         });
         if (v.description) {
           item.createEl('span', {
-            text: ` — ${v.description}`,
+            text: ` — ${v.description} `,
           });
         }
         if (v.example) {
           item.createEl('span', {
-            text: ` (e.g. ${v.example})`,
+            text: ` (e.g.${v.example})`,
             cls: 'text-muted',
           });
         }
@@ -300,7 +297,9 @@ export class CitationSettingTab extends PluginSettingTab {
     }
 
     if (otherVariables.length > 0) {
-      variableContainer.createEl('strong', { text: 'Detected Variables (from library)' });
+      variableContainer.createEl('strong', {
+        text: 'Detected Variables (from library)',
+      });
       createVariableList(otherVariables);
     }
 
@@ -324,8 +323,7 @@ export class CitationSettingTab extends PluginSettingTab {
   private displayMarkdownCitationSettings(containerEl: HTMLElement): void {
     containerEl.createEl('h3', { text: 'Markdown citation templates' });
     containerEl.createEl('p', {
-      text:
-        'You can insert Pandoc-style Markdown citations rather than literature notes by using the "Insert Markdown citation" command. The below options allow customization of the Markdown citation format.',
+      text: 'You can insert Pandoc-style Markdown citations rather than literature notes by using the "Insert Markdown citation" command. The below options allow customization of the Markdown citation format.',
     });
 
     this.buildSetting(
@@ -386,15 +384,16 @@ export class CitationSettingTab extends PluginSettingTab {
 
       updatePreview = (value: string) => {
         if (!previewEl) return;
-        const variables = this.plugin.templateService.getTemplateVariables(
-          MOCK_ENTRY,
-        );
+        const variables =
+          this.plugin.templateService.getTemplateVariables(MOCK_ENTRY);
         try {
           const result = this.plugin.templateService.render(value, variables);
           previewEl.setText(result);
           previewEl.style.color = 'var(--text-normal)';
         } catch (e) {
-          previewEl.setText(`Error rendering template: ${(e as Error).message}`);
+          previewEl.setText(
+            `Error rendering template: ${(e as Error).message} `,
+          );
           previewEl.style.color = 'var(--text-error)';
         }
       };
@@ -451,7 +450,7 @@ export class CitationSettingTab extends PluginSettingTab {
         this.plugin.libraryService.resolveLibraryPath(filePath),
       );
       this.citationPathErrorEl.addClass('d-none');
-    } catch (e) {
+    } catch {
       this.citationPathSuccessEl.addClass('d-none');
       this.citationPathErrorEl.removeClass('d-none');
       return false;
