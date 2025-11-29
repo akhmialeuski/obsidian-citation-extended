@@ -188,12 +188,12 @@ export class LibraryService {
             `LibraryService: Error loading from source ${source.id}:`,
             error,
           );
-          return Promise.reject(error);
+          return error instanceof Error ? error : new Error(String(error));
         }
       });
 
       // Add 10s timeout
-      let timeoutId: number;
+      let timeoutId: number = 0;
       const timeoutPromise = new Promise<never>((_, reject) => {
         timeoutId = window.setTimeout(
           () => reject(new Error('Timeout loading citation database')),
@@ -207,7 +207,7 @@ export class LibraryService {
       ]);
 
       // Clear the timeout if the race completed before the timeout fired
-      if (timeoutId !== undefined) {
+      if (timeoutId) {
         window.clearTimeout(timeoutId);
       }
       if (signal.aborted) return null;

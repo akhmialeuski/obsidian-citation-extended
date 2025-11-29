@@ -85,6 +85,7 @@ export function loadEntries(
 export interface Author {
   given?: string;
   family?: string;
+  literal?: string;
 }
 
 /**
@@ -203,6 +204,7 @@ export interface EntryDataCSL {
 
   abstract?: string;
   author?: Author[];
+  editor?: Author[];
   'container-title'?: string;
   DOI?: string;
   'event-place'?: string;
@@ -258,9 +260,18 @@ export class EntryCSLAdapter extends Entry {
   }
 
   get authorString(): string | null {
-    return this.data.author
-      ? this.data.author.map((a) => `${a.given} ${a.family}`).join(', ')
-      : null;
+    if (this.data.author) {
+      return this.data.author
+        .map((a) => a.literal || `${a.given || ''} ${a.family || ''}`.trim())
+        .join(', ');
+    }
+    if (this.data.editor) {
+      const editors = this.data.editor
+        .map((a) => a.literal || `${a.given || ''} ${a.family || ''}`.trim())
+        .join(', ');
+      return `${editors} (Eds.)`;
+    }
+    return null;
   }
 
   get containerTitle(): string | undefined {
@@ -414,6 +425,14 @@ export class EntryBibLaTeXAdapter extends Entry {
         return parts.filter((x) => x).join(' ');
       });
       return names.join(', ');
+    } else if (this.data.creators.editor) {
+      const names = this.data.creators.editor.map((name) => {
+        if (name.literal) return name.literal;
+        const parts = [name.firstName, name.prefix, name.lastName, name.suffix];
+        // Drop any null parts and join
+        return parts.filter((x) => x).join(' ');
+      });
+      return `${names.join(', ')} (Eds.)`;
     } else {
       return this.data.fields.author?.join(', ');
     }
