@@ -1,10 +1,27 @@
 # Intellij
 *.iml
-.idea
+.idea/
+
+# VSCode
+.vscode/
+
+# System
+.DS_Store
+Thumbs.db
 
 # npm
-node_modules
+node_modules/
+npm-debug.log
 
 # build
 main.js
 *.js.map
+dist/
+
+# coverage
+coverage/
+.nyc_output/
+
+# cache
+.eslintcache
+

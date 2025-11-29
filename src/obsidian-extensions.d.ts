@@ -3,8 +3,8 @@
  * Also extends some types to make our lives easier.
  */
 
-import { EventRef, Vault, Workspace } from 'obsidian';
+import { Vault } from 'obsidian';
 
 export class VaultExt extends Vault {
-  getConfig(key: string): any;
+  getConfig(key: string): unknown;
 }

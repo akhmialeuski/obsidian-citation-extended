@@ -4,15 +4,17 @@
  * Loading animation from
  * https://loading.io/css/
  */
- .zoteroModalLoading {
-   color: var(--text-muted);
-   text-align: center;
- }
+.zoteroModalLoading {
+  color: var(--text-muted);
+  text-align: center;
+}
+
 .zoteroModalLoadingAnimation {
   display: inline-block;
   width: 80px;
   height: 80px;
 }
+
 .zoteroModalLoadingAnimation {
   content: " ";
   display: block;
@@ -24,10 +26,12 @@
   border-color: #eee transparent #eee transparent;
   animation: lds-dual-ring 1.2s linear infinite;
 }
+
 @keyframes lds-dual-ring {
   0% {
     transform: rotate(0deg);
   }
+
   100% {
     transform: rotate(360deg);
   }
@@ -46,15 +50,28 @@
   font-size: 14px;
   display: block;
 }
+
 .zoteroAuthors {
   color: #555;
   font-size: 13px;
 }
+
 .zoteroAuthorsEmpty::after {
   font-style: italic;
   content: 'Unknown authors';
 }
+
 .zoteroCitekey {
+  color: #555;
+  font-size: 13px;
+  font-family: monospace;
+  display: inline-block;
+  margin-right: 5px;
+  padding-right: 5px;
+  border-right: 1px solid #ccc;
+}
+
+.zoteroYear {
   color: #555;
   font-size: 13px;
   font-family: monospace;
@@ -68,11 +85,23 @@
   font-size: 14px;
   display: block;
 }
+
 .theme-dark .zoteroAuthors {
   color: #aaa;
   font-size: 13px;
 }
+
 .theme-dark .zoteroCitekey {
+  color: #aaa;
+  font-size: 13px;
+  font-family: monospace;
+  display: inline-block;
+  margin-right: 5px;
+  padding-right: 5px;
+  border-right: 1px solid #aaa;
+}
+
+.theme-dark .zoteroYear {
   color: #aaa;
   font-size: 13px;
   font-family: monospace;
@@ -86,23 +115,29 @@
 .d-none {
   display: none;
 }
+
 .zoteroSettingCitationPathLoading,
 .zoteroSettingCitationPathError,
 .zoteroSettingCitationPathSuccess {
   font-size: 14px;
 }
+
 .zoteroSettingCitationPathLoading {
   color: var(--text-muted);
 }
+
 .zoteroSettingCitationPathError {
   color: var(--text-error);
 }
+
 .zoteroSettingCitationPathError:hover {
   color: var(--text-error-hover);
 }
+
 .zoteroSettingCitationPathSuccess {
   color: var(--text-accent);
 }
+
 .zoteroSettingCitationPathSuccess:hover {
   color: var(--text-accent-hover);
 }
@@ -111,4 +146,26 @@
   resize: vertical;
   width: 100%;
   min-height: 10em;
+}
+
+/* Stacked Setting Layout */
+.citation-setting-stacked {
+  display: block;
+  padding-bottom: 18px;
+}
+
+.citation-setting-stacked .setting-item-info {
+  margin-bottom: 10px;
+  width: 100%;
+}
+
+.citation-setting-stacked .setting-item-control {
+  width: 100%;
+  display: block;
+}
+
+.citation-setting-stacked textarea,
+.citation-setting-stacked input[type="text"] {
+  width: 100%;
+  display: block;
 }

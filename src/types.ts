@@ -3,47 +3,40 @@ import { Entry as EntryDataBibLaTeX } from '@retorquere/bibtex-parser';
 // Also make EntryDataBibLaTeX available to other modules
 export { Entry as EntryDataBibLaTeX } from '@retorquere/bibtex-parser';
 
-// Trick: allow string indexing onto object properties
-export interface IIndexable {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: any;
+export const databaseTypes = ['csl-json', 'biblatex'] as const;
+export type DatabaseType = (typeof databaseTypes)[number];
+
+export interface TemplateContext {
+  citekey: string;
+  abstract?: string;
+  authorString?: string | null;
+  containerTitle?: string;
+  DOI?: string;
+  eprint?: string | null;
+  eprinttype?: string | null;
+  eventPlace?: string;
+  language?: string;
+  note?: string;
+  page?: string;
+  publisher?: string;
+  publisherPlace?: string;
+  source?: string;
+  title?: string;
+  titleShort?: string;
+  type: string;
+  URL?: string;
+  year?: string;
+  zoteroSelectURI: string;
+
+  entry: Record<string, unknown>;
 }
 
-const databaseTypes = ['csl-json', 'biblatex'] as const;
-export type DatabaseType = typeof databaseTypes[number];
-
-export const TEMPLATE_VARIABLES = {
-  citekey: 'Unique citekey',
-  abstract: '',
-  authorString: 'Comma-separated list of author names',
-  containerTitle:
-    'Title of the container holding the reference (e.g. book title for a book chapter, or the journal title for a journal article)',
-  DOI: '',
-  eprint: '',
-  eprinttype: '',
-  eventPlace: 'Location of event',
-  language: 'Language code (e.g. en, ru)',
-  note: '',
-  page: 'Page or page range',
-  publisher: '',
-  publisherPlace: 'Location of publisher',
-  source: 'Source of the reference (e.g. YouTube, arXiv.org)',
-  title: '',
-  titleShort: '',
-  type: 'CSL type of the reference (e.g. article-journal, webpage, motion_picture)',
-  URL: '',
-  year: 'Publication year',
-  zoteroSelectURI: 'URI to open the reference in Zotero',
-};
-
 export class Library {
-  constructor(public entries: { [citekey: string]: Entry }) { }
+  constructor(public entries: { [citekey: string]: Entry }) {}
 
   get size(): number {
     return Object.keys(this.entries).length;
   }
-
-
 }
 
 /**
@@ -56,7 +49,7 @@ export function loadEntries(
   databaseRaw: string,
   databaseType: DatabaseType,
 ): EntryData[] {
-  let libraryArray: EntryData[];
+  let libraryArray: EntryData[] = [];
 
   if (databaseType == 'csl-json') {
     libraryArray = JSON.parse(databaseRaw);
@@ -78,7 +71,7 @@ export function loadEntries(
     parsed.errors.forEach((error) => {
       console.error(
         `Citation plugin: fatal error loading BibLaTeX entry` +
-        ` (line ${error.line}, column ${error.column}):`,
+          ` (line ${error.line}, column ${error.column}):`,
         error.message,
       );
     });
@@ -113,7 +106,7 @@ export abstract class Entry {
   /**
    * A comma-separated list of authors, each of the format `<firstname> <lastname>`.
    */
-  public abstract authorString?: string;
+  public abstract authorString?: string | null;
 
   /**
    * The name of the container for this reference -- in the case of a book
@@ -123,7 +116,7 @@ export abstract class Entry {
   public abstract containerTitle?: string;
 
   public abstract DOI?: string;
-  public abstract files?: string[];
+  public abstract files?: string[] | null;
 
   /**
    * The date of issue. Many references do not contain information about month
@@ -131,7 +124,7 @@ export abstract class Entry {
    * values for those elements. (A reference which is only encoded as being
    * issued in 2001 is represented here with a date 2001-01-01 00:00:00 UTC.)
    */
-  public abstract issuedDate?: Date;
+  public abstract issuedDate?: Date | null;
 
   /**
    * Page or page range of the reference.
@@ -153,11 +146,11 @@ export abstract class Entry {
   /**
    * BibLaTeX-specific properties
    */
-  public abstract eprint?: string;
-  public abstract eprinttype?: string;
+  public abstract eprint?: string | null;
+  public abstract eprinttype?: string | null;
 
   protected _year?: string;
-  public get year(): number {
+  public get year(): number | undefined {
     return this._year
       ? parseInt(this._year)
       : this.issuedDate?.getUTCFullYear();
@@ -166,9 +159,11 @@ export abstract class Entry {
   protected _note?: string[];
 
   public get note(): string {
-    return this._note
-      ?.map((el) => el.replace(/(zotero:\/\/.+)/g, '[Link]($1)'))
-      .join('\n\n');
+    return (
+      this._note
+        ?.map((el) => el.replace(/(zotero:\/\/.+)/g, '[Link]($1)'))
+        .join('\n\n') || ''
+    );
   }
 
   /**
@@ -179,7 +174,7 @@ export abstract class Entry {
   }
 
   toJSON(): Record<string, unknown> {
-    const jsonObj: Record<string, unknown> = Object.assign({}, this);
+    const jsonObj = { ...this } as Record<string, unknown>;
 
     // add getter values
     const proto = Object.getPrototypeOf(this);
@@ -188,9 +183,9 @@ export abstract class Entry {
       .forEach(([key, descriptor]) => {
         if (descriptor && key[0] !== '_') {
           try {
-            const val = (this as IIndexable)[key];
+            const val = (this as unknown as Record<string, unknown>)[key];
             jsonObj[key] = val;
-          } catch (error) {
+          } catch {
             return;
           }
         }
@@ -211,8 +206,7 @@ export interface EntryDataCSL {
   'container-title'?: string;
   DOI?: string;
   'event-place'?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  issued?: { 'date-parts': [any[]] };
+  issued?: { 'date-parts': [(number | string)[]] };
   language?: string;
   page?: string;
   publisher?: string;
@@ -223,26 +217,43 @@ export interface EntryDataCSL {
   URL?: string;
 }
 
+export interface WorkerRequest {
+  databaseRaw: string;
+  databaseType: DatabaseType;
+}
+
+export type WorkerResponse = EntryData[];
+
+export function isEntryDataCSL(entry: EntryData): entry is EntryDataCSL {
+  return (entry as EntryDataCSL).id !== undefined;
+}
+
+export function isEntryDataBibLaTeX(
+  entry: EntryData,
+): entry is EntryDataBibLaTeX {
+  return (entry as EntryDataBibLaTeX).key !== undefined;
+}
+
 export class EntryCSLAdapter extends Entry {
   constructor(private data: EntryDataCSL) {
     super();
   }
 
-  eprint: string = null;
-  eprinttype: string = null;
-  files: string[] = null;
+  eprint: string | null = null;
+  eprinttype: string | null = null;
+  files: string[] | null = null;
 
-  get id() {
+  get id(): string {
     return this.data.id;
   }
-  get type() {
+  get type(): string {
     return this.data.type;
   }
 
-  get abstract() {
+  get abstract(): string | undefined {
     return this.data.abstract;
   }
-  get author() {
+  get author(): Author[] | undefined {
     return this.data.author;
   }
 
@@ -252,27 +263,27 @@ export class EntryCSLAdapter extends Entry {
       : null;
   }
 
-  get containerTitle() {
+  get containerTitle(): string | undefined {
     return this.data['container-title'];
   }
 
-  get DOI() {
+  get DOI(): string | undefined {
     return this.data.DOI;
   }
 
-  get eventPlace() {
+  get eventPlace(): string | undefined {
     return this.data['event-place'];
   }
 
-  get language() {
+  get language(): string | undefined {
     return this.data.language;
   }
 
-  get source() {
+  get source(): string | undefined {
     return this.data.source;
   }
 
-  get issuedDate() {
+  get issuedDate(): Date | null {
     if (
       !(
         this.data.issued &&
@@ -283,78 +294,37 @@ export class EntryCSLAdapter extends Entry {
       return null;
 
     const [year, month, day] = this.data.issued['date-parts'][0];
-    return new Date(Date.UTC(year, (month || 1) - 1, day || 1));
+    const y = typeof year === 'string' ? parseInt(year) : year;
+    const m = typeof month === 'string' ? parseInt(month) : month;
+    const d = typeof day === 'string' ? parseInt(day) : day;
+
+    return new Date(Date.UTC(y, (m || 1) - 1, d || 1));
   }
 
-  get page() {
+  get page(): string | undefined {
     return this.data.page;
   }
 
-  get publisher() {
+  get publisher(): string | undefined {
     return this.data.publisher;
   }
 
-  get publisherPlace() {
+  get publisherPlace(): string | undefined {
     return this.data['publisher-place'];
   }
 
-  get title() {
+  get title(): string | undefined {
     return this.data.title;
   }
 
-  get titleShort() {
+  get titleShort(): string | undefined {
     return this.data['title-short'];
   }
 
-  get URL() {
+  get URL(): string | undefined {
     return this.data.URL;
   }
 }
-
-const BIBLATEX_PROPERTY_MAPPING: Record<string, string> = {
-  abstract: 'abstract',
-  booktitle: '_containerTitle',
-  date: 'issued',
-  doi: 'DOI',
-  eprint: 'eprint',
-  eprinttype: 'eprinttype',
-  eventtitle: 'event',
-  journal: '_containerTitle',
-  journaltitle: '_containerTitle',
-  location: 'publisherPlace',
-  pages: 'page',
-  shortjournal: 'containerTitleShort',
-  title: 'title',
-  shorttitle: 'titleShort',
-  url: 'URL',
-  venue: 'eventPlace',
-  year: '_year',
-  publisher: 'publisher',
-  note: '_note',
-};
-
-// BibLaTeX parser returns arrays of property values (allowing for repeated
-// property entries). For the following fields, just blindly take the first.
-const BIBLATEX_PROPERTY_TAKE_FIRST: string[] = [
-  'abstract',
-  'booktitle',
-  '_containerTitle',
-  'date',
-  'doi',
-  'eprint',
-  'eprinttype',
-  'eventtitle',
-  'journaltitle',
-  'location',
-  'pages',
-  'shortjournal',
-  'title',
-  'shorttitle',
-  'url',
-  'venue',
-  '_year',
-  'publisher',
-];
 
 export class EntryBibLaTeXAdapter extends Entry {
   abstract?: string;
@@ -380,25 +350,44 @@ export class EntryBibLaTeXAdapter extends Entry {
   constructor(private data: EntryDataBibLaTeX) {
     super();
 
-    Object.entries(BIBLATEX_PROPERTY_MAPPING).forEach(
-      (map: [string, string]) => {
-        const [src, tgt] = map;
-        if (src in this.data.fields) {
-          let val = this.data.fields[src];
-          if (BIBLATEX_PROPERTY_TAKE_FIRST.includes(src)) {
-            val = (val as any[])[0];
-          }
-
-          (this as IIndexable)[tgt] = val;
-        }
-      },
-    );
+    this.abstract = this.getField('abstract');
+    this._containerTitle =
+      this.getField('booktitle') ||
+      this.getField('journal') ||
+      this.getField('journaltitle');
+    this.containerTitleShort = this.getField('shortjournal');
+    this.DOI = this.getField('doi');
+    this.eprint = this.getField('eprint');
+    this.eprinttype = this.getField('eprinttype');
+    this.event = this.getField('eventtitle');
+    this.eventPlace = this.getField('venue');
+    this.issued = this.getField('date');
+    this.page = this.getField('pages');
+    this.publisher = this.getField('publisher');
+    this.publisherPlace = this.getField('location');
+    this.title = this.getField('title');
+    this.titleShort = this.getField('shorttitle');
+    this.URL = this.getField('url');
+    this._year = this.getField('year');
+    this._note = this.getArrayField('note');
   }
 
-  get id() {
+  private getField(key: string): string | undefined {
+    if (!(key in this.data.fields)) return undefined;
+    const val = this.data.fields[key];
+    return Array.isArray(val) ? val[0] : val;
+  }
+
+  private getArrayField(key: string): string[] | undefined {
+    if (!(key in this.data.fields)) return undefined;
+    const val = this.data.fields[key];
+    return Array.isArray(val) ? val : [val];
+  }
+
+  get id(): string {
     return this.data.key;
   }
-  get type() {
+  get type(): string {
     return this.data.type;
   }
 
@@ -416,7 +405,7 @@ export class EntryBibLaTeXAdapter extends Entry {
     return ret;
   }
 
-  get authorString() {
+  get authorString(): string | undefined {
     if (this.data.creators.author) {
       const names = this.data.creators.author.map((name) => {
         if (name.literal) return name.literal;
@@ -430,7 +419,7 @@ export class EntryBibLaTeXAdapter extends Entry {
     }
   }
 
-  get containerTitle() {
+  get containerTitle(): string | undefined {
     if (this._containerTitle) {
       return this._containerTitle;
     } else if (this.data.fields.eprint) {
@@ -444,7 +433,7 @@ export class EntryBibLaTeXAdapter extends Entry {
     }
   }
 
-  get issuedDate() {
+  get issuedDate(): Date | null {
     return this.issued ? new Date(this.issued) : null;
   }
 

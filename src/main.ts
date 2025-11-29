@@ -1,64 +1,62 @@
 import {
+  Editor,
   FileSystemAdapter,
-  MarkdownSourceView,
   MarkdownView,
-  normalizePath,
+  Notice,
   Plugin,
-  TFile,
-  debounce,
 } from 'obsidian';
-import * as path from 'path';
 import * as chokidar from 'chokidar';
-import * as CodeMirror from 'codemirror';
-
-import {
-  compile as compileTemplate,
-  TemplateDelegate as Template,
-} from 'handlebars';
-
 
 import CitationEvents from './events';
 import { TemplateService } from './services/template.service';
 import { NoteService } from './services/note.service';
 import { LibraryService } from './services/library.service';
 import { UIService } from './services/ui.service';
+import { LocalFileSource, VaultFileSource } from './sources';
+import { DataSource, DataSourceDefinition, MergeStrategy } from './data-source';
+import { DatabaseType } from './types';
 
 import { VaultExt } from './obsidian-extensions.d';
-import { CitationSettingTab, CitationsPluginSettings } from './settings';
 import {
-  Entry,
-  EntryData,
-  EntryBibLaTeXAdapter,
-  EntryCSLAdapter,
-  IIndexable,
-  Library,
-} from './types';
+  CitationSettingTab,
+  CitationsPluginSettings,
+  DEFAULT_SETTINGS,
+  validateSettings,
+} from './settings';
 import {
   DISALLOWED_FILENAME_CHARACTERS_RE,
   Notifier,
   WorkerManager,
-  WorkerManagerBlocked,
 } from './util';
 import LoadWorker from 'web-worker:./worker';
 
 export default class CitationPlugin extends Plugin {
-  settings: CitationsPluginSettings;
-  templateService: TemplateService;
-  noteService: NoteService;
-  libraryService: LibraryService;
-  uiService: UIService;
+  settings!: CitationsPluginSettings;
+  templateService!: TemplateService;
+  noteService!: NoteService;
+  libraryService!: LibraryService;
+  uiService!: UIService;
 
   events = new CitationEvents();
   private fileWatcher?: chokidar.FSWatcher;
 
-  literatureNoteErrorNotifier: Notifier;
+  literatureNoteErrorNotifier = new Notifier(
+    'Unable to access literature note. Please check that the literature note folder exists, and that the note name is valid.',
+  );
 
-  get editor(): CodeMirror.Editor {
-    const view = this.app.workspace.activeLeaf.view;
-    if (!(view instanceof MarkdownView)) return null;
+  /**
+   * Gets the current active Markdown editor
+   */
+  private getActiveEditor(): Editor | null {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    return view?.editor ?? null;
+  }
 
-    const sourceView = view.sourceMode;
-    return (sourceView as MarkdownSourceView).cmEditor;
+  /**
+   * Checks if there is an active editor
+   */
+  private hasActiveEditor(): boolean {
+    return this.getActiveEditor() !== null;
   }
 
   async loadSettings(): Promise<void> {
@@ -67,20 +65,22 @@ export default class CitationPlugin extends Plugin {
     const loadedSettings = await this.loadData();
     if (!loadedSettings) return;
 
-    const toLoad = [
-      'citationExportPath',
-      'citationExportFormat',
-      'literatureNoteTitleTemplate',
-      'literatureNoteFolder',
-      'literatureNoteContentTemplate',
-      'markdownCitationTemplate',
-      'alternativeMarkdownCitationTemplate',
-    ];
-    toLoad.forEach((setting) => {
-      if (setting in loadedSettings) {
-        (this.settings as IIndexable)[setting] = loadedSettings[setting];
-      }
-    });
+    const mergedSettings = { ...DEFAULT_SETTINGS, ...loadedSettings };
+    const validationResult = validateSettings(mergedSettings);
+
+    if (validationResult.success) {
+      Object.assign(this.settings, validationResult.data);
+    } else {
+      console.warn(
+        'Citations Plugin: Settings validation failed',
+        validationResult.error,
+      );
+      new Notice(
+        'Citations Plugin: Invalid settings detected. Please check your configuration.',
+      );
+      // Fallback to best-effort loading
+      Object.assign(this.settings, mergedSettings);
+    }
   }
 
   async saveSettings(): Promise<void> {
@@ -89,111 +89,139 @@ export default class CitationPlugin extends Plugin {
 
   async onload(): Promise<void> {
     await this.loadSettings();
-
-    this.literatureNoteErrorNotifier = new Notifier(
-      'Unable to access literature note. Please check that the literature note folder exists, or update the Citations plugin settings.',
+    this.templateService = new TemplateService(this.settings);
+    this.noteService = new NoteService(
+      this.app,
+      this.settings,
+      this.templateService,
     );
 
-    this.templateService = new TemplateService(this.settings);
-    this.noteService = new NoteService(this.app, this.settings, this.templateService);
+    // Create worker manager
+    const workerManager = new WorkerManager(new LoadWorker());
+
+    // Create data sources
+    const sources = this.createDataSources(workerManager);
+    const mergeStrategy = this.settings.mergeStrategy || MergeStrategy.LastWins;
+
     this.libraryService = new LibraryService(
       this.settings,
       this.events,
-      this.app.vault.adapter instanceof FileSystemAdapter ? this.app.vault.adapter : null
+      this.app.vault.adapter instanceof FileSystemAdapter
+        ? this.app.vault.adapter
+        : null,
+      workerManager,
+      sources,
+      mergeStrategy,
     );
     this.uiService = new UIService(this.app, this);
-
-    await this.initializeLibrary();
-
-    this.uiService.registerCommands();
-    this.addSettingTab(new CitationSettingTab(this.app, this));
+    this.init();
   }
 
   onunload(): void {
-    this.cleanup();
+    this.libraryService.dispose();
+    // @ts-expect-error: literatureNoteErrorNotifier is not nullable in type definition but needs to be cleared
+    this.literatureNoteErrorNotifier = null;
   }
 
-  private async initializeLibrary(): Promise<void> {
-    if (this.settings.citationExportPath) {
-      this.libraryService.load();
-      this.setupFileWatcher();
-    } else {
-      // TODO show warning?
-    }
-  }
+  /**
+   * Create data sources based on settings
+   * Supports both new multi-source configuration and legacy single-file configuration
+   */
+  private createDataSources(workerManager: WorkerManager): DataSource[] {
+    const sources: DataSource[] = [];
+    const vaultAdapter =
+      this.app.vault.adapter instanceof FileSystemAdapter
+        ? this.app.vault.adapter
+        : null;
 
-  private setupFileWatcher(): void {
-    if (this.fileWatcher) {
-      this.fileWatcher.close();
-      this.fileWatcher = null;
-    }
-
-    const watchOptions = {
-      awaitWriteFinish: {
-        stabilityThreshold: 500,
-      },
-      ignoreInitial: true,
-    };
-
-    const libraryPath = this.libraryService.resolveLibraryPath(
-      this.settings.citationExportPath
-    );
-
-    try {
-      this.fileWatcher = chokidar.watch(libraryPath, watchOptions);
-
-      const debouncedLoad = debounce(
-        () => {
-          console.debug('Citation library file changed, reloading...');
-          this.libraryService.load();
+    // Check if new multi-source config exists
+    if (this.settings.dataSources && this.settings.dataSources.length > 0) {
+      // Use new multi-source configuration
+      this.settings.dataSources.forEach(
+        (def: DataSourceDefinition, index: number) => {
+          const source = this.createDataSource(
+            def,
+            `source-${index}`,
+            vaultAdapter,
+            workerManager,
+          );
+          if (source) {
+            sources.push(source);
+          }
         },
-        1000,
-        true
+      );
+    } else if (this.settings.citationExportPath) {
+      // Backward compatibility: use citationExportPath
+      // Detect mobile by checking if FileSystemAdapter is available
+      const sourceType = vaultAdapter ? 'local-file' : 'vault-file';
+      const source = this.createDataSource(
+        {
+          type: sourceType,
+          path: this.settings.citationExportPath,
+          format: this.settings.citationExportFormat,
+        },
+        'default',
+        vaultAdapter,
+        workerManager,
       );
 
-      this.fileWatcher.on('change', () => {
-        debouncedLoad();
-      });
+      if (source) {
+        sources.push(source);
+      }
+    }
 
-      this.fileWatcher.on('error', (error) => {
-        console.error('Citation plugin: watcher error:', error);
-        this.libraryService.loadErrorNotifier.show(
-          'Error watching citation library file. Please check plugin settings.'
+    return sources;
+  }
+
+  /**
+   * Create a single data source from a definition
+   */
+  private createDataSource(
+    def: { type: string; path: string; format: DatabaseType },
+    id: string,
+    vaultAdapter: FileSystemAdapter | null,
+    workerManager: WorkerManager,
+  ): DataSource | null {
+    try {
+      if (def.type === 'local-file') {
+        return new LocalFileSource(
+          id,
+          def.path,
+          def.format,
+          workerManager,
+          vaultAdapter,
         );
-      });
+      } else if (def.type === 'vault-file') {
+        return new VaultFileSource(
+          id,
+          def.path,
+          def.format,
+          workerManager,
+          this.app.vault,
+        );
+      } else {
+        console.error(`Unknown data source type: ${def.type}`);
+        return null;
+      }
     } catch (error) {
-      console.error('Citation plugin: failed to create watcher:', error);
-      this.libraryService.loadErrorNotifier.show();
+      console.error(`Failed to create data source ${id}:`, error);
+      return null;
     }
   }
 
-  private cleanup(): void {
-    console.debug('Citation plugin: cleaning up resources');
-
-    // Close file watcher
-    if (this.fileWatcher) {
-      this.fileWatcher.close();
-      this.fileWatcher = null;
+  async init(): Promise<void> {
+    if (this.libraryService.getSources().length > 0) {
+      // Load library for the first time
+      this.libraryService.load();
+      this.libraryService.initWatcher();
+    } else {
+      console.warn('Citations plugin: No data sources configured');
     }
 
-    // Destroy notifiers
-    if (this.literatureNoteErrorNotifier) {
-      this.literatureNoteErrorNotifier.destroy();
-      this.literatureNoteErrorNotifier = null;
-    }
+    this.uiService.init();
 
-    // Destroy services (which handle their own cleanup)
-    if (this.libraryService) {
-      this.libraryService.destroy();
-    }
-
-    // Clear events
-    // this.events = null; // Optional, as it's garbage collected
+    this.addSettingTab(new CitationSettingTab(this.app, this));
   }
-
-
-
-
 
   getTitleForCitekey(citekey: string): string {
     const entry = this.libraryService.library.entries[citekey];
@@ -201,8 +229,6 @@ export default class CitationPlugin extends Plugin {
     const unsafeTitle = this.templateService.getTitle(variables);
     return unsafeTitle.replace(DISALLOWED_FILENAME_CHARACTERS_RE, '_');
   }
-
-
 
   getInitialContentForCitekey(citekey: string): string {
     const entry = this.libraryService.library.entries[citekey];
@@ -227,32 +253,46 @@ export default class CitationPlugin extends Plugin {
    * the given citekey. If no corresponding file is found, create one.
    */
 
-
   async openLiteratureNote(citekey: string, newPane: boolean): Promise<void> {
-    await this.noteService.openLiteratureNote(citekey, this.libraryService.library, newPane);
+    await this.noteService.openLiteratureNote(
+      citekey,
+      this.libraryService.library,
+      newPane,
+    );
   }
 
   async insertLiteratureNoteLink(citekey: string): Promise<void> {
-    this.noteService.getOrCreateLiteratureNoteFile(citekey, this.libraryService.library)
-      .then((file: TFile) => {
-        const useMarkdown: boolean = (<VaultExt>this.app.vault).getConfig(
-          'useMarkdownLinks',
+    const editor = this.getActiveEditor();
+    if (!editor) {
+      new Notice('No active editor found');
+      return;
+    }
+
+    try {
+      const file = await this.noteService.getOrCreateLiteratureNoteFile(
+        citekey,
+        this.libraryService.library,
+      );
+      const useMarkdown = (this.app.vault as VaultExt).getConfig(
+        'useMarkdownLinks',
+      );
+      const title = this.getTitleForCitekey(citekey);
+
+      let linkText: string;
+      if (useMarkdown) {
+        const uri = encodeURI(
+          this.app.metadataCache.fileToLinktext(file, '', false),
         );
-        const title = this.getTitleForCitekey(citekey);
+        linkText = `[${title}](${uri})`;
+      } else {
+        linkText = `[[${title}]]`;
+      }
 
-        let linkText: string;
-        if (useMarkdown) {
-          const uri = encodeURI(
-            this.app.metadataCache.fileToLinktext(file, '', false),
-          );
-          linkText = `[${title}](${uri})`;
-        } else {
-          linkText = `[[${title}]]`;
-        }
-
-        this.editor.replaceSelection(linkText);
-      })
-      .catch(console.error);
+      editor.replaceSelection(linkText);
+    } catch (error) {
+      console.error('Failed to insert literature note link:', error);
+      new Notice('Failed to insert literature note link');
+    }
   }
 
   /**
@@ -260,19 +300,43 @@ export default class CitationPlugin extends Plugin {
    * currently active pane.
    */
   async insertLiteratureNoteContent(citekey: string): Promise<void> {
-    const content = this.getInitialContentForCitekey(citekey);
-    this.editor.replaceRange(content, this.editor.getCursor());
+    const editor = this.getActiveEditor();
+    if (!editor) {
+      new Notice('No active editor found');
+      return;
+    }
+
+    try {
+      const content = this.getInitialContentForCitekey(citekey);
+      const cursor = editor.getCursor();
+      editor.replaceRange(content, cursor);
+    } catch (error) {
+      console.error('Failed to insert literature note content:', error);
+      new Notice('Failed to insert literature note content');
+    }
   }
 
   async insertMarkdownCitation(
     citekey: string,
     alternative = false,
   ): Promise<void> {
-    const func = alternative
-      ? this.getAlternativeMarkdownCitationForCitekey
-      : this.getMarkdownCitationForCitekey;
-    const citation = func.bind(this)(citekey);
+    const editor = this.getActiveEditor();
+    if (!editor) {
+      new Notice('No active editor found');
+      return;
+    }
 
-    this.editor.replaceRange(citation, this.editor.getCursor());
+    try {
+      const func = alternative
+        ? this.getAlternativeMarkdownCitationForCitekey
+        : this.getMarkdownCitationForCitekey;
+      const citation = func.bind(this)(citekey);
+
+      const cursor = editor.getCursor();
+      editor.replaceRange(citation, cursor);
+    } catch (error) {
+      console.error('Failed to insert markdown citation:', error);
+      new Notice('Failed to insert markdown citation');
+    }
   }
 }

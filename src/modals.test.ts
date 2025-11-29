@@ -1,89 +1,140 @@
-import { SearchModal } from './modals';
+/**
+ * @jest-environment jsdom
+ */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-require-imports */
 import { App } from 'obsidian';
-import CitationPlugin from './main';
+// import { CitationSearchModal } from './modals';
+// import CitationPlugin from './main';
 
 // Mock Obsidian
-jest.mock('obsidian', () => {
+jest.mock(
+  'obsidian',
+  () => {
     class MockFuzzySuggestModal {
-        app: any;
-        inputEl: HTMLElement;
-        resultContainerEl: HTMLElement;
-        constructor(app: any) {
-            this.app = app;
-            this.inputEl = document.createElement('input');
-            this.resultContainerEl = document.createElement('div');
-            // Mock parent for loadingEl creation
-            const parent = document.createElement('div');
-            parent.appendChild(this.resultContainerEl);
-        }
-        onOpen() { }
-        onClose() { }
-        setInstructions() { }
+      app: any;
+      inputEl: HTMLElement;
+      resultContainerEl: HTMLElement;
+      constructor(app: any) {
+        this.app = app;
+        this.inputEl = {
+          setAttribute: jest.fn(),
+          addEventListener: jest.fn(),
+          removeEventListener: jest.fn(),
+          focus: jest.fn(),
+        } as any;
+        this.resultContainerEl = {
+          addClass: jest.fn(),
+          createEl: jest.fn().mockReturnValue({
+            createEl: jest.fn(),
+            addClass: jest.fn(),
+            removeClass: jest.fn(),
+          }),
+        } as any;
+        // Mock parent for loadingEl creation
+        // const _parent = { appendChild: jest.fn() };
+      }
+      onOpen() {}
+      onClose() {}
+      setInstructions() {}
+      setPlaceholder() {}
+      updateSuggestions() {}
     }
     return {
-        App: jest.fn(),
-        FuzzySuggestModal: MockFuzzySuggestModal,
-        Notice: jest.fn(),
-        EventRef: jest.fn(),
+      App: jest.fn(),
+      FuzzySuggestModal: MockFuzzySuggestModal,
+      SuggestModal: MockFuzzySuggestModal,
+      Notice: jest.fn(),
+      EventRef: jest.fn(),
+      Events: class {
+        on() {}
+        off() {}
+        trigger() {}
+      },
+      PluginSettingTab: class {},
+      Plugin: class {},
     };
-});
+  },
+  { virtual: true },
+);
 
-jest.mock('./main');
+jest.mock(
+  'web-worker:./worker',
+  () => {
+    return class MockWorker {
+      addEventListener() {}
+      removeEventListener() {}
+      postMessage() {}
+    };
+  },
+  { virtual: true },
+);
 
-describe('SearchModal', () => {
-    let modal: SearchModal;
-    let app: App;
-    let plugin: CitationPlugin;
+describe('CitationSearchModal', () => {
+  let CitationSearchModal: any;
+  let CitationPlugin: any;
+  let modal: any;
+  let app: App;
+  let plugin: any;
 
-    beforeEach(() => {
-        app = new App();
-        plugin = new CitationPlugin(app, {} as any);
-        plugin.events = {
-            on: jest.fn(),
-            offref: jest.fn(),
-        } as any;
-        plugin.libraryService = {
-            isLibraryLoading: false,
-        } as any;
+  beforeAll(() => {
+    CitationSearchModal = require('./modals').CitationSearchModal;
+    CitationPlugin = require('./main').default;
+  });
 
-        modal = new SearchModal(app, plugin);
-    });
+  beforeEach(() => {
+    app = new App();
+    plugin = new CitationPlugin(app, {} as any);
+    plugin.events = {
+      on: jest.fn(),
+      offref: jest.fn(),
+    } as any;
+    plugin.libraryService = {
+      isLibraryLoading: false,
+    } as any;
 
-    it('should register event listeners on open', () => {
-        jest.useFakeTimers();
-        const addSpy = jest.spyOn(modal.inputEl, 'addEventListener');
+    const mockAction = {
+      name: 'Mock Action',
+      onChoose: jest.fn(),
+    };
+    modal = new CitationSearchModal(app, plugin, mockAction);
+  });
 
-        modal.onOpen();
-        jest.runAllTimers();
+  it('should register event listeners on open', () => {
+    jest.useFakeTimers();
+    const addSpy = jest.spyOn(modal.inputEl, 'addEventListener');
 
-        expect(addSpy).toHaveBeenCalledWith('keydown', expect.any(Function));
-        expect(addSpy).toHaveBeenCalledWith('keyup', expect.any(Function));
+    modal.onOpen();
+    jest.runAllTimers();
 
-        jest.useRealTimers();
-    });
+    expect(addSpy).toHaveBeenCalledWith('keydown', expect.any(Function));
+    expect(addSpy).toHaveBeenCalledWith('keyup', expect.any(Function));
 
-    it('should remove event listeners on close', () => {
-        jest.useFakeTimers();
-        modal.onOpen();
-        jest.runAllTimers();
+    jest.useRealTimers();
+  });
 
-        const removeSpy = jest.spyOn(modal.inputEl, 'removeEventListener');
-        modal.onClose();
+  it('should remove event listeners on close', () => {
+    jest.useFakeTimers();
+    modal.onOpen();
+    jest.runAllTimers();
 
-        expect(removeSpy).toHaveBeenCalledWith('keydown', expect.any(Function));
-        expect(removeSpy).toHaveBeenCalledWith('keyup', expect.any(Function));
+    const removeSpy = jest.spyOn(modal.inputEl, 'removeEventListener');
+    modal.onClose();
 
-        jest.useRealTimers();
-    });
+    expect(removeSpy).toHaveBeenCalledWith('keydown', expect.any(Function));
+    expect(removeSpy).toHaveBeenCalledWith('keyup', expect.any(Function));
 
-    it('should clear timeout on close if called early', () => {
-        jest.useFakeTimers();
-        modal.onOpen();
+    jest.useRealTimers();
+  });
 
-        const clearSpy = jest.spyOn(window, 'clearTimeout');
-        modal.onClose();
+  it('should clear timeout on close if called early', () => {
+    jest.useFakeTimers();
+    modal.onOpen();
 
-        expect(clearSpy).toHaveBeenCalled();
-        jest.useRealTimers();
-    });
+    const clearSpy = jest.spyOn(window, 'clearTimeout');
+    modal.onClose();
+
+    expect(clearSpy).toHaveBeenCalled();
+    jest.useRealTimers();
+  });
 });

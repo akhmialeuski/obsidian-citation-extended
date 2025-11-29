@@ -1,50 +1,61 @@
-import {
-  App,
-  EventRef,
-  FuzzyMatch,
-  FuzzySuggestModal,
-  Notice,
-  renderMatches,
-  SearchMatches,
-  SearchMatchPart,
-} from 'obsidian';
+import { App, EventRef, Notice, SuggestModal } from 'obsidian';
 import CitationPlugin from './main';
 import { Entry } from './types';
 
 // Stub some methods we know are there..
-interface FuzzySuggestModalExt<T> extends FuzzySuggestModal<T> {
+interface SuggestModalExt<T> extends SuggestModal<T> {
   chooser: ChooserExt;
 }
 interface ChooserExt {
   useSelectedItem(evt: MouseEvent | KeyboardEvent): void;
 }
+interface SuggestModalWithUpdate<T> extends SuggestModal<T> {
+  updateSuggestions(): void;
+}
 
-export class SearchModal extends FuzzySuggestModal<Entry> {
+export interface SearchAction {
+  name: string;
+  onChoose(item: Entry, evt: MouseEvent | KeyboardEvent): Promise<void>;
+  renderItem?(item: Entry, el: HTMLElement): void;
+  getInstructions?(): { command: string; purpose: string }[];
+}
+
+export class CitationSearchModal extends SuggestModal<Entry> {
   plugin: CitationPlugin;
+  action: SearchAction;
   limit = 50;
   loadingEl: HTMLElement;
-  private keydownHandler?: (ev: KeyboardEvent) => void;
-  private keyupHandler?: (ev: KeyboardEvent) => void;
-  private timeoutId?: number;
+  eventRefs: EventRef[] = [];
 
-  eventRefs: EventRef[];
-
-  constructor(app: App, plugin: CitationPlugin) {
+  constructor(app: App, plugin: CitationPlugin, action: SearchAction) {
     super(app);
     this.plugin = plugin;
+    this.action = action;
+    this.setPlaceholder(action.name);
+    if (action.getInstructions) {
+      this.setInstructions(action.getInstructions());
+    }
 
     this.resultContainerEl.addClass('zoteroModalResults');
-
     this.inputEl.setAttribute('spellcheck', 'false');
 
-    this.loadingEl = this.resultContainerEl.parentElement.createEl('div', {
-      cls: 'zoteroModalLoading',
-    });
+    const parent = this.resultContainerEl.parentElement;
+    if (parent) {
+      this.loadingEl = parent.createEl('div', {
+        cls: 'zoteroModalLoading',
+      });
+    } else {
+      this.loadingEl = this.resultContainerEl.createEl('div', {
+        cls: 'zoteroModalLoading',
+      });
+    }
     this.loadingEl.createEl('div', { cls: 'zoteroModalLoadingAnimation' });
     this.loadingEl.createEl('p', {
       text: 'Loading citation database. Please wait...',
     });
   }
+
+  private inputTimeout: number | undefined;
 
   onOpen() {
     super.onOpen();
@@ -61,52 +72,43 @@ export class SearchModal extends FuzzySuggestModal<Entry> {
 
     this.setLoading(this.plugin.libraryService.isLibraryLoading);
 
-    // Don't immediately register keyevent listeners. If the modal was triggered
-    // by an "Enter" keystroke (e.g. via the Obsidian command dialog), this event
-    // will be received here erroneously.
-    this.keydownHandler = (ev: KeyboardEvent) => this.onInputKeydown(ev);
-    this.keyupHandler = (ev: KeyboardEvent) => this.onInputKeyup(ev);
-
-    this.timeoutId = window.setTimeout(() => {
-      if (this.inputEl) {
-        this.inputEl.addEventListener('keydown', this.keydownHandler!);
-        this.inputEl.addEventListener('keyup', this.keyupHandler!);
-      }
+    this.inputTimeout = window.setTimeout(() => {
+      this.inputEl.addEventListener('keydown', (ev) => this.onInputKeydown(ev));
+      this.inputEl.addEventListener('keyup', (ev) => this.onInputKeyup(ev));
+      this.inputTimeout = undefined;
     }, 200);
   }
 
   onClose() {
-    if (this.timeoutId) {
-      window.clearTimeout(this.timeoutId);
-      this.timeoutId = undefined;
-    }
-
-    if (this.inputEl) {
-      if (this.keydownHandler) {
-        this.inputEl.removeEventListener('keydown', this.keydownHandler);
-      }
-      if (this.keyupHandler) {
-        this.inputEl.removeEventListener('keyup', this.keyupHandler);
-      }
-    }
-
-    this.keydownHandler = undefined;
-    this.keyupHandler = undefined;
-
     this.eventRefs?.forEach((e) => this.plugin.events.offref(e));
-    this.eventRefs = [];
+    if (this.inputTimeout) {
+      clearTimeout(this.inputTimeout);
+      this.inputTimeout = undefined;
+    }
+    this.inputEl.removeEventListener('keydown', (ev) =>
+      this.onInputKeydown(ev),
+    );
+    this.inputEl.removeEventListener('keyup', (ev) => this.onInputKeyup(ev));
   }
 
-  getItems(): Entry[] {
+  getSuggestions(query: string): Entry[] {
     if (this.plugin.libraryService.isLibraryLoading) {
       return [];
     }
 
-    return Object.values(this.plugin.libraryService.library.entries);
-  }
+    if (!query) {
+      return Object.values(this.plugin.libraryService.library.entries).slice(
+        0,
+        this.limit,
+      );
+    }
 
-  getItemText(item: Entry): string {
-    return `${item.title} ${item.authorString} ${item.year}`;
+    const ids = this.plugin.libraryService.searchService.search(query);
+    // Limit results here if SearchService doesn't
+    return ids
+      .slice(0, this.limit)
+      .map((id) => this.plugin.libraryService.library.entries[id])
+      .filter(Boolean);
   }
 
   setLoading(loading: boolean): void {
@@ -118,80 +120,57 @@ export class SearchModal extends FuzzySuggestModal<Entry> {
       this.loadingEl.addClass('d-none');
       this.inputEl.disabled = false;
       this.inputEl.focus();
-
-      // @ts-ignore: not exposed in API.
-      this.updateSuggestions();
+      (this as unknown as SuggestModalWithUpdate<Entry>).updateSuggestions();
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  onChooseItem(item: Entry, evt: MouseEvent | KeyboardEvent): void {
-    this.plugin.openLiteratureNote(item.id, false).catch(console.error);
+  onChooseSuggestion(item: Entry, evt: MouseEvent | KeyboardEvent): void {
+    this.action.onChoose(item, evt).catch(console.error);
   }
 
-  renderSuggestion(match: FuzzyMatch<Entry>, el: HTMLElement): void {
+  renderSuggestion(entry: Entry, el: HTMLElement): void {
+    if (this.action.renderItem) {
+      this.action.renderItem(entry, el);
+      return;
+    }
+
+    // Default rendering logic
     el.empty();
-    const entry = match.item;
     const entryTitle = entry.title || '';
 
+    const authorString = entry.authorString || '';
+    let displayedAuthorString = authorString;
+
+    if (entry.author && entry.author.length > 3) {
+      const firstAuthors = entry.author
+        .slice(0, 3)
+        .map((a) => [a.given, a.family].filter(Boolean).join(' '));
+      displayedAuthorString = firstAuthors.join(', ') + ' et al.';
+    }
+
+    const yearString = entry.year?.toString() || '';
+
     const container = el.createEl('div', { cls: 'zoteroResult' });
-    const titleEl = container.createEl('span', {
+    container.createEl('span', {
       cls: 'zoteroTitle',
+      text: entryTitle,
     });
     container.createEl('span', { cls: 'zoteroCitekey', text: entry.id });
+
+    if (yearString) {
+      container.createEl('span', {
+        cls: 'zoteroYear',
+        text: yearString,
+      });
+    }
 
     const authorsCls = entry.authorString
       ? 'zoteroAuthors'
       : 'zoteroAuthors zoteroAuthorsEmpty';
-    const authorsEl = container.createEl('span', {
+    container.createEl('span', {
       cls: authorsCls,
+      text: displayedAuthorString,
     });
-
-    // Prepare to highlight string matches for each part of the search item.
-    // Compute offsets of each rendered element's content within the string
-    // returned by `getItemText`.
-    const allMatches = match.match.matches;
-    const authorStringOffset = 1 + entryTitle.length;
-
-    // Filter a match list to contain only the relevant matches for a given
-    // substring, and with match indices shifted relative to the start of that
-    // substring
-    const shiftMatches = (
-      matches: SearchMatches,
-      start: number,
-      end: number,
-    ) => {
-      return matches
-        .map((match: SearchMatchPart) => {
-          const [matchStart, matchEnd] = match;
-          return [
-            matchStart - start,
-            Math.min(matchEnd - start, end),
-          ] as SearchMatchPart;
-        })
-        .filter((match: SearchMatchPart) => {
-          const [matchStart, matchEnd] = match;
-          return matchStart >= 0;
-        });
-    };
-
-    // Now highlight matched strings within each element
-    renderMatches(
-      titleEl,
-      entryTitle,
-      shiftMatches(allMatches, 0, entryTitle.length),
-    );
-    if (entry.authorString) {
-      renderMatches(
-        authorsEl,
-        entry.authorString,
-        shiftMatches(
-          allMatches,
-          authorStringOffset,
-          authorStringOffset + entry.authorString.length,
-        ),
-      );
-    }
   }
 
   onInputKeydown(ev: KeyboardEvent) {
@@ -202,32 +181,20 @@ export class SearchModal extends FuzzySuggestModal<Entry> {
 
   onInputKeyup(ev: KeyboardEvent) {
     if (ev.key == 'Enter' || ev.key == 'Tab') {
-      ((this as unknown) as FuzzySuggestModalExt<Entry>).chooser.useSelectedItem(
-        ev,
-      );
+      (this as unknown as SuggestModalExt<Entry>).chooser.useSelectedItem(ev);
     }
   }
 }
 
-export class OpenNoteModal extends SearchModal {
-  constructor(app: App, plugin: CitationPlugin) {
-    super(app, plugin);
+export class OpenNoteAction implements SearchAction {
+  name = 'Open literature note';
+  constructor(private plugin: CitationPlugin) {}
 
-    this.setInstructions([
-      { command: '↑↓', purpose: 'to navigate' },
-      { command: '↵', purpose: 'to open literature note' },
-      { command: 'ctrl ↵', purpose: 'to open literature note in a new pane' },
-      { command: 'tab', purpose: 'open in Zotero' },
-      { command: 'shift tab', purpose: 'open PDF' },
-      { command: 'esc', purpose: 'to dismiss' },
-    ]);
-  }
-
-  onChooseItem(item: Entry, evt: MouseEvent | KeyboardEvent): void {
+  async onChoose(item: Entry, evt: MouseEvent | KeyboardEvent) {
     if (evt instanceof MouseEvent || evt.key == 'Enter') {
       const newPane =
         evt instanceof KeyboardEvent && (evt as KeyboardEvent).ctrlKey;
-      this.plugin.openLiteratureNote(item.id, newPane);
+      await this.plugin.openLiteratureNote(item.id, newPane);
     } else if (evt.key == 'Tab') {
       if (evt.shiftKey) {
         const files = item.files || [];
@@ -244,62 +211,71 @@ export class OpenNoteModal extends SearchModal {
       }
     }
   }
+
+  getInstructions() {
+    return [
+      { command: '↑↓', purpose: 'to navigate' },
+      { command: '↵', purpose: 'to open literature note' },
+      { command: 'ctrl ↵', purpose: 'to open literature note in a new pane' },
+      { command: 'tab', purpose: 'open in Zotero' },
+      { command: 'shift tab', purpose: 'open PDF' },
+      { command: 'esc', purpose: 'to dismiss' },
+    ];
+  }
 }
 
-export class InsertNoteLinkModal extends SearchModal {
-  constructor(app: App, plugin: CitationPlugin) {
-    super(app, plugin);
+export class InsertNoteLinkAction implements SearchAction {
+  name = 'Insert literature note link';
+  constructor(private plugin: CitationPlugin) {}
 
-    this.setInstructions([
+  async onChoose(item: Entry) {
+    await this.plugin.insertLiteratureNoteLink(item.id);
+  }
+
+  getInstructions() {
+    return [
       { command: '↑↓', purpose: 'to navigate' },
       { command: '↵', purpose: 'to insert literature note reference' },
       { command: 'esc', purpose: 'to dismiss' },
-    ]);
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  onChooseItem(item: Entry, evt: unknown): void {
-    this.plugin.insertLiteratureNoteLink(item.id).catch(console.error);
+    ];
   }
 }
 
-export class InsertNoteContentModal extends SearchModal {
-  constructor(app: App, plugin: CitationPlugin) {
-    super(app, plugin);
+export class InsertNoteContentAction implements SearchAction {
+  name = 'Insert literature note content';
+  constructor(private plugin: CitationPlugin) {}
 
-    this.setInstructions([
+  async onChoose(item: Entry) {
+    await this.plugin.insertLiteratureNoteContent(item.id);
+  }
+
+  getInstructions() {
+    return [
       { command: '↑↓', purpose: 'to navigate' },
       {
         command: '↵',
         purpose: 'to insert literature note content in active pane',
       },
       { command: 'esc', purpose: 'to dismiss' },
-    ]);
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  onChooseItem(item: Entry, evt: unknown): void {
-    this.plugin.insertLiteratureNoteContent(item.id).catch(console.error);
+    ];
   }
 }
 
-export class InsertCitationModal extends SearchModal {
-  constructor(app: App, plugin: CitationPlugin) {
-    super(app, plugin);
+export class InsertCitationAction implements SearchAction {
+  name = 'Insert citation';
+  constructor(private plugin: CitationPlugin) {}
 
-    this.setInstructions([
+  async onChoose(item: Entry, evt: MouseEvent | KeyboardEvent) {
+    const isAlternative = evt instanceof KeyboardEvent && evt.shiftKey;
+    await this.plugin.insertMarkdownCitation(item.id, isAlternative);
+  }
+
+  getInstructions() {
+    return [
       { command: '↑↓', purpose: 'to navigate' },
       { command: '↵', purpose: 'to insert Markdown citation' },
       { command: 'shift ↵', purpose: 'to insert secondary Markdown citation' },
       { command: 'esc', purpose: 'to dismiss' },
-    ]);
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  onChooseItem(item: Entry, evt: MouseEvent | KeyboardEvent): void {
-    const isAlternative = evt instanceof KeyboardEvent && evt.shiftKey;
-    this.plugin
-      .insertMarkdownCitation(item.id, isAlternative)
-      .catch(console.error);
+    ];
   }
 }
