@@ -1,7 +1,7 @@
 {
   "name": "obsidian-citation-extended",
   "version": "0.4.6",
-  "description": "Automatically search and insert citations from a Zotero library",
+  "description": "Extended functionality to automatically search and insert citations from a Zotero library.",
   "main": "main.js",
   "scripts": {
     "dev": "rollup --config rollup.config.mjs -w",
