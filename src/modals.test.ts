@@ -26,9 +26,17 @@ jest.mock(
         this.resultContainerEl = {
           addClass: jest.fn(),
           createEl: jest.fn().mockReturnValue({
-            createEl: jest.fn(),
+            createEl: jest.fn().mockReturnValue({
+              addClass: jest.fn(),
+              removeClass: jest.fn(),
+              setText: jest.fn(),
+            }),
             addClass: jest.fn(),
             removeClass: jest.fn(),
+            children: [
+              { addClass: jest.fn(), removeClass: jest.fn() },
+              { addClass: jest.fn(), removeClass: jest.fn() },
+            ],
           }),
         } as any;
         // Mock parent for loadingEl creation
@@ -91,6 +99,7 @@ describe('CitationSearchModal', () => {
     } as any;
     plugin.libraryService = {
       isLibraryLoading: false,
+      state: { status: 'idle' },
     } as any;
 
     const mockAction = {

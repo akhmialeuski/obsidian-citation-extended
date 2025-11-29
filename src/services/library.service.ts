@@ -188,23 +188,44 @@ export class LibraryService {
             `LibraryService: Error loading from source ${source.id}:`,
             error,
           );
-          // Return empty array for failed sources, don't fail entire load
-          return [];
+          return error as Error;
         }
       });
 
-      const results = await Promise.all(loadPromises);
+      // Add 10s timeout
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        window.setTimeout(
+          () => reject(new Error('Timeout loading citation database')),
+          10000,
+        ),
+      );
+
+      const results = await Promise.race([
+        Promise.all(loadPromises),
+        timeoutPromise,
+      ]);
 
       if (signal.aborted) return null;
 
+      // Check if all sources failed
+      const successfulResults = results.filter((r): r is Entry[] =>
+        Array.isArray(r),
+      );
+      const errors = results.filter((r): r is Error => r instanceof Error);
+
+      if (successfulResults.length === 0 && errors.length > 0) {
+        // All sources failed, throw the first error
+        throw errors[0];
+      }
+
       // Merge results according to strategy
-      this.library = this.mergeEntries(results);
+      this.library = this.mergeEntries(successfulResults);
 
       // Build search index
       console.debug('Citation plugin: Building search index');
       this.searchService.buildIndex(Object.values(this.library.entries));
 
-      const totalEntries = results.reduce(
+      const totalEntries = successfulResults.reduce(
         (sum, entries) => sum + entries.length,
         0,
       );

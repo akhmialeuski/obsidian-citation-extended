@@ -1,6 +1,7 @@
 import { App, EventRef, Notice, SuggestModal } from 'obsidian';
 import CitationPlugin from './main';
 import { Entry } from './types';
+import { LibraryState, LoadingStatus } from './library-state';
 
 // Stub some methods we know are there..
 interface SuggestModalExt<T> extends SuggestModal<T> {
@@ -25,6 +26,7 @@ export class CitationSearchModal extends SuggestModal<Entry> {
   action: SearchAction;
   limit = 50;
   loadingEl: HTMLElement;
+  errorEl: HTMLElement;
   eventRefs: EventRef[] = [];
 
   constructor(app: App, plugin: CitationPlugin, action: SearchAction) {
@@ -53,6 +55,10 @@ export class CitationSearchModal extends SuggestModal<Entry> {
     this.loadingEl.createEl('p', {
       text: 'Loading citation database. Please wait...',
     });
+
+    this.errorEl = this.loadingEl.createEl('div', {
+      cls: 'zoteroModalError d-none',
+    });
   }
 
   private inputTimeout: number | undefined;
@@ -61,22 +67,50 @@ export class CitationSearchModal extends SuggestModal<Entry> {
     super.onOpen();
 
     this.eventRefs = [
-      this.plugin.events.on('library-load-start', () => {
-        this.setLoading(true);
-      }),
-
-      this.plugin.events.on('library-load-complete', () => {
-        this.setLoading(false);
+      this.plugin.events.on('library-state-changed', (state) => {
+        this.updateState(state);
       }),
     ];
 
-    this.setLoading(this.plugin.libraryService.isLibraryLoading);
+    this.updateState(this.plugin.libraryService.state);
 
     this.inputTimeout = window.setTimeout(() => {
       this.inputEl.addEventListener('keydown', (ev) => this.onInputKeydown(ev));
       this.inputEl.addEventListener('keyup', (ev) => this.onInputKeyup(ev));
       this.inputTimeout = undefined;
     }, 200);
+  }
+
+  updateState(state: LibraryState) {
+    if (state.status === LoadingStatus.Loading) {
+      this.setLoading(true);
+      this.showError(null);
+    } else if (state.status === LoadingStatus.Error) {
+      this.setLoading(false);
+      this.showError(state.error?.message || 'Unknown error');
+    } else {
+      this.setLoading(false);
+      this.showError(null);
+    }
+  }
+
+  showError(message: string | null) {
+    if (message) {
+      this.loadingEl.removeClass('d-none');
+      // Hide loading animation and text
+      this.loadingEl.children[0].addClass('d-none');
+      this.loadingEl.children[1].addClass('d-none');
+
+      this.errorEl.removeClass('d-none');
+      this.errorEl.setText(`Error: ${message}`);
+      this.inputEl.disabled = true;
+      this.resultContainerEl.empty();
+    } else {
+      this.errorEl.addClass('d-none');
+      // Show loading animation and text (if loading)
+      this.loadingEl.children[0].removeClass('d-none');
+      this.loadingEl.children[1].removeClass('d-none');
+    }
   }
 
   onClose() {
