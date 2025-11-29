@@ -193,18 +193,23 @@ export class LibraryService {
       });
 
       // Add 10s timeout
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        window.setTimeout(
+      let timeoutId: number;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = window.setTimeout(
           () => reject(new Error('Timeout loading citation database')),
           10000,
-        ),
-      );
+        );
+      });
 
       const results = await Promise.race([
         Promise.all(loadPromises),
         timeoutPromise,
       ]);
 
+      // Clear the timeout if the race completed before the timeout fired
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
       if (signal.aborted) return null;
 
       // Check if all sources failed
