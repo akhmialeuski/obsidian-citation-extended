@@ -1,1 +1,1 @@
-export default class Worker { }
+export default class Worker {}

@@ -55,6 +55,8 @@ export class CitationSearchModal extends SuggestModal<Entry> {
     });
   }
 
+  private inputTimeout: number | undefined;
+
   onOpen() {
     super.onOpen();
 
@@ -70,14 +72,23 @@ export class CitationSearchModal extends SuggestModal<Entry> {
 
     this.setLoading(this.plugin.libraryService.isLibraryLoading);
 
-    setTimeout(() => {
+    this.inputTimeout = window.setTimeout(() => {
       this.inputEl.addEventListener('keydown', (ev) => this.onInputKeydown(ev));
       this.inputEl.addEventListener('keyup', (ev) => this.onInputKeyup(ev));
+      this.inputTimeout = undefined;
     }, 200);
   }
 
   onClose() {
     this.eventRefs?.forEach((e) => this.plugin.events.offref(e));
+    if (this.inputTimeout) {
+      clearTimeout(this.inputTimeout);
+      this.inputTimeout = undefined;
+    }
+    this.inputEl.removeEventListener('keydown', (ev) =>
+      this.onInputKeydown(ev),
+    );
+    this.inputEl.removeEventListener('keyup', (ev) => this.onInputKeyup(ev));
   }
 
   getSuggestions(query: string): Entry[] {

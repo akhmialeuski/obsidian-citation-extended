@@ -5,6 +5,7 @@ import {
   Notice,
   Plugin,
 } from 'obsidian';
+import * as chokidar from 'chokidar';
 
 import CitationEvents from './events';
 import { TemplateService } from './services/template.service';
@@ -39,7 +40,9 @@ export default class CitationPlugin extends Plugin {
   events = new CitationEvents();
   private fileWatcher?: chokidar.FSWatcher;
 
-  literatureNoteErrorNotifier: Notifier;
+  literatureNoteErrorNotifier = new Notifier(
+    'Unable to access literature note. Please check that the literature note folder exists, and that the note name is valid.',
+  );
 
   /**
    * Gets the current active Markdown editor
@@ -84,36 +87,40 @@ export default class CitationPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
-  onload(): void {
-    this.loadSettings().then(() => {
-      this.templateService = new TemplateService(this.settings);
-      this.noteService = new NoteService(
-        this.app,
-        this.settings,
-        this.templateService,
-      );
+  async onload(): Promise<void> {
+    await this.loadSettings();
+    this.templateService = new TemplateService(this.settings);
+    this.noteService = new NoteService(
+      this.app,
+      this.settings,
+      this.templateService,
+    );
 
-      // Create worker manager
-      const workerManager = new WorkerManager(new LoadWorker());
+    // Create worker manager
+    const workerManager = new WorkerManager(new LoadWorker());
 
-      // Create data sources
-      const sources = this.createDataSources(workerManager);
-      const mergeStrategy =
-        this.settings.mergeStrategy || MergeStrategy.LastWins;
+    // Create data sources
+    const sources = this.createDataSources(workerManager);
+    const mergeStrategy = this.settings.mergeStrategy || MergeStrategy.LastWins;
 
-      this.libraryService = new LibraryService(
-        this.settings,
-        this.events,
-        this.app.vault.adapter instanceof FileSystemAdapter
-          ? this.app.vault.adapter
-          : null,
-        workerManager,
-        sources,
-        mergeStrategy,
-      );
-      this.uiService = new UIService(this.app, this);
-      this.init();
-    });
+    this.libraryService = new LibraryService(
+      this.settings,
+      this.events,
+      this.app.vault.adapter instanceof FileSystemAdapter
+        ? this.app.vault.adapter
+        : null,
+      workerManager,
+      sources,
+      mergeStrategy,
+    );
+    this.uiService = new UIService(this.app, this);
+    this.init();
+  }
+
+  onunload(): void {
+    this.libraryService.dispose();
+    // @ts-expect-error: literatureNoteErrorNotifier is not nullable in type definition but needs to be cleared
+    this.literatureNoteErrorNotifier = null;
   }
 
   /**
@@ -162,7 +169,6 @@ export default class CitationPlugin extends Plugin {
         sources.push(source);
       }
     }
-  }
 
     return sources;
   }

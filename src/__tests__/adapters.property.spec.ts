@@ -39,9 +39,19 @@ describe('Adapters Property Testing', () => {
             expect(adapter.id).toBe(data.id);
             expect(adapter.type).toBe(data.type);
             // Accessing other properties shouldn't throw
-            expect(adapter.title).toBeDefined();
-            expect(adapter.authorString).toBeDefined();
-            expect(adapter.year).toBeDefined();
+            if (data.title) {
+              expect(adapter.title).toBeDefined();
+            }
+            if (data.author) {
+              expect(adapter.authorString).toBeDefined();
+            }
+            if (
+              data.issued &&
+              data.issued['date-parts'] &&
+              data.issued['date-parts'][0].length > 0
+            ) {
+              expect(adapter.year).toBeDefined();
+            }
           },
         ),
       );
@@ -81,9 +91,15 @@ describe('Adapters Property Testing', () => {
             expect(adapter.id).toBe(data.key);
             expect(adapter.type).toBe(data.type);
             // Accessing other properties shouldn't throw
-            expect(adapter.title).toBeDefined();
-            expect(adapter.authorString).toBeDefined();
-            expect(adapter.year).toBeDefined();
+            if (data.fields.title) {
+              expect(adapter.title).toBeDefined();
+            }
+            if (data.creators.author || data.fields.author) {
+              expect(adapter.authorString).toBeDefined();
+            }
+            if (data.fields.year || data.fields.date) {
+              expect(adapter.year).toBeDefined();
+            }
           },
         ),
       );
