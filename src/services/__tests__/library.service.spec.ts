@@ -83,10 +83,18 @@ jest.mock(
   { virtual: true },
 );
 
+// Mock window
+global.window = {
+  setTimeout: setTimeout,
+  clearTimeout: clearTimeout,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} as any;
+
 describe('LibraryService', () => {
   let service: LibraryService;
   let settings: CitationsPluginSettings;
-  let events: { trigger: jest.Mock; on: jest.Mock };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let events: any;
   let vaultAdapter: { getBasePath: jest.Mock };
   let workerManager: { post: jest.Mock };
   let mockSource: {
@@ -133,6 +141,16 @@ describe('LibraryService', () => {
     (fs.promises.stat as jest.Mock).mockReset();
     mockWorkerManagerPost.mockReset();
     mockWorkerManagerPost.mockResolvedValue([]);
+
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'debug').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    service.dispose();
+    jest.restoreAllMocks();
   });
 
   test('initial state is Idle', () => {
@@ -154,23 +172,23 @@ describe('LibraryService', () => {
     expect(mockSource.load).toHaveBeenCalled();
   });
 
-  test('load() handles source error gracefully', async () => {
+  test('load() handles source error gracefully (now expects Error status)', async () => {
     mockSource.load.mockRejectedValue(new Error('Source failed'));
 
     await service.load();
 
-    // Should still succeed but with empty library
-    expect(service.state.status).toBe(LoadingStatus.Success);
-    expect(service.library.size).toBe(0);
+    // Now expects Error status because all sources failed
+    expect(service.state.status).toBe(LoadingStatus.Error);
+    expect(service.state.error).toBeDefined();
   });
 
-  test('load() handles worker error via source gracefully', async () => {
+  test('load() handles worker error via source gracefully (now expects Error status)', async () => {
     mockSource.load.mockRejectedValue(new Error('Worker failed'));
 
     await service.load();
 
-    expect(service.state.status).toBe(LoadingStatus.Success);
-    expect(service.library.size).toBe(0);
+    expect(service.state.status).toBe(LoadingStatus.Error);
+    expect(service.state.error).toBeDefined();
   });
   test('addSource() adds a source', () => {
     const newSource = { ...mockSource, id: 'new-source' };
