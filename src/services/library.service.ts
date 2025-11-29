@@ -188,7 +188,7 @@ export class LibraryService {
             `LibraryService: Error loading from source ${source.id}:`,
             error,
           );
-          return error as Error;
+          return Promise.reject(error);
         }
       });
 
