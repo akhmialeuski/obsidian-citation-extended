@@ -1,10 +1,10 @@
 {
-	"id": "obsidian-citation-extended",
-	"name": "Obsidian Citation Extended",
-	"version": "0.4.6",
-	"minAppVersion": "0.9.20",
-	"description": "Automatically search and insert citations from a Zotero library",
-	"author": "Anatol Khmialeuski",
-	"authorUrl": "https://coff.ee/akhmelevskiy",
-	"isDesktopOnly": true
+  "id": "obsidian-citation-extended",
+  "name": "Citation Extended",
+  "version": "0.4.6",
+  "minAppVersion": "0.9.20",
+  "description": "Automatically search and insert citations from a Zotero library",
+  "author": "Anatol Khmialeuski",
+  "authorUrl": "https://coff.ee/akhmelevskiy",
+  "isDesktopOnly": true
 }
