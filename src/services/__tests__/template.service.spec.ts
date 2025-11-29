@@ -89,7 +89,7 @@ const expectedRender: Record<string, string | undefined>[] = [
   {
     citekey: 'bar-ashersiegal2020perspectives',
     abstract: undefined,
-    authorString: undefined,
+    authorString: 'Elitzur A. Bar-Asher Siegal, Nora Boneh (Eds.)',
     containerTitle: undefined,
     DOI: '10.1007/978-3-030-34308-8',
     page: undefined,
