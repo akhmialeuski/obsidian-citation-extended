@@ -4,10 +4,11 @@ import {
   FileSystemAdapter,
   PluginSettingTab,
   Setting,
+  Notice,
 } from 'obsidian';
 
 import CitationPlugin from './main';
-import { DatabaseType } from './types';
+import { DatabaseType, DatabaseConfig } from './types';
 import { DataSourceDefinition, MergeStrategy } from './data-source';
 
 const CITATION_DATABASE_FORMAT_LABELS: Record<DatabaseType, string> = {
@@ -54,15 +55,15 @@ export const SettingsSchema = z.object({
   markdownCitationTemplate: z.string().min(1),
   alternativeMarkdownCitationTemplate: z.string().min(1),
   // Multi-source configuration
-  dataSources: z
+  databases: z
     .array(
       z.object({
-        type: z.string(),
+        name: z.string(),
+        type: z.enum(['csl-json', 'biblatex']),
         path: z.string(),
-        format: z.enum(['csl-json', 'biblatex']),
       }),
     )
-    .optional(),
+    .default([]),
   mergeStrategy: z.enum(['last-wins', 'merge']).optional(),
 });
 
@@ -82,7 +83,7 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   markdownCitationTemplate: '[@{{citekey}}]',
   alternativeMarkdownCitationTemplate: '@{{citekey}}',
   mergeStrategy: 'last-wins',
-  dataSources: [],
+  databases: [],
 };
 
 export class CitationsPluginSettings {
@@ -101,6 +102,7 @@ export class CitationsPluginSettings {
   public alternativeMarkdownCitationTemplate: string =
     DEFAULT_SETTINGS.alternativeMarkdownCitationTemplate;
 
+  public databases: DatabaseConfig[] = DEFAULT_SETTINGS.databases;
   public dataSources?: DataSourceDefinition[];
   public mergeStrategy?: MergeStrategy;
 }
@@ -112,19 +114,9 @@ export function validateSettings(settings: unknown) {
 export class CitationSettingTab extends PluginSettingTab {
   private plugin: CitationPlugin;
 
-  citationPathLoadingEl!: HTMLElement;
-  citationPathErrorEl!: HTMLElement;
-  citationPathSuccessEl!: HTMLElement;
-
   constructor(app: App, plugin: CitationPlugin) {
     super(app, plugin);
     this.plugin = plugin;
-  }
-
-  open(): void {
-    this.checkCitationExportPath(this.plugin.settings.citationExportPath).then(
-      () => this.showCitationExportPathSuccess(),
-    );
   }
 
   display(): void {
@@ -142,65 +134,145 @@ export class CitationSettingTab extends PluginSettingTab {
   }
 
   private displayCitationDatabaseSettings(containerEl: HTMLElement): void {
-    new Setting(containerEl)
-      .setName('Citation database format')
-      .addDropdown((component) => {
-        component.addOptions(CITATION_DATABASE_FORMAT_LABELS);
-        component.setValue(this.plugin.settings.citationExportFormat);
-        component.onChange(async (value) => {
-          this.plugin.settings.citationExportFormat = value as DatabaseType;
+    containerEl.createEl('h3', { text: 'Citation Databases' });
+    containerEl.createEl('p', {
+      text: 'Configure one or more citation databases. The plugin will load references from all configured sources.',
+      cls: 'setting-item-description',
+    });
+
+    const databasesContainer = containerEl.createDiv(
+      'citation-databases-container',
+    );
+
+    // Render existing databases
+    this.plugin.settings.databases.forEach((db, index) => {
+      this.renderDatabaseSetting(databasesContainer, db, index);
+    });
+
+    // Add new database button
+    new Setting(containerEl).addButton((button) => {
+      button
+        .setButtonText('Add Database')
+        .setCta()
+        .onClick(async () => {
+          if (this.plugin.settings.databases.length >= 20) {
+            new Notice('Maximum number of databases (20) reached.');
+            return;
+          }
+
+          this.plugin.settings.databases.push({
+            name: `Database ${this.plugin.settings.databases.length + 1}`,
+            type: 'csl-json',
+            path: '',
+          });
           await this.plugin.saveSettings();
-          this.checkCitationExportPath(
-            this.plugin.settings.citationExportPath,
-          ).then((success) => {
-            if (success) {
-              this.citationPathSuccessEl.addClass('d-none');
-              this.citationPathLoadingEl.removeClass('d-none');
-
-              this.plugin.libraryService.load().then(() => {
-                this.citationPathLoadingEl.addClass('d-none');
-                this.showCitationExportPathSuccess();
-              });
-            }
-          });
+          this.display(); // Re-render to show new database
         });
+    });
+  }
+
+  private renderDatabaseSetting(
+    container: HTMLElement,
+    db: DatabaseConfig,
+    index: number,
+  ): void {
+    const settingDiv = container.createDiv('citation-database-setting');
+    settingDiv.style.border = '1px solid var(--background-modifier-border)';
+    settingDiv.style.padding = '10px';
+    settingDiv.style.marginBottom = '10px';
+    settingDiv.style.borderRadius = '4px';
+
+    const header = settingDiv.createDiv('citation-database-header');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.marginBottom = '10px';
+
+    // Database Name
+    new Setting(header)
+      .setName(`Database ${index + 1}`)
+      .addText((text) => {
+        text
+          .setPlaceholder('Friendly Name')
+          .setValue(db.name)
+          .onChange(async (value) => {
+            this.plugin.settings.databases[index].name = value;
+            await this.plugin.saveSettings();
+          });
+      })
+      .addExtraButton((button) => {
+        button
+          .setIcon('trash')
+          .setTooltip('Remove Database')
+          .onClick(async () => {
+            this.plugin.settings.databases.splice(index, 1);
+            await this.plugin.saveSettings();
+            this.display();
+          });
       });
 
-    new Setting(containerEl)
-      .setName('Citation database path')
-      .setDesc(
-        'Path to citation library exported by your reference manager. ' +
-          'Can be an absolute path or a path relative to the current vault root folder. ' +
-          'Citations will be automatically reloaded whenever this file updates.',
-      )
-      .addText((input) => {
-        input.setPlaceholder('/path/to/export.json');
-        input.setValue(this.plugin.settings.citationExportPath);
-        input.onChange((value) => {
-          this.plugin.settings.citationExportPath = value;
-          this.plugin.saveSettings();
-          this.checkCitationExportPath(value).then((success) => {
-            if (success) {
-              this.plugin.libraryService
-                .load()
-                .then(() => this.showCitationExportPathSuccess());
-            }
+    // Database Type
+    new Setting(settingDiv).setName('Database Type').addDropdown((dropdown) => {
+      dropdown.addOptions(CITATION_DATABASE_FORMAT_LABELS);
+      dropdown.setValue(db.type);
+      dropdown.onChange(async (value) => {
+        this.plugin.settings.databases[index].type = value as DatabaseType;
+        await this.plugin.saveSettings();
+      });
+    });
+
+    // Database Path
+    new Setting(settingDiv)
+      .setName('Database Path')
+      .setDesc('Absolute path or path relative to vault root.')
+      .addText((text) => {
+        text
+          .setPlaceholder('/path/to/export.json')
+          .setValue(db.path)
+          .onChange(async (value) => {
+            this.plugin.settings.databases[index].path = value;
+            await this.plugin.saveSettings();
+            this.checkCitationExportPath(value, pathStatusEl);
           });
-        });
       });
 
-    this.citationPathLoadingEl = containerEl.createEl('p', {
-      cls: 'zoteroSettingCitationPathLoading d-none',
-      text: 'Loading citation database...',
-    });
-    this.citationPathErrorEl = containerEl.createEl('p', {
-      cls: 'zoteroSettingCitationPathError d-none',
-      text: 'The citation export file cannot be found. Please check the path above.',
-    });
-    this.citationPathSuccessEl = containerEl.createEl('p', {
-      cls: 'zoteroSettingCitationPathSuccess d-none',
-      text: 'Loaded library with {{n}} references.',
-    });
+    const pathStatusEl = settingDiv.createDiv('citation-path-status');
+    pathStatusEl.style.fontSize = '0.8em';
+    pathStatusEl.style.marginTop = '5px';
+
+    // Initial check
+    if (db.path) {
+      this.checkCitationExportPath(db.path, pathStatusEl);
+    }
+  }
+
+  /**
+   * Returns true iff the path exists; displays error as a side-effect
+   */
+  async checkCitationExportPath(
+    filePath: string,
+    statusEl: HTMLElement,
+  ): Promise<boolean> {
+    statusEl.empty();
+    statusEl.setText('Checking path...');
+    statusEl.style.color = 'var(--text-muted)';
+
+    try {
+      await FileSystemAdapter.readLocalFile(
+        this.plugin.libraryService.resolveLibraryPath(filePath),
+      );
+      statusEl.setText('Path verified.');
+      statusEl.style.color = 'var(--text-success)';
+      return true;
+    } catch {
+      statusEl.setText('File not found.');
+      statusEl.style.color = 'var(--text-error)';
+      return false;
+    }
+  }
+
+  // Legacy method kept for compatibility if needed, but unused in new UI
+  showCitationExportPathSuccess(): void {
+    // no-op
   }
 
   private displayLiteratureNoteSettings(containerEl: HTMLElement): void {
@@ -437,34 +509,5 @@ export class CitationSettingTab extends PluginSettingTab {
         component.onChange(onChange);
       });
     }
-  }
-
-  /**
-   * Returns true iff the path exists; displays error as a side-effect
-   */
-  async checkCitationExportPath(filePath: string): Promise<boolean> {
-    this.citationPathLoadingEl.addClass('d-none');
-
-    try {
-      await FileSystemAdapter.readLocalFile(
-        this.plugin.libraryService.resolveLibraryPath(filePath),
-      );
-      this.citationPathErrorEl.addClass('d-none');
-    } catch {
-      this.citationPathSuccessEl.addClass('d-none');
-      this.citationPathErrorEl.removeClass('d-none');
-      return false;
-    }
-
-    return true;
-  }
-
-  showCitationExportPathSuccess(): void {
-    if (!this.plugin.libraryService.library) return;
-
-    this.citationPathSuccessEl.setText(
-      `Loaded library with ${this.plugin.libraryService.library.size} references.`,
-    );
-    this.citationPathSuccessEl.removeClass('d-none');
   }
 }

@@ -97,7 +97,10 @@ describe('CitationPlugin', () => {
   });
 
   it('should initialize services and library on load', async () => {
-    plugin.settings = { citationExportPath: 'test.bib' } as any;
+    plugin.settings = {
+      citationExportPath: 'test.bib',
+      databases: [{ name: 'Test', path: 'test.bib', type: 'biblatex' }],
+    } as any;
     await plugin.onload();
 
     expect(plugin.libraryService).toBeDefined();
@@ -105,7 +108,10 @@ describe('CitationPlugin', () => {
   });
 
   it('should cleanup resources on unload', async () => {
-    plugin.settings = { citationExportPath: 'test.bib' } as any;
+    plugin.settings = {
+      citationExportPath: 'test.bib',
+      databases: [{ name: 'Test', path: 'test.bib', type: 'biblatex' }],
+    } as any;
     await plugin.onload();
 
     plugin.onunload();

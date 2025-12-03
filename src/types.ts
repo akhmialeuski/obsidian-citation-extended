@@ -6,6 +6,12 @@ export { Entry as EntryDataBibLaTeX } from '@retorquere/bibtex-parser';
 export const databaseTypes = ['csl-json', 'biblatex'] as const;
 export type DatabaseType = (typeof databaseTypes)[number];
 
+export interface DatabaseConfig {
+  name: string;
+  path: string;
+  type: DatabaseType;
+}
+
 export interface TemplateContext {
   citekey: string;
   abstract?: string;
@@ -144,6 +150,11 @@ export abstract class Entry {
   public abstract publisher?: string;
   public abstract publisherPlace?: string;
 
+  public abstract _sourceDatabase?: string;
+  public abstract _compositeCitekey?: string;
+
+  public abstract get citekey(): string;
+
   /**
    * BibLaTeX-specific properties
    */
@@ -171,7 +182,7 @@ export abstract class Entry {
    * A URI which will open the relevant entry in the Zotero client.
    */
   public get zoteroSelectURI(): string {
-    return `zotero://select/items/@${this.id}`;
+    return `zotero://select/items/@${this.citekey}`;
   }
 
   toJSON(): Record<string, unknown> {
@@ -245,9 +256,21 @@ export class EntryCSLAdapter extends Entry {
   eprinttype: string | null = null;
   files: string[] | null = null;
 
+  _sourceDatabase?: string;
+  _compositeCitekey?: string;
+  private _id?: string;
+
   get id(): string {
+    return this._id || this.data.id;
+  }
+  set id(value: string) {
+    this._id = value;
+  }
+
+  get citekey(): string {
     return this.data.id;
   }
+
   get type(): string {
     return this.data.type;
   }
@@ -358,6 +381,10 @@ export class EntryBibLaTeXAdapter extends Entry {
   _year?: string;
   _note?: string[];
 
+  _sourceDatabase?: string;
+  _compositeCitekey?: string;
+  private _id?: string;
+
   constructor(private data: EntryDataBibLaTeX) {
     super();
 
@@ -396,8 +423,16 @@ export class EntryBibLaTeXAdapter extends Entry {
   }
 
   get id(): string {
+    return this._id || this.data.key;
+  }
+  set id(value: string) {
+    this._id = value;
+  }
+
+  get citekey(): string {
     return this.data.key;
   }
+
   get type(): string {
     return this.data.type;
   }

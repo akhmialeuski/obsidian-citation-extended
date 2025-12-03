@@ -11,6 +11,7 @@ import {
   IntrospectionService,
   VariableDefinition,
 } from './introspection.service';
+import { LocalFileSource } from '../sources/local-file-source';
 
 export class LibraryService {
   library!: Library;
@@ -106,48 +107,62 @@ export class LibraryService {
   }
 
   /**
-   * Merge entries from multiple sources according to the merge strategy
+   * Merge entries from multiple sources, handling duplicates by creating composite keys
    */
   private mergeEntries(results: Entry[][]): Library {
     const entriesMap = new Map<string, Entry>();
+    const citekeyCounts = new Map<string, number>();
 
-    switch (this.mergeStrategy) {
-      case MergeStrategy.LastWins:
-        // Later sources override earlier ones
-        for (const entries of results) {
-          for (const entry of entries) {
-            entriesMap.set(entry.id, entry);
-          }
-        }
-        break;
+    // First pass: count citekeys
+    for (const entries of results) {
+      for (const entry of entries) {
+        citekeyCounts.set(entry.id, (citekeyCounts.get(entry.id) || 0) + 1);
+      }
+    }
 
-      case MergeStrategy.FirstWins:
-        // Earlier sources take precedence
-        for (const entries of results) {
-          for (const entry of entries) {
-            if (!entriesMap.has(entry.id)) {
-              entriesMap.set(entry.id, entry);
-            }
-          }
-        }
-        break;
+    for (const entries of results) {
+      for (const entry of entries) {
+        if (citekeyCounts.get(entry.id)! > 1) {
+          // Duplicate detected
+          const compositeKey = `${entry.id}@${entry._sourceDatabase}`;
+          entry._compositeCitekey = compositeKey;
+          // We keep the original ID for display/search but store it under composite key in the map if needed
+          // But wait, if we change the ID, it changes how it's referenced.
+          // The requirement says: "If records have same names but different citekeys - they are different records. If records are completely identical (same citekey and content), form a composite key: <citekey>@<database_name>."
 
-      case MergeStrategy.MostRecent:
-        // Compare modification dates (for now, use LastWins as fallback)
-        // TODO: Implement proper date comparison when sources provide timestamps
-        for (const entries of results) {
-          for (const entry of entries) {
-            entriesMap.set(entry.id, entry);
-          }
+          // Actually, if citekeys are same, we MUST distinguish them in the library map.
+          // So we should use the composite key as the map key.
+          // And maybe update the entry.id to be the composite key?
+          // Or keep entry.id as original and use a different property for map key?
+          // The Library class uses map key as lookup.
+
+          // Let's clone the entry to avoid modifying the original if it's shared (though it shouldn't be)
+          // And update its ID to the composite key so it's unique in the system.
+          // But we want to preserve the original citekey for display if possible.
+          // The Entry interface has 'id'.
+
+          // Let's update the ID to composite key.
+          // But we need to store the original citekey somewhere?
+          // The 'id' is used for @citekey.
+
+          // If the user wants to cite it, they will use the composite key?
+          // "User chooses which database to connect the record from."
+          // This implies the user selects one, and that selection has a unique ID.
+
+          // So yes, update ID to composite key.
+          entry.id = compositeKey;
+          // entry._compositeCitekey is already set.
         }
-        break;
+
+        entriesMap.set(entry.id, entry);
+      }
     }
 
     return new Library(Object.fromEntries(entriesMap));
   }
 
   async load(isRetry = false): Promise<Library | null> {
-    if (this.sources.length === 0) {
+    if (this.settings.databases.length === 0) {
       console.warn(
         'Citations plugin: No data sources configured. Please update plugin settings.',
       );
@@ -174,14 +189,30 @@ export class LibraryService {
     this.events.trigger('library-load-start');
 
     try {
+      // Create sources from settings
+      this.sources = this.settings.databases.map((db, index) => {
+        return new LocalFileSource(
+          `source-${index}`,
+          db.path,
+          db.type,
+          this.loadWorker,
+          this.vaultAdapter,
+        );
+      });
+
       // Load from all sources in parallel
-      const loadPromises = this.sources.map(async (source) => {
+      const loadPromises = this.sources.map(async (source, index) => {
         try {
           console.debug(`LibraryService: Loading from source ${source.id}`);
           const entries = await source.load();
           console.debug(
             `LibraryService: Loaded ${entries.length} entries from ${source.id}`,
           );
+          // Tag entries with source database name
+          const dbName = this.settings.databases[index].name;
+          entries.forEach((entry) => {
+            entry._sourceDatabase = dbName;
+          });
           return entries;
         } catch (error) {
           console.error(
@@ -223,7 +254,7 @@ export class LibraryService {
         throw errors[0];
       }
 
-      // Merge results according to strategy
+      // Merge results and handle duplicates
       this.library = this.mergeEntries(successfulResults);
 
       // Build search index
@@ -248,6 +279,9 @@ export class LibraryService {
       this.events.trigger('library-load-complete');
       this.loadErrorNotifier.hide();
       this.retryCount = 0;
+
+      // Re-init watcher since sources might have changed
+      this.initWatcher();
 
       return this.library;
     } catch (e) {
@@ -279,12 +313,17 @@ export class LibraryService {
     }
   }
 
-  /**
-   * Initialize watchers for all data sources
-   */
   initWatcher(): void {
+    // Dispose existing watchers first
+    this.sources.forEach((s) => s.dispose());
+
+    // Re-create sources if they don't exist (e.g. initial load)
+    // Actually load() creates sources. initWatcher should be called after load().
+
     if (this.sources.length === 0) {
-      console.warn('LibraryService: No sources to watch');
+      // If no sources, maybe we haven't loaded yet?
+      // But we can create sources just for watching?
+      // Better to rely on load() to populate sources.
       return;
     }
 
@@ -292,6 +331,7 @@ export class LibraryService {
     for (const source of this.sources) {
       try {
         source.watch(() => {
+          console.debug(`LibraryService: Change detected in ${source.id}`);
           this.triggerLoadWithDebounce();
         });
         console.debug(

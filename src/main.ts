@@ -13,7 +13,7 @@ import { NoteService } from './services/note.service';
 import { LibraryService } from './services/library.service';
 import { UIService } from './services/ui.service';
 import { LocalFileSource, VaultFileSource } from './sources';
-import { DataSource, DataSourceDefinition, MergeStrategy } from './data-source';
+import { DataSource, MergeStrategy } from './data-source';
 import { DatabaseType } from './types';
 
 import { VaultExt } from './obsidian-extensions.d';
@@ -70,6 +70,20 @@ export default class CitationPlugin extends Plugin {
 
     if (validationResult.success) {
       Object.assign(this.settings, validationResult.data);
+
+      // Migration: If databases is empty but legacy path exists, migrate it
+      if (
+        this.settings.databases.length === 0 &&
+        this.settings.citationExportPath
+      ) {
+        console.log('Citations Plugin: Migrating legacy settings to databases');
+        this.settings.databases.push({
+          name: 'Default',
+          path: this.settings.citationExportPath,
+          type: this.settings.citationExportFormat,
+        });
+        this.saveSettings();
+      }
     } else {
       console.warn(
         'Citations Plugin: Settings validation failed',
@@ -125,7 +139,6 @@ export default class CitationPlugin extends Plugin {
 
   /**
    * Create data sources based on settings
-   * Supports both new multi-source configuration and legacy single-file configuration
    */
   private createDataSources(workerManager: WorkerManager): DataSource[] {
     const sources: DataSource[] = [];
@@ -134,41 +147,23 @@ export default class CitationPlugin extends Plugin {
         ? this.app.vault.adapter
         : null;
 
-    // Check if new multi-source config exists
-    if (this.settings.dataSources && this.settings.dataSources.length > 0) {
-      // Use new multi-source configuration
-      this.settings.dataSources.forEach(
-        (def: DataSourceDefinition, index: number) => {
-          const source = this.createDataSource(
-            def,
-            `source-${index}`,
-            vaultAdapter,
-            workerManager,
-          );
-          if (source) {
-            sources.push(source);
-          }
-        },
-      );
-    } else if (this.settings.citationExportPath) {
-      // Backward compatibility: use citationExportPath
-      // Detect mobile by checking if FileSystemAdapter is available
-      const sourceType = vaultAdapter ? 'local-file' : 'vault-file';
-      const source = this.createDataSource(
-        {
-          type: sourceType,
-          path: this.settings.citationExportPath,
-          format: this.settings.citationExportFormat,
-        },
-        'default',
-        vaultAdapter,
-        workerManager,
-      );
-
-      if (source) {
-        sources.push(source);
-      }
-    }
+    // Use databases configuration
+    this.settings.databases.forEach(
+      (
+        def: { name: string; path: string; type: DatabaseType },
+        index: number,
+      ) => {
+        const source = this.createDataSource(
+          { type: 'local-file', path: def.path, format: def.type },
+          `source-${index}`,
+          vaultAdapter,
+          workerManager,
+        );
+        if (source) {
+          sources.push(source);
+        }
+      },
+    );
 
     return sources;
   }
