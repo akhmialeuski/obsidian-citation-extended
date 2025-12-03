@@ -3,10 +3,12 @@ import { CitationsPluginSettings } from '../settings';
 import CitationEvents from '../events';
 import { FileSystemAdapter } from 'obsidian';
 import { WorkerManager } from '../util';
-import { DataSource } from '../data-source';
 import { LoadingStatus } from '../library-state';
 
+import { LocalFileSource } from '../sources/local-file-source';
+
 // Mock dependencies
+jest.mock('../sources/local-file-source');
 jest.mock(
   'obsidian',
   () => ({
@@ -72,14 +74,16 @@ describe('LibraryService Loading Behavior', () => {
   });
 
   it('should set status to Error when source throws error (new behavior)', async () => {
-    const mockSource: DataSource = {
+    settings.databases = [
+      { name: 'Test', path: 'test.json', type: 'csl-json' },
+    ];
+
+    (LocalFileSource as jest.Mock).mockImplementation(() => ({
       id: 'test-source',
       load: jest.fn().mockRejectedValue(new Error('File not found')),
       watch: jest.fn(),
       dispose: jest.fn(),
-    };
-
-    service.addSource(mockSource);
+    }));
 
     const stateChangeSpy = jest.fn();
     events.on('library-state-changed', stateChangeSpy);
@@ -96,13 +100,17 @@ describe('LibraryService Loading Behavior', () => {
     jest.useFakeTimers();
     global.window.setTimeout = setTimeout;
     global.window.clearTimeout = clearTimeout;
-    const mockSource: DataSource = {
+
+    settings.databases = [
+      { name: 'Slow', path: 'slow.json', type: 'csl-json' },
+    ];
+
+    (LocalFileSource as jest.Mock).mockImplementation(() => ({
       id: 'slow-source',
       load: jest.fn().mockImplementation(() => new Promise(() => {})), // Never resolves
       watch: jest.fn(),
       dispose: jest.fn(),
-    };
-    service.addSource(mockSource);
+    }));
 
     const loadPromise = service.load();
 

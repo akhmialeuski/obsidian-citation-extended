@@ -3,17 +3,32 @@ import { Entry } from '../types';
 
 // Mock Entry class for testing
 class MockEntry extends Entry {
-  id: string;
+  id!: string;
   type: string = 'article-journal';
-  title: string;
-  authorString: string;
+  title!: string;
+  authorString!: string;
+  eprint: string | null = null;
+  eprinttype: string | null = null;
+  files: string[] | null = null;
 
-  constructor(id: string, title: string, author: string, year: number) {
+  _sourceDatabase?: string;
+  _compositeCitekey?: string;
+
+  get citekey(): string {
+    return this.id;
+  }
+
+  constructor(data: Partial<Entry>) {
     super();
-    this.id = id;
-    this.title = title;
-    this.authorString = author;
-    this._year = year.toString();
+    Object.assign(this, data);
+    // Ensure required fields are set for the mock if not provided in data
+    if (!this.id) this.id = data.id || 'mock-id';
+    if (!this.title) this.title = data.title || 'Mock Title';
+    if (!this.authorString)
+      this.authorString = data.authorString || 'Mock Author';
+    if (!this._year && data.issuedDate)
+      this._year = new Date(data.issuedDate).getFullYear().toString();
+    if (!this._year) this._year = '2000'; // Default year if not provided
   }
 
   // Implement abstract members with dummy values
@@ -21,7 +36,7 @@ class MockEntry extends Entry {
   author = [];
   containerTitle = '';
   DOI = '';
-  files = [];
+
   issuedDate = new Date();
   page = '';
   titleShort = '';
@@ -31,22 +46,17 @@ class MockEntry extends Entry {
   source = '';
   publisher = '';
   publisherPlace = '';
-  eprint = '';
-  eprinttype = '';
 }
 
 function generateEntries(count: number): MockEntry[] {
-  const entries: MockEntry[] = [];
-  for (let i = 0; i < count; i++) {
-    entries.push(
-      new MockEntry(
-        `citekey_${i}`,
-        `Title of the paper number ${i} about something interesting`,
-        `Author Number ${i}, Co-Author ${i}`,
-        2000 + (i % 23),
-      ),
-    );
-  }
+  const entries = Array.from({ length: count }, (_, i) => {
+    return new MockEntry({
+      id: `entry-${i}`,
+      title: `Title ${i}`,
+      authorString: `Author ${i}`,
+      issuedDate: new Date(2000 + (i % 20), 0, 1),
+    });
+  });
   return entries;
 }
 

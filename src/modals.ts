@@ -189,7 +189,12 @@ export class CitationSearchModal extends SuggestModal<Entry> {
       cls: 'zoteroTitle',
       text: entryTitle,
     });
-    container.createEl('span', { cls: 'zoteroCitekey', text: entry.id });
+    const citekey = entry.citekey || entry.id;
+    const displayKey = entry._sourceDatabase
+      ? `${entry._sourceDatabase}:${citekey}`
+      : citekey;
+
+    container.createEl('span', { cls: 'zoteroCitekey', text: displayKey });
 
     if (yearString) {
       container.createEl('span', {

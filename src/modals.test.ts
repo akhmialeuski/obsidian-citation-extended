@@ -1,10 +1,6 @@
-/**
- * @jest-environment jsdom
- */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-require-imports */
 import { App } from 'obsidian';
-// import { CitationSearchModal } from './modals';
+import { CitationSearchModal } from './modals';
 // import CitationPlugin from './main';
 
 // Mock Obsidian
@@ -38,9 +34,8 @@ jest.mock(
               { addClass: jest.fn(), removeClass: jest.fn() },
             ],
           }),
+          empty: jest.fn(),
         } as any;
-        // Mock parent for loadingEl creation
-        // const _parent = { appendChild: jest.fn() };
       }
       onOpen() {}
       onClose() {}
@@ -79,34 +74,49 @@ jest.mock(
 );
 
 describe('CitationSearchModal', () => {
-  let CitationSearchModal: any;
-  let CitationPlugin: any;
+  // let CitationSearchModal: any;
+  // let CitationPlugin: any;
   let modal: any;
   let app: App;
   let plugin: any;
 
   beforeAll(() => {
-    CitationSearchModal = require('./modals').CitationSearchModal;
-    CitationPlugin = require('./main').default;
+    // CitationSearchModal = require('./modals').CitationSearchModal;
   });
 
   beforeEach(() => {
     app = new App();
-    plugin = new CitationPlugin(app, {} as any);
-    plugin.events = {
-      on: jest.fn(),
-      offref: jest.fn(),
-    } as any;
-    plugin.libraryService = {
-      isLibraryLoading: false,
-      state: { status: 'idle' },
-    } as any;
+    plugin = {
+      events: {
+        on: jest.fn(),
+        offref: jest.fn(),
+      },
+      libraryService: {
+        isLibraryLoading: false,
+        state: { status: 'idle' },
+        searchService: {
+          search: jest.fn().mockReturnValue([]),
+        },
+        library: {
+          entries: {},
+        },
+      },
+      openLiteratureNote: jest.fn(),
+      insertLiteratureNoteLink: jest.fn(),
+      insertLiteratureNoteContent: jest.fn(),
+      insertMarkdownCitation: jest.fn(),
+    };
 
     const mockAction = {
       name: 'Mock Action',
       onChoose: jest.fn(),
     };
-    modal = new CitationSearchModal(app, plugin, mockAction);
+    try {
+      modal = new CitationSearchModal(app, plugin, mockAction);
+    } catch (e) {
+      console.error('Constructor failed:', e);
+      throw e;
+    }
   });
 
   it('should register event listeners on open', () => {
