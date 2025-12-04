@@ -1,24 +1,26 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/**
+ * @jest-environment jsdom
+ */
 import { App } from 'obsidian';
 import { CitationSearchModal } from './modals';
-// import CitationPlugin from './main';
+import CitationPlugin from './main';
 
 // Mock Obsidian
 jest.mock(
   'obsidian',
   () => {
     class MockFuzzySuggestModal {
-      app: any;
+      app: unknown;
       inputEl: HTMLElement;
       resultContainerEl: HTMLElement;
-      constructor(app: any) {
+      constructor(app: unknown) {
         this.app = app;
         this.inputEl = {
           setAttribute: jest.fn(),
           addEventListener: jest.fn(),
           removeEventListener: jest.fn(),
           focus: jest.fn(),
-        } as any;
+        } as unknown as HTMLInputElement;
         this.resultContainerEl = {
           addClass: jest.fn(),
           createEl: jest.fn().mockReturnValue({
@@ -35,7 +37,7 @@ jest.mock(
             ],
           }),
           empty: jest.fn(),
-        } as any;
+        } as unknown as HTMLElement;
       }
       onOpen() {}
       onClose() {}
@@ -74,15 +76,11 @@ jest.mock(
 );
 
 describe('CitationSearchModal', () => {
-  // let CitationSearchModal: any;
-  // let CitationPlugin: any;
-  let modal: any;
+  let modal: CitationSearchModal;
   let app: App;
-  let plugin: any;
+  let plugin: CitationPlugin;
 
-  beforeAll(() => {
-    // CitationSearchModal = require('./modals').CitationSearchModal;
-  });
+  beforeAll(() => {});
 
   beforeEach(() => {
     app = new App();
@@ -105,7 +103,7 @@ describe('CitationSearchModal', () => {
       insertLiteratureNoteLink: jest.fn(),
       insertLiteratureNoteContent: jest.fn(),
       insertMarkdownCitation: jest.fn(),
-    };
+    } as unknown as CitationPlugin;
 
     const mockAction = {
       name: 'Mock Action',

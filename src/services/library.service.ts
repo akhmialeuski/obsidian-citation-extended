@@ -304,11 +304,11 @@ export class LibraryService {
     if (this.retryCount < 5) {
       const delay = Math.min(1000 * Math.pow(2, this.retryCount), 30000);
       this.retryCount++;
-      console.log(
+      console.debug(
         `Citation plugin: Retrying load in ${delay}ms (Attempt ${this.retryCount})`,
       );
       this.retryTimer = window.setTimeout(() => {
-        this.load(true);
+        void this.load(true);
       }, delay);
     }
   }
@@ -352,7 +352,7 @@ export class LibraryService {
     }
 
     this.loadDebounceTimer = window.setTimeout(() => {
-      this.load();
+      void this.load();
     }, 1000); // 1s debounce
   }
 

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Notifier, WorkerManager } from './util';
 import { Notice } from 'obsidian';
 
@@ -48,7 +47,9 @@ describe('Notifier', () => {
   it('should hide the notice', () => {
     notifier.show();
     notifier.hide();
-    expect((notifier as any).currentNotice).toBeNull();
+    expect(
+      (notifier as unknown as { currentNotice: Notice | null }).currentNotice,
+    ).toBeNull();
   });
 });
 

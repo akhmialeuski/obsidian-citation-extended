@@ -76,7 +76,7 @@ export default class CitationPlugin extends Plugin {
         this.settings.databases.length === 0 &&
         this.settings.citationExportPath
       ) {
-        console.log('Citations Plugin: Migrating legacy settings to databases');
+        console.log('Citations plugin: Migrating legacy settings to databases');
         this.settings.databases.push({
           name: 'Default',
           path: this.settings.citationExportPath,
@@ -86,11 +86,11 @@ export default class CitationPlugin extends Plugin {
       }
     } else {
       console.warn(
-        'Citations Plugin: Settings validation failed',
+        'Citations plugin: Settings validation failed',
         validationResult.error,
       );
       new Notice(
-        'Citations Plugin: Invalid settings detected. Please check your configuration.',
+        'Citations plugin: Invalid settings detected. Please check your configuration.',
       );
       // Fallback to best-effort loading
       Object.assign(this.settings, mergedSettings);
@@ -133,7 +133,7 @@ export default class CitationPlugin extends Plugin {
 
   onunload(): void {
     this.libraryService.dispose();
-    // @ts-expect-error: literatureNoteErrorNotifier is not nullable in type definition but needs to be cleared
+    // @ts-expect-error -- literatureNoteErrorNotifier is not nullable in type definition but needs to be cleared
     this.literatureNoteErrorNotifier = null;
   }
 
@@ -204,10 +204,10 @@ export default class CitationPlugin extends Plugin {
     }
   }
 
-  async init(): Promise<void> {
+  init(): void {
     if (this.libraryService.getSources().length > 0) {
       // Load library for the first time
-      this.libraryService.load();
+      void this.libraryService.load();
       this.libraryService.initWatcher();
     } else {
       console.warn('Citations plugin: No data sources configured');
@@ -294,7 +294,7 @@ export default class CitationPlugin extends Plugin {
    * Format literature note content for a given reference and insert in the
    * currently active pane.
    */
-  async insertLiteratureNoteContent(citekey: string): Promise<void> {
+  insertLiteratureNoteContent(citekey: string): void {
     const editor = this.getActiveEditor();
     if (!editor) {
       new Notice('No active editor found');
@@ -311,10 +311,7 @@ export default class CitationPlugin extends Plugin {
     }
   }
 
-  async insertMarkdownCitation(
-    citekey: string,
-    alternative = false,
-  ): Promise<void> {
+  insertMarkdownCitation(citekey: string, alternative = false): void {
     const editor = this.getActiveEditor();
     if (!editor) {
       new Notice('No active editor found');
@@ -322,16 +319,15 @@ export default class CitationPlugin extends Plugin {
     }
 
     try {
-      const func = alternative
-        ? this.getAlternativeMarkdownCitationForCitekey
-        : this.getMarkdownCitationForCitekey;
-      const citation = func.bind(this)(citekey);
+      const citation = alternative
+        ? this.getAlternativeMarkdownCitationForCitekey(citekey)
+        : this.getMarkdownCitationForCitekey(citekey);
 
       const cursor = editor.getCursor();
       editor.replaceRange(citation, cursor);
     } catch (error) {
-      console.error('Failed to insert markdown citation:', error);
-      new Notice('Failed to insert markdown citation');
+      console.error('Failed to insert Markdown citation:', error);
+      new Notice('Failed to insert Markdown citation');
     }
   }
 }

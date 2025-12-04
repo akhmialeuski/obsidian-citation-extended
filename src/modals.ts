@@ -64,7 +64,7 @@ export class CitationSearchModal extends SuggestModal<Entry> {
   private inputTimeout: number | undefined;
 
   onOpen() {
-    super.onOpen();
+    void super.onOpen();
 
     this.eventRefs = [
       this.plugin.events.on('library-state-changed', (state) => {
@@ -231,8 +231,7 @@ export class OpenNoteAction implements SearchAction {
 
   async onChoose(item: Entry, evt: MouseEvent | KeyboardEvent) {
     if (evt instanceof MouseEvent || evt.key == 'Enter') {
-      const newPane =
-        evt instanceof KeyboardEvent && (evt as KeyboardEvent).ctrlKey;
+      const newPane = evt instanceof KeyboardEvent && evt.ctrlKey;
       await this.plugin.openLiteratureNote(item.id, newPane);
     } else if (evt.key == 'Tab') {
       if (evt.shiftKey) {

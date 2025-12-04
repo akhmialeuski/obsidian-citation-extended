@@ -9,6 +9,8 @@ import {
   EntryBibLaTeXAdapter,
   EntryCSLAdapter,
   DatabaseType,
+  EntryDataBibLaTeX,
+  EntryDataCSL,
 } from '../types';
 import { WorkerManager } from '../util';
 
@@ -83,23 +85,15 @@ export class LocalFileSource implements DataSource {
    * Convert EntryData to Entry objects using the appropriate adapter
    */
   private convertToEntries(entries: EntryData[]): Entry[] {
-    let adapter: new (data: EntryData) => Entry;
-
-    // The original switch statement is replaced with an if/else if structure
-    // to apply the requested type casting and resolve type mismatches.
     if (this.format === 'biblatex') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      adapter = EntryBibLaTeXAdapter as any;
+      return entries.map(
+        (e) => new EntryBibLaTeXAdapter(e as EntryDataBibLaTeX),
+      );
     } else if (this.format === 'csl-json') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      adapter = EntryCSLAdapter as any;
+      return entries.map((e) => new EntryCSLAdapter(e as EntryDataCSL));
     } else {
-      // Fallback or error handling for unknown formats if necessary
-      // Based on the original code, only 'biblatex' and 'csl-json' were handled.
-      throw new Error(`Unsupported database format: ${this.format}`);
+      throw new Error('Unsupported database format');
     }
-
-    return entries.map((e) => new adapter(e));
   }
 
   /**
@@ -172,7 +166,7 @@ export class LocalFileSource implements DataSource {
     }
 
     if (this.watcher) {
-      this.watcher.close();
+      void this.watcher.close();
       this.watcher = null;
       console.debug(`LocalFileSource: Disposed watcher for ${this.id}`);
     }

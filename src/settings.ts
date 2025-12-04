@@ -134,7 +134,7 @@ export class CitationSettingTab extends PluginSettingTab {
   }
 
   private displayCitationDatabaseSettings(containerEl: HTMLElement): void {
-    containerEl.createEl('h3', { text: 'Citation Databases' });
+    new Setting(containerEl).setName('Citation databases').setHeading();
     containerEl.createEl('p', {
       text: 'Configure one or more citation databases. The plugin will load references from all configured sources.',
       cls: 'setting-item-description',
@@ -152,21 +152,23 @@ export class CitationSettingTab extends PluginSettingTab {
     // Add new database button
     new Setting(containerEl).addButton((button) => {
       button
-        .setButtonText('Add Database')
+        .setButtonText('Add database')
         .setCta()
-        .onClick(async () => {
-          if (this.plugin.settings.databases.length >= 20) {
-            new Notice('Maximum number of databases (20) reached.');
-            return;
-          }
+        .onClick(() => {
+          void (async () => {
+            if (this.plugin.settings.databases.length >= 20) {
+              new Notice('Maximum number of databases (20) reached.');
+              return;
+            }
 
-          this.plugin.settings.databases.push({
-            name: `Database ${this.plugin.settings.databases.length + 1}`,
-            type: 'csl-json',
-            path: '',
-          });
-          await this.plugin.saveSettings();
-          this.display(); // Re-render to show new database
+            this.plugin.settings.databases.push({
+              name: `Database ${this.plugin.settings.databases.length + 1}`,
+              type: 'csl-json',
+              path: '',
+            });
+            await this.plugin.saveSettings();
+            this.display(); // Re-render to show new database
+          })();
         });
     });
   }
@@ -177,22 +179,26 @@ export class CitationSettingTab extends PluginSettingTab {
     index: number,
   ): void {
     const settingDiv = container.createDiv('citation-database-setting');
-    settingDiv.style.border = '1px solid var(--background-modifier-border)';
-    settingDiv.style.padding = '10px';
-    settingDiv.style.marginBottom = '10px';
-    settingDiv.style.borderRadius = '4px';
+    settingDiv.setCssProps({
+      border: '1px solid var(--background-modifier-border)',
+      padding: '10px',
+      marginBottom: '10px',
+      borderRadius: '4px',
+    });
 
     const header = settingDiv.createDiv('citation-database-header');
-    header.style.display = 'flex';
-    header.style.justifyContent = 'space-between';
-    header.style.marginBottom = '10px';
+    header.setCssProps({
+      display: 'flex',
+      justifyContent: 'space-between',
+      marginBottom: '10px',
+    });
 
     // Database Name
     new Setting(header)
       .setName(`Database ${index + 1}`)
       .addText((text) => {
         text
-          .setPlaceholder('Friendly Name')
+          .setPlaceholder('Friendly name')
           .setValue(db.name)
           .onChange(async (value) => {
             this.plugin.settings.databases[index].name = value;
@@ -202,16 +208,18 @@ export class CitationSettingTab extends PluginSettingTab {
       .addExtraButton((button) => {
         button
           .setIcon('trash')
-          .setTooltip('Remove Database')
-          .onClick(async () => {
-            this.plugin.settings.databases.splice(index, 1);
-            await this.plugin.saveSettings();
-            this.display();
+          .setTooltip('Remove database')
+          .onClick(() => {
+            void (async () => {
+              this.plugin.settings.databases.splice(index, 1);
+              await this.plugin.saveSettings();
+              this.display();
+            })();
           });
       });
 
     // Database Type
-    new Setting(settingDiv).setName('Database Type').addDropdown((dropdown) => {
+    new Setting(settingDiv).setName('Database type').addDropdown((dropdown) => {
       dropdown.addOptions(CITATION_DATABASE_FORMAT_LABELS);
       dropdown.setValue(db.type);
       dropdown.onChange(async (value) => {
@@ -222,7 +230,7 @@ export class CitationSettingTab extends PluginSettingTab {
 
     // Database Path
     new Setting(settingDiv)
-      .setName('Database Path')
+      .setName('Database path')
       .setDesc('Absolute path or path relative to vault root.')
       .addText((text) => {
         text
@@ -231,17 +239,19 @@ export class CitationSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.databases[index].path = value;
             await this.plugin.saveSettings();
-            this.checkCitationExportPath(value, pathStatusEl);
+            void this.checkCitationExportPath(value, pathStatusEl);
           });
       });
 
     const pathStatusEl = settingDiv.createDiv('citation-path-status');
-    pathStatusEl.style.fontSize = '0.8em';
-    pathStatusEl.style.marginTop = '5px';
+    pathStatusEl.setCssProps({
+      fontSize: '0.8em',
+      marginTop: '5px',
+    });
 
     // Initial check
     if (db.path) {
-      this.checkCitationExportPath(db.path, pathStatusEl);
+      void this.checkCitationExportPath(db.path, pathStatusEl);
     }
   }
 
@@ -254,18 +264,18 @@ export class CitationSettingTab extends PluginSettingTab {
   ): Promise<boolean> {
     statusEl.empty();
     statusEl.setText('Checking path...');
-    statusEl.style.color = 'var(--text-muted)';
+    statusEl.setCssProps({ color: 'var(--text-muted)' });
 
     try {
       await FileSystemAdapter.readLocalFile(
         this.plugin.libraryService.resolveLibraryPath(filePath),
       );
       statusEl.setText('Path verified.');
-      statusEl.style.color = 'var(--text-success)';
+      statusEl.setCssProps({ color: 'var(--text-success)' });
       return true;
     } catch {
       statusEl.setText('File not found.');
-      statusEl.style.color = 'var(--text-error)';
+      statusEl.setCssProps({ color: 'var(--text-error)' });
       return false;
     }
   }
@@ -283,7 +293,7 @@ export class CitationSettingTab extends PluginSettingTab {
       'literatureNoteFolder',
     );
 
-    containerEl.createEl('h3', { text: 'Literature note templates' });
+    new Setting(containerEl).setName('Literature note templates').setHeading();
 
     this.buildSetting(
       containerEl,
@@ -307,7 +317,7 @@ export class CitationSettingTab extends PluginSettingTab {
 
   private displayTemplateSettings(containerEl: HTMLElement): void {
     // ... existing implementation ...
-    containerEl.createEl('h3', { text: 'Template settings' });
+    new Setting(containerEl).setName('Template settings').setHeading();
     const templateInstructionsEl = containerEl.createEl('p');
     templateInstructionsEl.append(
       createSpan({
@@ -341,8 +351,10 @@ export class CitationSettingTab extends PluginSettingTab {
 
     const createVariableList = (vars: typeof variables) => {
       const list = variableContainer.createEl('ul');
-      list.style.marginTop = '5px';
-      list.style.marginBottom = '15px';
+      list.setCssProps({
+        marginTop: '5px',
+        marginBottom: '15px',
+      });
 
       vars.forEach((v) => {
         const item = list.createEl('li');
@@ -364,13 +376,13 @@ export class CitationSettingTab extends PluginSettingTab {
     };
 
     if (standardVariables.length > 0) {
-      variableContainer.createEl('strong', { text: 'Standard Variables' });
+      variableContainer.createEl('strong', { text: 'Standard variables' });
       createVariableList(standardVariables);
     }
 
     if (otherVariables.length > 0) {
       variableContainer.createEl('strong', {
-        text: 'Detected Variables (from library)',
+        text: 'Detected variables (from library)',
       });
       createVariableList(otherVariables);
     }
@@ -393,7 +405,9 @@ export class CitationSettingTab extends PluginSettingTab {
   }
 
   private displayMarkdownCitationSettings(containerEl: HTMLElement): void {
-    containerEl.createEl('h3', { text: 'Markdown citation templates' });
+    new Setting(containerEl)
+      .setName('Markdown citation templates')
+      .setHeading();
     containerEl.createEl('p', {
       text: 'You can insert Pandoc-style Markdown citations rather than literature notes by using the "Insert Markdown citation" command. The below options allow customization of the Markdown citation format.',
     });
@@ -436,23 +450,27 @@ export class CitationSettingTab extends PluginSettingTab {
       cls: 'citation-setting-error',
       text: '',
     });
-    errorEl.style.color = 'var(--text-error)';
-    errorEl.style.fontSize = '0.8em';
-    errorEl.style.marginTop = '4px';
-    errorEl.style.display = 'none';
+    errorEl.setCssProps({
+      color: 'var(--text-error)',
+      fontSize: '0.8em',
+      marginTop: '4px',
+      display: 'none',
+    });
 
     let previewEl: HTMLElement | null = null;
     let updatePreview: ((value: string) => void) | null = null;
 
     if (showPreview) {
       previewEl = containerEl.createDiv({ cls: 'citation-template-preview' });
-      previewEl.style.padding = '10px';
-      previewEl.style.backgroundColor = 'var(--background-secondary)';
-      previewEl.style.borderRadius = '4px';
-      previewEl.style.marginTop = '5px';
-      previewEl.style.fontFamily = 'var(--font-monospace)';
-      previewEl.style.whiteSpace = 'pre-wrap';
-      previewEl.style.fontSize = '0.8em';
+      previewEl.setCssProps({
+        padding: '10px',
+        backgroundColor: 'var(--background-secondary)',
+        borderRadius: '4px',
+        marginTop: '5px',
+        fontFamily: 'var(--font-monospace)',
+        whiteSpace: 'pre-wrap',
+        fontSize: '0.8em',
+      });
 
       updatePreview = (value: string) => {
         if (!previewEl) return;
@@ -461,12 +479,12 @@ export class CitationSettingTab extends PluginSettingTab {
         try {
           const result = this.plugin.templateService.render(value, variables);
           previewEl.setText(result);
-          previewEl.style.color = 'var(--text-normal)';
+          previewEl.setCssProps({ color: 'var(--text-normal)' });
         } catch (e) {
           previewEl.setText(
             `Error rendering template: ${(e as Error).message} `,
           );
-          previewEl.style.color = 'var(--text-error)';
+          previewEl.setCssProps({ color: 'var(--text-error)' });
         }
       };
 
@@ -480,13 +498,13 @@ export class CitationSettingTab extends PluginSettingTab {
         const result = fieldSchema.safeParse(value);
 
         if (result.success) {
-          errorEl.style.display = 'none';
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (this.plugin.settings as any)[key] = value;
+          errorEl.setCssProps({ display: 'none' });
+          (this.plugin.settings as unknown as Record<string, unknown>)[key] =
+            value;
           await this.plugin.saveSettings();
         } else {
           errorEl.setText(result.error.issues[0].message);
-          errorEl.style.display = 'block';
+          errorEl.setCssProps({ display: 'block' });
         }
       },
       500,

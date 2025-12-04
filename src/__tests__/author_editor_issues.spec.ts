@@ -9,8 +9,7 @@ describe('Author/Editor Display Issues', () => {
         type: 'book',
         author: [{ literal: 'Organization Name' }],
         title: 'Test Title',
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any as EntryDataCSL;
+      } as unknown as EntryDataCSL;
 
       const entry = new EntryCSLAdapter(data);
       expect(entry.authorString).toBe('Organization Name');
@@ -22,8 +21,7 @@ describe('Author/Editor Display Issues', () => {
         type: 'book',
         editor: [{ given: 'John', family: 'Doe' }],
         title: 'Edited Book',
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any as EntryDataCSL;
+      } as unknown as EntryDataCSL;
 
       const entry = new EntryCSLAdapter(data);
       expect(entry.authorString).toBe('John Doe (Eds.)');
@@ -35,8 +33,7 @@ describe('Author/Editor Display Issues', () => {
         type: 'book',
         editor: [{ literal: 'Organization Editor' }],
         title: 'Edited Book',
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any as EntryDataCSL;
+      } as unknown as EntryDataCSL;
 
       const entry = new EntryCSLAdapter(data);
       expect(entry.authorString).toBe('Organization Editor (Eds.)');
@@ -54,8 +51,7 @@ describe('Author/Editor Display Issues', () => {
         fields: {
           title: 'Edited Book',
         },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any as EntryDataBibLaTeX;
+      } as unknown as EntryDataBibLaTeX;
 
       const entry = new EntryBibLaTeXAdapter(data);
       expect(entry.authorString).toBe('John Doe (Eds.)');

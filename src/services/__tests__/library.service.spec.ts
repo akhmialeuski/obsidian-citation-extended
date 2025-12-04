@@ -9,8 +9,7 @@ import * as fs from 'fs';
 import { TextDecoder } from 'util';
 
 // Polyfill for Node.js environment
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-global.TextDecoder = TextDecoder as any;
+global.TextDecoder = TextDecoder as unknown as typeof global.TextDecoder;
 global.DataView = DataView;
 
 // Mock obsidian
@@ -87,8 +86,7 @@ jest.mock(
 global.window = {
   setTimeout: setTimeout,
   clearTimeout: clearTimeout,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-} as any;
+} as unknown as Window & typeof globalThis;
 
 import { LocalFileSource } from '../../sources/local-file-source';
 
@@ -100,8 +98,7 @@ jest.mock('../../sources/local-file-source');
 describe('LibraryService', () => {
   let service: LibraryService;
   let settings: CitationsPluginSettings;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let events: any;
+  let events: { trigger: jest.Mock; on: jest.Mock };
   let vaultAdapter: { getBasePath: jest.Mock };
   let workerManager: { post: jest.Mock };
 

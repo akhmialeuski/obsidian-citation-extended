@@ -476,14 +476,15 @@ export class EntryBibLaTeXAdapter extends Entry {
   get containerTitle(): string | undefined {
     if (this._containerTitle) {
       return this._containerTitle;
-    } else if (this.data.fields.eprint) {
-      const prefix = this.data.fields.eprinttype
-        ? `${this.data.fields.eprinttype}:`
-        : '';
-      const suffix = this.data.fields.primaryclass
-        ? ` [${this.data.fields.primaryclass}]`
-        : '';
-      return `${prefix}${this.data.fields.eprint}${suffix}`;
+    } else if (this.eprint) {
+      const eprinttype = this.eprinttype;
+      const prefix = eprinttype ? `${eprinttype}:` : '';
+      const primaryClassVal = this.data.fields.primaryclass;
+      const primaryClass = Array.isArray(primaryClassVal)
+        ? primaryClassVal[0]
+        : primaryClassVal;
+      const suffix = primaryClass ? ` [${primaryClass}]` : '';
+      return `${prefix}${this.eprint}${suffix}`;
     }
   }
 

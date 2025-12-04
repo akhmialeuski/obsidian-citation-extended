@@ -1,6 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import CitationPlugin from './main';
-import { App, FileSystemAdapter } from 'obsidian';
+import { CitationsPluginSettings } from './settings';
+import { App, FileSystemAdapter, PluginManifest } from 'obsidian';
 import * as chokidar from 'chokidar';
 import { LibraryService } from './services/library.service';
 
@@ -9,8 +9,8 @@ jest.mock(
   () => ({
     App: jest.fn(),
     Plugin: class {
-      app: any;
-      constructor(app: any) {
+      app: unknown;
+      constructor(app: unknown) {
         this.app = app;
       }
       addSettingTab() {}
@@ -24,7 +24,7 @@ jest.mock(
       addCommand() {}
     },
     FileSystemAdapter: class {},
-    debounce: (fn: (...args: any[]) => any) => fn,
+    debounce: (fn: (...args: unknown[]) => unknown) => fn,
     Notice: jest.fn(),
     Events: class {
       on() {}
@@ -60,13 +60,19 @@ jest.mock('./settings');
 describe('CitationPlugin', () => {
   let plugin: CitationPlugin;
   let app: App;
-  let watcher: any;
+  let watcher: unknown;
 
   beforeEach(() => {
     app = new App();
-    (app as any).vault = { adapter: new FileSystemAdapter() };
-    (app as any).workspace = { activeLeaf: { view: {} } };
-    plugin = new CitationPlugin(app, {} as any);
+    (app as unknown as { vault: { adapter: FileSystemAdapter } }).vault = {
+      adapter: new FileSystemAdapter(),
+    };
+    (
+      app as unknown as { workspace: { activeLeaf: { view: unknown } } }
+    ).workspace = {
+      activeLeaf: { view: {} },
+    };
+    plugin = new CitationPlugin(app, {} as unknown as PluginManifest);
     plugin.app = app;
 
     // Mock loadSettings
@@ -88,7 +94,6 @@ describe('CitationPlugin', () => {
       dispose: jest.fn(),
       loadErrorNotifier: { show: jest.fn() },
       getSources: jest.fn().mockImplementation(() => {
-        console.log('Mock getSources called');
         return ['source'];
       }),
       initWatcher: jest.fn(),
@@ -100,7 +105,7 @@ describe('CitationPlugin', () => {
     plugin.settings = {
       citationExportPath: 'test.bib',
       databases: [{ name: 'Test', path: 'test.bib', type: 'biblatex' }],
-    } as any;
+    } as CitationsPluginSettings;
     await plugin.onload();
 
     expect(plugin.libraryService).toBeDefined();
@@ -111,7 +116,7 @@ describe('CitationPlugin', () => {
     plugin.settings = {
       citationExportPath: 'test.bib',
       databases: [{ name: 'Test', path: 'test.bib', type: 'biblatex' }],
-    } as any;
+    } as CitationsPluginSettings;
     await plugin.onload();
 
     plugin.onunload();

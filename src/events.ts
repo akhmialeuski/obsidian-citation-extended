@@ -19,18 +19,17 @@ export default class CitationEvents extends Events {
   ): EventRef;
   on(
     name: string,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    callback: (...data: any[]) => void,
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type -- Function is required to match overload signatures
+    callback: Function,
     ctx?: unknown,
   ): EventRef {
-    return super.on(name, callback, ctx);
+    return super.on(name, callback as (...args: unknown[]) => unknown, ctx);
   }
 
   trigger(name: 'library-load-start'): void;
   trigger(name: 'library-load-complete'): void;
   trigger(name: 'library-state-changed', state: LibraryState): void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  trigger(name: string, ...data: any[]): void {
+  trigger(name: string, ...data: unknown[]): void {
     super.trigger(name, ...data);
   }
 }

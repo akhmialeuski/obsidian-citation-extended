@@ -106,14 +106,11 @@ const expectedRender: Record<string, string | undefined>[] = [
 const BIBLATEX_FIELDS_ONLY = ['eprint', 'eprinttype', 'files', 'note'];
 
 function matchLibraryRender(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  actual: Record<string, any>[],
+  actual: unknown[],
   expected: Record<string, string | undefined>[],
   dropFields?: string[],
 ): void {
-  const transform = (
-    dict: Record<string, string | undefined>,
-  ): Record<string, string> => {
+  const transform = (dict: Record<string, unknown>): Record<string, string> => {
     delete dict.entry;
 
     if (dropFields) {
@@ -128,8 +125,8 @@ function matchLibraryRender(
     ) as Record<string, string>;
   };
 
-  actual = actual.map((a) => transform(a));
-  expected = expected.map((e) => transform(e as Record<string, string>));
+  actual = actual.map((a) => transform(a as Record<string, unknown>));
+  expected = expected.map((e) => transform(e));
 
   expect(actual).toMatchObject(expected);
 }

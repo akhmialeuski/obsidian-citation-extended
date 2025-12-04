@@ -42,14 +42,12 @@ jest.mock('../util', () => ({
 global.window = {
   setTimeout: global.setTimeout,
   clearTimeout: global.clearTimeout,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-} as any;
+} as unknown as Window & typeof globalThis;
 
 describe('LibraryService Loading Behavior', () => {
   let service: LibraryService;
   let settings: CitationsPluginSettings;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let events: any;
+  let events: CitationEvents;
   let adapter: FileSystemAdapter;
   let workerManager: WorkerManager;
 
