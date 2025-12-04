@@ -1,4 +1,4 @@
-import { compile as compileTemplate } from 'handlebars';
+import Handlebars from 'handlebars';
 import { CitationsPluginSettings } from '../settings';
 import { Entry, TemplateContext } from '../types';
 
@@ -7,7 +7,52 @@ export class TemplateService {
     noEscape: true,
   };
 
-  constructor(private settings: CitationsPluginSettings) {}
+  constructor(private settings: CitationsPluginSettings) {
+    this.registerHelpers();
+  }
+
+  private registerHelpers() {
+    // Comparison helpers
+    Handlebars.registerHelper('eq', (a, b) => a == b);
+    Handlebars.registerHelper('ne', (a, b) => a != b);
+    Handlebars.registerHelper('gt', (a, b) => a > b);
+    Handlebars.registerHelper('lt', (a, b) => a < b);
+    Handlebars.registerHelper('gte', (a, b) => a >= b);
+    Handlebars.registerHelper('lte', (a, b) => a <= b);
+
+    // Boolean helpers
+    Handlebars.registerHelper('and', (...args) => {
+      // Handlebars passes an options object as the last argument
+      const actualArgs = args.slice(0, -1);
+      return actualArgs.every(Boolean);
+    });
+    Handlebars.registerHelper('or', (...args) => {
+      const actualArgs = args.slice(0, -1);
+      return actualArgs.some(Boolean);
+    });
+    Handlebars.registerHelper('not', (value) => !value);
+
+    // String helpers
+    Handlebars.registerHelper(
+      'replace',
+      (value: string, pattern: string, replacement: string) => {
+        if (typeof value !== 'string') return value;
+        return value.replace(new RegExp(pattern, 'g'), replacement);
+      },
+    );
+    Handlebars.registerHelper('truncate', (value: string, length: number) => {
+      if (typeof value !== 'string') return value;
+      if (value.length <= length) return value;
+      return value.substring(0, length);
+    });
+
+    // Regex helpers
+    Handlebars.registerHelper('match', (value: string, pattern: string) => {
+      if (typeof value !== 'string') return '';
+      const match = value.match(new RegExp(pattern));
+      return match ? match[0] : '';
+    });
+  }
 
   public getTemplateVariables(entry: Entry): TemplateContext {
     const shortcuts = {
@@ -38,7 +83,7 @@ export class TemplateService {
   }
 
   public render(templateStr: string, variables: TemplateContext): string {
-    const template = compileTemplate(templateStr, this.templateSettings);
+    const template = Handlebars.compile(templateStr, this.templateSettings);
     return template(variables);
   }
 

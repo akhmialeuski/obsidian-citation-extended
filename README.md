@@ -70,6 +70,40 @@ year: {{year}}
 {{abstract}}
 ```
 
+### Template Helpers
+
+The plugin supports several Handlebars helpers to allow for conditional logic and string manipulation in your templates.
+
+#### Comparison Helpers
+- `eq`: Equal to
+- `ne`: Not equal to
+- `gt`: Greater than
+- `lt`: Less than
+- `gte`: Greater than or equal to
+- `lte`: Less than or equal to
+
+Example: `{{#if (eq type "book")}}Book{{else}}Article{{/if}}`
+
+#### Boolean Helpers
+- `and`: Logical AND
+- `or`: Logical OR
+- `not`: Logical NOT
+
+Example: `{{#if (and (eq type "book") (gt year 2000))}}Modern Book{{/if}}`
+
+#### String Helpers
+- `replace`: Replace occurrences of a pattern with a replacement string.
+  - Usage: `{{replace value pattern replacement}}`
+  - Note: `pattern` is treated as a RegExp string.
+- `truncate`: Truncate a string to a specified length.
+  - Usage: `{{truncate value length}}`
+
+#### Regex Helpers
+- `match`: Extract a substring matching a regex pattern.
+  - Usage: `{{match value pattern}}`
+
+For more detailed documentation and examples, see [Template Helpers Documentation](docs/template-helpers.md).
+
 ## Multiple Databases Support
 
 The plugin now supports loading citations from multiple databases (e.g., multiple `.bib` or `.json` files). You can configure these in the plugin settings.
