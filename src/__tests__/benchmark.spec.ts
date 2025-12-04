@@ -78,7 +78,7 @@ describe('Search Performance Benchmark', () => {
         });
         miniSearch.addAll(entries);
         const end = performance.now();
-        console.log(
+        console.debug(
           `[${size}] MiniSearch Indexing: ${(end - start).toFixed(2)}ms`,
         );
         expect(end - start).toBeLessThan(5000); // Should be reasonable
@@ -88,7 +88,7 @@ describe('Search Performance Benchmark', () => {
         const start = performance.now();
         const results = miniSearch.search('interes', { prefix: true });
         const end = performance.now();
-        console.log(
+        console.debug(
           `[${size}] MiniSearch Search (prefix): ${(end - start).toFixed(2)}ms, found ${results.length}`,
         );
         expect(end - start).toBeLessThan(200); // Requirement: < 200ms
@@ -98,7 +98,7 @@ describe('Search Performance Benchmark', () => {
         const start = performance.now();
         const results = miniSearch.search('someting', { fuzzy: 0.2 });
         const end = performance.now();
-        console.log(
+        console.debug(
           `[${size}] MiniSearch Search (fuzzy): ${(end - start).toFixed(2)}ms, found ${results.length}`,
         );
         expect(end - start).toBeLessThan(200);
@@ -113,7 +113,7 @@ describe('Search Performance Benchmark', () => {
             (e.authorString && e.authorString.toLowerCase().includes(query)),
         );
         const end = performance.now();
-        console.log(
+        console.debug(
           `[${size}] Naive Filter Search: ${(end - start).toFixed(2)}ms, found ${results.length}`,
         );
       });

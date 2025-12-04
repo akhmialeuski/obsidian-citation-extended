@@ -76,22 +76,22 @@ export default class CitationPlugin extends Plugin {
         this.settings.databases.length === 0 &&
         this.settings.citationExportPath
       ) {
-        console.log('Citations plugin: Migrating legacy settings to databases');
+        console.debug(
+          'Citations plugin: Migrating legacy settings to databases',
+        );
         this.settings.databases.push({
           name: 'Default',
           path: this.settings.citationExportPath,
           type: this.settings.citationExportFormat,
         });
-        this.saveSettings();
+        void this.saveSettings();
       }
     } else {
       console.warn(
         'Citations plugin: Settings validation failed',
         validationResult.error,
       );
-      new Notice(
-        'Citations plugin: Invalid settings detected. Please check your configuration.',
-      );
+      new Notice('Invalid settings detected. Please check your configuration.');
       // Fallback to best-effort loading
       Object.assign(this.settings, mergedSettings);
     }

@@ -125,7 +125,7 @@ export class CitationSettingTab extends PluginSettingTab {
     containerEl.empty();
     containerEl.setAttr('id', 'zoteroSettingTab');
 
-    containerEl.createEl('h2', { text: 'Citation plugin settings' });
+    new Setting(containerEl).setName('Citation plugin').setHeading();
 
     this.displayCitationDatabaseSettings(containerEl);
     this.displayLiteratureNoteSettings(containerEl);
@@ -317,7 +317,7 @@ export class CitationSettingTab extends PluginSettingTab {
 
   private displayTemplateSettings(containerEl: HTMLElement): void {
     // ... existing implementation ...
-    new Setting(containerEl).setName('Template settings').setHeading();
+    new Setting(containerEl).setName('Templates').setHeading();
     const templateInstructionsEl = containerEl.createEl('p');
     templateInstructionsEl.append(
       createSpan({
@@ -397,8 +397,8 @@ export class CitationSettingTab extends PluginSettingTab {
           'reference as used internally by the plugin. See the ',
       }),
       createEl('a', {
-        text: 'plugin documentation',
-        href: 'http://www.foldl.me/obsidian-citation-plugin/classes/entry.html',
+        text: 'Plugin documentation',
+        href: 'https://github.com/akhmialeuski/obsidian-citation-extended/blob/master/docs/index.html',
       }),
       createSpan({ text: " for information on this object's structure." }),
     );
@@ -409,7 +409,8 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Markdown citation templates')
       .setHeading();
     containerEl.createEl('p', {
-      text: 'You can insert Pandoc-style Markdown citations rather than literature notes by using the "Insert Markdown citation" command. The below options allow customization of the Markdown citation format.',
+      // eslint-disable-next-line obsidianmd/ui/sentence-case -- "Pandoc-style" and "Markdown" are proper nouns/technical terms
+      text: 'You can insert Pandoc-style markdown citations rather than literature notes by using the "Insert markdown citation" command. The below options allow customization of the markdown citation format.',
     });
 
     this.buildSetting(

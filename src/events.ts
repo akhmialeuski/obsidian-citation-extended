@@ -19,7 +19,7 @@ export default class CitationEvents extends Events {
   ): EventRef;
   on(
     name: string,
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type -- Function is required to match overload signatures
+
     callback: Function,
     ctx?: unknown,
   ): EventRef {
