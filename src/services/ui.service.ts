@@ -61,7 +61,7 @@ export class UIService {
     this.plugin.addCommand({
       id: 'open-literature-note',
       name: 'Open literature note',
-      hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'o' }],
+
       callback: () => {
         const modal = new CitationSearchModal(
           this.app,
@@ -75,16 +75,16 @@ export class UIService {
     this.plugin.addCommand({
       id: 'update-bib-data',
       name: 'Refresh citation database',
-      hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'r' }],
+
       callback: () => {
-        this.plugin.libraryService.load();
+        void this.plugin.libraryService.load();
       },
     });
 
     this.plugin.addCommand({
       id: 'insert-citation',
       name: 'Insert literature note link',
-      hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'e' }],
+
       editorCallback: () => {
         const modal = new CitationSearchModal(
           this.app,

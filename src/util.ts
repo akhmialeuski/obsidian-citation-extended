@@ -47,9 +47,12 @@ export class Notifier {
         this.mutationObserver = null;
       }
     });
-    this.mutationObserver.observe(this.currentNotice.noticeEl, {
-      attributeFilter: ['class'],
-    });
+    this.mutationObserver.observe(
+      (this.currentNotice as unknown as { messageEl: HTMLElement }).messageEl,
+      {
+        attributeFilter: ['class'],
+      },
+    );
     return true;
   }
 
@@ -103,13 +106,13 @@ export class WorkerManager {
           if (signal?.aborted) {
             reject(new DOMException('Aborted', 'AbortError'));
           } else {
-            reject(error);
+            reject(error instanceof Error ? error : new Error(String(error)));
           }
         }
       };
 
       this.queue.push(task);
-      this.processQueue();
+      void this.processQueue();
     });
   }
 

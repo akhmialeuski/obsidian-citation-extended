@@ -76,7 +76,14 @@ export class IntrospectionService {
 
         // Add example if missing
         const variable = variables.get(key);
-        if (variable && !variable.example && value) {
+        if (
+          variable &&
+          !variable.example &&
+          value &&
+          (typeof value === 'string' ||
+            typeof value === 'number' ||
+            typeof value === 'boolean')
+        ) {
           variable.example = String(value);
         }
       }

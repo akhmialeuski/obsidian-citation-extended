@@ -52,17 +52,20 @@ export class NoteService {
       }
     }
 
-    return file as TFile;
+    if (file instanceof TFile) {
+      return file;
+    }
+    throw new Error(`File at ${path} is not a TFile`);
   }
 
-  async openLiteratureNote(
+  openLiteratureNote(
     citekey: string,
     library: Library,
     newPane: boolean,
   ): Promise<void> {
-    this.getOrCreateLiteratureNoteFile(citekey, library)
-      .then((file: TFile) => {
-        this.app.workspace.getLeaf(newPane).openFile(file);
+    return this.getOrCreateLiteratureNoteFile(citekey, library)
+      .then(async (file: TFile) => {
+        await this.app.workspace.getLeaf(newPane).openFile(file);
       })
       .catch(console.error);
   }

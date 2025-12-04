@@ -4,10 +4,11 @@ import {
   FileSystemAdapter,
   PluginSettingTab,
   Setting,
+  Notice,
 } from 'obsidian';
 
 import CitationPlugin from './main';
-import { DatabaseType } from './types';
+import { DatabaseType, DatabaseConfig } from './types';
 import { DataSourceDefinition, MergeStrategy } from './data-source';
 
 const CITATION_DATABASE_FORMAT_LABELS: Record<DatabaseType, string> = {
@@ -54,15 +55,15 @@ export const SettingsSchema = z.object({
   markdownCitationTemplate: z.string().min(1),
   alternativeMarkdownCitationTemplate: z.string().min(1),
   // Multi-source configuration
-  dataSources: z
+  databases: z
     .array(
       z.object({
-        type: z.string(),
+        name: z.string(),
+        type: z.enum(['csl-json', 'biblatex']),
         path: z.string(),
-        format: z.enum(['csl-json', 'biblatex']),
       }),
     )
-    .optional(),
+    .default([]),
   mergeStrategy: z.enum(['last-wins', 'merge']).optional(),
 });
 
@@ -82,7 +83,7 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   markdownCitationTemplate: '[@{{citekey}}]',
   alternativeMarkdownCitationTemplate: '@{{citekey}}',
   mergeStrategy: 'last-wins',
-  dataSources: [],
+  databases: [],
 };
 
 export class CitationsPluginSettings {
@@ -101,6 +102,7 @@ export class CitationsPluginSettings {
   public alternativeMarkdownCitationTemplate: string =
     DEFAULT_SETTINGS.alternativeMarkdownCitationTemplate;
 
+  public databases: DatabaseConfig[] = DEFAULT_SETTINGS.databases;
   public dataSources?: DataSourceDefinition[];
   public mergeStrategy?: MergeStrategy;
 }
@@ -112,19 +114,9 @@ export function validateSettings(settings: unknown) {
 export class CitationSettingTab extends PluginSettingTab {
   private plugin: CitationPlugin;
 
-  citationPathLoadingEl!: HTMLElement;
-  citationPathErrorEl!: HTMLElement;
-  citationPathSuccessEl!: HTMLElement;
-
   constructor(app: App, plugin: CitationPlugin) {
     super(app, plugin);
     this.plugin = plugin;
-  }
-
-  open(): void {
-    this.checkCitationExportPath(this.plugin.settings.citationExportPath).then(
-      () => this.showCitationExportPathSuccess(),
-    );
   }
 
   display(): void {
@@ -133,7 +125,7 @@ export class CitationSettingTab extends PluginSettingTab {
     containerEl.empty();
     containerEl.setAttr('id', 'zoteroSettingTab');
 
-    containerEl.createEl('h2', { text: 'Citation plugin settings' });
+    new Setting(containerEl).setName('Citation plugin').setHeading();
 
     this.displayCitationDatabaseSettings(containerEl);
     this.displayLiteratureNoteSettings(containerEl);
@@ -142,65 +134,155 @@ export class CitationSettingTab extends PluginSettingTab {
   }
 
   private displayCitationDatabaseSettings(containerEl: HTMLElement): void {
-    new Setting(containerEl)
-      .setName('Citation database format')
-      .addDropdown((component) => {
-        component.addOptions(CITATION_DATABASE_FORMAT_LABELS);
-        component.setValue(this.plugin.settings.citationExportFormat);
-        component.onChange(async (value) => {
-          this.plugin.settings.citationExportFormat = value as DatabaseType;
-          await this.plugin.saveSettings();
-          this.checkCitationExportPath(
-            this.plugin.settings.citationExportPath,
-          ).then((success) => {
-            if (success) {
-              this.citationPathSuccessEl.addClass('d-none');
-              this.citationPathLoadingEl.removeClass('d-none');
+    new Setting(containerEl).setName('Citation databases').setHeading();
+    containerEl.createEl('p', {
+      text: 'Configure one or more citation databases. The plugin will load references from all configured sources.',
+      cls: 'setting-item-description',
+    });
 
-              this.plugin.libraryService.load().then(() => {
-                this.citationPathLoadingEl.addClass('d-none');
-                this.showCitationExportPathSuccess();
-              });
+    const databasesContainer = containerEl.createDiv(
+      'citation-databases-container',
+    );
+
+    // Render existing databases
+    this.plugin.settings.databases.forEach((db, index) => {
+      this.renderDatabaseSetting(databasesContainer, db, index);
+    });
+
+    // Add new database button
+    new Setting(containerEl).addButton((button) => {
+      button
+        .setButtonText('Add database')
+        .setCta()
+        .onClick(() => {
+          void (async () => {
+            if (this.plugin.settings.databases.length >= 20) {
+              new Notice('Maximum number of databases (20) reached.');
+              return;
             }
-          });
+
+            this.plugin.settings.databases.push({
+              name: `Database ${this.plugin.settings.databases.length + 1}`,
+              type: 'csl-json',
+              path: '',
+            });
+            await this.plugin.saveSettings();
+            this.display(); // Re-render to show new database
+          })();
         });
+    });
+  }
+
+  private renderDatabaseSetting(
+    container: HTMLElement,
+    db: DatabaseConfig,
+    index: number,
+  ): void {
+    const settingDiv = container.createDiv('citation-database-setting');
+    settingDiv.setCssProps({
+      border: '1px solid var(--background-modifier-border)',
+      padding: '10px',
+      marginBottom: '10px',
+      borderRadius: '4px',
+    });
+
+    const header = settingDiv.createDiv('citation-database-header');
+    header.setCssProps({
+      display: 'flex',
+      justifyContent: 'space-between',
+      marginBottom: '10px',
+    });
+
+    // Database Name
+    new Setting(header)
+      .setName(`Database ${index + 1}`)
+      .addText((text) => {
+        text
+          .setPlaceholder('Friendly name')
+          .setValue(db.name)
+          .onChange(async (value) => {
+            this.plugin.settings.databases[index].name = value;
+            await this.plugin.saveSettings();
+          });
+      })
+      .addExtraButton((button) => {
+        button
+          .setIcon('trash')
+          .setTooltip('Remove database')
+          .onClick(() => {
+            void (async () => {
+              this.plugin.settings.databases.splice(index, 1);
+              await this.plugin.saveSettings();
+              this.display();
+            })();
+          });
       });
 
-    new Setting(containerEl)
-      .setName('Citation database path')
-      .setDesc(
-        'Path to citation library exported by your reference manager. ' +
-          'Can be an absolute path or a path relative to the current vault root folder. ' +
-          'Citations will be automatically reloaded whenever this file updates.',
-      )
-      .addText((input) => {
-        input.setPlaceholder('/path/to/export.json');
-        input.setValue(this.plugin.settings.citationExportPath);
-        input.onChange((value) => {
-          this.plugin.settings.citationExportPath = value;
-          this.plugin.saveSettings();
-          this.checkCitationExportPath(value).then((success) => {
-            if (success) {
-              this.plugin.libraryService
-                .load()
-                .then(() => this.showCitationExportPathSuccess());
-            }
+    // Database Type
+    new Setting(settingDiv).setName('Database type').addDropdown((dropdown) => {
+      dropdown.addOptions(CITATION_DATABASE_FORMAT_LABELS);
+      dropdown.setValue(db.type);
+      dropdown.onChange(async (value) => {
+        this.plugin.settings.databases[index].type = value as DatabaseType;
+        await this.plugin.saveSettings();
+      });
+    });
+
+    // Database Path
+    new Setting(settingDiv)
+      .setName('Database path')
+      .setDesc('Absolute path or path relative to vault root.')
+      .addText((text) => {
+        text
+          .setPlaceholder('/path/to/export.json')
+          .setValue(db.path)
+          .onChange(async (value) => {
+            this.plugin.settings.databases[index].path = value;
+            await this.plugin.saveSettings();
+            void this.checkCitationExportPath(value, pathStatusEl);
           });
-        });
       });
 
-    this.citationPathLoadingEl = containerEl.createEl('p', {
-      cls: 'zoteroSettingCitationPathLoading d-none',
-      text: 'Loading citation database...',
+    const pathStatusEl = settingDiv.createDiv('citation-path-status');
+    pathStatusEl.setCssProps({
+      fontSize: '0.8em',
+      marginTop: '5px',
     });
-    this.citationPathErrorEl = containerEl.createEl('p', {
-      cls: 'zoteroSettingCitationPathError d-none',
-      text: 'The citation export file cannot be found. Please check the path above.',
-    });
-    this.citationPathSuccessEl = containerEl.createEl('p', {
-      cls: 'zoteroSettingCitationPathSuccess d-none',
-      text: 'Loaded library with {{n}} references.',
-    });
+
+    // Initial check
+    if (db.path) {
+      void this.checkCitationExportPath(db.path, pathStatusEl);
+    }
+  }
+
+  /**
+   * Returns true iff the path exists; displays error as a side-effect
+   */
+  async checkCitationExportPath(
+    filePath: string,
+    statusEl: HTMLElement,
+  ): Promise<boolean> {
+    statusEl.empty();
+    statusEl.setText('Checking path...');
+    statusEl.setCssProps({ color: 'var(--text-muted)' });
+
+    try {
+      await FileSystemAdapter.readLocalFile(
+        this.plugin.libraryService.resolveLibraryPath(filePath),
+      );
+      statusEl.setText('Path verified.');
+      statusEl.setCssProps({ color: 'var(--text-success)' });
+      return true;
+    } catch {
+      statusEl.setText('File not found.');
+      statusEl.setCssProps({ color: 'var(--text-error)' });
+      return false;
+    }
+  }
+
+  // Legacy method kept for compatibility if needed, but unused in new UI
+  showCitationExportPathSuccess(): void {
+    // no-op
   }
 
   private displayLiteratureNoteSettings(containerEl: HTMLElement): void {
@@ -211,7 +293,7 @@ export class CitationSettingTab extends PluginSettingTab {
       'literatureNoteFolder',
     );
 
-    containerEl.createEl('h3', { text: 'Literature note templates' });
+    new Setting(containerEl).setName('Literature note templates').setHeading();
 
     this.buildSetting(
       containerEl,
@@ -235,7 +317,7 @@ export class CitationSettingTab extends PluginSettingTab {
 
   private displayTemplateSettings(containerEl: HTMLElement): void {
     // ... existing implementation ...
-    containerEl.createEl('h3', { text: 'Template settings' });
+    new Setting(containerEl).setName('Templates').setHeading();
     const templateInstructionsEl = containerEl.createEl('p');
     templateInstructionsEl.append(
       createSpan({
@@ -269,8 +351,10 @@ export class CitationSettingTab extends PluginSettingTab {
 
     const createVariableList = (vars: typeof variables) => {
       const list = variableContainer.createEl('ul');
-      list.style.marginTop = '5px';
-      list.style.marginBottom = '15px';
+      list.setCssProps({
+        marginTop: '5px',
+        marginBottom: '15px',
+      });
 
       vars.forEach((v) => {
         const item = list.createEl('li');
@@ -292,13 +376,13 @@ export class CitationSettingTab extends PluginSettingTab {
     };
 
     if (standardVariables.length > 0) {
-      variableContainer.createEl('strong', { text: 'Standard Variables' });
+      variableContainer.createEl('strong', { text: 'Standard variables' });
       createVariableList(standardVariables);
     }
 
     if (otherVariables.length > 0) {
       variableContainer.createEl('strong', {
-        text: 'Detected Variables (from library)',
+        text: 'Detected variables (from library)',
       });
       createVariableList(otherVariables);
     }
@@ -313,17 +397,20 @@ export class CitationSettingTab extends PluginSettingTab {
           'reference as used internally by the plugin. See the ',
       }),
       createEl('a', {
-        text: 'plugin documentation',
-        href: 'http://www.foldl.me/obsidian-citation-plugin/classes/entry.html',
+        text: 'Plugin documentation',
+        href: 'https://github.com/akhmialeuski/obsidian-citation-extended/blob/master/docs/index.html',
       }),
       createSpan({ text: " for information on this object's structure." }),
     );
   }
 
   private displayMarkdownCitationSettings(containerEl: HTMLElement): void {
-    containerEl.createEl('h3', { text: 'Markdown citation templates' });
+    new Setting(containerEl)
+      .setName('Markdown citation templates')
+      .setHeading();
     containerEl.createEl('p', {
-      text: 'You can insert Pandoc-style Markdown citations rather than literature notes by using the "Insert Markdown citation" command. The below options allow customization of the Markdown citation format.',
+      // eslint-disable-next-line obsidianmd/ui/sentence-case -- "Pandoc-style" and "Markdown" are proper nouns/technical terms
+      text: 'You can insert Pandoc-style markdown citations rather than literature notes by using the "Insert markdown citation" command. The below options allow customization of the markdown citation format.',
     });
 
     this.buildSetting(
@@ -364,23 +451,27 @@ export class CitationSettingTab extends PluginSettingTab {
       cls: 'citation-setting-error',
       text: '',
     });
-    errorEl.style.color = 'var(--text-error)';
-    errorEl.style.fontSize = '0.8em';
-    errorEl.style.marginTop = '4px';
-    errorEl.style.display = 'none';
+    errorEl.setCssProps({
+      color: 'var(--text-error)',
+      fontSize: '0.8em',
+      marginTop: '4px',
+      display: 'none',
+    });
 
     let previewEl: HTMLElement | null = null;
     let updatePreview: ((value: string) => void) | null = null;
 
     if (showPreview) {
       previewEl = containerEl.createDiv({ cls: 'citation-template-preview' });
-      previewEl.style.padding = '10px';
-      previewEl.style.backgroundColor = 'var(--background-secondary)';
-      previewEl.style.borderRadius = '4px';
-      previewEl.style.marginTop = '5px';
-      previewEl.style.fontFamily = 'var(--font-monospace)';
-      previewEl.style.whiteSpace = 'pre-wrap';
-      previewEl.style.fontSize = '0.8em';
+      previewEl.setCssProps({
+        padding: '10px',
+        backgroundColor: 'var(--background-secondary)',
+        borderRadius: '4px',
+        marginTop: '5px',
+        fontFamily: 'var(--font-monospace)',
+        whiteSpace: 'pre-wrap',
+        fontSize: '0.8em',
+      });
 
       updatePreview = (value: string) => {
         if (!previewEl) return;
@@ -389,12 +480,12 @@ export class CitationSettingTab extends PluginSettingTab {
         try {
           const result = this.plugin.templateService.render(value, variables);
           previewEl.setText(result);
-          previewEl.style.color = 'var(--text-normal)';
+          previewEl.setCssProps({ color: 'var(--text-normal)' });
         } catch (e) {
           previewEl.setText(
             `Error rendering template: ${(e as Error).message} `,
           );
-          previewEl.style.color = 'var(--text-error)';
+          previewEl.setCssProps({ color: 'var(--text-error)' });
         }
       };
 
@@ -408,13 +499,13 @@ export class CitationSettingTab extends PluginSettingTab {
         const result = fieldSchema.safeParse(value);
 
         if (result.success) {
-          errorEl.style.display = 'none';
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (this.plugin.settings as any)[key] = value;
+          errorEl.setCssProps({ display: 'none' });
+          (this.plugin.settings as unknown as Record<string, unknown>)[key] =
+            value;
           await this.plugin.saveSettings();
         } else {
           errorEl.setText(result.error.issues[0].message);
-          errorEl.style.display = 'block';
+          errorEl.setCssProps({ display: 'block' });
         }
       },
       500,
@@ -437,34 +528,5 @@ export class CitationSettingTab extends PluginSettingTab {
         component.onChange(onChange);
       });
     }
-  }
-
-  /**
-   * Returns true iff the path exists; displays error as a side-effect
-   */
-  async checkCitationExportPath(filePath: string): Promise<boolean> {
-    this.citationPathLoadingEl.addClass('d-none');
-
-    try {
-      await FileSystemAdapter.readLocalFile(
-        this.plugin.libraryService.resolveLibraryPath(filePath),
-      );
-      this.citationPathErrorEl.addClass('d-none');
-    } catch {
-      this.citationPathSuccessEl.addClass('d-none');
-      this.citationPathErrorEl.removeClass('d-none');
-      return false;
-    }
-
-    return true;
-  }
-
-  showCitationExportPathSuccess(): void {
-    if (!this.plugin.libraryService.library) return;
-
-    this.citationPathSuccessEl.setText(
-      `Loaded library with ${this.plugin.libraryService.library.size} references.`,
-    );
-    this.citationPathSuccessEl.removeClass('d-none');
   }
 }

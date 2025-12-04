@@ -7,7 +7,7 @@ export class SearchService {
 
   constructor() {
     // Handle potential interoperability issues with MiniSearch import
-    // @ts-expect-error minisearch types are not perfect
+    // @ts-expect-error -- minisearch types are not perfect
     const MiniSearchConstructor = MiniSearch.default || MiniSearch;
     this.index = new MiniSearchConstructor({
       fields: ['title', 'authorString', 'year', 'id'],

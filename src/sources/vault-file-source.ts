@@ -6,6 +6,8 @@ import {
   EntryBibLaTeXAdapter,
   EntryCSLAdapter,
   DatabaseType,
+  EntryDataBibLaTeX,
+  EntryDataCSL,
 } from '../types';
 import { WorkerManager } from '../util';
 
@@ -68,17 +70,15 @@ export class VaultFileSource implements DataSource {
    * Convert EntryData to Entry objects using the appropriate adapter
    */
   private convertToEntries(entries: EntryData[]): Entry[] {
-    let adapter: new (data: EntryData) => Entry;
-
     if (this.format === 'biblatex') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      adapter = EntryBibLaTeXAdapter as any;
+      return entries.map(
+        (e) => new EntryBibLaTeXAdapter(e as EntryDataBibLaTeX),
+      );
+    } else if (this.format === 'csl-json') {
+      return entries.map((e) => new EntryCSLAdapter(e as EntryDataCSL));
     } else {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      adapter = EntryCSLAdapter as any;
+      throw new Error('Unsupported database format');
     }
-
-    return entries.map((e) => new adapter(e));
   }
 
   /**

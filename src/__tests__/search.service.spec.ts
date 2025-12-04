@@ -3,17 +3,28 @@ import { Entry } from '../types';
 
 // Mock Entry class
 class MockEntry extends Entry {
-  id: string;
+  id!: string;
   type: string = 'article-journal';
-  title: string;
-  authorString: string;
+  title!: string;
+  authorString!: string;
+  eprint: string | null = null;
+  eprinttype: string | null = null;
+  files: string[] | null = null;
 
-  constructor(id: string, title: string, author: string, year: number) {
+  _sourceDatabase?: string;
+  _compositeCitekey?: string;
+
+  get citekey(): string {
+    return this.id;
+  }
+
+  constructor(data: Partial<Entry>) {
     super();
-    this.id = id;
-    this.title = title;
-    this.authorString = author;
-    this._year = year.toString();
+    Object.assign(this, data);
+    this.id = data.id || ''; // Ensure id is always set
+    this.title = data.title || '';
+    this.authorString = data.authorString || '';
+    this._year = data.issuedDate?.getFullYear()?.toString() || '';
   }
 
   // Implement abstract members with dummy values
@@ -21,7 +32,7 @@ class MockEntry extends Entry {
   author = [];
   containerTitle = '';
   DOI = '';
-  files = [];
+
   issuedDate = new Date();
   page = '';
   titleShort = '';
@@ -31,8 +42,6 @@ class MockEntry extends Entry {
   source = '';
   publisher = '';
   publisherPlace = '';
-  eprint = '';
-  eprinttype = '';
 }
 
 describe('SearchService', () => {
@@ -41,11 +50,25 @@ describe('SearchService', () => {
 
   beforeEach(() => {
     service = new SearchService();
-    entries = [
-      new MockEntry('1', 'Introduction to Algorithms', 'Cormen', 2009),
-      new MockEntry('2', 'Clean Code', 'Martin', 2008),
-      new MockEntry('3', 'The Pragmatic Programmer', 'Hunt', 1999),
-    ];
+    const entry1 = new MockEntry({
+      id: '1',
+      title: 'Introduction to Algorithms',
+      authorString: 'Cormen',
+      issuedDate: new Date(2009, 0, 1),
+    });
+    const entry2 = new MockEntry({
+      id: '2',
+      title: 'Clean Code',
+      authorString: 'Martin',
+      issuedDate: new Date(2008, 0, 1),
+    });
+    const entry3 = new MockEntry({
+      id: '3',
+      title: 'The Pragmatic Programmer',
+      authorString: 'Hunt',
+      issuedDate: new Date(1999, 0, 1),
+    });
+    entries = [entry1, entry2, entry3];
   });
 
   test('should index and search entries', () => {

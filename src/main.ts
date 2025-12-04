@@ -13,7 +13,7 @@ import { NoteService } from './services/note.service';
 import { LibraryService } from './services/library.service';
 import { UIService } from './services/ui.service';
 import { LocalFileSource, VaultFileSource } from './sources';
-import { DataSource, DataSourceDefinition, MergeStrategy } from './data-source';
+import { DataSource, MergeStrategy } from './data-source';
 import { DatabaseType } from './types';
 
 import { VaultExt } from './obsidian-extensions.d';
@@ -70,14 +70,28 @@ export default class CitationPlugin extends Plugin {
 
     if (validationResult.success) {
       Object.assign(this.settings, validationResult.data);
+
+      // Migration: If databases is empty but legacy path exists, migrate it
+      if (
+        this.settings.databases.length === 0 &&
+        this.settings.citationExportPath
+      ) {
+        console.debug(
+          'Citations plugin: Migrating legacy settings to databases',
+        );
+        this.settings.databases.push({
+          name: 'Default',
+          path: this.settings.citationExportPath,
+          type: this.settings.citationExportFormat,
+        });
+        void this.saveSettings();
+      }
     } else {
       console.warn(
-        'Citations Plugin: Settings validation failed',
+        'Citations plugin: Settings validation failed',
         validationResult.error,
       );
-      new Notice(
-        'Citations Plugin: Invalid settings detected. Please check your configuration.',
-      );
+      new Notice('Invalid settings detected. Please check your configuration.');
       // Fallback to best-effort loading
       Object.assign(this.settings, mergedSettings);
     }
@@ -119,13 +133,12 @@ export default class CitationPlugin extends Plugin {
 
   onunload(): void {
     this.libraryService.dispose();
-    // @ts-expect-error: literatureNoteErrorNotifier is not nullable in type definition but needs to be cleared
+    // @ts-expect-error -- literatureNoteErrorNotifier is not nullable in type definition but needs to be cleared
     this.literatureNoteErrorNotifier = null;
   }
 
   /**
    * Create data sources based on settings
-   * Supports both new multi-source configuration and legacy single-file configuration
    */
   private createDataSources(workerManager: WorkerManager): DataSource[] {
     const sources: DataSource[] = [];
@@ -134,41 +147,23 @@ export default class CitationPlugin extends Plugin {
         ? this.app.vault.adapter
         : null;
 
-    // Check if new multi-source config exists
-    if (this.settings.dataSources && this.settings.dataSources.length > 0) {
-      // Use new multi-source configuration
-      this.settings.dataSources.forEach(
-        (def: DataSourceDefinition, index: number) => {
-          const source = this.createDataSource(
-            def,
-            `source-${index}`,
-            vaultAdapter,
-            workerManager,
-          );
-          if (source) {
-            sources.push(source);
-          }
-        },
-      );
-    } else if (this.settings.citationExportPath) {
-      // Backward compatibility: use citationExportPath
-      // Detect mobile by checking if FileSystemAdapter is available
-      const sourceType = vaultAdapter ? 'local-file' : 'vault-file';
-      const source = this.createDataSource(
-        {
-          type: sourceType,
-          path: this.settings.citationExportPath,
-          format: this.settings.citationExportFormat,
-        },
-        'default',
-        vaultAdapter,
-        workerManager,
-      );
-
-      if (source) {
-        sources.push(source);
-      }
-    }
+    // Use databases configuration
+    this.settings.databases.forEach(
+      (
+        def: { name: string; path: string; type: DatabaseType },
+        index: number,
+      ) => {
+        const source = this.createDataSource(
+          { type: 'local-file', path: def.path, format: def.type },
+          `source-${index}`,
+          vaultAdapter,
+          workerManager,
+        );
+        if (source) {
+          sources.push(source);
+        }
+      },
+    );
 
     return sources;
   }
@@ -209,10 +204,10 @@ export default class CitationPlugin extends Plugin {
     }
   }
 
-  async init(): Promise<void> {
+  init(): void {
     if (this.libraryService.getSources().length > 0) {
       // Load library for the first time
-      this.libraryService.load();
+      void this.libraryService.load();
       this.libraryService.initWatcher();
     } else {
       console.warn('Citations plugin: No data sources configured');
@@ -299,7 +294,7 @@ export default class CitationPlugin extends Plugin {
    * Format literature note content for a given reference and insert in the
    * currently active pane.
    */
-  async insertLiteratureNoteContent(citekey: string): Promise<void> {
+  insertLiteratureNoteContent(citekey: string): void {
     const editor = this.getActiveEditor();
     if (!editor) {
       new Notice('No active editor found');
@@ -316,10 +311,7 @@ export default class CitationPlugin extends Plugin {
     }
   }
 
-  async insertMarkdownCitation(
-    citekey: string,
-    alternative = false,
-  ): Promise<void> {
+  insertMarkdownCitation(citekey: string, alternative = false): void {
     const editor = this.getActiveEditor();
     if (!editor) {
       new Notice('No active editor found');
@@ -327,16 +319,15 @@ export default class CitationPlugin extends Plugin {
     }
 
     try {
-      const func = alternative
-        ? this.getAlternativeMarkdownCitationForCitekey
-        : this.getMarkdownCitationForCitekey;
-      const citation = func.bind(this)(citekey);
+      const citation = alternative
+        ? this.getAlternativeMarkdownCitationForCitekey(citekey)
+        : this.getMarkdownCitationForCitekey(citekey);
 
       const cursor = editor.getCursor();
       editor.replaceRange(citation, cursor);
     } catch (error) {
-      console.error('Failed to insert markdown citation:', error);
-      new Notice('Failed to insert markdown citation');
+      console.error('Failed to insert Markdown citation:', error);
+      new Notice('Failed to insert Markdown citation');
     }
   }
 }
