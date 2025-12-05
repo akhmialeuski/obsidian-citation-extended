@@ -260,6 +260,17 @@ export class EntryCSLAdapter extends Entry {
   _compositeCitekey?: string;
   private _id?: string;
 
+  get year(): number | undefined {
+    const year = this.data.issued?.['date-parts']?.[0]?.[0];
+    if (year !== undefined && year !== null) {
+      const y = typeof year === 'string' ? parseInt(year) : year;
+      if (!isNaN(y)) {
+        return y;
+      }
+    }
+    return this.issuedDate?.getUTCFullYear();
+  }
+
   get id(): string {
     return this._id || this.data.id;
   }
