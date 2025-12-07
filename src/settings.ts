@@ -76,7 +76,7 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   literatureNoteFolder: 'Reading notes',
   literatureNoteContentTemplate:
     '---\n' +
-    'title: {{title}}\n' +
+    'title: {{quote title}}\n' +
     'authors: {{authorString}}\n' +
     'year: {{year}}\n' +
     '---\n\n',

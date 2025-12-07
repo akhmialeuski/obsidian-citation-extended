@@ -70,6 +70,9 @@ year: {{year}}
 {{abstract}}
 ```
 
+> [!WARNING]
+> **For Existing Users:** This change updates the default settings. If you have customized your literature note template, you will not see this change automatically. You should manually update your template to use `{{quote title}}` instead of `title: {{title}}` or simply wrap your title in quotes if you don't want to use the helper (though the helper is safer for titles containing quotes).
+
 ### Template Helpers
 
 The plugin supports several Handlebars helpers to allow for conditional logic and string manipulation in your templates.
@@ -101,6 +104,10 @@ Example: `{{#if (and (eq type "book") (gt year 2000))}}Modern Book{{/if}}`
 #### Regex Helpers
 - `match`: Extract a substring matching a regex pattern.
   - Usage: `{{match value pattern}}`
+
+#### Formatting Helpers
+- `quote`: Safely stringify a value for use in YAML/JSON (escapes quotes, etc.).
+  - Usage: `{{quote value}}`
 
 For more detailed documentation and examples, see [Template Helpers Documentation](docs/template-helpers.md).
 
