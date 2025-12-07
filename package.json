@@ -50,7 +50,7 @@
     "typescript-eslint": "^8.48.1"
   },
   "dependencies": {
-    "@retorquere/bibtex-parser": "^3.2.30",
+    "@retorquere/bibtex-parser": "^6.4.19",
     "chokidar": "^3.5.3",
     "handlebars": "^4.7.7",
     "minisearch": "^7.2.0",
