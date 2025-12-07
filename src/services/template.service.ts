@@ -52,6 +52,11 @@ export class TemplateService {
       const match = value.match(new RegExp(pattern));
       return match ? match[0] : '';
     });
+
+    // Formatting helpers
+    Handlebars.registerHelper('quote', (value: unknown) => {
+      return JSON.stringify(value);
+    });
   }
 
   public getTemplateVariables(entry: Entry): TemplateContext {
