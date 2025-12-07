@@ -173,7 +173,17 @@ export abstract class Entry {
   public get note(): string {
     return (
       this._note
-        ?.map((el) => el.replace(/(zotero:\/\/[^})\s]+)/g, '[Link]($1)'))
+        ?.map((el) => {
+          // Check if the element contains an HTML anchor tag from bibtex-parser
+          if (el.match(/<a href="[^"]+">[^<]+<\/a>/)) {
+            return el.replace(/<a href="([^"]+)">([^<]+)<\/a>/g, '[$2]($1)');
+          }
+          // Fallback for older parser versions or raw links (though regex below was problematic, we'll keep a safer version if needed or just drop it if v6 covers everything)
+          // The previous regex was: .replace(/(zotero:\/\/[^})\s]+)/g, '[Link]($1)')
+          // We can keep a fallback but make it less aggressive or just rely on the parser.
+          // Given the issue, let's just do the conversion if it's an anchor tag, otherwise return text.
+          return el;
+        })
         .join('\n\n') || ''
     );
   }
