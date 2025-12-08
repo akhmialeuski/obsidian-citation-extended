@@ -49,6 +49,7 @@ You can set up your own template for both the title and content of literature no
 * {{eprint}}
 * {{eprinttype}}
 * {{eventPlace}}
+* {{keywords}}
 * {{page}}
 * {{publisher}}
 * {{publisherPlace}}
@@ -104,6 +105,12 @@ Example: `{{#if (and (eq type "book") (gt year 2000))}}Modern Book{{/if}}`
 #### Regex Helpers
 - `match`: Extract a substring matching a regex pattern.
   - Usage: `{{match value pattern}}`
+
+#### Array/Citation Helpers
+- `join`: Join list with separator.
+- `split`: Split string into list.
+- `formatNames`: Format author list (supports "et al.").
+  - Usage: `{{formatNames entry.author}}`
 
 #### Formatting Helpers
 - `quote`: Safely stringify a value for use in YAML/JSON (escapes quotes, etc.).
