@@ -114,6 +114,7 @@ export class TemplateService {
       URL: entry.URL,
       year: entry.year?.toString(),
       zoteroSelectURI: entry.zoteroSelectURI,
+      zoteroId: entry.zoteroId,
     };
 
     return { entry: entry.toJSON(), ...shortcuts };
