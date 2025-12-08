@@ -1,6 +1,6 @@
 import Handlebars from 'handlebars';
 import { CitationsPluginSettings } from '../settings';
-import { Entry, TemplateContext } from '../types';
+import { Author, Entry, TemplateContext } from '../types';
 
 export class TemplateService {
   private templateSettings = {
@@ -57,6 +57,37 @@ export class TemplateService {
     Handlebars.registerHelper('quote', (value: unknown) => {
       return JSON.stringify(value);
     });
+    Handlebars.registerHelper('join', (value: unknown, separator: string) => {
+      if (!Array.isArray(value)) return value;
+      return value.join(separator);
+    });
+    Handlebars.registerHelper('split', (value: unknown, separator: string) => {
+      if (typeof value !== 'string') return value;
+      return value.split(separator);
+    });
+    Handlebars.registerHelper('formatNames', (authors: unknown, options) => {
+      if (!Array.isArray(authors)) return '';
+      // options.hash contains named arguments
+      const max = options.hash.max || 2;
+      const etAl = options.hash.etAl || ' et al.';
+      const connector = options.hash.connector || ' and ';
+
+      const authorList = authors as Author[];
+      const names = authorList.map(
+        (a) => a.literal || a.family || a.given || '',
+      );
+
+      if (names.length === 0) return '';
+      if (names.length === 1) return names[0];
+
+      if (names.length <= max) {
+        const last = names.pop();
+        return names.join(', ') + connector + last;
+      }
+
+      // If more than max, return first author + et al
+      return names[0] + etAl;
+    });
   }
 
   public getTemplateVariables(entry: Entry): TemplateContext {
@@ -70,6 +101,7 @@ export class TemplateService {
       eprint: entry.eprint,
       eprinttype: entry.eprinttype,
       eventPlace: entry.eventPlace,
+      keywords: entry.keywords,
       language: entry.language,
       note: entry.note,
       page: entry.page,

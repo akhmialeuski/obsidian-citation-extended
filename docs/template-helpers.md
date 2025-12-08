@@ -62,6 +62,61 @@ Truncate title to 50 characters:
 {{truncate title 50}}
 ```
 
+
+## Array Helpers
+
+### `join`
+
+Joins an array of strings into a single string with a separator.
+
+**Syntax:** `{{join value separator}}`
+
+**Example:**
+```handlebars
+{{join keywords ", "}}
+```
+
+### `split`
+
+Splits a string into an array of strings using a separator.
+
+**Syntax:** `{{split value separator}}`
+
+**Example:**
+```handlebars
+{{join (split "a-b-c" "-") ", "}}
+```
+
+### `formatNames` (Citation Formatting)
+
+Formats a list of authors (e.g. for "et al." citations).
+
+**Syntax:** `{{formatNames authors [max=2] [etAl=" et al."] [connector=" and "]}}`
+
+**Parameters:**
+- `authors`: The array of author objects (e.g. `entry.author`).
+- `max` (optional): Maximum number of authors to list before using "et al.". Default is 2.
+- `etAl` (optional): The string to append when truncating. Default is " et al.".
+- `connector` (optional): The string to use between the last two names. Default is " and ".
+
+**Examples:**
+
+Default (max 2):
+```handlebars
+{{formatNames entry.author}}
+```
+Result: "Smith and Jones" or "Smith et al."
+
+Custom max:
+```handlebars
+{{formatNames entry.author max=3}}
+```
+
+Custom suffix:
+```handlebars
+{{formatNames entry.author etAl=" and others"}}
+```
+
 ## Regex Helpers
 
 ### `match`

@@ -199,4 +199,75 @@ describe('TemplateService', () => {
       expect(service.getContent(variables)).toBe('Content: 2023');
     });
   });
+  describe('Helpers', () => {
+    test('join helper', () => {
+      const template = '{{join list ", "}}';
+      const result = service.render(template, {
+        list: ['a', 'b', 'c'],
+      } as unknown as TemplateContext);
+      expect(result).toBe('a, b, c');
+    });
+
+    test('split helper', () => {
+      const template = '{{join (split str "-") ", "}}';
+      const result = service.render(template, {
+        str: 'a-b-c',
+      } as unknown as TemplateContext);
+      expect(result).toBe('a, b, c');
+    });
+
+    describe('formatNames', () => {
+      const authors1 = [{ given: 'A', family: 'Brand' }];
+      const authors2 = [
+        { given: 'A', family: 'Brand' },
+        { given: 'B', family: 'Hoth' },
+      ];
+      const authors3 = [
+        { given: 'A', family: 'Brand' },
+        { given: 'B', family: 'Hoth' },
+        { given: 'C', family: 'Smith' },
+      ];
+
+      test('formats 1 author', () => {
+        const template = '{{formatNames authors}}';
+        const result = service.render(template, {
+          authors: authors1,
+        } as unknown as TemplateContext);
+        expect(result).toBe('Brand');
+      });
+
+      test('formats 2 authors', () => {
+        const template = '{{formatNames authors}}';
+        const result = service.render(template, {
+          authors: authors2,
+        } as unknown as TemplateContext);
+        expect(result).toBe('Brand and Hoth');
+      });
+
+      test('formats 3 authors (et al)', () => {
+        const template = '{{formatNames authors}}';
+        const result = service.render(template, {
+          authors: authors3,
+        } as unknown as TemplateContext);
+        expect(result).toBe('Brand et al.');
+      });
+
+      test('formats 3 authors with custom max', () => {
+        const template = '{{formatNames authors max=3}}';
+        const result = service.render(template, {
+          authors: authors3,
+        } as unknown as TemplateContext);
+        expect(result).toBe('Brand, Hoth and Smith');
+      });
+
+      test('formats with string literals', () => {
+        const authors = [{ literal: 'Organization' }];
+        const template = '{{formatNames authors}}';
+        const result = service.render(template, {
+          authors,
+        } as unknown as TemplateContext);
+        expect(result).toBe('Organization');
+      });
+    });
+  });
 });

@@ -21,6 +21,7 @@ export interface TemplateContext {
   eprint?: string | null;
   eprinttype?: string | null;
   eventPlace?: string;
+  keywords?: string[];
   language?: string;
   note?: string;
   page?: string;
@@ -141,6 +142,8 @@ export abstract class Entry {
   public abstract titleShort?: string;
   public abstract URL?: string;
 
+  public abstract keywords?: string[];
+
   public abstract eventPlace?: string;
 
   public abstract language?: string;
@@ -228,6 +231,7 @@ export interface EntryDataCSL {
   editor?: Author[];
   'container-title'?: string;
   DOI?: string;
+  keyword?: string;
   'event-place'?: string;
   issued?: { 'date-parts': [(number | string)[]] };
   language?: string;
@@ -379,6 +383,10 @@ export class EntryCSLAdapter extends Entry {
   get URL(): string | undefined {
     return this.data.URL;
   }
+
+  get keywords(): string[] | undefined {
+    return this.data.keyword?.split(',').map((s) => s.trim());
+  }
 }
 
 export class EntryBibLaTeXAdapter extends Entry {
@@ -401,6 +409,7 @@ export class EntryBibLaTeXAdapter extends Entry {
   URL?: string;
   _year?: string;
   _note?: string[];
+  keywords?: string[];
 
   _sourceDatabase?: string;
   _compositeCitekey?: string;
@@ -429,6 +438,7 @@ export class EntryBibLaTeXAdapter extends Entry {
     this.URL = this.getField('url');
     this._year = this.getField('year');
     this._note = this.getArrayField('note');
+    this.keywords = this.getArrayField('keywords');
   }
 
   private getField(key: string): string | undefined {
