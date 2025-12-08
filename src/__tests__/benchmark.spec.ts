@@ -10,6 +10,8 @@ class MockEntry extends Entry {
   eprint: string | null = null;
   eprinttype: string | null = null;
   files: string[] | null = null;
+  zoteroId?: string;
+  keywords?: string[];
 
   _sourceDatabase?: string;
   _compositeCitekey?: string;

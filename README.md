@@ -58,6 +58,7 @@ You can set up your own template for both the title and content of literature no
 * {{URL}}
 * {{year}}
 * {{zoteroSelectURI}}
+* {{zoteroId}}
 ```
 
 In addition to these standard variables, the plugin **automatically detects other fields** present in your bibliography file (e.g., `customField`, `notes`, `file`, etc.) and makes them available as variables. You can see the full list of detected variables in the plugin settings under "Template settings".

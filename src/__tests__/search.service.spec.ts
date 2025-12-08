@@ -37,6 +37,9 @@ class MockEntry extends Entry {
   page = '';
   titleShort = '';
   URL = '';
+  zoteroId?: string;
+  keywords?: string[];
+
   eventPlace = '';
   language = '';
   source = '';

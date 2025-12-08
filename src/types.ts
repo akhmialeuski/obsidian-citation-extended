@@ -34,6 +34,7 @@ export interface TemplateContext {
   URL?: string;
   year?: string;
   zoteroSelectURI: string;
+  zoteroId?: string;
 
   entry: Record<string, unknown>;
 }
@@ -142,6 +143,8 @@ export abstract class Entry {
   public abstract titleShort?: string;
   public abstract URL?: string;
 
+  public abstract zoteroId?: string;
+
   public abstract keywords?: string[];
 
   public abstract eventPlace?: string;
@@ -242,6 +245,7 @@ export interface EntryDataCSL {
   title?: string;
   'title-short'?: string;
   URL?: string;
+  'zotero-key'?: string;
 }
 
 export interface WorkerRequest {
@@ -384,6 +388,10 @@ export class EntryCSLAdapter extends Entry {
     return this.data.URL;
   }
 
+  get zoteroId(): string | undefined {
+    return this.data['zotero-key'];
+  }
+
   get keywords(): string[] | undefined {
     return this.data.keyword?.split(',').map((s) => s.trim());
   }
@@ -410,6 +418,7 @@ export class EntryBibLaTeXAdapter extends Entry {
   _year?: string;
   _note?: string[];
   keywords?: string[];
+  zoteroId?: string;
 
   _sourceDatabase?: string;
   _compositeCitekey?: string;
@@ -439,6 +448,7 @@ export class EntryBibLaTeXAdapter extends Entry {
     this._year = this.getField('year');
     this._note = this.getArrayField('note');
     this.keywords = this.getArrayField('keywords');
+    this.zoteroId = this.getField('zotero-key');
   }
 
   private getField(key: string): string | undefined {
