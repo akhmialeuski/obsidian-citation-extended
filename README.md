@@ -85,6 +85,8 @@ tags: references
 [Open PDF](file://{{urlEncode entry.data.fields.file}})
 ```
 
+**Standard Variables**:
+
 ```
 * {{citekey}}
 * {{abstract}}
@@ -100,8 +102,13 @@ tags: references
 * {{publisherPlace}}
 * {{title}}
 * {{titleShort}}
-- **Standard Variables**: `{{year}}`, `{{authorString}}`, `{{title}}`, `{{containerTitle}}`, `{{series}}`, `{{volume}}`, etc.
-- **Custom Access**: Access any field via `{{entry.data.fields.fieldName}}`.
+```
+
+**Detected Variables (from library)**: Any key present in the entry's data is exposed as a variable.
+    - Examples: `{{abstract}}`, `{{DOI}}`, `{{keywords}}`, `{{note}}`, `{{publisher}}`, `{{URL}}`, `{{zoteroId}}`, etc.
+    - *Note: These vary depending on the data available in your bibliography file.*
+
+**Custom Access**: Access any field via `{{entry.data.fields.fieldName}}`.
 
 [View Full Variable Reference & Advanced Usage](docs/template-variables.md)
 

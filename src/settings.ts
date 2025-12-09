@@ -469,20 +469,21 @@ export class CitationSettingTab extends PluginSettingTab {
     let updatePreview: ((value: string) => void) | null = null;
 
     if (showPreview) {
+      const separator = containerEl.createEl('hr');
+      separator.setCssProps({
+        marginTop: '20px',
+        marginBottom: '20px',
+        borderColor: 'var(--background-modifier-border)',
+      });
+
       previewEl = containerEl.createDiv({ cls: 'citation-template-preview' });
       previewEl.setCssProps({
         padding: '10px',
         backgroundColor: 'var(--background-secondary)',
         borderRadius: '4px',
-        marginTop: '15px',
         fontFamily: 'var(--font-monospace)',
         whiteSpace: 'pre-wrap',
         fontSize: '0.8em',
-      });
-
-      const separator = containerEl.createDiv();
-      separator.setCssProps({
-        marginBottom: '30px',
       });
 
       updatePreview = (value: string) => {
