@@ -63,6 +63,38 @@ Truncate title to 50 characters:
 ```
 
 
+
+## Path Helpers
+
+### `urlEncode`
+
+Encodes a string for use in a URL (equivalent to `encodeURI`).
+
+- **Usage:** `{{urlEncode value}}`
+- **Example:** `{{urlEncode "file path with spaces.pdf"}}` -> `file%20path%20with%20spaces.pdf`
+
+### `basename`
+
+Returns the last portion of a path (filename with extension).
+
+- **Usage:** `{{basename path}}`
+- **Example:** `{{basename "/path/to/file.pdf"}}` -> `file.pdf`
+
+### `filename`
+
+Returns the filename without extension.
+
+- **Usage:** `{{filename path}}`
+- **Example:** `{{filename "/path/to/file.pdf"}}` -> `file`
+
+### `dirname`
+
+Returns the directory name of a path.
+
+- **Usage:** `{{dirname path}}`
+- **Example:** `{{dirname "/path/to/file.pdf"}}` -> `/path/to`
+
+
 ## Array Helpers
 
 ### `join`

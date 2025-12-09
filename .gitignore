@@ -26,5 +26,3 @@ coverage/
 .eslintcache
 
 
-# agent
-.agent/

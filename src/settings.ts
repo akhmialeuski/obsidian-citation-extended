@@ -37,6 +37,8 @@ const MOCK_ENTRY = {
   title: 'A Mock Article for Preview',
   titleShort: 'Mock Article',
   URL: 'https://example.com/mock',
+  series: 'Mock Series',
+  volume: '42',
   year: 2024,
   zoteroSelectURI: 'zotero://select/items/@mock2024',
   toJSON: function () {
@@ -397,8 +399,13 @@ export class CitationSettingTab extends PluginSettingTab {
           'reference as used internally by the plugin. See the ',
       }),
       createEl('a', {
-        text: 'Plugin documentation',
-        href: 'https://github.com/akhmialeuski/obsidian-citation-extended/blob/master/docs/index.html',
+        text: 'Template documentation',
+        href: 'https://github.com/akhmialeuski/obsidian-citation-extended/blob/master/docs/template-variables.md',
+      }),
+      createSpan({ text: ' or ' }),
+      createEl('a', {
+        text: 'README',
+        href: 'https://github.com/akhmialeuski/obsidian-citation-extended/blob/master/README.md',
       }),
       createSpan({ text: " for information on this object's structure." }),
     );
@@ -467,10 +474,15 @@ export class CitationSettingTab extends PluginSettingTab {
         padding: '10px',
         backgroundColor: 'var(--background-secondary)',
         borderRadius: '4px',
-        marginTop: '5px',
+        marginTop: '15px',
         fontFamily: 'var(--font-monospace)',
         whiteSpace: 'pre-wrap',
         fontSize: '0.8em',
+      });
+
+      const separator = containerEl.createDiv();
+      separator.setCssProps({
+        marginBottom: '30px',
       });
 
       updatePreview = (value: string) => {

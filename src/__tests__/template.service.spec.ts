@@ -1,6 +1,6 @@
 import { TemplateService } from '../services/template.service';
 import { CitationsPluginSettings } from '../settings';
-import { TemplateContext } from '../types';
+import { TemplateContext, Entry } from '../types';
 
 describe('TemplateService', () => {
   let service: TemplateService;
@@ -206,6 +206,56 @@ describe('TemplateService', () => {
           mockContext,
         ),
       ).toBe('true');
+    });
+  });
+  describe('Path Helpers', () => {
+    it('should handle urlEncode helper', () => {
+      expect(service.render('{{urlEncode "hello world"}}', mockContext)).toBe(
+        'hello%20world',
+      );
+    });
+
+    it('should handle basename helper', () => {
+      expect(
+        service.render('{{basename "/path/to/file.pdf"}}', mockContext),
+      ).toBe('file.pdf');
+      expect(
+        service.render('{{basename "C:\\path\\to\\file.pdf"}}', mockContext),
+      ).toBe('file.pdf');
+    });
+
+    it('should handle filename helper', () => {
+      expect(
+        service.render('{{filename "/path/to/file.pdf"}}', mockContext),
+      ).toBe('file');
+      expect(
+        service.render('{{filename "C:\\path\\to\\file.pdf"}}', mockContext),
+      ).toBe('file');
+    });
+
+    it('should handle dirname helper', () => {
+      expect(
+        service.render('{{dirname "/path/to/file.pdf"}}', mockContext),
+      ).toBe('/path/to');
+      expect(
+        service.render('{{dirname "C:\\path\\to\\file.pdf"}}', mockContext),
+      ).toBe('C:\\path\\to');
+    });
+  });
+
+  describe('Template Variables', () => {
+    it('should export series and volume shortcuts', () => {
+      const entryMock = {
+        id: 'citekey',
+        title: 'Title',
+        series: 'My Series',
+        volume: '123',
+        toJSON: () => ({}),
+      } as unknown as Entry;
+
+      const vars = service.getTemplateVariables(entryMock);
+      expect(vars.series).toBe('My Series');
+      expect(vars.volume).toBe('123');
     });
   });
 });
