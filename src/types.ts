@@ -27,6 +27,8 @@ export interface TemplateContext {
   page?: string;
   publisher?: string;
   publisherPlace?: string;
+  series?: string;
+  volume?: string;
   source?: string;
   title?: string;
   titleShort?: string;
@@ -156,6 +158,9 @@ export abstract class Entry {
   public abstract publisher?: string;
   public abstract publisherPlace?: string;
 
+  public abstract series?: string;
+  public abstract volume?: string;
+
   public abstract _sourceDatabase?: string;
   public abstract _compositeCitekey?: string;
 
@@ -246,6 +251,8 @@ export interface EntryDataCSL {
   'title-short'?: string;
   URL?: string;
   'zotero-key'?: string;
+  'collection-title'?: string;
+  volume?: string;
 }
 
 export interface WorkerRequest {
@@ -376,6 +383,14 @@ export class EntryCSLAdapter extends Entry {
     return this.data['publisher-place'];
   }
 
+  get series(): string | undefined {
+    return this.data['collection-title'];
+  }
+
+  get volume(): string | undefined {
+    return this.data.volume;
+  }
+
   get title(): string | undefined {
     return this.data.title;
   }
@@ -411,6 +426,8 @@ export class EntryBibLaTeXAdapter extends Entry {
   page?: string;
   publisher?: string;
   publisherPlace?: string;
+  series?: string;
+  volume?: string;
   source?: string;
   title?: string;
   titleShort?: string;
@@ -437,7 +454,12 @@ export class EntryBibLaTeXAdapter extends Entry {
     this.eprint = this.getField('eprint');
     this.eprinttype = this.getField('eprinttype');
     this.event = this.getField('eventtitle');
-    this.eventPlace = this.getField('venue');
+    this.event = this.getField('eventtitle');
+    // BibLaTeX 'venue' or 'location' (if event is present) could be eventPlace.
+    // Standard mapping: venue is often used for event place.
+    this.eventPlace = this.getField('venue') || this.getField('location');
+    this.series = this.getField('series');
+    this.volume = this.getField('volume');
     this.issued = this.getField('date');
     this.page = this.getField('pages');
     this.publisher = this.getField('publisher');

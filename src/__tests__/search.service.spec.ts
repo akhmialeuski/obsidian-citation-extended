@@ -45,6 +45,8 @@ class MockEntry extends Entry {
   source = '';
   publisher = '';
   publisherPlace = '';
+  series = '';
+  volume = '';
 }
 
 describe('SearchService', () => {

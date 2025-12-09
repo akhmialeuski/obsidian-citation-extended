@@ -20,6 +20,8 @@ export const KNOWN_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   titleShort: '',
   type: 'CSL type of the reference (e.g. article-journal, webpage, motion_picture)',
   URL: '',
+  series: 'Series name (e.g. "Lecture Notes in Computer Science")',
+  volume: 'Volume number',
   year: 'Publication year',
   zoteroSelectURI: 'URI to open the reference in Zotero',
 };

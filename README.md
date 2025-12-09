@@ -40,6 +40,51 @@ The plugin offers five simple features at the moment:
 ### Templates
 You can set up your own template for both the title and content of literature notes. The following variables can be used:
 
+- If you use another reference manager (e.g., **Mendeley**):
+  - Export your library to BibTeX format (e.g., `export.bib`).
+  - In the Citations plugin settings, select `BibLaTeX` as the format and provide the path to your exported `.bib` file.
+  - You can access custom fields from your `.bib` file using `{{entry.data.fields.fieldName}}`.
+
+### Examples & Recipes
+
+Here are some example templates for common citation styles and workflows.
+
+#### Markdown Citations
+
+**Alphabetic Initials** (e.g., [Vadhan'17]):
+```handlebars
+[[{{#if titleShort}}{{titleShort}}{{else}}{{title}}{{/if}} ({{year}})|({{#each entry.author}}{{family.[0]}}{{/each}}'{{year.[2]}}{{year.[3]}})]]
+```
+
+**Author List & Year** (e.g., [Author1 & Author2, 2023]):
+```handlebars
+[[{{#if titleShort}}{{titleShort}}{{else}}{{title}}{{/if}} ({{year}})|({{entry.author.[0].family}}{{#if entry.author.[2].family}} et al.{{else}}{{#if entry.author.[1].family}} & {{entry.author.[1].family}}{{/if}}{{/if}}, {{year}})]]
+```
+
+#### Literature Note
+
+**Header with Metadata:**
+```handlebars
+---
+title: "{{quote title}}"
+year: {{year}}
+author: {{#each entry.author}} 
+ - "[[{{given}} {{family}}]]" {{/each}}
+doi: "{{DOI}}"
+tags: references
+---
+# {{title}}
+
+**Authors:** {{authorString}}
+**Year:** {{year}}
+**Abstract:** {{abstract}}
+```
+
+**PDF Link (URL Encoded):**
+```handlebars
+[Open PDF](file://{{urlEncode entry.data.fields.file}})
+```
+
 ```
 * {{citekey}}
 * {{abstract}}
@@ -55,21 +100,23 @@ You can set up your own template for both the title and content of literature no
 * {{publisherPlace}}
 * {{title}}
 * {{titleShort}}
-* {{URL}}
-* {{year}}
-* {{zoteroSelectURI}}
-* {{zoteroId}}
-```
+- **Standard Variables**: `{{year}}`, `{{authorString}}`, `{{title}}`, `{{containerTitle}}`, `{{series}}`, `{{volume}}`, etc.
+- **Custom Access**: Access any field via `{{entry.data.fields.fieldName}}`.
 
-In addition to these standard variables, the plugin **automatically detects other fields** present in your bibliography file (e.g., `customField`, `notes`, `file`, etc.) and makes them available as variables. You can see the full list of detected variables in the plugin settings under "Template settings".
+[View Full Variable Reference & Advanced Usage](docs/template-variables.md)
+
 For example, your literature note title template can simply be `@{{citekey}}` and the content template can look like:
-```
+```handlebars
 ---
 title: {{title}}
 authors: {{authorString}}
 year: {{year}}
+series: {{series}}
+volume: {{volume}}
 ---
 {{abstract}}
+
+**Keywords:** {{join entry.data.fields.keywords ", "}}
 ```
 
 > [!WARNING]

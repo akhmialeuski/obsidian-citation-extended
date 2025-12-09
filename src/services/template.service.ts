@@ -57,6 +57,22 @@ export class TemplateService {
     Handlebars.registerHelper('quote', (value: unknown) => {
       return JSON.stringify(value);
     });
+    Handlebars.registerHelper('urlEncode', (value: unknown) => {
+      if (typeof value !== 'string') return value;
+      return encodeURI(value);
+    });
+    Handlebars.registerHelper('basename', (value: string) => {
+      if (typeof value !== 'string') return value;
+      return value.replace(/^.*[\\/]/, '');
+    });
+    Handlebars.registerHelper('filename', (value: string) => {
+      if (typeof value !== 'string') return value;
+      return value.replace(/^.*[\\/]/, '').replace(/\.[^/.]+$/, '');
+    });
+    Handlebars.registerHelper('dirname', (value: string) => {
+      if (typeof value !== 'string') return value;
+      return value.replace(/[\\/][^\\/]*$/, '');
+    });
     Handlebars.registerHelper('join', (value: unknown, separator: string) => {
       if (!Array.isArray(value)) return value;
       return value.join(separator);
@@ -107,6 +123,8 @@ export class TemplateService {
       page: entry.page,
       publisher: entry.publisher,
       publisherPlace: entry.publisherPlace,
+      series: entry.series,
+      volume: entry.volume,
       source: entry.source,
       title: entry.title,
       titleShort: entry.titleShort,
