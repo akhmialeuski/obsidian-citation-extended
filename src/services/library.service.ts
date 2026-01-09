@@ -161,7 +161,7 @@ export class LibraryService {
     return new Library(Object.fromEntries(entriesMap));
   }
 
-  async load(isRetry = false): Promise<Library | null> {
+  load = async (isRetry = false): Promise<Library | null> => {
     if (this.settings.databases.length === 0) {
       console.warn(
         'Citations plugin: No data sources configured. Please update plugin settings.',
@@ -298,7 +298,7 @@ export class LibraryService {
         this.abortController = null;
       }
     }
-  }
+  };
 
   private handleErrorRetry(): void {
     if (this.retryCount < 5) {
@@ -359,7 +359,7 @@ export class LibraryService {
   /**
    * Clean up all resources
    */
-  dispose(): void {
+  dispose = (): void => {
     // Clear timers
     if (this.loadDebounceTimer) {
       window.clearTimeout(this.loadDebounceTimer);
@@ -391,7 +391,7 @@ export class LibraryService {
 
     this.sources = [];
     console.debug('LibraryService: Disposed all resources');
-  }
+  };
 
   /**
    * Returns true iff the library is currently being loaded on the worker thread.

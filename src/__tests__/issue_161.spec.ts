@@ -136,7 +136,7 @@ describe('Issue 161: Insert Literature Note Link', () => {
     expect(app.metadataCache.fileToLinktext).toHaveBeenCalledWith(
       mockFile,
       '',
-      false,
+      true,
     );
 
     // This expectation reflects the DESIRED behavior (fixing the bug)
