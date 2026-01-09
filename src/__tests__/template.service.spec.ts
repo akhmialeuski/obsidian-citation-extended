@@ -257,5 +257,29 @@ describe('TemplateService', () => {
       expect(vars.series).toBe('My Series');
       expect(vars.volume).toBe('123');
     });
+
+    it('should export date shortcut in YYYY-MM-DD format', () => {
+      const entryMock = {
+        id: 'citekey',
+        title: 'Title',
+        issuedDate: new Date('2023-01-01T12:00:00Z'),
+        toJSON: () => ({}),
+      } as unknown as Entry;
+
+      const vars = service.getTemplateVariables(entryMock);
+      expect(vars.date).toBe('2023-01-01');
+    });
+
+    it('should handle missing issuedDate for date shortcut', () => {
+      const entryMock = {
+        id: 'citekey',
+        title: 'Title',
+        issuedDate: null,
+        toJSON: () => ({}),
+      } as unknown as Entry;
+
+      const vars = service.getTemplateVariables(entryMock);
+      expect(vars.date).toBeNull();
+    });
   });
 });

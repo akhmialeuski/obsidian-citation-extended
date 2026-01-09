@@ -133,6 +133,9 @@ export class TemplateService {
       year: entry.year?.toString(),
       zoteroSelectURI: entry.zoteroSelectURI,
       zoteroId: entry.zoteroId,
+      date: entry.issuedDate
+        ? entry.issuedDate.toISOString().split('T')[0]
+        : null,
     };
 
     return { entry: entry.toJSON(), ...shortcuts };

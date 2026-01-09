@@ -40,6 +40,7 @@ const MOCK_ENTRY = {
   series: 'Mock Series',
   volume: '42',
   year: 2024,
+  issuedDate: new Date('2024-01-01'),
   zoteroSelectURI: 'zotero://select/items/@mock2024',
   toJSON: function () {
     return this;

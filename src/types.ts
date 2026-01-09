@@ -37,6 +37,7 @@ export interface TemplateContext {
   year?: string;
   zoteroSelectURI: string;
   zoteroId?: string;
+  date?: string | null;
 
   entry: Record<string, unknown>;
 }

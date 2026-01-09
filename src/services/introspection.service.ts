@@ -22,6 +22,9 @@ export const KNOWN_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   URL: '',
   series: 'Series name (e.g. "Lecture Notes in Computer Science")',
   volume: 'Volume number',
+  date: 'Publication date (YYYY-MM-DD)',
+  dateEnd: '',
+  dateStart: '',
   year: 'Publication year',
   zoteroSelectURI: 'URI to open the reference in Zotero',
 };
