@@ -102,6 +102,7 @@ tags: references
 * {{publisherPlace}}
 * {{title}}
 * {{titleShort}}
+* {{date}}
 ```
 
 **Detected Variables (from library)**: Any key present in the entry's data is exposed as a variable.

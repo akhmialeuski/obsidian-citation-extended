@@ -24,6 +24,7 @@ These variables are available for every entry (if the data exists in your librar
 | `{{abstract}}` | Abstract or summary | `This paper discusses...` |
 | `{{zoteroSelectURI}}` | URI to select item in Zotero | `zotero://select/items/...` |
 | `{{type}}` | Reference type | `article-journal` |
+| `{{date}}` | Publication Date (YYYY-MM-DD) | `2020-01-15` |
 
 ## Advanced Access: `entry.data.fields`
 
