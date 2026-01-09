@@ -74,10 +74,7 @@ export function loadEntries(
       },
     };
 
-    const parsed = BibTeXParser.parse(
-      databaseRaw,
-      options,
-    ) as BibTeXParser.Bibliography;
+    const parsed = BibTeXParser.parse(databaseRaw, options);
 
     parsed.errors.forEach((error) => {
       console.error(

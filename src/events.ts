@@ -5,6 +5,12 @@
 import { Events, EventRef } from 'obsidian';
 import { LibraryState } from './library-state';
 
+/**
+ * Generic callback type that matches all overload signatures.
+ * Using a union of the specific callback types ensures type safety.
+ */
+type CitationEventCallback = (() => void) | ((state: LibraryState) => void);
+
 export default class CitationEvents extends Events {
   on(name: 'library-load-start', callback: () => void, ctx?: unknown): EventRef;
   on(
@@ -17,13 +23,9 @@ export default class CitationEvents extends Events {
     callback: (state: LibraryState) => void,
     ctx?: unknown,
   ): EventRef;
-  on(
-    name: string,
-
-    callback: Function,
-    ctx?: unknown,
-  ): EventRef {
-    return super.on(name, callback as (...args: unknown[]) => unknown, ctx);
+  on(name: string, callback: CitationEventCallback, ctx?: unknown): EventRef {
+    // Cast callback to be compatible with the parent Events.on() signature
+    return super.on(name, callback as (...data: unknown[]) => unknown, ctx);
   }
 
   trigger(name: 'library-load-start'): void;

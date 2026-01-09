@@ -34,7 +34,10 @@ export default tseslint.config(
             '@typescript-eslint/no-explicit-any': 'error',
             '@typescript-eslint/no-floating-promises': 'error',
             '@typescript-eslint/no-require-imports': 'error',
-            '@typescript-eslint/no-unsafe-function-type': 'off', // Allowed for event callbacks
+            '@typescript-eslint/no-unsafe-function-type': 'error',
+            '@typescript-eslint/no-base-to-string': 'error',
+            '@typescript-eslint/await-thenable': 'error',
+            '@typescript-eslint/no-unnecessary-type-assertion': 'error',
 
             // Console usage
             'no-console': ['error', { allow: ['warn', 'error', 'debug'] }],

@@ -417,8 +417,7 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Markdown citation templates')
       .setHeading();
     containerEl.createEl('p', {
-      // eslint-disable-next-line obsidianmd/ui/sentence-case -- "Pandoc-style" and "Markdown" are proper nouns/technical terms
-      text: 'You can insert Pandoc-style markdown citations rather than literature notes by using the "Insert markdown citation" command. The below options allow customization of the markdown citation format.',
+      text: 'You can insert pandoc-style citations rather than literature notes by using the insert citation command. The below options allow customization of the citation format.',
     });
 
     this.buildSetting(
@@ -504,7 +503,8 @@ export class CitationSettingTab extends PluginSettingTab {
       };
 
       // Initial render
-      updatePreview(String(this.plugin.settings[key]));
+      const initialValue = this.plugin.settings[key];
+      updatePreview(this.settingValueToString(initialValue));
     }
 
     const save = debounce(
@@ -533,14 +533,34 @@ export class CitationSettingTab extends PluginSettingTab {
 
     if (componentType === 'text') {
       setting.addText((component) => {
-        component.setValue(String(this.plugin.settings[key]));
+        const value = this.plugin.settings[key];
+        component.setValue(this.settingValueToString(value));
         component.onChange(onChange);
       });
     } else if (componentType === 'textarea') {
       setting.addTextArea((component) => {
-        component.setValue(String(this.plugin.settings[key]));
+        const value = this.plugin.settings[key];
+        component.setValue(this.settingValueToString(value));
         component.onChange(onChange);
       });
     }
+  }
+
+  /**
+   * Safely converts a settings value to a string for display in UI components.
+   * Handles string, number, boolean, and complex types.
+   */
+  private settingValueToString(value: unknown): string {
+    if (typeof value === 'string') {
+      return value;
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+    if (value === null || value === undefined) {
+      return '';
+    }
+    // For arrays and objects, return empty string as they shouldn't be displayed as text
+    return '';
   }
 }
