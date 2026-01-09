@@ -16,7 +16,7 @@ interface SuggestModalWithUpdate<T> extends SuggestModal<T> {
 
 export interface SearchAction {
   name: string;
-  onChoose(item: Entry, evt: MouseEvent | KeyboardEvent): Promise<void>;
+  onChoose(item: Entry, evt: MouseEvent | KeyboardEvent): Promise<void> | void;
   renderItem?(item: Entry, el: HTMLElement): void;
   getInstructions?(): { command: string; purpose: string }[];
 }
@@ -159,7 +159,7 @@ export class CitationSearchModal extends SuggestModal<Entry> {
   }
 
   onChooseSuggestion(item: Entry, evt: MouseEvent | KeyboardEvent): void {
-    this.action.onChoose(item, evt).catch(console.error);
+    Promise.resolve(this.action.onChoose(item, evt)).catch(console.error);
   }
 
   renderSuggestion(entry: Entry, el: HTMLElement): void {
@@ -283,8 +283,8 @@ export class InsertNoteContentAction implements SearchAction {
   name = 'Insert literature note content';
   constructor(private plugin: CitationPlugin) {}
 
-  async onChoose(item: Entry) {
-    await this.plugin.insertLiteratureNoteContent(item.id);
+  onChoose(item: Entry) {
+    this.plugin.insertLiteratureNoteContent(item.id);
   }
 
   getInstructions() {
@@ -303,9 +303,9 @@ export class InsertCitationAction implements SearchAction {
   name = 'Insert citation';
   constructor(private plugin: CitationPlugin) {}
 
-  async onChoose(item: Entry, evt: MouseEvent | KeyboardEvent) {
+  onChoose(item: Entry, evt: MouseEvent | KeyboardEvent) {
     const isAlternative = evt instanceof KeyboardEvent && evt.shiftKey;
-    await this.plugin.insertMarkdownCitation(item.id, isAlternative);
+    this.plugin.insertMarkdownCitation(item.id, isAlternative);
   }
 
   getInstructions() {

@@ -152,12 +152,10 @@ describe('Bug Reproduction: Incorrect Markdown Link Extension', () => {
       true, // Expect omitMdExtension to be true
     );
 
-    const mockEditor = (
-      app.workspace.getActiveViewOfType(class {}) as unknown as {
-        editor: { replaceSelection: jest.Mock };
-      }
-    ).editor;
-    expect(mockEditor.replaceSelection).toHaveBeenCalledWith(
+    // Get the mock editor from the mocked getActiveViewOfType return value
+    const mockView = (app.workspace.getActiveViewOfType as jest.Mock).mock
+      .results[0]?.value as { editor: { replaceSelection: jest.Mock } };
+    expect(mockView.editor.replaceSelection).toHaveBeenCalledWith(
       '[[Test Note Title]]',
     );
   });
