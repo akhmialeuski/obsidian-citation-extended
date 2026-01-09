@@ -229,7 +229,7 @@ export class OpenNoteAction implements SearchAction {
   name = 'Open literature note';
   constructor(private plugin: CitationPlugin) {}
 
-  async onChoose(item: Entry, evt: MouseEvent | KeyboardEvent) {
+  onChoose = async (item: Entry, evt: MouseEvent | KeyboardEvent) => {
     if (evt instanceof MouseEvent || evt.key == 'Enter') {
       const newPane = evt instanceof KeyboardEvent && evt.ctrlKey;
       await this.plugin.openLiteratureNote(item.id, newPane);
@@ -248,7 +248,7 @@ export class OpenNoteAction implements SearchAction {
         open(item.zoteroSelectURI);
       }
     }
-  }
+  };
 
   getInstructions() {
     return [
@@ -266,9 +266,9 @@ export class InsertNoteLinkAction implements SearchAction {
   name = 'Insert literature note link';
   constructor(private plugin: CitationPlugin) {}
 
-  async onChoose(item: Entry) {
+  onChoose = async (item: Entry) => {
     await this.plugin.insertLiteratureNoteLink(item.id);
-  }
+  };
 
   getInstructions() {
     return [
@@ -283,9 +283,9 @@ export class InsertNoteContentAction implements SearchAction {
   name = 'Insert literature note content';
   constructor(private plugin: CitationPlugin) {}
 
-  onChoose(item: Entry) {
+  onChoose = (item: Entry) => {
     this.plugin.insertLiteratureNoteContent(item.id);
-  }
+  };
 
   getInstructions() {
     return [
@@ -303,10 +303,10 @@ export class InsertCitationAction implements SearchAction {
   name = 'Insert citation';
   constructor(private plugin: CitationPlugin) {}
 
-  onChoose(item: Entry, evt: MouseEvent | KeyboardEvent) {
+  onChoose = (item: Entry, evt: MouseEvent | KeyboardEvent) => {
     const isAlternative = evt instanceof KeyboardEvent && evt.shiftKey;
     this.plugin.insertMarkdownCitation(item.id, isAlternative);
-  }
+  };
 
   getInstructions() {
     return [

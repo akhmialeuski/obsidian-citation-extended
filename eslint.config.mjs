@@ -38,6 +38,7 @@ export default tseslint.config(
             '@typescript-eslint/no-base-to-string': 'error',
             '@typescript-eslint/await-thenable': 'error',
             '@typescript-eslint/no-unnecessary-type-assertion': 'error',
+            '@typescript-eslint/unbound-method': 'error',
 
             // Console usage
             'no-console': ['error', { allow: ['warn', 'error', 'debug'] }],
@@ -58,5 +59,11 @@ export default tseslint.config(
             '.agent/**',
             'eslint.config.mjs',
         ],
+    },
+    {
+        files: ['**/*.spec.ts', '**/*.test.ts'],
+        rules: {
+            '@typescript-eslint/unbound-method': 'off',
+        },
     },
 );
