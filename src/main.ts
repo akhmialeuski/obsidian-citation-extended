@@ -280,7 +280,7 @@ export default class CitationPlugin extends Plugin {
         );
         linkText = `[${title}](${uri})`;
       } else {
-        linkText = this.app.metadataCache.fileToLinktext(file, '', false);
+        linkText = this.app.metadataCache.fileToLinktext(file, '', true);
         linkText = `[[${linkText}]]`;
       }
 
