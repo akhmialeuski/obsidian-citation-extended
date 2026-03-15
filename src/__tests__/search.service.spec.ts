@@ -102,4 +102,37 @@ describe('SearchService', () => {
     service.buildIndex(entries);
     expect(service.search('')).toEqual([]);
   });
+
+  // Regression test for GitHub issue #220:
+  // "Insert literature note link won't search by author name"
+  test('should find entries by author name in Insert Literature Note Link (#220)', () => {
+    const entries = [
+      new MockEntry({
+        id: 'hopf2020',
+        title: 'Perioperative outcomes of surgery',
+        authorString: 'Hopf, John K.',
+        issuedDate: new Date(2020, 0, 1),
+      }),
+      new MockEntry({
+        id: 'smith2021',
+        title: 'Another article about something',
+        authorString: 'Smith, Jane',
+        issuedDate: new Date(2021, 0, 1),
+      }),
+    ];
+
+    service.buildIndex(entries);
+
+    // Search by last name
+    const byLastName = service.search('Hopf');
+    expect(byLastName).toContain('hopf2020');
+
+    // Search by citekey
+    const byKey = service.search('hopf2020');
+    expect(byKey).toContain('hopf2020');
+
+    // Search by partial author name
+    const byPartial = service.search('Hop');
+    expect(byPartial).toContain('hopf2020');
+  });
 });

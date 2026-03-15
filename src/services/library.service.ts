@@ -284,9 +284,12 @@ export class LibraryService implements ILibraryService {
     } catch (e) {
       if (signal.aborted) return null;
 
+      const errorMsg = (e as Error).message || String(e);
       console.error('Citation plugin: Error loading library', e);
       this.setState({ status: LoadingStatus.Error, error: e as Error });
-      this.loadErrorNotifier.show();
+      this.loadErrorNotifier.show(
+        `Unable to load citations: ${errorMsg}. Please check plugin settings and file paths.`,
+      );
 
       this.handleErrorRetry();
       return null;
