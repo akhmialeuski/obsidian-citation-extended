@@ -1,7 +1,8 @@
-import { App, EventRef, Notice, SuggestModal } from 'obsidian';
-import CitationPlugin from './main';
-import { Entry } from './core';
-import { LibraryState, LoadingStatus } from './library/library-state';
+import { App, EventRef, SuggestModal } from 'obsidian';
+import CitationPlugin from '../../main';
+import { Entry } from '../../core';
+import { LibraryState, LoadingStatus } from '../../library/library-state';
+import { SearchAction } from './actions/search-action';
 
 // Stub some methods we know are there..
 interface SuggestModalExt<T> extends SuggestModal<T> {
@@ -12,13 +13,6 @@ interface ChooserExt {
 }
 interface SuggestModalWithUpdate<T> extends SuggestModal<T> {
   updateSuggestions(): void;
-}
-
-export interface SearchAction {
-  name: string;
-  onChoose(item: Entry, evt: MouseEvent | KeyboardEvent): Promise<void> | void;
-  renderItem?(item: Entry, el: HTMLElement): void;
-  getInstructions?(): { command: string; purpose: string }[];
 }
 
 export class CitationSearchModal extends SuggestModal<Entry> {
@@ -219,98 +213,5 @@ export class CitationSearchModal extends SuggestModal<Entry> {
     if (ev.key == 'Enter' || ev.key == 'Tab') {
       (this as unknown as SuggestModalExt<Entry>).chooser.useSelectedItem(ev);
     }
-  }
-}
-
-export class OpenNoteAction implements SearchAction {
-  name = 'Open literature note';
-  constructor(private plugin: CitationPlugin) {}
-
-  onChoose = async (item: Entry, evt: MouseEvent | KeyboardEvent) => {
-    if (evt instanceof MouseEvent || evt.key == 'Enter') {
-      const newPane = evt instanceof KeyboardEvent && evt.ctrlKey;
-      await this.plugin.editorActions.openLiteratureNote(item.id, newPane);
-    } else if (evt.key == 'Tab') {
-      if (evt.shiftKey) {
-        const files = item.files || [];
-        const pdfPaths = files.filter((path) =>
-          path.toLowerCase().endsWith('pdf'),
-        );
-        if (pdfPaths.length == 0) {
-          new Notice('This reference has no associated PDF files.');
-        } else {
-          open(`file://${pdfPaths[0]}`);
-        }
-      } else {
-        open(item.zoteroSelectURI);
-      }
-    }
-  };
-
-  getInstructions() {
-    return [
-      { command: '↑↓', purpose: 'to navigate' },
-      { command: '↵', purpose: 'to open literature note' },
-      { command: 'ctrl ↵', purpose: 'to open literature note in a new pane' },
-      { command: 'tab', purpose: 'open in Zotero' },
-      { command: 'shift tab', purpose: 'open PDF' },
-      { command: 'esc', purpose: 'to dismiss' },
-    ];
-  }
-}
-
-export class InsertNoteLinkAction implements SearchAction {
-  name = 'Insert literature note link';
-  constructor(private plugin: CitationPlugin) {}
-
-  onChoose = async (item: Entry) => {
-    await this.plugin.editorActions.insertLiteratureNoteLink(item.id);
-  };
-
-  getInstructions() {
-    return [
-      { command: '↑↓', purpose: 'to navigate' },
-      { command: '↵', purpose: 'to insert literature note reference' },
-      { command: 'esc', purpose: 'to dismiss' },
-    ];
-  }
-}
-
-export class InsertNoteContentAction implements SearchAction {
-  name = 'Insert literature note content';
-  constructor(private plugin: CitationPlugin) {}
-
-  onChoose = (item: Entry) => {
-    this.plugin.editorActions.insertLiteratureNoteContent(item.id);
-  };
-
-  getInstructions() {
-    return [
-      { command: '↑↓', purpose: 'to navigate' },
-      {
-        command: '↵',
-        purpose: 'to insert literature note content in active pane',
-      },
-      { command: 'esc', purpose: 'to dismiss' },
-    ];
-  }
-}
-
-export class InsertCitationAction implements SearchAction {
-  name = 'Insert citation';
-  constructor(private plugin: CitationPlugin) {}
-
-  onChoose = (item: Entry, evt: MouseEvent | KeyboardEvent) => {
-    const isAlternative = evt instanceof KeyboardEvent && evt.shiftKey;
-    this.plugin.editorActions.insertMarkdownCitation(item.id, isAlternative);
-  };
-
-  getInstructions() {
-    return [
-      { command: '↑↓', purpose: 'to navigate' },
-      { command: '↵', purpose: 'to insert Markdown citation' },
-      { command: 'shift ↵', purpose: 'to insert secondary Markdown citation' },
-      { command: 'esc', purpose: 'to dismiss' },
-    ];
   }
 }

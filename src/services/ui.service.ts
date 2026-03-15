@@ -1,12 +1,10 @@
 import { App, Notice } from 'obsidian';
 import { LoadingStatus, LibraryState } from '../library/library-state';
-import {
-  CitationSearchModal,
-  InsertCitationAction,
-  InsertNoteLinkAction,
-  InsertNoteContentAction,
-  OpenNoteAction,
-} from '../modals';
+import { CitationSearchModal } from '../ui/modals/citation-search-modal';
+import { InsertCitationAction } from '../ui/modals/actions/insert-citation.action';
+import { InsertNoteLinkAction } from '../ui/modals/actions/insert-note-link.action';
+import { InsertNoteContentAction } from '../ui/modals/actions/insert-note-content.action';
+import { OpenNoteAction } from '../ui/modals/actions/open-note.action';
 import CitationPlugin from '../main';
 import { IUIService } from '../container';
 

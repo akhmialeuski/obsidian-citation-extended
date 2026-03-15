@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { App } from 'obsidian';
-import { CitationSearchModal } from './modals';
+import { CitationSearchModal } from './ui/modals/citation-search-modal';
 import CitationPlugin from './main';
 
 // Mock Obsidian
