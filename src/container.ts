@@ -1,6 +1,6 @@
 import { FileSystemAdapter, Vault } from 'obsidian';
 import { Entry, Library, TemplateContext } from './types';
-import { LibraryState } from './library-state';
+import { LibraryState } from './library/library-state';
 import {
   DataSource,
   DataSourceDefinition,
@@ -15,7 +15,7 @@ import {
   IntrospectionService,
   VariableDefinition,
 } from './services/introspection.service';
-import { StoreSubscriber } from './store';
+import { StoreSubscriber } from './library/library-store';
 import { TFile } from 'obsidian';
 
 // ---------------------------------------------------------------------------

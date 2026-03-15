@@ -3,7 +3,7 @@ import * as path from 'path';
 import { CitationsPluginSettings } from '../settings';
 import { Entry, Library, ParseErrorInfo } from '../types';
 import { Notifier, WorkerManager } from '../util';
-import { LoadingStatus, LibraryState } from '../library-state';
+import { LoadingStatus, LibraryState } from '../library/library-state';
 import CitationEvents from '../events';
 import {
   DataSource,
@@ -17,7 +17,7 @@ import {
   VariableDefinition,
 } from './introspection.service';
 import { ILibraryService, IDataSourceFactory } from '../container';
-import { LibraryStore } from '../store';
+import { LibraryStore } from '../library/library-store';
 import { LocalFileSource } from '../sources/local-file-source';
 
 const LOAD_TIMEOUT_MS = 10_000;

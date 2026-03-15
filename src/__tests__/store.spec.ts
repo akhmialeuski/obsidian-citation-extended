@@ -1,5 +1,5 @@
-import { LibraryStore } from '../store';
-import { LoadingStatus } from '../library-state';
+import { LibraryStore } from '../library/library-store';
+import { LoadingStatus } from '../library/library-state';
 
 describe('LibraryStore', () => {
   let store: LibraryStore;

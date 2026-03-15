@@ -3,7 +3,7 @@ import { CitationsPluginSettings } from '../settings';
 import CitationEvents from '../events';
 import { FileSystemAdapter } from 'obsidian';
 import { WorkerManager } from '../util';
-import { LoadingStatus } from '../library-state';
+import { LoadingStatus } from '../library/library-state';
 
 import { LocalFileSource } from '../sources/local-file-source';
 

@@ -1,7 +1,7 @@
 import { App, EventRef, Notice, SuggestModal } from 'obsidian';
 import CitationPlugin from './main';
 import { Entry } from './types';
-import { LibraryState, LoadingStatus } from './library-state';
+import { LibraryState, LoadingStatus } from './library/library-state';
 
 // Stub some methods we know are there..
 interface SuggestModalExt<T> extends SuggestModal<T> {

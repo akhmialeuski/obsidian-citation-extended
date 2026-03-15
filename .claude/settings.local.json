@@ -7,7 +7,15 @@
       "Bash(npm test:*)",
       "Bash(npm i:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git mv:*)",
+      "Bash(sed -i \"s|from ''./library-state''|from ''./library/library-state''|g\" src/container.ts src/events.ts src/modals.ts)",
+      "Bash(sed -i \"s|from ''./store''|from ''./library/library-store''|g\" src/container.ts)",
+      "Bash(sed -i \"s|from ''../library-state''|from ''../library/library-state''|g\" src/services/library.service.ts src/services/ui.service.ts)",
+      "Bash(sed -i \"s|from ''../store''|from ''../library/library-store''|g\" src/services/library.service.ts)",
+      "Bash(sed -i \"s|from ''../library-state''|from ''../library/library-state''|g\" src/__tests__/library-loading.spec.ts src/__tests__/store.spec.ts)",
+      "Bash(sed -i \"s|from ''../store''|from ''../library/library-store''|g\" src/__tests__/store.spec.ts)",
+      "Bash(sed -i \"s|from ''../../library-state''|from ''../../library/library-state''|g\" src/services/__tests__/library.service.spec.ts)"
     ]
   }
 }

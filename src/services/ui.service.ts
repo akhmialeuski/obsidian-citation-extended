@@ -1,5 +1,5 @@
 import { App } from 'obsidian';
-import { LoadingStatus, LibraryState } from '../library-state';
+import { LoadingStatus, LibraryState } from '../library/library-state';
 import {
   CitationSearchModal,
   InsertCitationAction,

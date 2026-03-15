@@ -3,7 +3,7 @@
  */
 
 import { Events, EventRef } from 'obsidian';
-import { LibraryState } from './library-state';
+import { LibraryState } from './library/library-state';
 
 /**
  * Generic callback type that matches all overload signatures.
