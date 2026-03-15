@@ -213,12 +213,6 @@ export class CitationSettingTab extends PluginSettingTab {
       return false;
     }
   }
-
-  // Legacy method kept for compatibility if needed, but unused in new UI
-  showCitationExportPathSuccess(): void {
-    // no-op
-  }
-
   private displayLiteratureNoteSettings(containerEl: HTMLElement): void {
     this.buildSetting(
       containerEl,
