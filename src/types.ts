@@ -184,19 +184,44 @@ export abstract class Entry {
 
   protected _note?: string[];
 
+  /**
+   * Decode HTML entities and parser artifacts from bibtex-parser output.
+   *
+   * The parser produces several encodings depending on input:
+   *   \textless / \textgreater  →  &lt; / &gt;
+   *   &lt; / &gt; in input      →  &amp;lt; / &amp;gt; (double-encoded)
+   *   plain < / > in braces     →  ¡ / ¿  (inverted punctuation)
+   */
+  protected static decodeHtmlEntities(text: string): string {
+    return (
+      text
+        // Double-encoded entities first
+        .replace(/&amp;lt;/g, '<')
+        .replace(/&amp;gt;/g, '>')
+        .replace(/&amp;amp;/g, '&')
+        .replace(/&amp;quot;/g, '"')
+        // Single-encoded entities
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        // Parser artifact: ¡ / ¿ used as < / > substitutes
+        .replace(/¡/g, '<')
+        .replace(/¿/g, '>')
+    );
+  }
+
   public get note(): string {
     return (
       this._note
         ?.map((el) => {
-          // Check if the element contains an HTML anchor tag from bibtex-parser
-          if (el.match(/<a href="[^"]+">[^<]+<\/a>/)) {
-            return el.replace(/<a href="([^"]+)">([^<]+)<\/a>/g, '[$2]($1)');
-          }
-          // Fallback for older parser versions or raw links (though regex below was problematic, we'll keep a safer version if needed or just drop it if v6 covers everything)
-          // The previous regex was: .replace(/(zotero:\/\/[^})\s]+)/g, '[Link]($1)')
-          // We can keep a fallback but make it less aggressive or just rely on the parser.
-          // Given the issue, let's just do the conversion if it's an anchor tag, otherwise return text.
-          return el;
+          // Convert HTML anchor tags from bibtex-parser to Markdown links.
+          // Parser may output <a href> (from \href) or ¡a href¿ (from raw HTML).
+          el = el.replace(/<a href="([^"]+)">([^<]+)<\/a>/g, '[$2]($1)');
+          el = el.replace(/¡a href="([^"]+)"¿([^¡]*)¡\/a¿/g, '[$2]($1)');
+          // Decode HTML entities that bibtex-parser may produce
+          return Entry.decodeHtmlEntities(el);
         })
         .join('\n\n') || ''
     );
