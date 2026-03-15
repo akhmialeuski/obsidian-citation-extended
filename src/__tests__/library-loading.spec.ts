@@ -31,12 +31,15 @@ jest.mock(
   { virtual: true },
 );
 
-jest.mock('../util', () => ({
+jest.mock('../ui/notifier', () => ({
   Notifier: jest.fn().mockImplementation(() => ({
     show: jest.fn(),
     hide: jest.fn(),
     unload: jest.fn(),
   })),
+}));
+
+jest.mock('../util', () => ({
   WorkerManager: jest.fn().mockImplementation(() => ({
     dispose: jest.fn(),
   })),

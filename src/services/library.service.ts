@@ -2,7 +2,8 @@ import { FileSystemAdapter, Notice } from 'obsidian';
 import * as path from 'path';
 import { CitationsPluginSettings } from '../settings';
 import { Entry, Library, ParseErrorInfo } from '../types';
-import { Notifier, WorkerManager } from '../util';
+import { WorkerManager } from '../util';
+import { Notifier } from '../ui/notifier';
 import { LoadingStatus, LibraryState } from '../library/library-state';
 import CitationEvents from '../events';
 import {

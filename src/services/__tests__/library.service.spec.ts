@@ -50,13 +50,16 @@ jest.mock('fs', () => {
 // Mock util
 const mockWorkerManagerPost = jest.fn().mockResolvedValue([]);
 
+jest.mock('../../ui/notifier', () => ({
+  Notifier: class {
+    show = jest.fn();
+    hide = jest.fn();
+    unload = jest.fn();
+  },
+}));
+
 jest.mock('../../util', () => {
   return {
-    Notifier: class {
-      show = jest.fn();
-      hide = jest.fn();
-      unload = jest.fn();
-    },
     WorkerManager: class {
       post = mockWorkerManagerPost;
       dispose = jest.fn();

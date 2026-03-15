@@ -1,4 +1,5 @@
-import { Notifier, WorkerManager } from './util';
+import { WorkerManager } from './util';
+import { Notifier } from './ui/notifier';
 import { Notice } from 'obsidian';
 
 jest.mock(

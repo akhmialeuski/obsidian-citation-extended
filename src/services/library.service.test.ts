@@ -2,7 +2,8 @@ import { LibraryService } from './library.service';
 import { CitationsPluginSettings } from '../settings';
 import CitationEvents from '../events';
 import { FileSystemAdapter } from 'obsidian';
-import { Notifier, WorkerManager } from '../util';
+import { WorkerManager } from '../util';
+import { Notifier } from '../ui/notifier';
 
 jest.mock(
   'obsidian',
@@ -26,6 +27,7 @@ jest.mock(
 );
 jest.mock('../events');
 jest.mock('../util');
+jest.mock('../ui/notifier');
 jest.mock(
   'web-worker:../worker',
   () => {
