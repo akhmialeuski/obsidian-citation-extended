@@ -38,15 +38,17 @@ describe('YAML Colon Handling', () => {
     settings.literatureNoteContentTemplate =
       DEFAULT_SETTINGS.literatureNoteContentTemplate;
     const variables = templateService.getTemplateVariables(mockEntry);
-    const content = templateService.getContent(variables);
+    const contentResult = templateService.getContent(variables);
 
-    // Expect quoted title now
+    expect(contentResult.ok).toBe(true);
+    if (!contentResult.ok) return;
+    const content = contentResult.value;
+
     expect(content).toContain('title: "My Title: A Subtitle"');
 
-    // Check YAML validity for title line
     const titleLine = content
       .split('\n')
-      .find((line) => line.startsWith('title:'));
+      .find((line: string) => line.startsWith('title:'));
     expect(titleLine).toBe('title: "My Title: A Subtitle"');
   });
 
@@ -57,12 +59,14 @@ describe('YAML Colon Handling', () => {
       toJSON: () => entryWithQuotes,
     } as unknown as Entry;
     settings.literatureNoteContentTemplate =
-      DEFAULT_SETTINGS.literatureNoteContentTemplate; // uses {{quote title}}
+      DEFAULT_SETTINGS.literatureNoteContentTemplate;
 
     const variables = templateService.getTemplateVariables(entryWithQuotes);
-    const content = templateService.getContent(variables);
+    const contentResult = templateService.getContent(variables);
 
-    // JSON.stringify('My "Quoted" Title') -> "My \"Quoted\" Title"
-    expect(content).toContain('title: "My \\"Quoted\\" Title"');
+    expect(contentResult.ok).toBe(true);
+    if (!contentResult.ok) return;
+
+    expect(contentResult.value).toContain('title: "My \\"Quoted\\" Title"');
   });
 });

@@ -2,7 +2,7 @@ import { FileSystemAdapter } from 'obsidian';
 import * as chokidar from 'chokidar';
 import * as fs from 'fs';
 import * as path from 'path';
-import { DataSource } from '../data-source';
+import { DataSource, DataSourceLoadResult } from '../data-source';
 import {
   Entry,
   EntryData,
@@ -45,11 +45,10 @@ export class LocalFileSource implements DataSource {
   /**
    * Load entries from the local file
    */
-  async load(): Promise<Entry[]> {
+  async load(): Promise<DataSourceLoadResult> {
     const resolvedPath = this.resolveFilePath();
 
     try {
-      // Integrity check: File exists and not empty
       const stats = await fs.promises.stat(resolvedPath);
       if (!stats || stats.size === 0) {
         throw new Error(
@@ -57,22 +56,21 @@ export class LocalFileSource implements DataSource {
         );
       }
 
-      // Read file using FileSystemAdapter
       const buffer = await FileSystemAdapter.readLocalFile(resolvedPath);
-
-      // Decode file as UTF-8
       const dataView = new DataView(buffer);
       const decoder = new TextDecoder('utf8');
       const value = decoder.decode(dataView);
 
-      // Parse using worker
-      const entries: EntryData[] = await this.loadWorker.post({
+      const rawEntries: EntryData[] = await this.loadWorker.post({
         databaseRaw: value,
         databaseType: this.format,
       });
 
-      // Convert to Entry objects using appropriate adapter
-      return this.convertToEntries(entries);
+      return {
+        sourceId: this.id,
+        entries: this.convertToEntries(rawEntries),
+        modifiedAt: stats.mtime,
+      };
     } catch (error) {
       console.error(`Failed to load from ${this.filePath}:`, error);
       throw new Error(

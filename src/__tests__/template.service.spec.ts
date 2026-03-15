@@ -1,6 +1,11 @@
 import { TemplateService } from '../services/template.service';
 import { CitationsPluginSettings } from '../settings';
 import { TemplateContext, Entry } from '../types';
+import { Result } from '../result';
+
+function expectOk<T>(result: Result<T>, expected: T) {
+  expect(result).toEqual({ ok: true, value: expected });
+}
 
 describe('TemplateService', () => {
   let service: TemplateService;
@@ -24,222 +29,256 @@ describe('TemplateService', () => {
 
   describe('Comparison Helpers', () => {
     it('should handle eq helper', () => {
-      expect(
+      expectOk(
         service.render('{{#if (eq 1 1)}}true{{else}}false{{/if}}', mockContext),
-      ).toBe('true');
-      expect(
+        'true',
+      );
+      expectOk(
         service.render('{{#if (eq 1 2)}}true{{else}}false{{/if}}', mockContext),
-      ).toBe('false');
+        'false',
+      );
     });
 
     it('should handle ne helper', () => {
-      expect(
+      expectOk(
         service.render('{{#if (ne 1 2)}}true{{else}}false{{/if}}', mockContext),
-      ).toBe('true');
-      expect(
+        'true',
+      );
+      expectOk(
         service.render('{{#if (ne 1 1)}}true{{else}}false{{/if}}', mockContext),
-      ).toBe('false');
+        'false',
+      );
     });
 
     it('should handle gt helper', () => {
-      expect(
+      expectOk(
         service.render('{{#if (gt 2 1)}}true{{else}}false{{/if}}', mockContext),
-      ).toBe('true');
-      expect(
+        'true',
+      );
+      expectOk(
         service.render('{{#if (gt 1 2)}}true{{else}}false{{/if}}', mockContext),
-      ).toBe('false');
+        'false',
+      );
     });
 
     it('should handle lt helper', () => {
-      expect(
+      expectOk(
         service.render('{{#if (lt 1 2)}}true{{else}}false{{/if}}', mockContext),
-      ).toBe('true');
-      expect(
+        'true',
+      );
+      expectOk(
         service.render('{{#if (lt 2 1)}}true{{else}}false{{/if}}', mockContext),
-      ).toBe('false');
+        'false',
+      );
     });
 
     it('should handle gte helper', () => {
-      expect(
+      expectOk(
         service.render(
           '{{#if (gte 2 1)}}true{{else}}false{{/if}}',
           mockContext,
         ),
-      ).toBe('true');
-      expect(
+        'true',
+      );
+      expectOk(
         service.render(
           '{{#if (gte 1 1)}}true{{else}}false{{/if}}',
           mockContext,
         ),
-      ).toBe('true');
-      expect(
+        'true',
+      );
+      expectOk(
         service.render(
           '{{#if (gte 1 2)}}true{{else}}false{{/if}}',
           mockContext,
         ),
-      ).toBe('false');
+        'false',
+      );
     });
 
     it('should handle lte helper', () => {
-      expect(
+      expectOk(
         service.render(
           '{{#if (lte 1 2)}}true{{else}}false{{/if}}',
           mockContext,
         ),
-      ).toBe('true');
-      expect(
+        'true',
+      );
+      expectOk(
         service.render(
           '{{#if (lte 1 1)}}true{{else}}false{{/if}}',
           mockContext,
         ),
-      ).toBe('true');
-      expect(
+        'true',
+      );
+      expectOk(
         service.render(
           '{{#if (lte 2 1)}}true{{else}}false{{/if}}',
           mockContext,
         ),
-      ).toBe('false');
+        'false',
+      );
     });
   });
 
   describe('Boolean Helpers', () => {
     it('should handle and helper', () => {
-      expect(
+      expectOk(
         service.render(
           '{{#if (and true true)}}true{{else}}false{{/if}}',
           mockContext,
         ),
-      ).toBe('true');
-      expect(
+        'true',
+      );
+      expectOk(
         service.render(
           '{{#if (and true false)}}true{{else}}false{{/if}}',
           mockContext,
         ),
-      ).toBe('false');
-      expect(
+        'false',
+      );
+      expectOk(
         service.render(
           '{{#if (and true true true)}}true{{else}}false{{/if}}',
           mockContext,
         ),
-      ).toBe('true');
+        'true',
+      );
     });
 
     it('should handle or helper', () => {
-      expect(
+      expectOk(
         service.render(
           '{{#if (or true false)}}true{{else}}false{{/if}}',
           mockContext,
         ),
-      ).toBe('true');
-      expect(
+        'true',
+      );
+      expectOk(
         service.render(
           '{{#if (or false false)}}true{{else}}false{{/if}}',
           mockContext,
         ),
-      ).toBe('false');
+        'false',
+      );
     });
 
     it('should handle not helper', () => {
-      expect(
+      expectOk(
         service.render(
           '{{#if (not false)}}true{{else}}false{{/if}}',
           mockContext,
         ),
-      ).toBe('true');
-      expect(
+        'true',
+      );
+      expectOk(
         service.render(
           '{{#if (not true)}}true{{else}}false{{/if}}',
           mockContext,
         ),
-      ).toBe('false');
+        'false',
+      );
     });
   });
 
   describe('String Helpers', () => {
     it('should handle replace helper', () => {
-      expect(
+      expectOk(
         service.render(
           '{{replace "hello world" "world" "universe"}}',
           mockContext,
         ),
-      ).toBe('hello universe');
-      expect(
+        'hello universe',
+      );
+      expectOk(
         service.render('{{replace "hello world" "o" "a"}}', mockContext),
-      ).toBe('hella warld');
+        'hella warld',
+      );
     });
 
     it('should handle truncate helper', () => {
-      expect(service.render('{{truncate "hello world" 5}}', mockContext)).toBe(
+      expectOk(
+        service.render('{{truncate "hello world" 5}}', mockContext),
         'hello',
       );
-      expect(service.render('{{truncate "hello" 10}}', mockContext)).toBe(
-        'hello',
-      );
+      expectOk(service.render('{{truncate "hello" 10}}', mockContext), 'hello');
     });
   });
 
   describe('Regex Helpers', () => {
     it('should handle match helper', () => {
-      expect(
+      expectOk(
         service.render('{{match "hello world" "hello"}}', mockContext),
-      ).toBe('hello');
-      expect(
+        'hello',
+      );
+      expectOk(
         service.render('{{match "hello world" "\\w+"}}', mockContext),
-      ).toBe('hello');
-      expect(
+        'hello',
+      );
+      expectOk(
         service.render('{{match "hello world" "universe"}}', mockContext),
-      ).toBe('');
+        '',
+      );
     });
   });
 
   describe('Nested Helpers', () => {
     it('should handle nested helpers', () => {
-      expect(
+      expectOk(
         service.render(
           '{{#if (and (eq 1 1) (gt 2 1))}}true{{else}}false{{/if}}',
           mockContext,
         ),
-      ).toBe('true');
-      expect(
+        'true',
+      );
+      expectOk(
         service.render(
           '{{#if (or (eq 1 2) (lt 1 2))}}true{{else}}false{{/if}}',
           mockContext,
         ),
-      ).toBe('true');
+        'true',
+      );
     });
   });
   describe('Path Helpers', () => {
     it('should handle urlEncode helper', () => {
-      expect(service.render('{{urlEncode "hello world"}}', mockContext)).toBe(
+      expectOk(
+        service.render('{{urlEncode "hello world"}}', mockContext),
         'hello%20world',
       );
     });
 
     it('should handle basename helper', () => {
-      expect(
+      expectOk(
         service.render('{{basename "/path/to/file.pdf"}}', mockContext),
-      ).toBe('file.pdf');
-      expect(
+        'file.pdf',
+      );
+      expectOk(
         service.render('{{basename "C:\\path\\to\\file.pdf"}}', mockContext),
-      ).toBe('file.pdf');
+        'file.pdf',
+      );
     });
 
     it('should handle filename helper', () => {
-      expect(
+      expectOk(
         service.render('{{filename "/path/to/file.pdf"}}', mockContext),
-      ).toBe('file');
-      expect(
+        'file',
+      );
+      expectOk(
         service.render('{{filename "C:\\path\\to\\file.pdf"}}', mockContext),
-      ).toBe('file');
+        'file',
+      );
     });
 
     it('should handle dirname helper', () => {
-      expect(
+      expectOk(
         service.render('{{dirname "/path/to/file.pdf"}}', mockContext),
-      ).toBe('/path/to');
-      expect(
+        '/path/to',
+      );
+      expectOk(
         service.render('{{dirname "C:\\path\\to\\file.pdf"}}', mockContext),
-      ).toBe('C:\\path\\to');
+        'C:\\path\\to',
+      );
     });
   });
 

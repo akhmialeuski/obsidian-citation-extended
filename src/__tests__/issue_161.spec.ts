@@ -95,6 +95,7 @@ describe('Issue 161: Insert Literature Note Link', () => {
     } as unknown as NoteService;
 
     plugin.libraryService = {
+      isLibraryLoading: false,
       library: {
         entries: {
           test_key: {
@@ -107,10 +108,9 @@ describe('Issue 161: Insert Literature Note Link', () => {
       },
     } as unknown as LibraryService;
 
-    // Mock Template Service methods used in main.ts
     plugin.templateService = {
       getTemplateVariables: jest.fn(),
-      getTitle: jest.fn().mockReturnValue('Test Article'),
+      getTitle: jest.fn().mockReturnValue({ ok: true, value: 'Test Article' }),
     } as unknown as CitationPlugin['templateService'];
   });
 

@@ -1,8 +1,11 @@
 import Handlebars from 'handlebars';
 import { CitationsPluginSettings } from '../settings';
 import { Author, Entry, TemplateContext } from '../types';
+import { Result, ok, err } from '../result';
+import { TemplateRenderError } from '../errors';
+import { ITemplateService } from '../container';
 
-export class TemplateService {
+export class TemplateService implements ITemplateService {
   private templateSettings = {
     noEscape: true,
   };
@@ -12,27 +15,37 @@ export class TemplateService {
   }
 
   private registerHelpers() {
-    // Comparison helpers
-    Handlebars.registerHelper('eq', (a, b) => a == b);
-    Handlebars.registerHelper('ne', (a, b) => a != b);
-    Handlebars.registerHelper('gt', (a, b) => a > b);
-    Handlebars.registerHelper('lt', (a, b) => a < b);
-    Handlebars.registerHelper('gte', (a, b) => a >= b);
-    Handlebars.registerHelper('lte', (a, b) => a <= b);
+    // Loose equality is intentional for flexible template comparisons
+    Handlebars.registerHelper('eq', (a: unknown, b: unknown) => a == b);
+    // Loose equality is intentional for flexible template comparisons
+    Handlebars.registerHelper('ne', (a: unknown, b: unknown) => a != b);
+    Handlebars.registerHelper(
+      'gt',
+      (a: unknown, b: unknown) => (a as number) > (b as number),
+    );
+    Handlebars.registerHelper(
+      'lt',
+      (a: unknown, b: unknown) => (a as number) < (b as number),
+    );
+    Handlebars.registerHelper(
+      'gte',
+      (a: unknown, b: unknown) => (a as number) >= (b as number),
+    );
+    Handlebars.registerHelper(
+      'lte',
+      (a: unknown, b: unknown) => (a as number) <= (b as number),
+    );
 
-    // Boolean helpers
-    Handlebars.registerHelper('and', (...args) => {
-      // Handlebars passes an options object as the last argument
+    Handlebars.registerHelper('and', (...args: unknown[]) => {
       const actualArgs = args.slice(0, -1);
       return actualArgs.every(Boolean);
     });
-    Handlebars.registerHelper('or', (...args) => {
+    Handlebars.registerHelper('or', (...args: unknown[]) => {
       const actualArgs = args.slice(0, -1);
       return actualArgs.some(Boolean);
     });
-    Handlebars.registerHelper('not', (value) => !value);
+    Handlebars.registerHelper('not', (value: unknown) => !value);
 
-    // String helpers
     Handlebars.registerHelper(
       'replace',
       (value: string, pattern: string, replacement: string) => {
@@ -46,14 +59,12 @@ export class TemplateService {
       return value.substring(0, length);
     });
 
-    // Regex helpers
     Handlebars.registerHelper('match', (value: string, pattern: string) => {
       if (typeof value !== 'string') return '';
       const match = value.match(new RegExp(pattern));
       return match ? match[0] : '';
     });
 
-    // Formatting helpers
     Handlebars.registerHelper('quote', (value: unknown) => {
       return JSON.stringify(value);
     });
@@ -81,29 +92,30 @@ export class TemplateService {
       if (typeof value !== 'string') return value;
       return value.split(separator);
     });
-    Handlebars.registerHelper('formatNames', (authors: unknown, options) => {
-      if (!Array.isArray(authors)) return '';
-      // options.hash contains named arguments
-      const max = options.hash.max || 2;
-      const etAl = options.hash.etAl || ' et al.';
-      const connector = options.hash.connector || ' and ';
+    Handlebars.registerHelper(
+      'formatNames',
+      (authors: unknown, options: Handlebars.HelperOptions) => {
+        if (!Array.isArray(authors)) return '';
+        const max = (options.hash.max as number) || 2;
+        const etAl = (options.hash.etAl as string) || ' et al.';
+        const connector = (options.hash.connector as string) || ' and ';
 
-      const authorList = authors as Author[];
-      const names = authorList.map(
-        (a) => a.literal || a.family || a.given || '',
-      );
+        const authorList = authors as Author[];
+        const names = authorList.map(
+          (a) => a.literal || a.family || a.given || '',
+        );
 
-      if (names.length === 0) return '';
-      if (names.length === 1) return names[0];
+        if (names.length === 0) return '';
+        if (names.length === 1) return names[0];
 
-      if (names.length <= max) {
-        const last = names.pop();
-        return names.join(', ') + connector + last;
-      }
+        if (names.length <= max) {
+          const last = names.pop();
+          return names.join(', ') + connector + last;
+        }
 
-      // If more than max, return first author + et al
-      return names[0] + etAl;
-    });
+        return names[0] + etAl;
+      },
+    );
   }
 
   public getTemplateVariables(entry: Entry): TemplateContext {
@@ -141,23 +153,38 @@ export class TemplateService {
     return { entry: entry.toJSON(), ...shortcuts };
   }
 
-  public render(templateStr: string, variables: TemplateContext): string {
-    const template = Handlebars.compile(templateStr, this.templateSettings);
-    return template(variables);
+  public render(
+    templateStr: string,
+    variables: TemplateContext,
+  ): Result<string, TemplateRenderError> {
+    try {
+      const template = Handlebars.compile(templateStr, this.templateSettings);
+      return ok(template(variables));
+    } catch (e) {
+      return err(
+        new TemplateRenderError(
+          `Template render failed: ${(e as Error).message}`,
+        ),
+      );
+    }
   }
 
-  public getTitle(variables: TemplateContext): string {
+  public getTitle(
+    variables: TemplateContext,
+  ): Result<string, TemplateRenderError> {
     return this.render(this.settings.literatureNoteTitleTemplate, variables);
   }
 
-  public getContent(variables: TemplateContext): string {
+  public getContent(
+    variables: TemplateContext,
+  ): Result<string, TemplateRenderError> {
     return this.render(this.settings.literatureNoteContentTemplate, variables);
   }
 
   public getMarkdownCitation(
     variables: TemplateContext,
     alternative = false,
-  ): string {
+  ): Result<string, TemplateRenderError> {
     const templateStr = alternative
       ? this.settings.alternativeMarkdownCitationTemplate
       : this.settings.markdownCitationTemplate;

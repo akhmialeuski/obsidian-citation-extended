@@ -34,8 +34,12 @@ describe('NoteService', () => {
     jest
       .spyOn(templateService, 'getTemplateVariables')
       .mockReturnValue({} as unknown as TemplateContext); // TemplateContext is complex to mock fully
-    jest.spyOn(templateService, 'getTitle').mockReturnValue('My Title');
-    jest.spyOn(templateService, 'getContent').mockReturnValue('My Content');
+    jest
+      .spyOn(templateService, 'getTitle')
+      .mockReturnValue({ ok: true, value: 'My Title' });
+    jest
+      .spyOn(templateService, 'getContent')
+      .mockReturnValue({ ok: true, value: 'My Content' });
 
     noteService = new NoteService(app, settings, templateService);
 
