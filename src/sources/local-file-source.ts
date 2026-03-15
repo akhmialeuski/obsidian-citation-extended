@@ -11,6 +11,7 @@ import {
   DatabaseType,
   EntryDataBibLaTeX,
   EntryDataCSL,
+  WorkerResponse,
 } from '../types';
 import { WorkerManager } from '../util';
 
@@ -61,15 +62,16 @@ export class LocalFileSource implements DataSource {
       const decoder = new TextDecoder('utf8');
       const value = decoder.decode(dataView);
 
-      const rawEntries: EntryData[] = await this.loadWorker.post({
+      const result: WorkerResponse = await this.loadWorker.post({
         databaseRaw: value,
         databaseType: this.format,
       });
 
       return {
         sourceId: this.id,
-        entries: this.convertToEntries(rawEntries),
+        entries: this.convertToEntries(result.entries),
         modifiedAt: stats.mtime,
+        parseErrors: result.parseErrors,
       };
     } catch (error) {
       console.error(`Failed to load from ${this.filePath}:`, error);

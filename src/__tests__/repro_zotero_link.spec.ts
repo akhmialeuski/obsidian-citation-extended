@@ -9,9 +9,9 @@ describe('Zotero Link Reproduction', () => {
 `;
 
   it('should preserve the link text in the note field', () => {
-    const entries = loadEntries(bibtexLibrary, 'biblatex');
+    const result = loadEntries(bibtexLibrary, 'biblatex');
     const entry = new EntryBibLaTeXAdapter(
-      entries[0] as unknown as EntryDataBibLaTeX,
+      result.entries[0] as unknown as EntryDataBibLaTeX,
     );
 
     // We expect the text "Morrison 2020:366" to be preserved in the link

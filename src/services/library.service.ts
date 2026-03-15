@@ -1,7 +1,7 @@
-import { FileSystemAdapter } from 'obsidian';
+import { FileSystemAdapter, Notice } from 'obsidian';
 import * as path from 'path';
 import { CitationsPluginSettings } from '../settings';
-import { Entry, Library } from '../types';
+import { Entry, Library, ParseErrorInfo } from '../types';
 import { Notifier, WorkerManager } from '../util';
 import { LoadingStatus, LibraryState } from '../library-state';
 import CitationEvents from '../events';
@@ -33,6 +33,7 @@ export interface SourceMetadata {
   sourceId: string;
   databaseName: string;
   entryCount: number;
+  parseErrorCount: number;
   modifiedAt?: Date;
 }
 
@@ -222,13 +223,22 @@ export class LibraryService implements ILibraryService {
         throw errors[0];
       }
 
+      let totalParseErrors = 0;
+      const allParseErrors: ParseErrorInfo[] = [];
+
       this.sourceMetadata = successfulResults.map((r) => {
         const sourceIndex = parseInt(r.sourceId.replace('source-', ''), 10);
+        const errorCount = r.parseErrors?.length ?? 0;
+        totalParseErrors += errorCount;
+        if (r.parseErrors) {
+          allParseErrors.push(...r.parseErrors);
+        }
         return {
           sourceId: r.sourceId,
           databaseName:
             this.settings.databases[sourceIndex]?.name ?? r.sourceId,
           entryCount: r.entries.length,
+          parseErrorCount: errorCount,
           modifiedAt: r.modifiedAt,
         };
       });
@@ -249,6 +259,16 @@ export class LibraryService implements ILibraryService {
         lastLoaded: new Date(),
         progress: { current: this.library.size, total: this.library.size },
       });
+
+      if (totalParseErrors > 0) {
+        console.warn(
+          `Citation plugin: ${totalParseErrors} entries skipped due to parse errors.`,
+          allParseErrors.slice(0, 5),
+        );
+        new Notice(
+          `Citations: Loaded ${this.library.size} entries. ${totalParseErrors} entries skipped due to parse errors. Check console for details.`,
+        );
+      }
 
       console.debug(
         `Citation plugin: successfully loaded library with ${this.library.size} unique entries from ${totalEntries} total entries across ${this.sources.length} sources.`,

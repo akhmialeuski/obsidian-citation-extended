@@ -1,4 +1,4 @@
-import { Entry, DatabaseType } from './types';
+import { Entry, DatabaseType, ParseErrorInfo } from './types';
 
 /**
  * Discriminates the transport mechanism used by a data source.
@@ -114,4 +114,10 @@ export interface DataSourceLoadResult {
    * Optional modification timestamp for merge strategy
    */
   modifiedAt?: Date;
+
+  /**
+   * Non-fatal parse errors encountered during loading.
+   * Each error represents an entry that was skipped.
+   */
+  parseErrors?: ParseErrorInfo[];
 }

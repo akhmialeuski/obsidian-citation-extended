@@ -8,6 +8,7 @@ import {
   DatabaseType,
   EntryDataBibLaTeX,
   EntryDataCSL,
+  WorkerResponse,
 } from '../types';
 import { WorkerManager } from '../util';
 
@@ -45,15 +46,16 @@ export class VaultFileSource implements DataSource {
         throw new Error(`File is empty: ${this.filePath}`);
       }
 
-      const rawEntries: EntryData[] = await this.loadWorker.post({
+      const result: WorkerResponse = await this.loadWorker.post({
         databaseRaw: content,
         databaseType: this.format,
       });
 
       return {
         sourceId: this.id,
-        entries: this.convertToEntries(rawEntries),
+        entries: this.convertToEntries(result.entries),
         modifiedAt: new Date(file.stat.mtime),
+        parseErrors: result.parseErrors,
       };
     } catch (error) {
       console.error(

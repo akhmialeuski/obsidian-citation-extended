@@ -59,14 +59,17 @@ export class Library {
 export function loadEntries(
   databaseRaw: string,
   databaseType: DatabaseType,
-): EntryData[] {
+): WorkerResponse {
   let libraryArray: EntryData[] = [];
+  const parseErrors: ParseErrorInfo[] = [];
 
   if (databaseType == 'csl-json') {
     libraryArray = JSON.parse(databaseRaw);
   } else if (databaseType == 'biblatex') {
     const options: BibTeXParser.ParserOptions = {
       errorHandler: (err) => {
+        const msg = String(err);
+        parseErrors.push({ message: msg });
         console.warn(
           'Citation plugin: non-fatal error loading BibLaTeX entry:',
           err,
@@ -77,6 +80,8 @@ export function loadEntries(
     const parsed = BibTeXParser.parse(databaseRaw, options);
 
     parsed.errors.forEach((error) => {
+      const msg = `Fatal error (line ${error.line}, column ${error.column}): ${error.message}`;
+      parseErrors.push({ message: msg });
       console.error(
         `Citation plugin: fatal error loading BibLaTeX entry` +
           ` (line ${error.line}, column ${error.column}):`,
@@ -87,7 +92,7 @@ export function loadEntries(
     libraryArray = parsed.entries;
   }
 
-  return libraryArray;
+  return { entries: libraryArray, parseErrors };
 }
 
 export interface Author {
@@ -253,12 +258,19 @@ export interface EntryDataCSL {
   volume?: string;
 }
 
+export interface ParseErrorInfo {
+  message: string;
+}
+
 export interface WorkerRequest {
   databaseRaw: string;
   databaseType: DatabaseType;
 }
 
-export type WorkerResponse = EntryData[];
+export interface WorkerResponse {
+  entries: EntryData[];
+  parseErrors: ParseErrorInfo[];
+}
 
 export function isEntryDataCSL(entry: EntryData): entry is EntryDataCSL {
   return (entry as EntryDataCSL).id !== undefined;

@@ -134,7 +134,7 @@ function matchLibraryRender(
 function loadBibLaTeXEntries(filename: string): EntryDataBibLaTeX[] {
   const biblatexPath = path.join(__dirname, '../../__tests__', filename);
   const biblatex = fs.readFileSync(biblatexPath, 'utf-8');
-  return loadEntries(biblatex, 'biblatex') as EntryDataBibLaTeX[];
+  return loadEntries(biblatex, 'biblatex').entries as EntryDataBibLaTeX[];
 }
 
 describe('TemplateService', () => {
@@ -167,7 +167,7 @@ describe('TemplateService', () => {
     beforeEach(() => {
       const cslPath = path.join(__dirname, '../../__tests__', 'library.json');
       const csl = fs.readFileSync(cslPath, 'utf-8');
-      entries = loadEntries(csl, 'csl-json') as EntryDataCSL[];
+      entries = loadEntries(csl, 'csl-json').entries as EntryDataCSL[];
     });
 
     test('renders correctly', () => {

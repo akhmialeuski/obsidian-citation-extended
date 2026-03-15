@@ -13,7 +13,7 @@ import {
 function loadBibLaTeXEntries(filename: string): EntryDataBibLaTeX[] {
   const biblatexPath = path.join(__dirname, filename);
   const biblatex = fs.readFileSync(biblatexPath, 'utf-8');
-  return loadEntries(biblatex, 'biblatex') as EntryDataBibLaTeX[];
+  return loadEntries(biblatex, 'biblatex').entries as EntryDataBibLaTeX[];
 }
 
 function loadBibLaTeXLibrary(entries: EntryDataBibLaTeX[]): Library {
@@ -76,7 +76,7 @@ describe('csl library', () => {
   beforeEach(() => {
     const cslPath = path.join(__dirname, 'library.json');
     const csl = fs.readFileSync(cslPath, 'utf-8');
-    entries = loadEntries(csl, 'csl-json') as EntryDataCSL[];
+    entries = loadEntries(csl, 'csl-json').entries as EntryDataCSL[];
   });
 
   test('loads', () => {
