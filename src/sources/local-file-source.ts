@@ -62,10 +62,15 @@ export class LocalFileSource implements DataSource {
       const decoder = new TextDecoder('utf8');
       const value = decoder.decode(dataView);
 
-      const result: WorkerResponse = await this.loadWorker.post({
+      const raw = await this.loadWorker.post({
         databaseRaw: value,
         databaseType: this.format,
       });
+
+      // Backward compatibility: a cached worker may still return a plain array
+      const result: WorkerResponse = Array.isArray(raw)
+        ? { entries: raw as EntryData[], parseErrors: [] }
+        : raw;
 
       return {
         sourceId: this.id,

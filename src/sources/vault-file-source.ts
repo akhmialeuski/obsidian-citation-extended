@@ -46,10 +46,15 @@ export class VaultFileSource implements DataSource {
         throw new Error(`File is empty: ${this.filePath}`);
       }
 
-      const result: WorkerResponse = await this.loadWorker.post({
+      const raw = await this.loadWorker.post({
         databaseRaw: content,
         databaseType: this.format,
       });
+
+      // Backward compatibility: a cached worker may still return a plain array
+      const result: WorkerResponse = Array.isArray(raw)
+        ? { entries: raw as EntryData[], parseErrors: [] }
+        : raw;
 
       return {
         sourceId: this.id,

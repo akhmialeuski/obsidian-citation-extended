@@ -49,8 +49,13 @@ export class NoteService {
 
     try {
       await this.app.vault.createFolder(normalized);
-    } catch {
-      // Folder may have been created concurrently
+    } catch (e) {
+      // createFolder throws if the folder already exists (concurrent creation).
+      // Log unexpected errors but don't block note creation.
+      const msg = (e as Error).message || '';
+      if (!msg.includes('Folder already exists')) {
+        console.warn('Citations: could not create folder:', normalized, e);
+      }
     }
   }
 
@@ -118,15 +123,16 @@ export class NoteService {
     throw new Error(`File at ${notePath} is not a TFile`);
   }
 
-  openLiteratureNote(
+  async openLiteratureNote(
     citekey: string,
     library: Library,
     newPane: boolean,
   ): Promise<void> {
-    return this.getOrCreateLiteratureNoteFile(citekey, library)
-      .then(async (file: TFile) => {
-        await this.app.workspace.getLeaf(newPane).openFile(file);
-      })
-      .catch(console.error);
+    try {
+      const file = await this.getOrCreateLiteratureNoteFile(citekey, library);
+      await this.app.workspace.getLeaf(newPane).openFile(file);
+    } catch (e) {
+      console.error('Failed to open literature note:', e);
+    }
   }
 }

@@ -1,3 +1,4 @@
+/** @jest-environment jsdom */
 import { NoteService } from '../note.service';
 import { TemplateService } from '../template.service';
 import { CitationsPluginSettings } from '../../settings';

@@ -76,4 +76,10 @@ describe('Mendeley file path normalization (#175)', () => {
     expect(entry.files.length).toBe(1);
     expect(entry.files[0]).toBe('valid.pdf');
   });
+
+  it('does not strip colon from filenames like file:v2.pdf', () => {
+    const entry = makeEntryWithFile('C:/docs/file:v2.pdf');
+    // :v2.pdf contains a dot, so :[A-Za-z]+$ won't match
+    expect(entry.files[0]).toBe('C:/docs/file:v2.pdf');
+  });
 });

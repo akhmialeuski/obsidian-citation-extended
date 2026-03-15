@@ -206,7 +206,10 @@ export abstract class Entry {
         .replace(/&amp;/g, '&')
         .replace(/&quot;/g, '"')
         .replace(/&#39;/g, "'")
-        // Parser artifact: ¡ / ¿ used as < / > substitutes
+        // Parser artifact: bibtex-parser converts all < / > to ¡ / ¿.
+        // We convert them back globally. Trade-off: legitimate Spanish ¡ / ¿
+        // in note fields will also be converted, but this is rare in academic
+        // BibTeX data while math expressions (5 < x > 3) are common.
         .replace(/¡/g, '<')
         .replace(/¿/g, '>')
     );
@@ -545,7 +548,8 @@ export class EntryBibLaTeXAdapter extends Entry {
     if (p.match(/^:[A-Za-z][\\/]/)) {
       p = p.substring(1);
     }
-    // Strip trailing :PDF, :pdf, :HTML, etc.
+    // Strip trailing :TYPE indicator (e.g. :PDF, :HTML).
+    // Safe: [A-Za-z]+$ only matches pure-letter suffixes — filenames with dots/numbers won't match.
     p = p.replace(/:[A-Za-z]+$/, '');
     // BibTeX escaped colon (Mendeley: C\:\\path → C:\\path after unescape)
     p = p.replace(/\\:/g, ':');
