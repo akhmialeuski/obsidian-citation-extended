@@ -1,5 +1,5 @@
 import { TemplateService } from '../template.service';
-import { CitationsPluginSettings } from '../../settings';
+import { CitationsPluginSettings } from '../../ui/settings/settings';
 import { TemplateContext, Entry } from '../../core';
 import { Result } from '../../core/result';
 

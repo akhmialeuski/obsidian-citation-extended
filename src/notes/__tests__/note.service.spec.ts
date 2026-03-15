@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import { NoteService } from '../note.service';
 import { TemplateService } from '../../template/template.service';
-import { CitationsPluginSettings } from '../../settings';
+import { CitationsPluginSettings } from '../../ui/settings/settings';
 import { Library, Entry, TemplateContext } from '../../core';
 import { TemplateRenderError } from '../../core/errors';
 import { App } from 'obsidian';

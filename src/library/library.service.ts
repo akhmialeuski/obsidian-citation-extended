@@ -1,6 +1,6 @@
 import { FileSystemAdapter } from 'obsidian';
 import * as path from 'path';
-import { CitationsPluginSettings } from '../settings';
+import { CitationsPluginSettings } from '../ui/settings/settings';
 import { Entry, Library, ParseErrorInfo } from '../core';
 import { WorkerManager } from '../util';
 import { LoadingStatus, LibraryState } from './library-state';

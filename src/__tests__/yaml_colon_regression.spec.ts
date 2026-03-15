@@ -13,7 +13,8 @@ jest.mock(
 );
 
 import { TemplateService } from '../template/template.service';
-import { CitationsPluginSettings, DEFAULT_SETTINGS } from '../settings';
+import { CitationsPluginSettings } from '../ui/settings/settings';
+import { DEFAULT_SETTINGS } from '../ui/settings/settings-schema';
 import { Entry } from '../core';
 
 describe('YAML Colon Handling', () => {

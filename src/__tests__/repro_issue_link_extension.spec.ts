@@ -1,5 +1,5 @@
 import CitationPlugin from '../main';
-import { CitationsPluginSettings } from '../settings';
+import { CitationsPluginSettings } from '../ui/settings/settings';
 import { App, PluginManifest, TFile } from 'obsidian';
 import { LibraryService } from '../library/library.service';
 import { NoteService } from '../notes/note.service';
@@ -68,7 +68,9 @@ jest.mock('chokidar');
 jest.mock('../library/library.service');
 jest.mock('../notes/note.service');
 jest.mock('../template/template.service');
-jest.mock('../settings');
+jest.mock('../ui/settings/settings');
+jest.mock('../ui/settings/settings-schema');
+jest.mock('../ui/settings/settings-tab');
 jest.mock('web-worker:./worker', () => class {}, { virtual: true });
 
 describe('Bug Reproduction: Incorrect Markdown Link Extension', () => {

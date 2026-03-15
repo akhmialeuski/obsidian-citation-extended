@@ -1,5 +1,5 @@
 import CitationPlugin from './main';
-import { CitationsPluginSettings } from './settings';
+import { CitationsPluginSettings } from './ui/settings/settings';
 import { App, FileSystemAdapter, PluginManifest } from 'obsidian';
 import * as chokidar from 'chokidar';
 import { LibraryService } from './library/library.service';
@@ -55,7 +55,9 @@ jest.mock('./library/library.service');
 jest.mock('./template/template.service');
 jest.mock('./notes/note.service');
 jest.mock('./services/ui.service');
-jest.mock('./settings');
+jest.mock('./ui/settings/settings');
+jest.mock('./ui/settings/settings-schema');
+jest.mock('./ui/settings/settings-tab');
 
 describe('CitationPlugin', () => {
   let plugin: CitationPlugin;

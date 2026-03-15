@@ -19,12 +19,12 @@ import {
 } from './core';
 import { DataSourceFactory } from './sources/data-source-factory';
 
+import { CitationSettingTab } from './ui/settings/settings-tab';
+import { CitationsPluginSettings } from './ui/settings/settings';
 import {
-  CitationSettingTab,
-  CitationsPluginSettings,
   DEFAULT_SETTINGS,
   validateSettings,
-} from './settings';
+} from './ui/settings/settings-schema';
 import { DISALLOWED_FILENAME_CHARACTERS_RE, WorkerManager } from './util';
 import LoadWorker from 'web-worker:./worker';
 

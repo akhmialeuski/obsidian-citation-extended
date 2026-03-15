@@ -5,7 +5,7 @@ import {
   EntryDataBibLaTeX,
 } from '../core';
 import { TemplateService } from '../template/template.service';
-import { CitationsPluginSettings } from '../settings';
+import { CitationsPluginSettings } from '../ui/settings/settings';
 
 describe('Zotero ID Support', () => {
   const mockSettings = {

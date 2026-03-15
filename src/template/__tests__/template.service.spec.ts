@@ -14,7 +14,7 @@ jest.mock(
 );
 
 import { TemplateService } from '../template.service';
-import { CitationsPluginSettings } from '../../settings';
+import { CitationsPluginSettings } from '../../ui/settings/settings';
 import {
   EntryDataBibLaTeX,
   EntryDataCSL,

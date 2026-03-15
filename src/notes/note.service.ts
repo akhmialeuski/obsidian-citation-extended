@@ -1,6 +1,6 @@
 import { App, TFile, TFolder, normalizePath } from 'obsidian';
 import * as path from 'path';
-import { CitationsPluginSettings } from '../settings';
+import { CitationsPluginSettings } from '../ui/settings/settings';
 import { ITemplateService } from '../container';
 import { Library } from '../core';
 import { DISALLOWED_FILENAME_CHARACTERS_RE } from '../util';

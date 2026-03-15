@@ -1,5 +1,5 @@
 import Handlebars from 'handlebars';
-import { CitationsPluginSettings } from '../settings';
+import { CitationsPluginSettings } from '../ui/settings/settings';
 import {
   Entry,
   TemplateContext,

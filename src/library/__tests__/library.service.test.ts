@@ -1,5 +1,5 @@
 import { LibraryService } from '../library.service';
-import { CitationsPluginSettings } from '../../settings';
+import { CitationsPluginSettings } from '../../ui/settings/settings';
 import CitationEvents from '../../events';
 import { FileSystemAdapter } from 'obsidian';
 import { WorkerManager } from '../../util';

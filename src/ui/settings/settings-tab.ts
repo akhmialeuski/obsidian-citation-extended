@@ -7,17 +7,14 @@ import {
   Notice,
 } from 'obsidian';
 
-import CitationPlugin from './main';
-import { DatabaseType, DatabaseConfig } from './core';
-import { DataSourceDefinition } from './data-source';
-import { MergeStrategy } from './library/merge-strategy';
+import CitationPlugin from '../../main';
+import { DatabaseType, DatabaseConfig, Entry } from '../../core';
+import { SettingsSchema, CitationsPluginSettingsType } from './settings-schema';
 
 const CITATION_DATABASE_FORMAT_LABELS: Record<DatabaseType, string> = {
   'csl-json': 'CSL-JSON',
   biblatex: 'BibLaTeX',
 };
-
-import { Entry } from './core';
 
 const MOCK_ENTRY = {
   id: 'mock2024',
@@ -47,73 +44,6 @@ const MOCK_ENTRY = {
     return this;
   },
 } as unknown as Entry;
-
-import { z } from 'zod';
-
-export const SettingsSchema = z.object({
-  citationExportPath: z.string(),
-  citationExportFormat: z.enum(['csl-json', 'biblatex']),
-  literatureNoteTitleTemplate: z.string().min(1),
-  literatureNoteFolder: z.string(),
-  literatureNoteContentTemplate: z.string().min(1),
-  markdownCitationTemplate: z.string().min(1),
-  alternativeMarkdownCitationTemplate: z.string().min(1),
-  // Multi-source configuration
-  databases: z
-    .array(
-      z.object({
-        name: z.string(),
-        type: z.enum(['csl-json', 'biblatex']),
-        path: z.string(),
-      }),
-    )
-    .default([]),
-  mergeStrategy: z.enum(['last-wins', 'merge']).optional(),
-});
-
-export type CitationsPluginSettingsType = z.infer<typeof SettingsSchema>;
-
-export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
-  citationExportPath: '',
-  citationExportFormat: 'csl-json',
-  literatureNoteTitleTemplate: '@{{citekey}}',
-  literatureNoteFolder: 'Reading notes',
-  literatureNoteContentTemplate:
-    '---\n' +
-    'title: {{quote title}}\n' +
-    'authors: {{authorString}}\n' +
-    'year: {{year}}\n' +
-    '---\n\n',
-  markdownCitationTemplate: '[@{{citekey}}]',
-  alternativeMarkdownCitationTemplate: '@{{citekey}}',
-  mergeStrategy: 'last-wins',
-  databases: [],
-};
-
-export class CitationsPluginSettings {
-  public citationExportPath: string = DEFAULT_SETTINGS.citationExportPath;
-  public citationExportFormat: DatabaseType =
-    DEFAULT_SETTINGS.citationExportFormat;
-
-  public literatureNoteTitleTemplate: string =
-    DEFAULT_SETTINGS.literatureNoteTitleTemplate;
-  public literatureNoteFolder: string = DEFAULT_SETTINGS.literatureNoteFolder;
-  public literatureNoteContentTemplate: string =
-    DEFAULT_SETTINGS.literatureNoteContentTemplate;
-
-  public markdownCitationTemplate: string =
-    DEFAULT_SETTINGS.markdownCitationTemplate;
-  public alternativeMarkdownCitationTemplate: string =
-    DEFAULT_SETTINGS.alternativeMarkdownCitationTemplate;
-
-  public databases: DatabaseConfig[] = DEFAULT_SETTINGS.databases;
-  public dataSources?: DataSourceDefinition[];
-  public mergeStrategy?: MergeStrategy;
-}
-
-export function validateSettings(settings: unknown) {
-  return SettingsSchema.safeParse(settings);
-}
 
 export class CitationSettingTab extends PluginSettingTab {
   private plugin: CitationPlugin;

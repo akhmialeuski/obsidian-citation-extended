@@ -1,5 +1,5 @@
 import CitationPlugin from '../main';
-import { CitationsPluginSettings } from '../settings';
+import { CitationsPluginSettings } from '../ui/settings/settings';
 import { App, PluginManifest, TFile } from 'obsidian';
 import { NoteService } from '../notes/note.service';
 import { LibraryService } from '../library/library.service';

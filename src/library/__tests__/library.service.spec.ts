@@ -1,5 +1,5 @@
 import { LibraryService } from '../library.service';
-import { CitationsPluginSettings } from '../../settings';
+import { CitationsPluginSettings } from '../../ui/settings/settings';
 import { LoadingStatus } from '../library-state';
 import CitationEvents from '../../events';
 import { WorkerManager } from '../../util';
