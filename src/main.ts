@@ -22,7 +22,7 @@ import {
 } from './errors';
 import { DataSourceFactory } from './container';
 
-import { VaultExt } from './obsidian-extensions.d';
+import { VaultExt, WorkspaceExt } from './obsidian-extensions.d';
 import {
   CitationSettingTab,
   CitationsPluginSettings,
@@ -51,8 +51,13 @@ export default class CitationPlugin extends Plugin {
   );
 
   private getActiveEditor(): Editor | null {
+    // Standard MarkdownView approach
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-    return view?.editor ?? null;
+    if (view?.editor) return view.editor;
+
+    // Fallback: activeEditor supports Canvas text nodes, Lineage, etc.
+    const ext = this.app.workspace as WorkspaceExt;
+    return ext.activeEditor?.editor ?? null;
   }
 
   async loadSettings(): Promise<void> {

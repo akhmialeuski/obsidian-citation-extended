@@ -83,11 +83,15 @@ export class UIService implements IUIService {
       },
     });
 
+    // Use `callback` instead of `editorCallback` so that insert commands
+    // are available in Canvas text nodes, Lineage views, and other
+    // non-standard editor contexts.  The plugin methods already null-guard
+    // the editor and show a Notice when none is found.
     this.plugin.addCommand({
       id: 'insert-citation',
       name: 'Insert literature note link',
 
-      editorCallback: () => {
+      callback: () => {
         const modal = new CitationSearchModal(
           this.app,
           this.plugin,
@@ -100,7 +104,7 @@ export class UIService implements IUIService {
     this.plugin.addCommand({
       id: 'insert-literature-note-content',
       name: 'Insert literature note content in the current pane',
-      editorCallback: () => {
+      callback: () => {
         const modal = new CitationSearchModal(
           this.app,
           this.plugin,
@@ -113,7 +117,7 @@ export class UIService implements IUIService {
     this.plugin.addCommand({
       id: 'insert-markdown-citation',
       name: 'Insert Markdown citation',
-      editorCallback: () => {
+      callback: () => {
         const modal = new CitationSearchModal(
           this.app,
           this.plugin,
