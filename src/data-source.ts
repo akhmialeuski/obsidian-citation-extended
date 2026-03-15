@@ -1,4 +1,5 @@
-import { Entry, DatabaseType } from './types';
+import { Entry, DatabaseType, ParseErrorInfo } from './core';
+import { MergeStrategy } from './library/merge-strategy';
 
 /**
  * Discriminates the transport mechanism used by a data source.
@@ -34,29 +35,6 @@ export interface DataSource {
    * Should be called when the data source is no longer needed
    */
   dispose(): void;
-}
-
-/**
- * Strategy for merging entries when multiple sources have the same citekey
- */
-export enum MergeStrategy {
-  /**
-   * Last source wins in case of citekey conflicts
-   * Sources are processed in order, later sources override earlier ones
-   */
-  LastWins = 'last-wins',
-
-  /**
-   * First source wins in case of citekey conflicts
-   * First occurrence of a citekey is kept, subsequent ones are ignored
-   */
-  FirstWins = 'first-wins',
-
-  /**
-   * Merge by most recent modification date
-   * Requires sources to provide modification timestamps
-   */
-  MostRecent = 'most-recent',
 }
 
 /**
@@ -114,4 +92,10 @@ export interface DataSourceLoadResult {
    * Optional modification timestamp for merge strategy
    */
   modifiedAt?: Date;
+
+  /**
+   * Non-fatal parse errors encountered during loading.
+   * Each error represents an entry that was skipped.
+   */
+  parseErrors?: ParseErrorInfo[];
 }

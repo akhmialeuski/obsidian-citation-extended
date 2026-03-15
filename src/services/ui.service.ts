@@ -1,18 +1,17 @@
-import { App } from 'obsidian';
-import { LoadingStatus, LibraryState } from '../library-state';
-import {
-  CitationSearchModal,
-  InsertCitationAction,
-  InsertNoteLinkAction,
-  InsertNoteContentAction,
-  OpenNoteAction,
-} from '../modals';
+import { App, Notice } from 'obsidian';
+import { LoadingStatus, LibraryState } from '../library/library-state';
+import { CitationSearchModal } from '../ui/modals/citation-search-modal';
+import { InsertCitationAction } from '../ui/modals/actions/insert-citation.action';
+import { InsertNoteLinkAction } from '../ui/modals/actions/insert-note-link.action';
+import { InsertNoteContentAction } from '../ui/modals/actions/insert-note-content.action';
+import { OpenNoteAction } from '../ui/modals/actions/open-note.action';
 import CitationPlugin from '../main';
 import { IUIService } from '../container';
 
 export class UIService implements IUIService {
   private statusBarItem: HTMLElement;
   private unsubscribe: (() => void) | null = null;
+  private lastNotifiedStatus?: LoadingStatus;
 
   constructor(
     private app: App,
@@ -25,6 +24,7 @@ export class UIService implements IUIService {
     this.unsubscribe = this.plugin.libraryService.store.subscribe(
       (state: LibraryState) => {
         this.updateStatusBar(state);
+        this.showStateNotices(state);
       },
     );
 
@@ -59,6 +59,23 @@ export class UIService implements IUIService {
     }
   }
 
+  private showStateNotices(state: LibraryState): void {
+    if (state.status === this.lastNotifiedStatus) return;
+    this.lastNotifiedStatus = state.status;
+
+    if (state.status === LoadingStatus.Error && state.parseErrors.length > 0) {
+      new Notice(state.parseErrors[0]);
+    } else if (
+      state.status === LoadingStatus.Success &&
+      state.parseErrors.length > 0
+    ) {
+      const entryCount = state.progress?.current ?? 0;
+      new Notice(
+        `Citations: Loaded ${entryCount} entries. ${state.parseErrors.length} entries skipped due to parse errors. Check console for details.`,
+      );
+    }
+  }
+
   registerCommands(): void {
     this.plugin.addCommand({
       id: 'open-literature-note',
@@ -83,11 +100,15 @@ export class UIService implements IUIService {
       },
     });
 
+    // Use `callback` instead of `editorCallback` so that insert commands
+    // are available in Canvas text nodes, Lineage views, and other
+    // non-standard editor contexts.  The plugin methods already null-guard
+    // the editor and show a Notice when none is found.
     this.plugin.addCommand({
       id: 'insert-citation',
       name: 'Insert literature note link',
 
-      editorCallback: () => {
+      callback: () => {
         const modal = new CitationSearchModal(
           this.app,
           this.plugin,
@@ -100,7 +121,7 @@ export class UIService implements IUIService {
     this.plugin.addCommand({
       id: 'insert-literature-note-content',
       name: 'Insert literature note content in the current pane',
-      editorCallback: () => {
+      callback: () => {
         const modal = new CitationSearchModal(
           this.app,
           this.plugin,
@@ -113,7 +134,7 @@ export class UIService implements IUIService {
     this.plugin.addCommand({
       id: 'insert-markdown-citation',
       name: 'Insert Markdown citation',
-      editorCallback: () => {
+      callback: () => {
         const modal = new CitationSearchModal(
           this.app,
           this.plugin,

@@ -11,7 +11,8 @@ import {
   DatabaseType,
   EntryDataBibLaTeX,
   EntryDataCSL,
-} from '../types';
+  WorkerResponse,
+} from '../core';
 import { WorkerManager } from '../util';
 
 /**
@@ -61,15 +62,21 @@ export class LocalFileSource implements DataSource {
       const decoder = new TextDecoder('utf8');
       const value = decoder.decode(dataView);
 
-      const rawEntries: EntryData[] = await this.loadWorker.post({
+      const raw = await this.loadWorker.post({
         databaseRaw: value,
         databaseType: this.format,
       });
 
+      // TODO(v0.5.0): Remove backward compatibility shim once all workers return WorkerResponse
+      const result: WorkerResponse = Array.isArray(raw)
+        ? { entries: raw as EntryData[], parseErrors: [] }
+        : raw;
+
       return {
         sourceId: this.id,
-        entries: this.convertToEntries(rawEntries),
+        entries: this.convertToEntries(result.entries),
         modifiedAt: stats.mtime,
+        parseErrors: result.parseErrors,
       };
     } catch (error) {
       console.error(`Failed to load from ${this.filePath}:`, error);

@@ -8,7 +8,8 @@ import {
   DatabaseType,
   EntryDataBibLaTeX,
   EntryDataCSL,
-} from '../types';
+  WorkerResponse,
+} from '../core';
 import { WorkerManager } from '../util';
 
 /**
@@ -45,15 +46,21 @@ export class VaultFileSource implements DataSource {
         throw new Error(`File is empty: ${this.filePath}`);
       }
 
-      const rawEntries: EntryData[] = await this.loadWorker.post({
+      const raw = await this.loadWorker.post({
         databaseRaw: content,
         databaseType: this.format,
       });
 
+      // TODO(v0.5.0): Remove backward compatibility shim once all workers return WorkerResponse
+      const result: WorkerResponse = Array.isArray(raw)
+        ? { entries: raw as EntryData[], parseErrors: [] }
+        : raw;
+
       return {
         sourceId: this.id,
-        entries: this.convertToEntries(rawEntries),
+        entries: this.convertToEntries(result.entries),
         modifiedAt: new Date(file.stat.mtime),
+        parseErrors: result.parseErrors,
       };
     } catch (error) {
       console.error(
