@@ -13,6 +13,7 @@ import { ITemplateService } from '../container';
 
 export class TemplateService implements ITemplateService {
   private hbs = Handlebars.create();
+  private cache = new Map<string, Handlebars.TemplateDelegate>();
   private templateSettings = {
     noEscape: true,
   };
@@ -160,12 +161,25 @@ export class TemplateService implements ITemplateService {
     return { entry: entry.toJSON(), ...shortcuts };
   }
 
+  private compile(templateStr: string): Handlebars.TemplateDelegate {
+    let compiled = this.cache.get(templateStr);
+    if (!compiled) {
+      compiled = this.hbs.compile(templateStr, this.templateSettings);
+      this.cache.set(templateStr, compiled);
+    }
+    return compiled;
+  }
+
+  public clearCache(): void {
+    this.cache.clear();
+  }
+
   public render(
     templateStr: string,
     variables: TemplateContext,
   ): Result<string, TemplateRenderError> {
     try {
-      const template = this.hbs.compile(templateStr, this.templateSettings);
+      const template = this.compile(templateStr);
       return ok(template(variables));
     } catch (e) {
       return err(

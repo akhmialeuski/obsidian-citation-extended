@@ -279,4 +279,26 @@ describe('TemplateService', () => {
       });
     });
   });
+
+  describe('Template cache', () => {
+    test('returns same result for repeated renders with same template', () => {
+      const template = '{{title}} ({{year}})';
+      const vars1 = { title: 'A', year: '2020' } as unknown as TemplateContext;
+      const vars2 = { title: 'B', year: '2021' } as unknown as TemplateContext;
+      const r1 = service.render(template, vars1);
+      const r2 = service.render(template, vars2);
+      expect(r1.ok && r1.value).toBe('A (2020)');
+      expect(r2.ok && r2.value).toBe('B (2021)');
+    });
+
+    test('clearCache allows recompilation', () => {
+      const template = '{{title}}';
+      const vars = { title: 'Test' } as unknown as TemplateContext;
+      const r1 = service.render(template, vars);
+      service.clearCache();
+      const r2 = service.render(template, vars);
+      expect(r1.ok && r1.value).toBe('Test');
+      expect(r2.ok && r2.value).toBe('Test');
+    });
+  });
 });
