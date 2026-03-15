@@ -11,7 +11,7 @@ import { SearchService } from './search/search.service';
 import {
   IntrospectionService,
   VariableDefinition,
-} from './services/introspection.service';
+} from './template/introspection.service';
 import { StoreSubscriber } from './library/library-store';
 import { TFile } from 'obsidian';
 
@@ -40,6 +40,7 @@ export interface ITemplateService {
     variables: TemplateContext,
     alternative?: boolean,
   ): Result<string, TemplateRenderError>;
+  validate(templateStr: string): Result<void, TemplateRenderError>;
 }
 
 export interface INoteService {

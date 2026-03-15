@@ -16,7 +16,7 @@ import { SearchService } from '../search/search.service';
 import {
   IntrospectionService,
   VariableDefinition,
-} from './introspection.service';
+} from '../template/introspection.service';
 import { ILibraryService } from '../container';
 import { IDataSourceFactory } from '../sources/data-source-factory';
 import { LibraryStore } from '../library/library-store';

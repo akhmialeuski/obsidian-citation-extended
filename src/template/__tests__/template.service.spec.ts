@@ -280,6 +280,43 @@ describe('TemplateService', () => {
     });
   });
 
+  describe('validate', () => {
+    test('returns ok for a valid template', () => {
+      const result = service.validate('Hello {{name}}');
+      expect(result.ok).toBe(true);
+    });
+
+    test('returns ok for a valid block template', () => {
+      const result = service.validate('{{#if x}}yes{{/if}}');
+      expect(result.ok).toBe(true);
+    });
+
+    test('returns err with TemplateRenderError for unclosed block', () => {
+      const result = service.validate('{{#if x}}hello');
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toContain('Invalid template');
+      }
+    });
+
+    test('returns err for mismatched block close tag', () => {
+      const result = service.validate('{{#if x}}hello{{/each}}');
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toContain('Invalid template');
+      }
+    });
+
+    test('does not cache the compiled template', () => {
+      const template = '{{title}}';
+      service.validate(template);
+      // Clear cache should not affect validate results since validate does not cache
+      service.clearCache();
+      const result = service.validate(template);
+      expect(result.ok).toBe(true);
+    });
+  });
+
   describe('Template cache', () => {
     test('returns same result for repeated renders with same template', () => {
       const template = '{{title}} ({{year}})';

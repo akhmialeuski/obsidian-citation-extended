@@ -107,4 +107,15 @@ export class TemplateService implements ITemplateService {
       : this.settings.markdownCitationTemplate;
     return this.render(templateStr, variables);
   }
+
+  public validate(templateStr: string): Result<void, TemplateRenderError> {
+    try {
+      this.hbs.precompile(templateStr, this.templateSettings);
+      return ok(undefined);
+    } catch (e) {
+      return err(
+        new TemplateRenderError(`Invalid template: ${(e as Error).message}`),
+      );
+    }
+  }
 }
