@@ -63,6 +63,13 @@
     "*.json": "prettier --write"
   },
   "jest": {
+    "roots": [
+      "<rootDir>/tests",
+      "<rootDir>/src"
+    ],
+    "testMatch": [
+      "<rootDir>/tests/**/*.{spec,test}.ts"
+    ],
     "moduleNameMapper": {
       "src/(.*)": "<rootDir>/src/$1"
     },
