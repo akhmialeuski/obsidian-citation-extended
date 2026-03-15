@@ -35,8 +35,11 @@ jest.mock('../util', () => ({
   Notifier: jest.fn().mockImplementation(() => ({
     show: jest.fn(),
     hide: jest.fn(),
+    unload: jest.fn(),
   })),
-  WorkerManager: jest.fn(),
+  WorkerManager: jest.fn().mockImplementation(() => ({
+    dispose: jest.fn(),
+  })),
 }));
 
 global.window = {

@@ -5,29 +5,51 @@ import { Entry, Library } from '../types';
 import { Notifier, WorkerManager } from '../util';
 import { LoadingStatus, LibraryState } from '../library-state';
 import CitationEvents from '../events';
-import { DataSource, MergeStrategy } from '../data-source';
+import {
+  DataSource,
+  DataSourceLoadResult,
+  DataSourceType,
+  MergeStrategy,
+} from '../data-source';
 import { SearchService } from '../search/search.service';
 import {
   IntrospectionService,
   VariableDefinition,
 } from './introspection.service';
+import { ILibraryService, IDataSourceFactory } from '../container';
+import { LibraryStore } from '../store';
 import { LocalFileSource } from '../sources/local-file-source';
 
-export class LibraryService {
-  library!: Library;
+const LOAD_TIMEOUT_MS = 10_000;
+const LOAD_DEBOUNCE_MS = 1_000;
+const MAX_RETRY_COUNT = 5;
+const INITIAL_RETRY_DELAY_MS = 1_000;
+const MAX_RETRY_DELAY_MS = 30_000;
+
+/**
+ * Metadata collected from each source during loading.
+ */
+export interface SourceMetadata {
+  sourceId: string;
+  databaseName: string;
+  entryCount: number;
+  modifiedAt?: Date;
+}
+
+export class LibraryService implements ILibraryService {
+  library: Library | null = null;
   public searchService: SearchService;
   public introspectionService: IntrospectionService;
+  public store: LibraryStore;
+  public sourceMetadata: SourceMetadata[] = [];
+
   private loadWorker: WorkerManager;
   private abortController: AbortController | null = null;
   private sources: DataSource[] = [];
   private loadDebounceTimer: number | null = null;
   private retryTimer: number | null = null;
   private retryCount = 0;
-
-  // State
-  state: LibraryState = {
-    status: LoadingStatus.Idle,
-  };
+  private dataSourceFactory: IDataSourceFactory | null = null;
 
   loadErrorNotifier = new Notifier(
     'Unable to load citations. Please update Citations plugin settings.',
@@ -36,7 +58,7 @@ export class LibraryService {
   constructor(
     private settings: CitationsPluginSettings,
     private events: CitationEvents,
-    private vaultAdapter: FileSystemAdapter | null, // To resolve path
+    private vaultAdapter: FileSystemAdapter | null,
     workerManager: WorkerManager,
     sources: DataSource[] = [],
     private mergeStrategy: MergeStrategy = MergeStrategy.LastWins,
@@ -45,26 +67,29 @@ export class LibraryService {
     this.sources = sources;
     this.searchService = new SearchService();
     this.introspectionService = new IntrospectionService();
+    this.store = new LibraryStore();
   }
 
   /**
-   * Get the worker manager for creating data sources
+   * Inject a DataSourceFactory for creating sources from settings.
    */
+  setDataSourceFactory(factory: IDataSourceFactory): void {
+    this.dataSourceFactory = factory;
+  }
+
+  get state(): LibraryState {
+    return this.store.getState();
+  }
+
   getWorkerManager(): WorkerManager {
     return this.loadWorker;
   }
 
-  /**
-   * Add a data source to the library service
-   */
   addSource(source: DataSource): void {
     this.sources.push(source);
     console.debug(`LibraryService: Added source ${source.id}`);
   }
 
-  /**
-   * Remove a data source by ID
-   */
   removeSource(sourceId: string): void {
     const index = this.sources.findIndex((s) => s.id === sourceId);
     if (index !== -1) {
@@ -75,24 +100,14 @@ export class LibraryService {
     }
   }
 
-  /**
-   * Get all data sources
-   */
   getSources(): DataSource[] {
     return [...this.sources];
   }
 
-  /**
-   * Get available template variables from the current library
-   */
   getTemplateVariables(): VariableDefinition[] {
     return this.introspectionService.getTemplateVariables(this.library);
   }
 
-  /**
-   * Resolve a provided library path, allowing for relative paths rooted at
-   * the vault directory. (Helper method for settings tab)
-   */
   resolveLibraryPath(rawPath: string): string {
     const vaultRoot =
       this.vaultAdapter instanceof FileSystemAdapter
@@ -102,18 +117,14 @@ export class LibraryService {
   }
 
   private setState(newState: Partial<LibraryState>): void {
-    this.state = { ...this.state, ...newState };
-    this.events.trigger('library-state-changed', this.state);
+    this.store.setState(newState);
+    this.events.trigger('library-state-changed', this.store.getState());
   }
 
-  /**
-   * Merge entries from multiple sources, handling duplicates by creating composite keys
-   */
   private mergeEntries(results: Entry[][]): Library {
     const entriesMap = new Map<string, Entry>();
     const citekeyCounts = new Map<string, number>();
 
-    // First pass: count citekeys
     for (const entries of results) {
       for (const entry of entries) {
         citekeyCounts.set(entry.id, (citekeyCounts.get(entry.id) || 0) + 1);
@@ -123,37 +134,10 @@ export class LibraryService {
     for (const entries of results) {
       for (const entry of entries) {
         if (citekeyCounts.get(entry.id)! > 1) {
-          // Duplicate detected
           const compositeKey = `${entry.id}@${entry._sourceDatabase}`;
           entry._compositeCitekey = compositeKey;
-          // We keep the original ID for display/search but store it under composite key in the map if needed
-          // But wait, if we change the ID, it changes how it's referenced.
-          // The requirement says: "If records have same names but different citekeys - they are different records. If records are completely identical (same citekey and content), form a composite key: <citekey>@<database_name>."
-
-          // Actually, if citekeys are same, we MUST distinguish them in the library map.
-          // So we should use the composite key as the map key.
-          // And maybe update the entry.id to be the composite key?
-          // Or keep entry.id as original and use a different property for map key?
-          // The Library class uses map key as lookup.
-
-          // Let's clone the entry to avoid modifying the original if it's shared (though it shouldn't be)
-          // And update its ID to the composite key so it's unique in the system.
-          // But we want to preserve the original citekey for display if possible.
-          // The Entry interface has 'id'.
-
-          // Let's update the ID to composite key.
-          // But we need to store the original citekey somewhere?
-          // The 'id' is used for @citekey.
-
-          // If the user wants to cite it, they will use the composite key?
-          // "User chooses which database to connect the record from."
-          // This implies the user selects one, and that selection has a unique ID.
-
-          // So yes, update ID to composite key.
           entry.id = compositeKey;
-          // entry._compositeCitekey is already set.
         }
-
         entriesMap.set(entry.id, entry);
       }
     }
@@ -169,7 +153,6 @@ export class LibraryService {
       return null;
     }
 
-    // Cancel previous load if running
     if (this.abortController) {
       this.abortController.abort();
     }
@@ -189,31 +172,20 @@ export class LibraryService {
     this.events.trigger('library-load-start');
 
     try {
-      // Create sources from settings
-      this.sources = this.settings.databases.map((db, index) => {
-        return new LocalFileSource(
-          `source-${index}`,
-          db.path,
-          db.type,
-          this.loadWorker,
-          this.vaultAdapter,
-        );
-      });
+      this.sources = this.createSources();
 
-      // Load from all sources in parallel
       const loadPromises = this.sources.map(async (source, index) => {
         try {
           console.debug(`LibraryService: Loading from source ${source.id}`);
-          const entries = await source.load();
+          const result: DataSourceLoadResult = await source.load();
           console.debug(
-            `LibraryService: Loaded ${entries.length} entries from ${source.id}`,
+            `LibraryService: Loaded ${result.entries.length} entries from ${source.id}`,
           );
-          // Tag entries with source database name
           const dbName = this.settings.databases[index].name;
-          entries.forEach((entry) => {
+          result.entries.forEach((entry) => {
             entry._sourceDatabase = dbName;
           });
-          return entries;
+          return result;
         } catch (error) {
           console.error(
             `LibraryService: Error loading from source ${source.id}:`,
@@ -223,12 +195,11 @@ export class LibraryService {
         }
       });
 
-      // Add 10s timeout
       let timeoutId: number = 0;
       const timeoutPromise = new Promise<never>((_, reject) => {
         timeoutId = window.setTimeout(
           () => reject(new Error('Timeout loading citation database')),
-          10000,
+          LOAD_TIMEOUT_MS,
         );
       });
 
@@ -237,31 +208,38 @@ export class LibraryService {
         timeoutPromise,
       ]);
 
-      // Clear the timeout if the race completed before the timeout fired
       if (timeoutId) {
         window.clearTimeout(timeoutId);
       }
       if (signal.aborted) return null;
 
-      // Check if all sources failed
-      const successfulResults = results.filter((r): r is Entry[] =>
-        Array.isArray(r),
+      const successfulResults = results.filter(
+        (r): r is DataSourceLoadResult => !(r instanceof Error),
       );
       const errors = results.filter((r): r is Error => r instanceof Error);
 
       if (successfulResults.length === 0 && errors.length > 0) {
-        // All sources failed, throw the first error
         throw errors[0];
       }
 
-      // Merge results and handle duplicates
-      this.library = this.mergeEntries(successfulResults);
+      this.sourceMetadata = successfulResults.map((r) => {
+        const sourceIndex = parseInt(r.sourceId.replace('source-', ''), 10);
+        return {
+          sourceId: r.sourceId,
+          databaseName:
+            this.settings.databases[sourceIndex]?.name ?? r.sourceId,
+          entryCount: r.entries.length,
+          modifiedAt: r.modifiedAt,
+        };
+      });
 
-      // Build search index
+      const entryArrays = successfulResults.map((r) => r.entries);
+      this.library = this.mergeEntries(entryArrays);
+
       console.debug('Citation plugin: Building search index');
       this.searchService.buildIndex(Object.values(this.library.entries));
 
-      const totalEntries = successfulResults.reduce(
+      const totalEntries = entryArrays.reduce(
         (sum, entries) => sum + entries.length,
         0,
       );
@@ -280,7 +258,6 @@ export class LibraryService {
       this.loadErrorNotifier.hide();
       this.retryCount = 0;
 
-      // Re-init watcher since sources might have changed
       this.initWatcher();
 
       return this.library;
@@ -300,9 +277,33 @@ export class LibraryService {
     }
   };
 
+  private createSources(): DataSource[] {
+    if (this.dataSourceFactory) {
+      return this.settings.databases.map((db, index) =>
+        this.dataSourceFactory!.create(
+          { type: DataSourceType.LocalFile, path: db.path, format: db.type },
+          `source-${index}`,
+        ),
+      );
+    }
+    return this.settings.databases.map(
+      (db, index) =>
+        new LocalFileSource(
+          `source-${index}`,
+          db.path,
+          db.type,
+          this.loadWorker,
+          this.vaultAdapter,
+        ),
+    );
+  }
+
   private handleErrorRetry(): void {
-    if (this.retryCount < 5) {
-      const delay = Math.min(1000 * Math.pow(2, this.retryCount), 30000);
+    if (this.retryCount < MAX_RETRY_COUNT) {
+      const delay = Math.min(
+        INITIAL_RETRY_DELAY_MS * Math.pow(2, this.retryCount),
+        MAX_RETRY_DELAY_MS,
+      );
       this.retryCount++;
       console.debug(
         `Citation plugin: Retrying load in ${delay}ms (Attempt ${this.retryCount})`,
@@ -314,20 +315,12 @@ export class LibraryService {
   }
 
   initWatcher(): void {
-    // Dispose existing watchers first
     this.sources.forEach((s) => s.dispose());
 
-    // Re-create sources if they don't exist (e.g. initial load)
-    // Actually load() creates sources. initWatcher should be called after load().
-
     if (this.sources.length === 0) {
-      // If no sources, maybe we haven't loaded yet?
-      // But we can create sources just for watching?
-      // Better to rely on load() to populate sources.
       return;
     }
 
-    // Set up watchers for all sources
     for (const source of this.sources) {
       try {
         source.watch(() => {
@@ -353,14 +346,10 @@ export class LibraryService {
 
     this.loadDebounceTimer = window.setTimeout(() => {
       void this.load();
-    }, 1000); // 1s debounce
+    }, LOAD_DEBOUNCE_MS);
   }
 
-  /**
-   * Clean up all resources
-   */
   dispose = (): void => {
-    // Clear timers
     if (this.loadDebounceTimer) {
       window.clearTimeout(this.loadDebounceTimer);
       this.loadDebounceTimer = null;
@@ -371,13 +360,11 @@ export class LibraryService {
       this.retryTimer = null;
     }
 
-    // Abort any ongoing load
     if (this.abortController) {
       this.abortController.abort();
       this.abortController = null;
     }
 
-    // Dispose all sources
     for (const source of this.sources) {
       try {
         source.dispose();
@@ -390,13 +377,14 @@ export class LibraryService {
     }
 
     this.sources = [];
+    this.loadWorker.dispose();
+    this.loadErrorNotifier.unload();
+    this.store.dispose();
+
     console.debug('LibraryService: Disposed all resources');
   };
 
-  /**
-   * Returns true iff the library is currently being loaded on the worker thread.
-   */
   get isLibraryLoading(): boolean {
-    return this.state.status === LoadingStatus.Loading;
+    return this.store.getState().status === LoadingStatus.Loading;
   }
 }

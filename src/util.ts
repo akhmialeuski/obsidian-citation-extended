@@ -133,4 +133,13 @@ export class WorkerManager {
 
     this.isProcessing = false;
   }
+
+  /**
+   * Dispose the worker manager: clear pending queue and terminate the worker.
+   */
+  dispose(): void {
+    this.queue.length = 0;
+    this.isProcessing = false;
+    this._worker.terminate();
+  }
 }

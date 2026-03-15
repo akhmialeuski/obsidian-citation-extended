@@ -187,16 +187,18 @@ describe('TemplateService', () => {
   describe('Template rendering', () => {
     test('renderTitle', () => {
       settings.literatureNoteTitleTemplate = 'Title: {{title}}';
-      settings.literatureNoteTitleTemplate = 'Title: {{title}}';
       const variables = { title: 'My Title' } as unknown as TemplateContext;
-      expect(service.getTitle(variables)).toBe('Title: My Title');
+      const result = service.getTitle(variables);
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value).toBe('Title: My Title');
     });
 
     test('renderContent', () => {
       settings.literatureNoteContentTemplate = 'Content: {{year}}';
-      settings.literatureNoteContentTemplate = 'Content: {{year}}';
       const variables = { year: '2023' } as unknown as TemplateContext;
-      expect(service.getContent(variables)).toBe('Content: 2023');
+      const result = service.getContent(variables);
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value).toBe('Content: 2023');
     });
   });
   describe('Helpers', () => {
@@ -205,7 +207,8 @@ describe('TemplateService', () => {
       const result = service.render(template, {
         list: ['a', 'b', 'c'],
       } as unknown as TemplateContext);
-      expect(result).toBe('a, b, c');
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value).toBe('a, b, c');
     });
 
     test('split helper', () => {
@@ -213,7 +216,8 @@ describe('TemplateService', () => {
       const result = service.render(template, {
         str: 'a-b-c',
       } as unknown as TemplateContext);
-      expect(result).toBe('a, b, c');
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value).toBe('a, b, c');
     });
 
     describe('formatNames', () => {
@@ -233,7 +237,8 @@ describe('TemplateService', () => {
         const result = service.render(template, {
           authors: authors1,
         } as unknown as TemplateContext);
-        expect(result).toBe('Brand');
+        expect(result.ok).toBe(true);
+        if (result.ok) expect(result.value).toBe('Brand');
       });
 
       test('formats 2 authors', () => {
@@ -241,7 +246,8 @@ describe('TemplateService', () => {
         const result = service.render(template, {
           authors: authors2,
         } as unknown as TemplateContext);
-        expect(result).toBe('Brand and Hoth');
+        expect(result.ok).toBe(true);
+        if (result.ok) expect(result.value).toBe('Brand and Hoth');
       });
 
       test('formats 3 authors (et al)', () => {
@@ -249,7 +255,8 @@ describe('TemplateService', () => {
         const result = service.render(template, {
           authors: authors3,
         } as unknown as TemplateContext);
-        expect(result).toBe('Brand et al.');
+        expect(result.ok).toBe(true);
+        if (result.ok) expect(result.value).toBe('Brand et al.');
       });
 
       test('formats 3 authors with custom max', () => {
@@ -257,7 +264,8 @@ describe('TemplateService', () => {
         const result = service.render(template, {
           authors: authors3,
         } as unknown as TemplateContext);
-        expect(result).toBe('Brand, Hoth and Smith');
+        expect(result.ok).toBe(true);
+        if (result.ok) expect(result.value).toBe('Brand, Hoth and Smith');
       });
 
       test('formats with string literals', () => {
@@ -266,7 +274,8 @@ describe('TemplateService', () => {
         const result = service.render(template, {
           authors,
         } as unknown as TemplateContext);
-        expect(result).toBe('Organization');
+        expect(result.ok).toBe(true);
+        if (result.ok) expect(result.value).toBe('Organization');
       });
     });
   });

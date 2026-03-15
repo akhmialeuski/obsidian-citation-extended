@@ -90,7 +90,7 @@ describe('Bug Reproduction: Incorrect Markdown Link Extension', () => {
     plugin.templateService.getTemplateVariables = jest.fn().mockReturnValue({});
     plugin.templateService.getTitle = jest
       .fn()
-      .mockReturnValue('Test Note Title');
+      .mockReturnValue({ ok: true, value: 'Test Note Title' });
 
     plugin.noteService = new NoteService(
       app,
@@ -104,6 +104,7 @@ describe('Bug Reproduction: Incorrect Markdown Link Extension', () => {
       .mockResolvedValue(mockFile);
 
     plugin.libraryService = {
+      isLibraryLoading: false,
       library: { entries: { 'test-citekey': { id: 'test-citekey' } } },
     } as unknown as LibraryService;
 

@@ -55,9 +55,11 @@ jest.mock('../../util', () => {
     Notifier: class {
       show = jest.fn();
       hide = jest.fn();
+      unload = jest.fn();
     },
     WorkerManager: class {
       post = mockWorkerManagerPost;
+      dispose = jest.fn();
       constructor() {
         // Mock constructor
       }
@@ -100,7 +102,7 @@ describe('LibraryService', () => {
   let settings: CitationsPluginSettings;
   let events: { trigger: jest.Mock; on: jest.Mock };
   let vaultAdapter: { getBasePath: jest.Mock };
-  let workerManager: { post: jest.Mock };
+  let workerManager: { post: jest.Mock; dispose: jest.Mock };
 
   beforeEach(() => {
     settings = new CitationsPluginSettings();
@@ -119,12 +121,16 @@ describe('LibraryService', () => {
 
     workerManager = {
       post: mockWorkerManagerPost,
+      dispose: jest.fn(),
     };
 
-    // Default mock implementation for LocalFileSource
-    (LocalFileSource as jest.Mock).mockImplementation((id) => ({
+    (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
       id,
-      load: jest.fn().mockResolvedValue([]),
+      load: jest.fn().mockResolvedValue({
+        sourceId: id,
+        entries: [],
+        modifiedAt: new Date(),
+      }),
       watch: jest.fn(),
       dispose: jest.fn(),
     }));
@@ -170,7 +176,7 @@ describe('LibraryService', () => {
   });
 
   test('load() handles source error gracefully (now expects Error status)', async () => {
-    (LocalFileSource as jest.Mock).mockImplementation((id) => ({
+    (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
       id,
       load: jest.fn().mockRejectedValue(new Error('Source failed')),
       watch: jest.fn(),
@@ -190,16 +196,25 @@ describe('LibraryService', () => {
       { name: 'DB2', path: 'db2.json', type: 'biblatex' },
     ];
 
-    (LocalFileSource as jest.Mock).mockImplementation((id) => ({
+    (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
       id,
       load: jest.fn().mockImplementation(async () => {
-        if (id === 'source-0') return [{ id: '1', title: 'A' }];
+        if (id === 'source-0')
+          return {
+            sourceId: id,
+            entries: [{ id: '1', title: 'A' }],
+            modifiedAt: new Date(),
+          };
         if (id === 'source-1')
-          return [
-            { id: '1', title: 'B' },
-            { id: '2', title: 'C' },
-          ];
-        return [];
+          return {
+            sourceId: id,
+            entries: [
+              { id: '1', title: 'B' },
+              { id: '2', title: 'C' },
+            ],
+            modifiedAt: new Date(),
+          };
+        return { sourceId: id, entries: [], modifiedAt: new Date() };
       }),
       watch: jest.fn(),
       dispose: jest.fn(),
@@ -210,10 +225,12 @@ describe('LibraryService', () => {
 
     await service.load();
 
-    expect(service.library.size).toBe(3);
-    expect(service.library.entries['1@DB1']).toBeDefined();
-    expect(service.library.entries['1@DB2']).toBeDefined();
-    expect(service.library.entries['2']).toBeDefined();
+    const library = service.library;
+    expect(library).not.toBeNull();
+    expect(library?.size).toBe(3);
+    expect(library?.entries['1@DB1']).toBeDefined();
+    expect(library?.entries['1@DB2']).toBeDefined();
+    expect(library?.entries['2']).toBeDefined();
   });
 
   test('initWatcher() sets up watchers for all sources', async () => {

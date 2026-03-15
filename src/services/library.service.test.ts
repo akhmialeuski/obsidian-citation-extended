@@ -41,6 +41,10 @@ describe('LibraryService', () => {
   let adapter: FileSystemAdapter;
 
   beforeEach(() => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.spyOn(console, 'debug').mockImplementation(() => {});
+
     settings = new CitationsPluginSettings();
     events = new CitationEvents();
     adapter = new FileSystemAdapter();
@@ -52,9 +56,14 @@ describe('LibraryService', () => {
     (Notifier as unknown as jest.Mock).mockImplementation(() => ({
       show: jest.fn(),
       hide: jest.fn(),
+      unload: jest.fn(),
     }));
 
     service = new LibraryService(settings, events, adapter, workerManager);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('should dispose resources', () => {

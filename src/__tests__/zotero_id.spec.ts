@@ -31,9 +31,9 @@ describe('Zotero ID Support', () => {
 
       const variables = templateService.getTemplateVariables(entry);
       expect(variables.zoteroId).toBe('ZOTERO_ID_123');
-      expect(templateService.render('{{zoteroId}}', variables)).toBe(
-        'ZOTERO_ID_123',
-      );
+      const renderResult1 = templateService.render('{{zoteroId}}', variables);
+      expect(renderResult1.ok).toBe(true);
+      if (renderResult1.ok) expect(renderResult1.value).toBe('ZOTERO_ID_123');
     });
 
     it('should be undefined if zotero-key is missing', () => {
@@ -68,9 +68,9 @@ describe('Zotero ID Support', () => {
 
       const variables = templateService.getTemplateVariables(entry);
       expect(variables.zoteroId).toBe('ZOTERO_ID_456');
-      expect(templateService.render('{{zoteroId}}', variables)).toBe(
-        'ZOTERO_ID_456',
-      );
+      const renderResult2 = templateService.render('{{zoteroId}}', variables);
+      expect(renderResult2.ok).toBe(true);
+      if (renderResult2.ok) expect(renderResult2.value).toBe('ZOTERO_ID_456');
     });
 
     it('should be undefined if zotero-key is missing', () => {

@@ -87,7 +87,6 @@ describe('CitationPlugin', () => {
     };
     (chokidar.watch as jest.Mock).mockReturnValue(watcher);
 
-    // Mock LibraryService
     (LibraryService as jest.Mock).mockImplementation(() => ({
       load: jest.fn(),
       resolveLibraryPath: jest.fn().mockReturnValue('/path/to/lib'),
@@ -97,7 +96,13 @@ describe('CitationPlugin', () => {
         return ['source'];
       }),
       initWatcher: jest.fn(),
+      setDataSourceFactory: jest.fn(),
       library: { entries: {} },
+      store: {
+        subscribe: jest.fn().mockReturnValue(jest.fn()),
+        getState: jest.fn().mockReturnValue({ status: 'idle' }),
+        dispose: jest.fn(),
+      },
     }));
   });
 
@@ -119,9 +124,12 @@ describe('CitationPlugin', () => {
     } as CitationsPluginSettings;
     await plugin.onload();
 
+    const unloadSpy = jest.spyOn(plugin.literatureNoteErrorNotifier, 'unload');
+
     plugin.onunload();
 
+    expect(plugin.uiService.dispose).toHaveBeenCalled();
     expect(plugin.libraryService.dispose).toHaveBeenCalled();
-    expect(plugin.literatureNoteErrorNotifier).toBeNull();
+    expect(unloadSpy).toHaveBeenCalled();
   });
 });

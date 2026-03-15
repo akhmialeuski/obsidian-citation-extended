@@ -39,7 +39,7 @@ export class IntrospectionService {
   /**
    * Analyze the library to find all available template variables.
    */
-  public getTemplateVariables(library: Library): VariableDefinition[] {
+  public getTemplateVariables(library: Library | null): VariableDefinition[] {
     const variables = new Map<string, VariableDefinition>();
 
     // Add known variables first to ensure they are present and have descriptions

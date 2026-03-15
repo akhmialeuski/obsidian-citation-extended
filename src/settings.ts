@@ -490,13 +490,13 @@ export class CitationSettingTab extends PluginSettingTab {
         if (!previewEl) return;
         const variables =
           this.plugin.templateService.getTemplateVariables(MOCK_ENTRY);
-        try {
-          const result = this.plugin.templateService.render(value, variables);
-          previewEl.setText(result);
+        const result = this.plugin.templateService.render(value, variables);
+        if (result.ok) {
+          previewEl.setText(result.value);
           previewEl.setCssProps({ color: 'var(--text-normal)' });
-        } catch (e) {
+        } else {
           previewEl.setText(
-            `Error rendering template: ${(e as Error).message} `,
+            `Error rendering template: ${result.error.message} `,
           );
           previewEl.setCssProps({ color: 'var(--text-error)' });
         }

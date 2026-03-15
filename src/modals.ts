@@ -126,22 +126,19 @@ export class CitationSearchModal extends SuggestModal<Entry> {
   }
 
   getSuggestions(query: string): Entry[] {
-    if (this.plugin.libraryService.isLibraryLoading) {
+    const library = this.plugin.libraryService.library;
+    if (this.plugin.libraryService.isLibraryLoading || !library) {
       return [];
     }
 
     if (!query) {
-      return Object.values(this.plugin.libraryService.library.entries).slice(
-        0,
-        this.limit,
-      );
+      return Object.values(library.entries).slice(0, this.limit);
     }
 
     const ids = this.plugin.libraryService.searchService.search(query);
-    // Limit results here if SearchService doesn't
     return ids
       .slice(0, this.limit)
-      .map((id) => this.plugin.libraryService.library.entries[id])
+      .map((id) => library.entries[id])
       .filter(Boolean);
   }
 

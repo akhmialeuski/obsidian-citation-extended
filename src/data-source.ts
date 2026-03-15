@@ -1,6 +1,14 @@
 import { Entry, DatabaseType } from './types';
 
 /**
+ * Discriminates the transport mechanism used by a data source.
+ */
+export enum DataSourceType {
+  LocalFile = 'local-file',
+  VaultFile = 'vault-file',
+}
+
+/**
  * DataSource interface defines a contract for loading bibliography entries
  * from various sources (local files, vault files, network, etc.)
  */
@@ -12,10 +20,8 @@ export interface DataSource {
 
   /**
    * Load entries from this data source
-   * @returns Promise resolving to an array of Entry objects
-   * @throws Error if loading fails
    */
-  load(): Promise<Entry[]>;
+  load(): Promise<DataSourceLoadResult>;
 
   /**
    * Watch for changes and call the callback when data changes
@@ -75,7 +81,7 @@ export interface DataSourceDefinition {
   /**
    * Type of the data source
    */
-  type: 'local-file' | 'vault-file';
+  type: DataSourceType;
 
   /**
    * Path to the data file

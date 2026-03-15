@@ -8,9 +8,11 @@ import {
   OpenNoteAction,
 } from '../modals';
 import CitationPlugin from '../main';
+import { IUIService } from '../container';
 
-export class UIService {
+export class UIService implements IUIService {
   private statusBarItem: HTMLElement;
+  private unsubscribe: (() => void) | null = null;
 
   constructor(
     private app: App,
@@ -20,12 +22,12 @@ export class UIService {
   }
 
   init(): void {
-    this.plugin.events.on('library-state-changed', (state: LibraryState) => {
-      this.updateStatusBar(state);
-    });
+    this.unsubscribe = this.plugin.libraryService.store.subscribe(
+      (state: LibraryState) => {
+        this.updateStatusBar(state);
+      },
+    );
 
-    // Initial state
-    this.updateStatusBar(this.plugin.libraryService.state);
     this.registerCommands();
   }
 
@@ -120,5 +122,12 @@ export class UIService {
         modal.open();
       },
     });
+  }
+
+  dispose(): void {
+    if (this.unsubscribe) {
+      this.unsubscribe();
+      this.unsubscribe = null;
+    }
   }
 }

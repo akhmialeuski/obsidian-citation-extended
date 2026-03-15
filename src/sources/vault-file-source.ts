@@ -1,5 +1,5 @@
 import { Vault, EventRef, TFile } from 'obsidian';
-import { DataSource } from '../data-source';
+import { DataSource, DataSourceLoadResult } from '../data-source';
 import {
   Entry,
   EntryData,
@@ -31,30 +31,30 @@ export class VaultFileSource implements DataSource {
   /**
    * Load entries from the vault file
    */
-  async load(): Promise<Entry[]> {
+  async load(): Promise<DataSourceLoadResult> {
     try {
-      // Get the file from vault
       const file = this.vault.getAbstractFileByPath(this.filePath);
 
       if (!file || !(file instanceof TFile)) {
         throw new Error(`File not found in vault: ${this.filePath}`);
       }
 
-      // Read file content
       const content = await this.vault.read(file);
 
       if (!content || content.length === 0) {
         throw new Error(`File is empty: ${this.filePath}`);
       }
 
-      // Parse using worker
-      const entries: EntryData[] = await this.loadWorker.post({
+      const rawEntries: EntryData[] = await this.loadWorker.post({
         databaseRaw: content,
         databaseType: this.format,
       });
 
-      // Convert to Entry objects using appropriate adapter
-      return this.convertToEntries(entries);
+      return {
+        sourceId: this.id,
+        entries: this.convertToEntries(rawEntries),
+        modifiedAt: new Date(file.stat.mtime),
+      };
     } catch (error) {
       console.error(
         `VaultFileSource: Error loading from ${this.filePath}:`,

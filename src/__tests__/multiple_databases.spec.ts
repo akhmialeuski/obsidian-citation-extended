@@ -35,17 +35,29 @@ describe('LibraryService - Multiple Databases', () => {
   let workerManager: WorkerManager;
 
   beforeEach(() => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.spyOn(console, 'debug').mockImplementation(() => {});
+
     settings = new CitationsPluginSettings();
     events = new CitationEvents();
     workerManager = new WorkerManager({} as Worker);
 
-    // Mock LocalFileSource implementation
-    (LocalFileSource as jest.Mock).mockImplementation((id) => ({
+    (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
       id,
-      load: jest.fn().mockResolvedValue([]),
+      load: jest.fn().mockResolvedValue({
+        sourceId: id,
+        entries: [],
+        modifiedAt: new Date(),
+      }),
       watch: jest.fn(),
       dispose: jest.fn(),
     }));
+  });
+
+  afterEach(() => {
+    service?.dispose();
+    jest.restoreAllMocks();
   });
 
   it('should load entries from multiple databases', async () => {
@@ -57,12 +69,14 @@ describe('LibraryService - Multiple Databases', () => {
     const entry1 = { id: 'entry1', title: 'Title 1' } as Entry;
     const entry2 = { id: 'entry2', title: 'Title 2' } as Entry;
 
-    (LocalFileSource as jest.Mock).mockImplementation((id) => ({
+    (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
       id,
       load: jest.fn().mockImplementation(async () => {
-        if (id === 'source-0') return [entry1];
-        if (id === 'source-1') return [entry2];
-        return [];
+        if (id === 'source-0')
+          return { sourceId: id, entries: [entry1], modifiedAt: new Date() };
+        if (id === 'source-1')
+          return { sourceId: id, entries: [entry2], modifiedAt: new Date() };
+        return { sourceId: id, entries: [], modifiedAt: new Date() };
       }),
       watch: jest.fn(),
       dispose: jest.fn(),
@@ -79,11 +93,13 @@ describe('LibraryService - Multiple Databases', () => {
 
     await service.load();
 
-    expect(service.library.size).toBe(2);
-    expect(service.library.entries['entry1']).toBeDefined();
-    expect(service.library.entries['entry2']).toBeDefined();
-    expect(service.library.entries['entry1']._sourceDatabase).toBe('DB1');
-    expect(service.library.entries['entry2']._sourceDatabase).toBe('DB2');
+    const lib1 = service.library;
+    expect(lib1).not.toBeNull();
+    expect(lib1?.size).toBe(2);
+    expect(lib1?.entries['entry1']).toBeDefined();
+    expect(lib1?.entries['entry2']).toBeDefined();
+    expect(lib1?.entries['entry1']._sourceDatabase).toBe('DB1');
+    expect(lib1?.entries['entry2']._sourceDatabase).toBe('DB2');
   });
 
   it('should handle duplicate citekeys by creating composite keys', async () => {
@@ -95,12 +111,14 @@ describe('LibraryService - Multiple Databases', () => {
     const entry1 = { id: 'duplicate', title: 'Title 1' } as Entry;
     const entry2 = { id: 'duplicate', title: 'Title 2' } as Entry;
 
-    (LocalFileSource as jest.Mock).mockImplementation((id) => ({
+    (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
       id,
       load: jest.fn().mockImplementation(async () => {
-        if (id === 'source-0') return [entry1];
-        if (id === 'source-1') return [entry2];
-        return [];
+        if (id === 'source-0')
+          return { sourceId: id, entries: [entry1], modifiedAt: new Date() };
+        if (id === 'source-1')
+          return { sourceId: id, entries: [entry2], modifiedAt: new Date() };
+        return { sourceId: id, entries: [], modifiedAt: new Date() };
       }),
       watch: jest.fn(),
       dispose: jest.fn(),
@@ -117,14 +135,16 @@ describe('LibraryService - Multiple Databases', () => {
 
     await service.load();
 
-    expect(service.library.size).toBe(2);
-    expect(service.library.entries['duplicate@DB1']).toBeDefined();
-    expect(service.library.entries['duplicate@DB2']).toBeDefined();
+    const lib2 = service.library;
+    expect(lib2).not.toBeNull();
+    expect(lib2?.size).toBe(2);
+    expect(lib2?.entries['duplicate@DB1']).toBeDefined();
+    expect(lib2?.entries['duplicate@DB2']).toBeDefined();
 
-    expect(service.library.entries['duplicate@DB1']._compositeCitekey).toBe(
+    expect(lib2?.entries['duplicate@DB1']._compositeCitekey).toBe(
       'duplicate@DB1',
     );
-    expect(service.library.entries['duplicate@DB2']._compositeCitekey).toBe(
+    expect(lib2?.entries['duplicate@DB2']._compositeCitekey).toBe(
       'duplicate@DB2',
     );
   });
