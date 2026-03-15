@@ -9,7 +9,8 @@ import {
 
 import CitationPlugin from './main';
 import { DatabaseType, DatabaseConfig } from './types';
-import { DataSourceDefinition, MergeStrategy } from './data-source';
+import { DataSourceDefinition } from './data-source';
+import { MergeStrategy } from './library/merge-strategy';
 
 const CITATION_DATABASE_FORMAT_LABELS: Record<DatabaseType, string> = {
   'csl-json': 'CSL-JSON',

@@ -7,7 +7,7 @@ import { Entry } from '../types';
 import { WorkerManager } from '../util';
 import { LocalFileSource } from '../sources/local-file-source';
 import CitationEvents from '../events';
-import { MergeStrategy } from '../data-source';
+import { MergeStrategy } from '../library/merge-strategy';
 
 jest.mock('../sources/local-file-source');
 jest.mock('../util');

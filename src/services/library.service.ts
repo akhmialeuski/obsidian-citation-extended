@@ -9,8 +9,8 @@ import {
   DataSource,
   DataSourceLoadResult,
   DataSourceType,
-  MergeStrategy,
 } from '../data-source';
+import { MergeStrategy } from '../library/merge-strategy';
 import { SearchService } from '../search/search.service';
 import {
   IntrospectionService,

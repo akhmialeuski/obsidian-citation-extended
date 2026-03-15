@@ -12,7 +12,7 @@ import { TemplateService } from './services/template.service';
 import { NoteService } from './services/note.service';
 import { LibraryService } from './services/library.service';
 import { UIService } from './services/ui.service';
-import { MergeStrategy } from './data-source';
+import { MergeStrategy } from './library/merge-strategy';
 import { Entry } from './types';
 import { Result, ok, err } from './core/result';
 import {
