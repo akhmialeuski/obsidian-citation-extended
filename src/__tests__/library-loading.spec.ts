@@ -1,6 +1,5 @@
 import { LibraryService } from '../library/library.service';
 import { CitationsPluginSettings } from '../ui/settings/settings';
-import CitationEvents from '../events';
 import { FileSystemAdapter } from 'obsidian';
 import { WorkerManager } from '../util';
 import { LoadingStatus } from '../library/library-state';
@@ -45,17 +44,15 @@ global.window = {
 describe('LibraryService Loading Behavior', () => {
   let service: LibraryService;
   let settings: CitationsPluginSettings;
-  let events: CitationEvents;
   let adapter: FileSystemAdapter;
   let workerManager: WorkerManager;
 
   beforeEach(() => {
     settings = new CitationsPluginSettings();
-    events = new CitationEvents();
     adapter = new FileSystemAdapter();
     workerManager = new WorkerManager({} as Worker);
 
-    service = new LibraryService(settings, events, adapter, workerManager);
+    service = new LibraryService(settings, adapter, workerManager);
 
     jest.spyOn(console, 'error').mockImplementation(() => {});
     jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -82,7 +79,7 @@ describe('LibraryService Loading Behavior', () => {
     }));
 
     const stateChangeSpy = jest.fn();
-    events.on('library-state-changed', stateChangeSpy);
+    service.store.subscribe(stateChangeSpy);
 
     await service.load();
 

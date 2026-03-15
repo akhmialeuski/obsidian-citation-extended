@@ -1,7 +1,6 @@
 import { FileSystemAdapter, Notice, Plugin } from 'obsidian';
 import * as chokidar from 'chokidar';
 
-import CitationEvents from './events';
 import { TemplateService } from './template/template.service';
 import { NoteService } from './notes/note.service';
 import { LibraryService } from './library/library.service';
@@ -36,7 +35,6 @@ export default class CitationPlugin extends Plugin {
   uiService!: UIService;
   editorActions!: EditorActions;
 
-  events = new CitationEvents();
   private fileWatcher?: chokidar.FSWatcher;
 
   async loadSettings(): Promise<void> {
@@ -105,7 +103,6 @@ export default class CitationPlugin extends Plugin {
     );
     this.libraryService = new LibraryService(
       this.settings,
-      this.events,
       vaultAdapter,
       workerManager,
       [],

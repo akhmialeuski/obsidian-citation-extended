@@ -6,7 +6,6 @@ import { CitationsPluginSettings } from '../ui/settings/settings';
 import { Entry } from '../core';
 import { WorkerManager } from '../util';
 import { LocalFileSource } from '../sources/local-file-source';
-import CitationEvents from '../events';
 import { MergeStrategy } from '../library/merge-strategy';
 
 jest.mock('../sources/local-file-source');
@@ -31,7 +30,6 @@ jest.mock(
 describe('LibraryService - Multiple Databases', () => {
   let service: LibraryService;
   let settings: CitationsPluginSettings;
-  let events: CitationEvents;
   let workerManager: WorkerManager;
 
   beforeEach(() => {
@@ -40,7 +38,6 @@ describe('LibraryService - Multiple Databases', () => {
     jest.spyOn(console, 'debug').mockImplementation(() => {});
 
     settings = new CitationsPluginSettings();
-    events = new CitationEvents();
     workerManager = new WorkerManager({} as Worker);
 
     (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
@@ -84,7 +81,6 @@ describe('LibraryService - Multiple Databases', () => {
 
     service = new LibraryService(
       settings,
-      events,
       null,
       workerManager,
       [],
@@ -126,7 +122,6 @@ describe('LibraryService - Multiple Databases', () => {
 
     service = new LibraryService(
       settings,
-      events,
       null,
       workerManager,
       [],

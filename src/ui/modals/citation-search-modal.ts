@@ -1,4 +1,4 @@
-import { App, EventRef, SuggestModal } from 'obsidian';
+import { App, SuggestModal } from 'obsidian';
 import CitationPlugin from '../../main';
 import { Entry } from '../../core';
 import { LibraryState, LoadingStatus } from '../../library/library-state';
@@ -21,7 +21,7 @@ export class CitationSearchModal extends SuggestModal<Entry> {
   limit = 50;
   loadingEl: HTMLElement;
   errorEl: HTMLElement;
-  eventRefs: EventRef[] = [];
+  private unsubscribeStore?: () => void;
 
   constructor(app: App, plugin: CitationPlugin, action: SearchAction) {
     super(app);
@@ -60,13 +60,12 @@ export class CitationSearchModal extends SuggestModal<Entry> {
   onOpen() {
     void super.onOpen();
 
-    this.eventRefs = [
-      this.plugin.events.on('library-state-changed', (state) => {
+    // subscribe fires immediately with current state, so no separate updateState call needed
+    this.unsubscribeStore = this.plugin.libraryService.store.subscribe(
+      (state) => {
         this.updateState(state);
-      }),
-    ];
-
-    this.updateState(this.plugin.libraryService.state);
+      },
+    );
 
     this.inputTimeout = window.setTimeout(() => {
       this.inputEl.addEventListener('keydown', (ev) => this.onInputKeydown(ev));
@@ -108,7 +107,7 @@ export class CitationSearchModal extends SuggestModal<Entry> {
   }
 
   onClose() {
-    this.eventRefs?.forEach((e) => this.plugin.events.offref(e));
+    this.unsubscribeStore?.();
     if (this.inputTimeout) {
       clearTimeout(this.inputTimeout);
       this.inputTimeout = undefined;

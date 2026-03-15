@@ -85,13 +85,12 @@ describe('CitationSearchModal', () => {
   beforeEach(() => {
     app = new App();
     plugin = {
-      events: {
-        on: jest.fn(),
-        offref: jest.fn(),
-      },
       libraryService: {
         isLibraryLoading: false,
         state: { status: 'idle' },
+        store: {
+          subscribe: jest.fn().mockReturnValue(jest.fn()),
+        },
         searchService: {
           search: jest.fn().mockReturnValue([]),
         },

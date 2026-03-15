@@ -1,17 +1,11 @@
 import { LibraryService } from '../library.service';
 import { CitationsPluginSettings } from '../../ui/settings/settings';
-import CitationEvents from '../../events';
 import { FileSystemAdapter } from 'obsidian';
 import { WorkerManager } from '../../util';
 
 jest.mock(
   'obsidian',
   () => ({
-    Events: class {
-      on() {}
-      off() {}
-      trigger() {}
-    },
     FileSystemAdapter: class {
       getBasePath() {
         return '';
@@ -24,7 +18,6 @@ jest.mock(
   }),
   { virtual: true },
 );
-jest.mock('../../events');
 jest.mock('../../util');
 jest.mock(
   'web-worker:../worker',
@@ -37,7 +30,6 @@ jest.mock(
 describe('LibraryService', () => {
   let service: LibraryService;
   let settings: CitationsPluginSettings;
-  let events: CitationEvents;
   let adapter: FileSystemAdapter;
 
   beforeEach(() => {
@@ -46,13 +38,12 @@ describe('LibraryService', () => {
     jest.spyOn(console, 'debug').mockImplementation(() => {});
 
     settings = new CitationsPluginSettings();
-    events = new CitationEvents();
     adapter = new FileSystemAdapter();
 
     // Mock WorkerManager
     const workerManager = new WorkerManager({} as Worker);
 
-    service = new LibraryService(settings, events, adapter, workerManager);
+    service = new LibraryService(settings, adapter, workerManager);
   });
 
   afterEach(() => {

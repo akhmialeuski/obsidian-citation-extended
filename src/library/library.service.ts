@@ -4,7 +4,6 @@ import { CitationsPluginSettings } from '../ui/settings/settings';
 import { Entry, Library, ParseErrorInfo } from '../core';
 import { WorkerManager } from '../util';
 import { LoadingStatus, LibraryState } from './library-state';
-import CitationEvents from '../events';
 import {
   DataSource,
   DataSourceLoadResult,
@@ -55,7 +54,6 @@ export class LibraryService implements ILibraryService {
 
   constructor(
     private settings: CitationsPluginSettings,
-    private events: CitationEvents,
     private vaultAdapter: FileSystemAdapter | null,
     workerManager: WorkerManager,
     sources: DataSource[] = [],
@@ -116,7 +114,6 @@ export class LibraryService implements ILibraryService {
 
   private setState(newState: Partial<LibraryState>): void {
     this.store.setState(newState);
-    this.events.trigger('library-state-changed', this.store.getState());
   }
 
   private mergeEntries(results: Entry[][]): Library {
@@ -171,7 +168,6 @@ export class LibraryService implements ILibraryService {
       parseErrors: [],
     });
     console.debug('Citation plugin: Reloading library from all sources');
-    this.events.trigger('library-load-start');
 
     try {
       this.sources = this.createSources();
@@ -278,7 +274,6 @@ export class LibraryService implements ILibraryService {
         `Citation plugin: successfully loaded library with ${this.library.size} unique entries from ${totalEntries} total entries across ${this.sources.length} sources.`,
       );
 
-      this.events.trigger('library-load-complete');
       this.retryCount = 0;
 
       this.initWatcher();

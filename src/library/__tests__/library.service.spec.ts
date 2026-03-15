@@ -1,7 +1,6 @@
 import { LibraryService } from '../library.service';
 import { CitationsPluginSettings } from '../../ui/settings/settings';
 import { LoadingStatus } from '../library-state';
-import CitationEvents from '../../events';
 import { WorkerManager } from '../../util';
 
 import { FileSystemAdapter } from 'obsidian';
@@ -22,10 +21,6 @@ jest.mock(
     FileSystemAdapter: class {
       static readLocalFile = jest.fn();
       getBasePath = jest.fn().mockReturnValue('/');
-    },
-    Events: class {
-      trigger = jest.fn();
-      on = jest.fn();
     },
     Notice: class {
       hide = jest.fn();
@@ -95,7 +90,6 @@ jest.mock('../../sources/local-file-source');
 describe('LibraryService', () => {
   let service: LibraryService;
   let settings: CitationsPluginSettings;
-  let events: { trigger: jest.Mock; on: jest.Mock };
   let vaultAdapter: { getBasePath: jest.Mock };
   let workerManager: { post: jest.Mock; dispose: jest.Mock };
 
@@ -104,11 +98,6 @@ describe('LibraryService', () => {
     settings.databases = [
       { name: 'Test', path: 'test.json', type: 'biblatex' },
     ];
-
-    events = {
-      trigger: jest.fn(),
-      on: jest.fn(),
-    };
 
     vaultAdapter = {
       getBasePath: jest.fn().mockReturnValue('/vault'),
@@ -132,7 +121,6 @@ describe('LibraryService', () => {
 
     service = new LibraryService(
       settings,
-      events as unknown as CitationEvents,
       vaultAdapter as unknown as FileSystemAdapter,
       workerManager as unknown as WorkerManager,
       [],
@@ -162,12 +150,10 @@ describe('LibraryService', () => {
     const promise = service.load();
 
     expect(service.state.status).toBe(LoadingStatus.Loading);
-    expect(events.trigger).toHaveBeenCalledWith('library-load-start');
 
     await promise;
 
     expect(service.state.status).toBe(LoadingStatus.Success);
-    expect(events.trigger).toHaveBeenCalledWith('library-load-complete');
   });
 
   test('load() handles source error gracefully (now expects Error status)', async () => {
