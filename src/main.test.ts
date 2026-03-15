@@ -124,12 +124,9 @@ describe('CitationPlugin', () => {
     } as CitationsPluginSettings;
     await plugin.onload();
 
-    const unloadSpy = jest.spyOn(plugin.literatureNoteErrorNotifier, 'unload');
-
     plugin.onunload();
 
     expect(plugin.uiService.dispose).toHaveBeenCalled();
     expect(plugin.libraryService.dispose).toHaveBeenCalled();
-    expect(unloadSpy).toHaveBeenCalled();
   });
 });

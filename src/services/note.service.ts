@@ -1,15 +1,14 @@
-import { App, TFile, normalizePath } from 'obsidian';
+import { App, Notice, TFile, TFolder, normalizePath } from 'obsidian';
 import * as path from 'path';
 import { CitationsPluginSettings } from '../settings';
 import { ITemplateService } from '../container';
 import { Library } from '../types';
-import { DISALLOWED_FILENAME_CHARACTERS_RE, Notifier } from '../util';
+import { DISALLOWED_FILENAME_CHARACTERS_RE } from '../util';
+import { TemplateRenderError } from '../errors';
+
+const MAX_FILENAME_LENGTH = 200;
 
 export class NoteService {
-  literatureNoteErrorNotifier = new Notifier(
-    'Unable to access literature note. Please check that the literature note folder exists, or update the Citations plugin settings.',
-  );
-
   constructor(
     private app: App,
     private settings: CitationsPluginSettings,
@@ -26,11 +25,33 @@ export class NoteService {
     if (!titleResult.ok) {
       throw titleResult.error;
     }
-    const title = titleResult.value.replace(
+    let title = titleResult.value.replace(
       DISALLOWED_FILENAME_CHARACTERS_RE,
       '_',
     );
+    // Truncate filename to avoid OS path length limits
+    if (title.length > MAX_FILENAME_LENGTH) {
+      title = title.substring(0, MAX_FILENAME_LENGTH);
+    }
     return path.join(this.settings.literatureNoteFolder, `${title}.md`);
+  }
+
+  /**
+   * Ensure the literature note folder exists, creating it if necessary.
+   */
+  private async ensureFolderExists(folderPath: string): Promise<void> {
+    if (!folderPath || folderPath === '/' || folderPath === '.') return;
+
+    const normalized = normalizePath(folderPath);
+    const existing = this.app.vault.getAbstractFileByPath(normalized);
+    if (existing instanceof TFolder) return;
+    if (existing) return; // Path exists but is a file — let vault.create handle the error
+
+    try {
+      await this.app.vault.createFolder(normalized);
+    } catch {
+      // Folder may have been created concurrently
+    }
   }
 
   /**
@@ -40,7 +61,18 @@ export class NoteService {
     citekey: string,
     library: Library,
   ): Promise<TFile> {
-    const notePath = this.getPathForCitekey(citekey, library);
+    let notePath: string;
+    try {
+      notePath = this.getPathForCitekey(citekey, library);
+    } catch (exc) {
+      if (exc instanceof TemplateRenderError) {
+        new Notice(
+          `Citations: Failed to render literature note title template. Check your template syntax. Error: ${exc.message}`,
+        );
+      }
+      throw exc;
+    }
+
     const normalizedPath = normalizePath(notePath);
 
     let file = this.app.vault.getAbstractFileByPath(normalizedPath);
@@ -52,15 +84,29 @@ export class NoteService {
         file = matches[0];
       } else {
         try {
+          // Ensure the target folder exists before creating the note
+          const folder = path.dirname(notePath);
+          await this.ensureFolderExists(folder);
+
           const entry = library.entries[citekey];
           const variables = this.templateService.getTemplateVariables(entry);
           const contentResult = this.templateService.getContent(variables);
           if (!contentResult.ok) {
+            new Notice(
+              `Citations: Failed to render literature note content template. Error: ${contentResult.error.message}`,
+            );
             throw contentResult.error;
           }
           file = await this.app.vault.create(notePath, contentResult.value);
         } catch (exc) {
-          this.literatureNoteErrorNotifier.show();
+          if (exc instanceof TemplateRenderError) {
+            // Already shown a Notice above
+          } else {
+            const errorMsg = (exc as Error).message || String(exc);
+            new Notice(
+              `Citations: Unable to create literature note "${path.basename(notePath)}". ${errorMsg}`,
+            );
+          }
           throw exc;
         }
       }

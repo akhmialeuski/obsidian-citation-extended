@@ -535,6 +535,25 @@ export class EntryBibLaTeXAdapter extends Entry {
     return this.data.type;
   }
 
+  /**
+   * Normalize file paths from various BibTeX exporters.
+   * Mendeley uses `:C\:\\Project/Literature/MyPDF.pdf:PDF` format.
+   */
+  private static normalizeFilePath(filePath: string): string {
+    let p = filePath.trim();
+    // Mendeley format: :C\:\\path:PDF — strip leading colon and trailing :TYPE
+    if (p.match(/^:[A-Za-z][\\/]/)) {
+      p = p.substring(1);
+    }
+    // Strip trailing :PDF, :pdf, :HTML, etc.
+    p = p.replace(/:[A-Za-z]+$/, '');
+    // BibTeX escaped colon (Mendeley: C\:\\path → C:\\path after unescape)
+    p = p.replace(/\\:/g, ':');
+    // Normalize backslashes to forward slashes
+    p = p.replace(/\\\\/g, '/').replace(/\\/g, '/');
+    return p;
+  }
+
   get files(): string[] {
     // For some reason the bibtex parser doesn't reliably parse file list to
     // array ; so we'll do it manually / redundantly
@@ -546,7 +565,9 @@ export class EntryBibLaTeXAdapter extends Entry {
       ret = ret.concat(this.data.fields.files.flatMap((x) => x.split(';')));
     }
 
-    return ret;
+    return ret
+      .map((f) => EntryBibLaTeXAdapter.normalizeFilePath(f))
+      .filter((f) => f.length > 0);
   }
 
   get authorString(): string | undefined {

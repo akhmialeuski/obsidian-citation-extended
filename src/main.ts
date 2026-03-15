@@ -29,11 +29,7 @@ import {
   DEFAULT_SETTINGS,
   validateSettings,
 } from './settings';
-import {
-  DISALLOWED_FILENAME_CHARACTERS_RE,
-  Notifier,
-  WorkerManager,
-} from './util';
+import { DISALLOWED_FILENAME_CHARACTERS_RE, WorkerManager } from './util';
 import LoadWorker from 'web-worker:./worker';
 
 export default class CitationPlugin extends Plugin {
@@ -45,10 +41,6 @@ export default class CitationPlugin extends Plugin {
 
   events = new CitationEvents();
   private fileWatcher?: chokidar.FSWatcher;
-
-  literatureNoteErrorNotifier = new Notifier(
-    'Unable to access literature note. Please check that the literature note folder exists, and that the note name is valid.',
-  );
 
   private getActiveEditor(): Editor | null {
     // Standard MarkdownView approach
@@ -142,7 +134,6 @@ export default class CitationPlugin extends Plugin {
   onunload(): void {
     this.uiService.dispose();
     this.libraryService.dispose();
-    this.literatureNoteErrorNotifier.unload();
   }
 
   init(): void {
