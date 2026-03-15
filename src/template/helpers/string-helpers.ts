@@ -7,7 +7,12 @@ export function registerStringHelpers(hbs: HandlebarsInstance): void {
     'replace',
     (value: string, pattern: string, replacement: string) => {
       if (typeof value !== 'string') return value;
-      return value.replace(new RegExp(pattern, 'g'), replacement);
+      try {
+        return value.replace(new RegExp(pattern, 'g'), replacement);
+      } catch {
+        console.warn(`Invalid regex pattern in replace helper: ${pattern}`);
+        return value;
+      }
     },
   );
   hbs.registerHelper('truncate', (value: string, length: number) => {
@@ -18,8 +23,13 @@ export function registerStringHelpers(hbs: HandlebarsInstance): void {
 
   hbs.registerHelper('match', (value: string, pattern: string) => {
     if (typeof value !== 'string') return '';
-    const match = value.match(new RegExp(pattern));
-    return match ? match[0] : '';
+    try {
+      const match = value.match(new RegExp(pattern));
+      return match ? match[0] : '';
+    } catch {
+      console.warn(`Invalid regex pattern in match helper: ${pattern}`);
+      return '';
+    }
   });
 
   hbs.registerHelper('quote', (value: unknown) => {

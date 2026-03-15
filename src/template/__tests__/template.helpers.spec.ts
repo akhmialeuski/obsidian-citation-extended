@@ -220,6 +220,23 @@ describe('TemplateService', () => {
         '',
       );
     });
+
+    it('should not throw on invalid regex in replace', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      expectOk(
+        service.render('{{replace "hello" "[invalid" "x"}}', mockContext),
+        'hello',
+      );
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it('should not throw on invalid regex in match', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      expectOk(service.render('{{match "hello" "[invalid"}}', mockContext), '');
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
   });
 
   describe('Nested Helpers', () => {
