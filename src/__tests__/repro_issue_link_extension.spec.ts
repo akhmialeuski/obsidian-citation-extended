@@ -1,7 +1,7 @@
 import CitationPlugin from '../main';
 import { CitationsPluginSettings } from '../settings';
 import { App, PluginManifest, TFile } from 'obsidian';
-import { LibraryService } from '../services/library.service';
+import { LibraryService } from '../library/library.service';
 import { NoteService } from '../notes/note.service';
 import { TemplateService } from '../template/template.service';
 
@@ -64,7 +64,7 @@ jest.mock(
 );
 
 jest.mock('chokidar');
-jest.mock('../services/library.service');
+jest.mock('../library/library.service');
 jest.mock('../notes/note.service');
 jest.mock('../template/template.service');
 jest.mock('../settings');

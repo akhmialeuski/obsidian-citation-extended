@@ -7,7 +7,7 @@ export type StoreSubscriber<T> = (state: T) => void;
  * Replaces direct event triggers for state management.
  */
 export class LibraryStore {
-  private state: LibraryState = { status: LoadingStatus.Idle };
+  private state: LibraryState = { status: LoadingStatus.Idle, parseErrors: [] };
   private subscribers = new Set<StoreSubscriber<LibraryState>>();
 
   getState(): LibraryState {

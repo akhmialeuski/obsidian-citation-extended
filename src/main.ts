@@ -10,7 +10,7 @@ import * as chokidar from 'chokidar';
 import CitationEvents from './events';
 import { TemplateService } from './template/template.service';
 import { NoteService } from './notes/note.service';
-import { LibraryService } from './services/library.service';
+import { LibraryService } from './library/library.service';
 import { UIService } from './services/ui.service';
 import { MergeStrategy } from './library/merge-strategy';
 import {

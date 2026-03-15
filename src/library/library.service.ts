@@ -1,17 +1,16 @@
-import { FileSystemAdapter, Notice } from 'obsidian';
+import { FileSystemAdapter } from 'obsidian';
 import * as path from 'path';
 import { CitationsPluginSettings } from '../settings';
 import { Entry, Library, ParseErrorInfo } from '../core';
 import { WorkerManager } from '../util';
-import { Notifier } from '../ui/notifier';
-import { LoadingStatus, LibraryState } from '../library/library-state';
+import { LoadingStatus, LibraryState } from './library-state';
 import CitationEvents from '../events';
 import {
   DataSource,
   DataSourceLoadResult,
   DataSourceType,
 } from '../data-source';
-import { MergeStrategy } from '../library/merge-strategy';
+import { MergeStrategy } from './merge-strategy';
 import { SearchService } from '../search/search.service';
 import {
   IntrospectionService,
@@ -19,7 +18,7 @@ import {
 } from '../template/introspection.service';
 import { ILibraryService } from '../container';
 import { IDataSourceFactory } from '../sources/data-source-factory';
-import { LibraryStore } from '../library/library-store';
+import { LibraryStore } from './library-store';
 import { LocalFileSource } from '../sources/local-file-source';
 
 const LOAD_TIMEOUT_MS = 10_000;
@@ -53,10 +52,6 @@ export class LibraryService implements ILibraryService {
   private retryTimer: number | null = null;
   private retryCount = 0;
   private dataSourceFactory: IDataSourceFactory | null = null;
-
-  loadErrorNotifier = new Notifier(
-    'Unable to load citations. Please update Citations plugin settings.',
-  );
 
   constructor(
     private settings: CitationsPluginSettings,
@@ -170,7 +165,11 @@ export class LibraryService implements ILibraryService {
       }
     }
 
-    this.setState({ status: LoadingStatus.Loading, error: undefined });
+    this.setState({
+      status: LoadingStatus.Loading,
+      error: undefined,
+      parseErrors: [],
+    });
     console.debug('Citation plugin: Reloading library from all sources');
     this.events.trigger('library-load-start');
 
@@ -251,33 +250,35 @@ export class LibraryService implements ILibraryService {
       console.debug('Citation plugin: Building search index');
       this.searchService.buildIndex(Object.values(this.library.entries));
 
-      const totalEntries = entryArrays.reduce(
-        (sum, entries) => sum + entries.length,
-        0,
-      );
-
-      this.setState({
-        status: LoadingStatus.Success,
-        lastLoaded: new Date(),
-        progress: { current: this.library.size, total: this.library.size },
-      });
+      const parseErrorMessages =
+        totalParseErrors > 0
+          ? allParseErrors.slice(0, 10).map((pe) => pe.message)
+          : [];
 
       if (totalParseErrors > 0) {
         console.warn(
           `Citation plugin: ${totalParseErrors} entries skipped due to parse errors.`,
           allParseErrors.slice(0, 5),
         );
-        new Notice(
-          `Citations: Loaded ${this.library.size} entries. ${totalParseErrors} entries skipped due to parse errors. Check console for details.`,
-        );
       }
+
+      this.setState({
+        status: LoadingStatus.Success,
+        lastLoaded: new Date(),
+        progress: { current: this.library.size, total: this.library.size },
+        parseErrors: parseErrorMessages,
+      });
+
+      const totalEntries = entryArrays.reduce(
+        (sum, entries) => sum + entries.length,
+        0,
+      );
 
       console.debug(
         `Citation plugin: successfully loaded library with ${this.library.size} unique entries from ${totalEntries} total entries across ${this.sources.length} sources.`,
       );
 
       this.events.trigger('library-load-complete');
-      this.loadErrorNotifier.hide();
       this.retryCount = 0;
 
       this.initWatcher();
@@ -288,10 +289,13 @@ export class LibraryService implements ILibraryService {
 
       const errorMsg = (e as Error).message || String(e);
       console.error('Citation plugin: Error loading library', e);
-      this.setState({ status: LoadingStatus.Error, error: e as Error });
-      this.loadErrorNotifier.show(
-        `Unable to load citations: ${errorMsg}. Please check plugin settings and file paths.`,
-      );
+      this.setState({
+        status: LoadingStatus.Error,
+        error: e as Error,
+        parseErrors: [
+          `Unable to load citations: ${errorMsg}. Please check plugin settings and file paths.`,
+        ],
+      });
 
       this.handleErrorRetry();
       return null;
@@ -403,7 +407,6 @@ export class LibraryService implements ILibraryService {
 
     this.sources = [];
     this.loadWorker.dispose();
-    this.loadErrorNotifier.unload();
     this.store.dispose();
 
     console.debug('LibraryService: Disposed all resources');

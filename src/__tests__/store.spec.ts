@@ -14,7 +14,10 @@ describe('LibraryStore', () => {
 
   describe('getState()', () => {
     it('should return initial Idle state', () => {
-      expect(store.getState()).toEqual({ status: LoadingStatus.Idle });
+      expect(store.getState()).toEqual({
+        status: LoadingStatus.Idle,
+        parseErrors: [],
+      });
     });
 
     it('should return a copy of the state (no mutation)', () => {

@@ -10,4 +10,5 @@ export interface LibraryState {
   progress?: { current: number; total: number };
   error?: Error;
   lastLoaded?: Date;
+  parseErrors: string[];
 }

@@ -1,4 +1,4 @@
-import { LibraryService } from '../services/library.service';
+import { LibraryService } from '../library/library.service';
 import { CitationsPluginSettings } from '../settings';
 import CitationEvents from '../events';
 import { FileSystemAdapter } from 'obsidian';
@@ -30,14 +30,6 @@ jest.mock(
   }),
   { virtual: true },
 );
-
-jest.mock('../ui/notifier', () => ({
-  Notifier: jest.fn().mockImplementation(() => ({
-    show: jest.fn(),
-    hide: jest.fn(),
-    unload: jest.fn(),
-  })),
-}));
 
 jest.mock('../util', () => ({
   WorkerManager: jest.fn().mockImplementation(() => ({

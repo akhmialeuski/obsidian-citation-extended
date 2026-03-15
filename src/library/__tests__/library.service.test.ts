@@ -1,9 +1,8 @@
-import { LibraryService } from './library.service';
-import { CitationsPluginSettings } from '../settings';
-import CitationEvents from '../events';
+import { LibraryService } from '../library.service';
+import { CitationsPluginSettings } from '../../settings';
+import CitationEvents from '../../events';
 import { FileSystemAdapter } from 'obsidian';
-import { WorkerManager } from '../util';
-import { Notifier } from '../ui/notifier';
+import { WorkerManager } from '../../util';
 
 jest.mock(
   'obsidian',
@@ -25,9 +24,8 @@ jest.mock(
   }),
   { virtual: true },
 );
-jest.mock('../events');
-jest.mock('../util');
-jest.mock('../ui/notifier');
+jest.mock('../../events');
+jest.mock('../../util');
 jest.mock(
   'web-worker:../worker',
   () => {
@@ -53,13 +51,6 @@ describe('LibraryService', () => {
 
     // Mock WorkerManager
     const workerManager = new WorkerManager({} as Worker);
-
-    // Mock Notifier
-    (Notifier as unknown as jest.Mock).mockImplementation(() => ({
-      show: jest.fn(),
-      hide: jest.fn(),
-      unload: jest.fn(),
-    }));
 
     service = new LibraryService(settings, events, adapter, workerManager);
   });

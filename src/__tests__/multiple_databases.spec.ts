@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { LibraryService } from '../services/library.service';
+import { LibraryService } from '../library/library.service';
 import { CitationsPluginSettings } from '../settings';
 import { Entry } from '../core';
 import { WorkerManager } from '../util';

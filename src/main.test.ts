@@ -2,7 +2,7 @@ import CitationPlugin from './main';
 import { CitationsPluginSettings } from './settings';
 import { App, FileSystemAdapter, PluginManifest } from 'obsidian';
 import * as chokidar from 'chokidar';
-import { LibraryService } from './services/library.service';
+import { LibraryService } from './library/library.service';
 
 jest.mock(
   'obsidian',
@@ -51,7 +51,7 @@ jest.mock(
   { virtual: true },
 );
 jest.mock('chokidar');
-jest.mock('./services/library.service');
+jest.mock('./library/library.service');
 jest.mock('./template/template.service');
 jest.mock('./notes/note.service');
 jest.mock('./services/ui.service');
@@ -91,7 +91,6 @@ describe('CitationPlugin', () => {
       load: jest.fn(),
       resolveLibraryPath: jest.fn().mockReturnValue('/path/to/lib'),
       dispose: jest.fn(),
-      loadErrorNotifier: { show: jest.fn() },
       getSources: jest.fn().mockImplementation(() => {
         return ['source'];
       }),

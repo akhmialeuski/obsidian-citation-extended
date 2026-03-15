@@ -1,4 +1,4 @@
-import { App } from 'obsidian';
+import { App, Notice } from 'obsidian';
 import { LoadingStatus, LibraryState } from '../library/library-state';
 import {
   CitationSearchModal,
@@ -25,6 +25,7 @@ export class UIService implements IUIService {
     this.unsubscribe = this.plugin.libraryService.store.subscribe(
       (state: LibraryState) => {
         this.updateStatusBar(state);
+        this.showStateNotices(state);
       },
     );
 
@@ -56,6 +57,20 @@ export class UIService implements IUIService {
       this.statusBarItem.addClass(cls);
     } else {
       this.statusBarItem.removeClass('mod-error');
+    }
+  }
+
+  private showStateNotices(state: LibraryState): void {
+    if (state.status === LoadingStatus.Error && state.parseErrors.length > 0) {
+      new Notice(state.parseErrors[0]);
+    } else if (
+      state.status === LoadingStatus.Success &&
+      state.parseErrors.length > 0
+    ) {
+      const entryCount = state.progress?.current ?? 0;
+      new Notice(
+        `Citations: Loaded ${entryCount} entries. ${state.parseErrors.length} entries skipped due to parse errors. Check console for details.`,
+      );
     }
   }
 

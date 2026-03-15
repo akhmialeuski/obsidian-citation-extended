@@ -1,6 +1,6 @@
 import { LibraryService } from '../library.service';
 import { CitationsPluginSettings } from '../../settings';
-import { LoadingStatus } from '../../library/library-state';
+import { LoadingStatus } from '../library-state';
 import CitationEvents from '../../events';
 import { WorkerManager } from '../../util';
 
@@ -49,14 +49,6 @@ jest.mock('fs', () => {
 
 // Mock util
 const mockWorkerManagerPost = jest.fn().mockResolvedValue([]);
-
-jest.mock('../../ui/notifier', () => ({
-  Notifier: class {
-    show = jest.fn();
-    hide = jest.fn();
-    unload = jest.fn();
-  },
-}));
 
 jest.mock('../../util', () => {
   return {
