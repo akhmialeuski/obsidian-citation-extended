@@ -1,5 +1,6 @@
 import { Entry, TemplateContext, Result, TemplateRenderError } from './core';
 import { Library } from './core';
+import { TFile } from 'obsidian';
 import { LibraryState } from './library/library-state';
 import { DataSource } from './data-source';
 import { SearchService } from './search/search.service';
@@ -35,6 +36,19 @@ export interface ITemplateService {
     alternative?: boolean,
   ): Result<string, TemplateRenderError>;
   validate(templateStr: string): Result<void, TemplateRenderError>;
+}
+
+export interface INoteService {
+  getPathForCitekey(citekey: string, library: Library): string;
+  getOrCreateLiteratureNoteFile(
+    citekey: string,
+    library: Library,
+  ): Promise<TFile>;
+  openLiteratureNote(
+    citekey: string,
+    library: Library,
+    newPane: boolean,
+  ): Promise<void>;
 }
 
 export interface ILibraryService {

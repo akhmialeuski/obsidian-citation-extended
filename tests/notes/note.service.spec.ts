@@ -92,4 +92,48 @@ describe('NoteService', () => {
       TemplateRenderError,
     );
   });
+
+  describe('openLiteratureNote', () => {
+    it('propagates errors from getOrCreateLiteratureNoteFile', async () => {
+      // Mock vault so getOrCreateLiteratureNoteFile fails
+      (app as unknown as Record<string, unknown>).vault = {
+        getAbstractFileByPath: jest.fn(() => null),
+        getMarkdownFiles: jest.fn(() => []),
+        createFolder: jest.fn().mockRejectedValue(new Error('Disk full')),
+        create: jest.fn().mockRejectedValue(new Error('Disk full')),
+      };
+      (app as unknown as Record<string, unknown>).workspace = {
+        getLeaf: jest.fn(() => ({
+          openFile: jest.fn(),
+        })),
+      };
+
+      await expect(
+        noteService.openLiteratureNote('citekey1', library, false),
+      ).rejects.toThrow();
+    });
+
+    it('opens the file in the requested pane on success', async () => {
+      const mockFile = { path: 'Reading notes/My Title.md' };
+      const openFileFn = jest.fn();
+      (app as unknown as Record<string, unknown>).vault = {
+        getAbstractFileByPath: jest.fn(() => mockFile),
+      };
+      (app as unknown as Record<string, unknown>).workspace = {
+        getLeaf: jest.fn(() => ({
+          openFile: openFileFn,
+        })),
+      };
+
+      // getAbstractFileByPath returns a mock that is not instanceof TFile,
+      // so we need to make it pass the check
+      const { TFile } = jest.requireMock('obsidian');
+      Object.setPrototypeOf(mockFile, TFile.prototype);
+
+      await noteService.openLiteratureNote('citekey1', library, true);
+
+      expect(app.workspace.getLeaf).toHaveBeenCalledWith(true);
+      expect(openFileFn).toHaveBeenCalledWith(mockFile);
+    });
+  });
 });

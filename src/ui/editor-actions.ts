@@ -29,7 +29,18 @@ export class EditorActions {
       return;
     }
 
-    await this.plugin.noteService.openLiteratureNote(citekey, library, newPane);
+    try {
+      await this.plugin.noteService.openLiteratureNote(
+        citekey,
+        library,
+        newPane,
+      );
+    } catch (e) {
+      console.error('Failed to open literature note:', e);
+      new Notice(
+        'Unable to open literature note. Please check that the literature note folder exists.',
+      );
+    }
   }
 
   async insertLiteratureNoteLink(citekey: string): Promise<void> {

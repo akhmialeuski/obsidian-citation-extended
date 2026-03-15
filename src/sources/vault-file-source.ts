@@ -51,7 +51,7 @@ export class VaultFileSource implements DataSource {
         databaseType: this.format,
       });
 
-      // Backward compatibility: a cached worker may still return a plain array
+      // TODO(v0.5.0): Remove backward compatibility shim once all workers return WorkerResponse
       const result: WorkerResponse = Array.isArray(raw)
         ? { entries: raw as EntryData[], parseErrors: [] }
         : raw;

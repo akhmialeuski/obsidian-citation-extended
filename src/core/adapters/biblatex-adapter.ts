@@ -54,7 +54,6 @@ export class EntryBibLaTeXAdapter extends Entry {
     this.eprint = this.getField('eprint');
     this.eprinttype = this.getField('eprinttype');
     this.event = this.getField('eventtitle');
-    this.event = this.getField('eventtitle');
     // BibLaTeX 'venue' or 'location' (if event is present) could be eventPlace.
     // Standard mapping: venue is often used for event place.
     this.eventPlace = this.getField('venue') || this.getField('location');

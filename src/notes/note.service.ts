@@ -1,13 +1,13 @@
 import { App, TFile, TFolder, normalizePath } from 'obsidian';
 import * as path from 'path';
 import { CitationsPluginSettings } from '../ui/settings/settings';
-import { ITemplateService } from '../container';
+import { INoteService, ITemplateService } from '../container';
 import { Library } from '../core';
 import { DISALLOWED_FILENAME_CHARACTERS_RE } from '../util';
 
 const MAX_FILENAME_LENGTH = 200;
 
-export class NoteService {
+export class NoteService implements INoteService {
   constructor(
     private app: App,
     private settings: CitationsPluginSettings,
@@ -101,11 +101,7 @@ export class NoteService {
     library: Library,
     newPane: boolean,
   ): Promise<void> {
-    try {
-      const file = await this.getOrCreateLiteratureNoteFile(citekey, library);
-      await this.app.workspace.getLeaf(newPane).openFile(file);
-    } catch (e) {
-      console.error('Failed to open literature note:', e);
-    }
+    const file = await this.getOrCreateLiteratureNoteFile(citekey, library);
+    await this.app.workspace.getLeaf(newPane).openFile(file);
   }
 }

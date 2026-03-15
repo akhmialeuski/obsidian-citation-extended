@@ -81,5 +81,8 @@
     "transform": {
       "^.+\\.ts$": "ts-jest"
     }
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "^4.53.3"
   }
 }

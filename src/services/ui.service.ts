@@ -11,6 +11,7 @@ import { IUIService } from '../container';
 export class UIService implements IUIService {
   private statusBarItem: HTMLElement;
   private unsubscribe: (() => void) | null = null;
+  private lastNotifiedStatus?: LoadingStatus;
 
   constructor(
     private app: App,
@@ -59,6 +60,9 @@ export class UIService implements IUIService {
   }
 
   private showStateNotices(state: LibraryState): void {
+    if (state.status === this.lastNotifiedStatus) return;
+    this.lastNotifiedStatus = state.status;
+
     if (state.status === LoadingStatus.Error && state.parseErrors.length > 0) {
       new Notice(state.parseErrors[0]);
     } else if (
