@@ -1,10 +1,4 @@
-import {
-  Editor,
-  FileSystemAdapter,
-  MarkdownView,
-  Notice,
-  Plugin,
-} from 'obsidian';
+import { FileSystemAdapter, Notice, Plugin } from 'obsidian';
 import * as chokidar from 'chokidar';
 
 import CitationEvents from './events';
@@ -12,6 +6,7 @@ import { TemplateService } from './template/template.service';
 import { NoteService } from './notes/note.service';
 import { LibraryService } from './library/library.service';
 import { UIService } from './services/ui.service';
+import { EditorActions } from './ui/editor-actions';
 import { MergeStrategy } from './library/merge-strategy';
 import {
   Entry,
@@ -24,7 +19,6 @@ import {
 } from './core';
 import { DataSourceFactory } from './sources/data-source-factory';
 
-import { VaultExt, WorkspaceExt } from './obsidian-extensions.d';
 import {
   CitationSettingTab,
   CitationsPluginSettings,
@@ -40,19 +34,10 @@ export default class CitationPlugin extends Plugin {
   noteService!: NoteService;
   libraryService!: LibraryService;
   uiService!: UIService;
+  editorActions!: EditorActions;
 
   events = new CitationEvents();
   private fileWatcher?: chokidar.FSWatcher;
-
-  private getActiveEditor(): Editor | null {
-    // Standard MarkdownView approach
-    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (view?.editor) return view.editor;
-
-    // Fallback: activeEditor supports Canvas text nodes, Lineage, etc.
-    const ext = this.app.workspace as WorkspaceExt;
-    return ext.activeEditor?.editor ?? null;
-  }
 
   async loadSettings(): Promise<void> {
     this.settings = new CitationsPluginSettings();
@@ -129,6 +114,7 @@ export default class CitationPlugin extends Plugin {
     this.libraryService.setDataSourceFactory(dataSourceFactory);
 
     this.uiService = new UIService(this.app, this);
+    this.editorActions = new EditorActions(this);
 
     this.init();
   }
@@ -213,110 +199,5 @@ export default class CitationPlugin extends Plugin {
       entryResult.value,
     );
     return this.templateService.getMarkdownCitation(variables, true);
-  }
-
-  async openLiteratureNote(citekey: string, newPane: boolean): Promise<void> {
-    const library = this.libraryService.library;
-    if (!library) {
-      new Notice(new LibraryNotReadyError().message);
-      return;
-    }
-
-    const entryResult = this.getEntry(citekey);
-    if (!entryResult.ok) {
-      new Notice(entryResult.error.message);
-      return;
-    }
-
-    await this.noteService.openLiteratureNote(citekey, library, newPane);
-  }
-
-  async insertLiteratureNoteLink(citekey: string): Promise<void> {
-    const editor = this.getActiveEditor();
-    if (!editor) {
-      new Notice('No active editor found');
-      return;
-    }
-
-    const library = this.libraryService.library;
-    if (!library) {
-      new Notice(new LibraryNotReadyError().message);
-      return;
-    }
-
-    const entryResult = this.getEntry(citekey);
-    if (!entryResult.ok) {
-      new Notice(entryResult.error.message);
-      return;
-    }
-
-    try {
-      const file = await this.noteService.getOrCreateLiteratureNoteFile(
-        citekey,
-        library,
-      );
-      const titleResult = this.getTitleForCitekey(citekey);
-      if (!titleResult.ok) {
-        new Notice(titleResult.error.message);
-        return;
-      }
-
-      const useMarkdown = (this.app.vault as VaultExt).getConfig(
-        'useMarkdownLinks',
-      );
-
-      let linkText: string;
-      if (useMarkdown) {
-        const uri = encodeURI(
-          this.app.metadataCache.fileToLinktext(file, '', false),
-        );
-        linkText = `[${titleResult.value}](${uri})`;
-      } else {
-        linkText = this.app.metadataCache.fileToLinktext(file, '', true);
-        linkText = `[[${linkText}]]`;
-      }
-
-      editor.replaceSelection(linkText);
-    } catch (error) {
-      console.error('Failed to insert literature note link:', error);
-      new Notice('Failed to insert literature note link');
-    }
-  }
-
-  insertLiteratureNoteContent(citekey: string): void {
-    const editor = this.getActiveEditor();
-    if (!editor) {
-      new Notice('No active editor found');
-      return;
-    }
-
-    const contentResult = this.getInitialContentForCitekey(citekey);
-    if (!contentResult.ok) {
-      new Notice(contentResult.error.message);
-      return;
-    }
-
-    const cursor = editor.getCursor();
-    editor.replaceRange(contentResult.value, cursor);
-  }
-
-  insertMarkdownCitation(citekey: string, alternative = false): void {
-    const editor = this.getActiveEditor();
-    if (!editor) {
-      new Notice('No active editor found');
-      return;
-    }
-
-    const citationResult = alternative
-      ? this.getAlternativeMarkdownCitationForCitekey(citekey)
-      : this.getMarkdownCitationForCitekey(citekey);
-
-    if (!citationResult.ok) {
-      new Notice(citationResult.error.message);
-      return;
-    }
-
-    const cursor = editor.getCursor();
-    editor.replaceRange(citationResult.value, cursor);
   }
 }

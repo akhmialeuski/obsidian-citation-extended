@@ -3,6 +3,7 @@ import { CitationsPluginSettings } from '../settings';
 import { App, PluginManifest, TFile } from 'obsidian';
 import { NoteService } from '../notes/note.service';
 import { LibraryService } from '../library/library.service';
+import { EditorActions } from '../ui/editor-actions';
 
 // Mock Obsidian types
 jest.mock(
@@ -112,6 +113,8 @@ describe('Issue 161: Insert Literature Note Link', () => {
       getTemplateVariables: jest.fn(),
       getTitle: jest.fn().mockReturnValue({ ok: true, value: 'Test Article' }),
     } as unknown as CitationPlugin['templateService'];
+
+    plugin.editorActions = new EditorActions(plugin);
   });
 
   test('should use fileToLinktext for WikiLinks to ensure correct path resolution', async () => {
@@ -127,7 +130,7 @@ describe('Issue 161: Insert Literature Note Link', () => {
     );
 
     // Act
-    await plugin.insertLiteratureNoteLink('test_key');
+    await plugin.editorActions.insertLiteratureNoteLink('test_key');
 
     // Assert
     expect(
@@ -162,7 +165,7 @@ describe('Issue 161: Insert Literature Note Link', () => {
     );
 
     // Act
-    await plugin.insertLiteratureNoteLink('test_key');
+    await plugin.editorActions.insertLiteratureNoteLink('test_key');
 
     // Assert
     expect(app.metadataCache.fileToLinktext).toHaveBeenCalledWith(

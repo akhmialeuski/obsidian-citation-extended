@@ -229,7 +229,7 @@ export class OpenNoteAction implements SearchAction {
   onChoose = async (item: Entry, evt: MouseEvent | KeyboardEvent) => {
     if (evt instanceof MouseEvent || evt.key == 'Enter') {
       const newPane = evt instanceof KeyboardEvent && evt.ctrlKey;
-      await this.plugin.openLiteratureNote(item.id, newPane);
+      await this.plugin.editorActions.openLiteratureNote(item.id, newPane);
     } else if (evt.key == 'Tab') {
       if (evt.shiftKey) {
         const files = item.files || [];
@@ -264,7 +264,7 @@ export class InsertNoteLinkAction implements SearchAction {
   constructor(private plugin: CitationPlugin) {}
 
   onChoose = async (item: Entry) => {
-    await this.plugin.insertLiteratureNoteLink(item.id);
+    await this.plugin.editorActions.insertLiteratureNoteLink(item.id);
   };
 
   getInstructions() {
@@ -281,7 +281,7 @@ export class InsertNoteContentAction implements SearchAction {
   constructor(private plugin: CitationPlugin) {}
 
   onChoose = (item: Entry) => {
-    this.plugin.insertLiteratureNoteContent(item.id);
+    this.plugin.editorActions.insertLiteratureNoteContent(item.id);
   };
 
   getInstructions() {
@@ -302,7 +302,7 @@ export class InsertCitationAction implements SearchAction {
 
   onChoose = (item: Entry, evt: MouseEvent | KeyboardEvent) => {
     const isAlternative = evt instanceof KeyboardEvent && evt.shiftKey;
-    this.plugin.insertMarkdownCitation(item.id, isAlternative);
+    this.plugin.editorActions.insertMarkdownCitation(item.id, isAlternative);
   };
 
   getInstructions() {

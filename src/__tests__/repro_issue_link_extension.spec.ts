@@ -4,6 +4,7 @@ import { App, PluginManifest, TFile } from 'obsidian';
 import { LibraryService } from '../library/library.service';
 import { NoteService } from '../notes/note.service';
 import { TemplateService } from '../template/template.service';
+import { EditorActions } from '../ui/editor-actions';
 
 /** @jest-environment jsdom */
 
@@ -108,6 +109,8 @@ describe('Bug Reproduction: Incorrect Markdown Link Extension', () => {
       library: { entries: { 'test-citekey': { id: 'test-citekey' } } },
     } as unknown as LibraryService;
 
+    plugin.editorActions = new EditorActions(plugin);
+
     // Mock Active Editor
     const mockEditor = {
       replaceSelection: jest.fn(),
@@ -137,7 +140,7 @@ describe('Bug Reproduction: Incorrect Markdown Link Extension', () => {
     );
     // END: Mock setup
 
-    await plugin.insertLiteratureNoteLink('test-citekey');
+    await plugin.editorActions.insertLiteratureNoteLink('test-citekey');
 
     // Expected behavior after fix:
     // app.metadataCache.fileToLinktext should be called with omitMdExtension = true
