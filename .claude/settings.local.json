@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l /c/Users/AnatolKhmialeuski/Workspace/obsidian-citation-extended/src/*.ts /c/Users/AnatolKhmialeuski/Workspace/obsidian-citation-extended/src/**/*.ts)",
+      "Bash(find C:UsersAnatolKhmialeuskiWorkspaceobsidian-citation-extended -maxdepth 1 -name .eslintrc* -o -name eslint.config*)",
+      "Bash(npm run:*)",
+      "Bash(npm test:*)",
+      "Bash(npm i:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ]
+  }
+}

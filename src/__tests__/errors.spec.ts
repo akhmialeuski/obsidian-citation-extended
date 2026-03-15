@@ -4,7 +4,7 @@ import {
   EntryNotFoundError,
   TemplateRenderError,
   DataSourceError,
-} from '../errors';
+} from '../core/errors';
 
 describe('Domain errors', () => {
   describe('CitationError', () => {

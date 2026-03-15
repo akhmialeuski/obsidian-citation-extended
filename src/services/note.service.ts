@@ -4,7 +4,7 @@ import { CitationsPluginSettings } from '../settings';
 import { ITemplateService } from '../container';
 import { Library } from '../types';
 import { DISALLOWED_FILENAME_CHARACTERS_RE } from '../util';
-import { TemplateRenderError } from '../errors';
+import { TemplateRenderError } from '../core/errors';
 
 const MAX_FILENAME_LENGTH = 200;
 

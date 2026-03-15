@@ -6,8 +6,8 @@ import {
   DataSourceDefinition,
   DataSourceType,
 } from './data-source';
-import { DataSourceError, TemplateRenderError } from './errors';
-import { Result } from './result';
+import { DataSourceError, TemplateRenderError } from './core/errors';
+import { Result } from './core/result';
 import { WorkerManager } from './util';
 import { LocalFileSource, VaultFileSource } from './sources';
 import { SearchService } from './search/search.service';

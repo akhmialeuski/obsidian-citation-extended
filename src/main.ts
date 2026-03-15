@@ -14,12 +14,12 @@ import { LibraryService } from './services/library.service';
 import { UIService } from './services/ui.service';
 import { MergeStrategy } from './data-source';
 import { Entry } from './types';
-import { Result, ok, err } from './result';
+import { Result, ok, err } from './core/result';
 import {
   CitationError,
   LibraryNotReadyError,
   EntryNotFoundError,
-} from './errors';
+} from './core/errors';
 import { DataSourceFactory } from './container';
 
 import { VaultExt, WorkspaceExt } from './obsidian-extensions.d';

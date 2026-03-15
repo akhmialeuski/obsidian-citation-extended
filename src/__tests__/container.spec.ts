@@ -1,6 +1,6 @@
 import { DataSourceFactory, IDataSourceFactory } from '../container';
 import { DataSourceType } from '../data-source';
-import { DataSourceError } from '../errors';
+import { DataSourceError } from '../core/errors';
 
 jest.mock(
   'obsidian',

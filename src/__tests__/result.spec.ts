@@ -1,4 +1,4 @@
-import { ok, err, Result } from '../result';
+import { ok, err, Result } from '../core/result';
 
 describe('Result', () => {
   describe('ok()', () => {

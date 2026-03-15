@@ -1,7 +1,7 @@
 import { TemplateService } from '../services/template.service';
 import { CitationsPluginSettings } from '../settings';
 import { TemplateContext, Entry } from '../types';
-import { Result } from '../result';
+import { Result } from '../core/result';
 
 function expectOk<T>(result: Result<T>, expected: T) {
   expect(result).toEqual({ ok: true, value: expected });

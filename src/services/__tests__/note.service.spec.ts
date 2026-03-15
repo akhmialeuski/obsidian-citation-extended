@@ -3,7 +3,7 @@ import { NoteService } from '../note.service';
 import { TemplateService } from '../template.service';
 import { CitationsPluginSettings } from '../../settings';
 import { Library, Entry, TemplateContext } from '../../types';
-import { TemplateRenderError } from '../../errors';
+import { TemplateRenderError } from '../../core/errors';
 import { App } from 'obsidian';
 
 jest.mock(
@@ -52,8 +52,10 @@ describe('NoteService', () => {
   });
 
   test('getPathForCitekey returns correct path', () => {
-    const path = noteService.getPathForCitekey('citekey1', library);
-    expect(path).toBe('Reading notes/My Title.md');
+    const result = noteService.getPathForCitekey('citekey1', library);
+    // Normalize separators for cross-platform compatibility
+    const normalized = result.replace(/\\/g, '/');
+    expect(normalized).toBe('Reading notes/My Title.md');
   });
 
   test('getPathForCitekey truncates long filenames', () => {
@@ -63,7 +65,8 @@ describe('NoteService', () => {
       .mockReturnValue({ ok: true, value: longTitle });
 
     const result = noteService.getPathForCitekey('citekey1', library);
-    const filename = result.split('/').pop()!;
+    const normalized = result.replace(/\\/g, '/');
+    const filename = normalized.split('/').pop()!;
     // 200 chars max + .md = 203 total
     expect(filename.length).toBeLessThanOrEqual(203);
   });
