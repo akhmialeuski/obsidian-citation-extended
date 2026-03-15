@@ -52,7 +52,7 @@ jest.mock(
 );
 jest.mock('chokidar');
 jest.mock('./services/library.service');
-jest.mock('./services/template.service');
+jest.mock('./template/template.service');
 jest.mock('./services/note.service');
 jest.mock('./services/ui.service');
 jest.mock('./settings');

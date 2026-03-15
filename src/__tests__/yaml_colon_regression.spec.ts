@@ -12,7 +12,7 @@ jest.mock(
   { virtual: true },
 );
 
-import { TemplateService } from '../services/template.service';
+import { TemplateService } from '../template/template.service';
 import { CitationsPluginSettings, DEFAULT_SETTINGS } from '../settings';
 import { Entry } from '../core';
 

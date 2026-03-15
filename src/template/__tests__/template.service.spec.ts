@@ -66,7 +66,7 @@ const expectedRender: Record<string, string | undefined>[] = [
     authorString: 'Laurence Aitchison, Máté Lengyel',
     containerTitle: 'Current Opinion in Neurobiology',
     DOI: '10.1016/j.conb.2017.08.010',
-    page: '219–227',
+    page: '219-227',
     title:
       'With or without you: Predictive coding and Bayesian inference in the brain',
     URL: 'http://www.sciencedirect.com/science/article/pii/S0959438817300454',
@@ -79,7 +79,7 @@ const expectedRender: Record<string, string | undefined>[] = [
     authorString: 'Andrei Alexandrescu, Katrin Kirchhoff',
     containerTitle: undefined,
     DOI: undefined,
-    page: '1–4',
+    page: '1-4',
     title: 'Factored Neural Language Models',
     URL: 'http://aclasb.dfki.de/nlp/bib/N06-2001',
     year: '2006',

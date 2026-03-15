@@ -4,7 +4,7 @@ import {
   EntryDataCSL,
   EntryDataBibLaTeX,
 } from '../core';
-import { TemplateService } from '../services/template.service';
+import { TemplateService } from '../template/template.service';
 import { CitationsPluginSettings } from '../settings';
 
 describe('Zotero ID Support', () => {

@@ -3,7 +3,7 @@ import { CitationsPluginSettings } from '../settings';
 import { App, PluginManifest, TFile } from 'obsidian';
 import { LibraryService } from '../services/library.service';
 import { NoteService } from '../services/note.service';
-import { TemplateService } from '../services/template.service';
+import { TemplateService } from '../template/template.service';
 
 /** @jest-environment jsdom */
 
@@ -66,7 +66,7 @@ jest.mock(
 jest.mock('chokidar');
 jest.mock('../services/library.service');
 jest.mock('../services/note.service');
-jest.mock('../services/template.service');
+jest.mock('../template/template.service');
 jest.mock('../settings');
 jest.mock('web-worker:./worker', () => class {}, { virtual: true });
 

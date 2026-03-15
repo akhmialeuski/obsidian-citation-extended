@@ -8,7 +8,7 @@ import {
 import * as chokidar from 'chokidar';
 
 import CitationEvents from './events';
-import { TemplateService } from './services/template.service';
+import { TemplateService } from './template/template.service';
 import { NoteService } from './services/note.service';
 import { LibraryService } from './services/library.service';
 import { UIService } from './services/ui.service';
