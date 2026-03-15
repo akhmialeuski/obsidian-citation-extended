@@ -12,6 +12,7 @@ import {
 import { ITemplateService } from '../container';
 
 export class TemplateService implements ITemplateService {
+  private hbs = Handlebars.create();
   private templateSettings = {
     noEscape: true,
   };
@@ -22,83 +23,83 @@ export class TemplateService implements ITemplateService {
 
   private registerHelpers() {
     // Loose equality is intentional for flexible template comparisons
-    Handlebars.registerHelper('eq', (a: unknown, b: unknown) => a == b);
+    this.hbs.registerHelper('eq', (a: unknown, b: unknown) => a == b);
     // Loose equality is intentional for flexible template comparisons
-    Handlebars.registerHelper('ne', (a: unknown, b: unknown) => a != b);
-    Handlebars.registerHelper(
+    this.hbs.registerHelper('ne', (a: unknown, b: unknown) => a != b);
+    this.hbs.registerHelper(
       'gt',
       (a: unknown, b: unknown) => (a as number) > (b as number),
     );
-    Handlebars.registerHelper(
+    this.hbs.registerHelper(
       'lt',
       (a: unknown, b: unknown) => (a as number) < (b as number),
     );
-    Handlebars.registerHelper(
+    this.hbs.registerHelper(
       'gte',
       (a: unknown, b: unknown) => (a as number) >= (b as number),
     );
-    Handlebars.registerHelper(
+    this.hbs.registerHelper(
       'lte',
       (a: unknown, b: unknown) => (a as number) <= (b as number),
     );
 
-    Handlebars.registerHelper('and', (...args: unknown[]) => {
+    this.hbs.registerHelper('and', (...args: unknown[]) => {
       const actualArgs = args.slice(0, -1);
       return actualArgs.every(Boolean);
     });
-    Handlebars.registerHelper('or', (...args: unknown[]) => {
+    this.hbs.registerHelper('or', (...args: unknown[]) => {
       const actualArgs = args.slice(0, -1);
       return actualArgs.some(Boolean);
     });
-    Handlebars.registerHelper('not', (value: unknown) => !value);
+    this.hbs.registerHelper('not', (value: unknown) => !value);
 
-    Handlebars.registerHelper(
+    this.hbs.registerHelper(
       'replace',
       (value: string, pattern: string, replacement: string) => {
         if (typeof value !== 'string') return value;
         return value.replace(new RegExp(pattern, 'g'), replacement);
       },
     );
-    Handlebars.registerHelper('truncate', (value: string, length: number) => {
+    this.hbs.registerHelper('truncate', (value: string, length: number) => {
       if (typeof value !== 'string') return value;
       if (value.length <= length) return value;
       return value.substring(0, length);
     });
 
-    Handlebars.registerHelper('match', (value: string, pattern: string) => {
+    this.hbs.registerHelper('match', (value: string, pattern: string) => {
       if (typeof value !== 'string') return '';
       const match = value.match(new RegExp(pattern));
       return match ? match[0] : '';
     });
 
-    Handlebars.registerHelper('quote', (value: unknown) => {
+    this.hbs.registerHelper('quote', (value: unknown) => {
       return JSON.stringify(value);
     });
-    Handlebars.registerHelper('urlEncode', (value: unknown) => {
+    this.hbs.registerHelper('urlEncode', (value: unknown) => {
       if (typeof value !== 'string') return value;
       return encodeURI(value);
     });
-    Handlebars.registerHelper('basename', (value: string) => {
+    this.hbs.registerHelper('basename', (value: string) => {
       if (typeof value !== 'string') return value;
       return value.replace(/^.*[\\/]/, '');
     });
-    Handlebars.registerHelper('filename', (value: string) => {
+    this.hbs.registerHelper('filename', (value: string) => {
       if (typeof value !== 'string') return value;
       return value.replace(/^.*[\\/]/, '').replace(/\.[^/.]+$/, '');
     });
-    Handlebars.registerHelper('dirname', (value: string) => {
+    this.hbs.registerHelper('dirname', (value: string) => {
       if (typeof value !== 'string') return value;
       return value.replace(/[\\/][^\\/]*$/, '');
     });
-    Handlebars.registerHelper('join', (value: unknown, separator: string) => {
+    this.hbs.registerHelper('join', (value: unknown, separator: string) => {
       if (!Array.isArray(value)) return value;
       return value.join(separator);
     });
-    Handlebars.registerHelper('split', (value: unknown, separator: string) => {
+    this.hbs.registerHelper('split', (value: unknown, separator: string) => {
       if (typeof value !== 'string') return value;
       return value.split(separator);
     });
-    Handlebars.registerHelper(
+    this.hbs.registerHelper(
       'formatNames',
       (authors: unknown, options: Handlebars.HelperOptions) => {
         if (!Array.isArray(authors)) return '';
@@ -164,7 +165,7 @@ export class TemplateService implements ITemplateService {
     variables: TemplateContext,
   ): Result<string, TemplateRenderError> {
     try {
-      const template = Handlebars.compile(templateStr, this.templateSettings);
+      const template = this.hbs.compile(templateStr, this.templateSettings);
       return ok(template(variables));
     } catch (e) {
       return err(
