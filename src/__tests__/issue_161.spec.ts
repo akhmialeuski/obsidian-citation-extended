@@ -1,7 +1,7 @@
 import CitationPlugin from '../main';
 import { CitationsPluginSettings } from '../settings';
 import { App, PluginManifest, TFile } from 'obsidian';
-import { NoteService } from '../services/note.service';
+import { NoteService } from '../notes/note.service';
 import { LibraryService } from '../services/library.service';
 
 // Mock Obsidian types

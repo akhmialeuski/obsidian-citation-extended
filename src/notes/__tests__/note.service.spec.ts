@@ -13,7 +13,6 @@ jest.mock(
     TFile: class {},
     TFolder: class {},
     normalizePath: (path: string) => path,
-    Notice: jest.fn(),
     PluginSettingTab: class {},
     Setting: class {},
   }),
