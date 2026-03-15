@@ -1,8 +1,12 @@
-import { Entry, Library, TemplateContext } from './types';
+import {
+  Entry,
+  Library,
+  TemplateContext,
+  Result,
+  TemplateRenderError,
+} from './core';
 import { LibraryState } from './library/library-state';
 import { DataSource } from './data-source';
-import { TemplateRenderError } from './core/errors';
-import { Result } from './core/result';
 import { SearchService } from './search/search.service';
 import {
   IntrospectionService,

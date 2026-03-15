@@ -2,7 +2,7 @@
 import { NoteService } from '../note.service';
 import { TemplateService } from '../template.service';
 import { CitationsPluginSettings } from '../../settings';
-import { Library, Entry, TemplateContext } from '../../types';
+import { Library, Entry, TemplateContext } from '../../core';
 import { TemplateRenderError } from '../../core/errors';
 import { App } from 'obsidian';
 

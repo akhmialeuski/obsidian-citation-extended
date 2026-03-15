@@ -1,5 +1,5 @@
 import { SearchService } from '../search/search.service';
-import { Entry } from '../types';
+import { Entry } from '../core';
 
 // Mock Entry class
 class MockEntry extends Entry {

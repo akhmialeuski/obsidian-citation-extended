@@ -1,8 +1,14 @@
 import Handlebars from 'handlebars';
 import { CitationsPluginSettings } from '../settings';
-import { Author, Entry, TemplateContext } from '../types';
-import { Result, ok, err } from '../core/result';
-import { TemplateRenderError } from '../core/errors';
+import {
+  Author,
+  Entry,
+  TemplateContext,
+  Result,
+  ok,
+  err,
+  TemplateRenderError,
+} from '../core';
 import { ITemplateService } from '../container';
 
 export class TemplateService implements ITemplateService {

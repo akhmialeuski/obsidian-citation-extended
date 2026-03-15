@@ -4,7 +4,7 @@
  * Verifies that entries with Unicode characters (γ, á, é, etc.)
  * in titles and author names are correctly parsed and searchable.
  */
-import { loadEntries, EntryBibLaTeXAdapter, EntryDataBibLaTeX } from '../types';
+import { loadEntries, EntryBibLaTeXAdapter, EntryDataBibLaTeX } from '../core';
 import { SearchService } from '../search/search.service';
 
 describe('Special characters in entries (#119)', () => {

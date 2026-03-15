@@ -4,7 +4,7 @@ import {
   EntryBibLaTeXAdapter,
   EntryDataCSL,
   EntryDataBibLaTeX,
-} from '../types';
+} from '../core';
 
 describe('Adapters Property Testing', () => {
   describe('EntryCSLAdapter', () => {

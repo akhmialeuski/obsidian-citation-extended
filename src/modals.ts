@@ -1,6 +1,6 @@
 import { App, EventRef, Notice, SuggestModal } from 'obsidian';
 import CitationPlugin from './main';
-import { Entry } from './types';
+import { Entry } from './core';
 import { LibraryState, LoadingStatus } from './library/library-state';
 
 // Stub some methods we know are there..

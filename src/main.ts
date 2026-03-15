@@ -13,13 +13,15 @@ import { NoteService } from './services/note.service';
 import { LibraryService } from './services/library.service';
 import { UIService } from './services/ui.service';
 import { MergeStrategy } from './library/merge-strategy';
-import { Entry } from './types';
-import { Result, ok, err } from './core/result';
 import {
+  Entry,
+  Result,
+  ok,
+  err,
   CitationError,
   LibraryNotReadyError,
   EntryNotFoundError,
-} from './core/errors';
+} from './core';
 import { DataSourceFactory } from './sources/data-source-factory';
 
 import { VaultExt, WorkspaceExt } from './obsidian-extensions.d';

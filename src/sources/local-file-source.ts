@@ -12,7 +12,7 @@ import {
   EntryDataBibLaTeX,
   EntryDataCSL,
   WorkerResponse,
-} from '../types';
+} from '../core';
 import { WorkerManager } from '../util';
 
 /**

@@ -1,4 +1,4 @@
-import { Library } from '../types';
+import { Library } from '../core';
 
 export const KNOWN_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   citekey: 'Unique citekey',

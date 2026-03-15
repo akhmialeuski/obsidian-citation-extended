@@ -1,4 +1,4 @@
-import { EntryCSLAdapter, EntryBibLaTeXAdapter, EntryDataCSL } from '../types';
+import { EntryCSLAdapter, EntryBibLaTeXAdapter, EntryDataCSL } from '../core';
 import { Entry as EntryDataBibLaTeX } from '@retorquere/bibtex-parser';
 
 describe('Author/Editor Display Issues', () => {

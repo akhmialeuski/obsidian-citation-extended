@@ -14,7 +14,7 @@ jest.mock(
 
 import { TemplateService } from '../services/template.service';
 import { CitationsPluginSettings, DEFAULT_SETTINGS } from '../settings';
-import { Entry } from '../types';
+import { Entry } from '../core';
 
 describe('YAML Colon Handling', () => {
   let templateService: TemplateService;

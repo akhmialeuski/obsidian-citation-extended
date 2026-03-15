@@ -4,7 +4,7 @@
  * Verifies that @audio entries with entrysubtype=podcastepisode are
  * correctly parsed and available for search.
  */
-import { loadEntries, EntryBibLaTeXAdapter, EntryDataBibLaTeX } from '../types';
+import { loadEntries, EntryBibLaTeXAdapter, EntryDataBibLaTeX } from '../core';
 
 describe('@audio / podcast entry type (#246)', () => {
   const podcastBib = `

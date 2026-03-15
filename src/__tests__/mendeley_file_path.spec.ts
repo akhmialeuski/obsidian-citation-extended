@@ -6,7 +6,7 @@
  * Instead of standard:
  *   C:\\Project\\Literature\\MyPDF.pdf
  */
-import { EntryBibLaTeXAdapter } from '../types';
+import { EntryBibLaTeXAdapter } from '../core';
 import { Entry as EntryDataBibLaTeX } from '@retorquere/bibtex-parser';
 
 function makeEntryWithFile(fileValue: string): EntryBibLaTeXAdapter {

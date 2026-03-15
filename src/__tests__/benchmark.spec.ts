@@ -1,5 +1,5 @@
 import MiniSearch from 'minisearch';
-import { Entry } from '../types';
+import { Entry } from '../core';
 
 // Mock Entry class for testing
 class MockEntry extends Entry {

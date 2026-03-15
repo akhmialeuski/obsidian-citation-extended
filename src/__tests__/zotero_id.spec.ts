@@ -3,7 +3,7 @@ import {
   EntryBibLaTeXAdapter,
   EntryDataCSL,
   EntryDataBibLaTeX,
-} from '../types';
+} from '../core';
 import { TemplateService } from '../services/template.service';
 import { CitationsPluginSettings } from '../settings';
 

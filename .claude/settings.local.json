@@ -19,7 +19,11 @@
       "Bash(node -e \":*)",
       "Bash(sed -i \"s|import { DataSourceFactory } from ''./container'';|import { DataSourceFactory } from ''./sources/data-source-factory'';|g\" src/main.ts)",
       "Bash(sed -i \"s|import { DataSourceFactory, IDataSourceFactory } from ''../container'';|import { DataSourceFactory, IDataSourceFactory } from ''../sources/data-source-factory'';|g\" src/__tests__/container.spec.ts)",
-      "Bash(sed -i \"s|import { ILibraryService, IDataSourceFactory } from ''../container'';|import { ILibraryService } from ''../container'';\\\\nimport { IDataSourceFactory } from ''../sources/data-source-factory'';|g\" src/services/library.service.ts)"
+      "Bash(sed -i \"s|import { ILibraryService, IDataSourceFactory } from ''../container'';|import { ILibraryService } from ''../container'';\\\\nimport { IDataSourceFactory } from ''../sources/data-source-factory'';|g\" src/services/library.service.ts)",
+      "Bash(grep -n \"from ''../types''\" src/__tests__/*.ts)",
+      "Bash(for f:*)",
+      "Bash(do sed:*)",
+      "Bash(done)"
     ]
   }
 }

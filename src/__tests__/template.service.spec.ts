@@ -1,6 +1,6 @@
 import { TemplateService } from '../services/template.service';
 import { CitationsPluginSettings } from '../settings';
-import { TemplateContext, Entry } from '../types';
+import { TemplateContext, Entry } from '../core';
 import { Result } from '../core/result';
 
 function expectOk<T>(result: Result<T>, expected: T) {

@@ -1,5 +1,5 @@
 import MiniSearch from 'minisearch';
-import { Entry } from '../types';
+import { Entry } from '../core';
 
 export class SearchService {
   private index: MiniSearch;

@@ -4,7 +4,7 @@
  * Verifies that loadEntries() returns both entries and parse errors,
  * enabling user-visible feedback about skipped entries.
  */
-import { loadEntries } from '../types';
+import { loadEntries } from '../core';
 
 describe('loadEntries parse error reporting', () => {
   it('returns empty parseErrors for valid BibLaTeX', () => {

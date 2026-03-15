@@ -2,9 +2,8 @@ import { App, Notice, TFile, TFolder, normalizePath } from 'obsidian';
 import * as path from 'path';
 import { CitationsPluginSettings } from '../settings';
 import { ITemplateService } from '../container';
-import { Library } from '../types';
+import { Library, TemplateRenderError } from '../core';
 import { DISALLOWED_FILENAME_CHARACTERS_RE } from '../util';
-import { TemplateRenderError } from '../core/errors';
 
 const MAX_FILENAME_LENGTH = 200;
 

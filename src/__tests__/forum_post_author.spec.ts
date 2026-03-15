@@ -5,7 +5,7 @@
  * "firstname lastname [@username]" which are stored as `literal` in CSL-JSON.
  * BibLaTeX stores them via the `literal` field on creator objects.
  */
-import { EntryCSLAdapter, EntryDataCSL } from '../types';
+import { EntryCSLAdapter, EntryDataCSL } from '../core';
 
 describe('Forum Post and non-standard author types (#210)', () => {
   it('handles Forum Post author with [@username] format via literal', () => {

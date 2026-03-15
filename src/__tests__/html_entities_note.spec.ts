@@ -7,7 +7,7 @@
  *   plain < / > in braces     →  ¡ / ¿  (inverted punctuation)
  *   \href{url}{text}          →  <a href="url">text</a>
  */
-import { loadEntries, EntryBibLaTeXAdapter, EntryDataBibLaTeX } from '../types';
+import { loadEntries, EntryBibLaTeXAdapter, EntryDataBibLaTeX } from '../core';
 
 function makeEntry(noteValue: string): EntryBibLaTeXAdapter {
   const bib = `

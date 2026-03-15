@@ -1,6 +1,6 @@
 import PromiseWorker from 'promise-worker';
 
-import { WorkerRequest, WorkerResponse } from './types';
+import { WorkerRequest, WorkerResponse } from './core';
 
 export const DISALLOWED_FILENAME_CHARACTERS_RE = /[*"\\/<>:|?]/g;
 

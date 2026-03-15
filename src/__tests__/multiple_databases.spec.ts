@@ -3,7 +3,7 @@
  */
 import { LibraryService } from '../services/library.service';
 import { CitationsPluginSettings } from '../settings';
-import { Entry } from '../types';
+import { Entry } from '../core';
 import { WorkerManager } from '../util';
 import { LocalFileSource } from '../sources/local-file-source';
 import CitationEvents from '../events';

@@ -8,7 +8,7 @@ import {
   loadEntries,
   EntryDataBibLaTeX,
   EntryDataCSL,
-} from '../types';
+} from '../core';
 
 function loadBibLaTeXEntries(filename: string): EntryDataBibLaTeX[] {
   const biblatexPath = path.join(__dirname, filename);

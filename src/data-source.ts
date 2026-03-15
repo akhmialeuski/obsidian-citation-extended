@@ -1,4 +1,4 @@
-import { Entry, DatabaseType, ParseErrorInfo } from './types';
+import { Entry, DatabaseType, ParseErrorInfo } from './core';
 import { MergeStrategy } from './library/merge-strategy';
 
 /**

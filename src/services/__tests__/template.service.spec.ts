@@ -22,7 +22,7 @@ import {
   EntryCSLAdapter,
   loadEntries,
   TemplateContext,
-} from '../../types';
+} from '../../core';
 
 const expectedRender: Record<string, string | undefined>[] = [
   {

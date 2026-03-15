@@ -1,4 +1,4 @@
-import { EntryBibLaTeXAdapter, EntryDataBibLaTeX } from '../types';
+import { EntryBibLaTeXAdapter, EntryDataBibLaTeX } from '../core';
 
 describe('EntryBibLaTeXAdapter note parsing regex', () => {
   test('correctly handles multiple zotero links in a single line', () => {

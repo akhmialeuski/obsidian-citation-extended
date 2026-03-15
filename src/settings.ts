@@ -8,7 +8,7 @@ import {
 } from 'obsidian';
 
 import CitationPlugin from './main';
-import { DatabaseType, DatabaseConfig } from './types';
+import { DatabaseType, DatabaseConfig } from './core';
 import { DataSourceDefinition } from './data-source';
 import { MergeStrategy } from './library/merge-strategy';
 
@@ -17,7 +17,7 @@ const CITATION_DATABASE_FORMAT_LABELS: Record<DatabaseType, string> = {
   biblatex: 'BibLaTeX',
 };
 
-import { Entry } from './types';
+import { Entry } from './core';
 
 const MOCK_ENTRY = {
   id: 'mock2024',

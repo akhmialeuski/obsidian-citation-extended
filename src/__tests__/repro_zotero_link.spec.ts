@@ -1,4 +1,4 @@
-import { loadEntries, EntryBibLaTeXAdapter, EntryDataBibLaTeX } from '../types';
+import { loadEntries, EntryBibLaTeXAdapter, EntryDataBibLaTeX } from '../core';
 
 describe('Zotero Link Reproduction', () => {
   const bibtexLibrary = `

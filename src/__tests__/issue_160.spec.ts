@@ -1,4 +1,4 @@
-import { EntryCSLAdapter, EntryDataCSL } from '../types';
+import { EntryCSLAdapter, EntryDataCSL } from '../core';
 
 describe('Issue 160: Year subtraction bug', () => {
   const createEntry = (dateParts: (string | number)[]): EntryCSLAdapter => {
