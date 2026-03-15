@@ -22,6 +22,8 @@ export class CitationSearchModal extends SuggestModal<Entry> {
   loadingEl: HTMLElement;
   errorEl: HTMLElement;
   private unsubscribeStore?: () => void;
+  private boundKeydown = (ev: KeyboardEvent) => this.onInputKeydown(ev);
+  private boundKeyup = (ev: KeyboardEvent) => this.onInputKeyup(ev);
 
   constructor(app: App, plugin: CitationPlugin, action: SearchAction) {
     super(app);
@@ -68,8 +70,8 @@ export class CitationSearchModal extends SuggestModal<Entry> {
     );
 
     this.inputTimeout = window.setTimeout(() => {
-      this.inputEl.addEventListener('keydown', (ev) => this.onInputKeydown(ev));
-      this.inputEl.addEventListener('keyup', (ev) => this.onInputKeyup(ev));
+      this.inputEl.addEventListener('keydown', this.boundKeydown);
+      this.inputEl.addEventListener('keyup', this.boundKeyup);
       this.inputTimeout = undefined;
     }, 200);
   }
@@ -112,10 +114,8 @@ export class CitationSearchModal extends SuggestModal<Entry> {
       clearTimeout(this.inputTimeout);
       this.inputTimeout = undefined;
     }
-    this.inputEl.removeEventListener('keydown', (ev) =>
-      this.onInputKeydown(ev),
-    );
-    this.inputEl.removeEventListener('keyup', (ev) => this.onInputKeyup(ev));
+    this.inputEl.removeEventListener('keydown', this.boundKeydown);
+    this.inputEl.removeEventListener('keyup', this.boundKeyup);
   }
 
   getSuggestions(query: string): Entry[] {
