@@ -20,7 +20,7 @@ import {
   LibraryNotReadyError,
   EntryNotFoundError,
 } from './core/errors';
-import { DataSourceFactory } from './container';
+import { DataSourceFactory } from './sources/data-source-factory';
 
 import { VaultExt, WorkspaceExt } from './obsidian-extensions.d';
 import {

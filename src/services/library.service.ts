@@ -17,7 +17,8 @@ import {
   IntrospectionService,
   VariableDefinition,
 } from './introspection.service';
-import { ILibraryService, IDataSourceFactory } from '../container';
+import { ILibraryService } from '../container';
+import { IDataSourceFactory } from '../sources/data-source-factory';
 import { LibraryStore } from '../library/library-store';
 import { LocalFileSource } from '../sources/local-file-source';
 

@@ -15,7 +15,11 @@
       "Bash(sed -i \"s|from ''../store''|from ''../library/library-store''|g\" src/services/library.service.ts)",
       "Bash(sed -i \"s|from ''../library-state''|from ''../library/library-state''|g\" src/__tests__/library-loading.spec.ts src/__tests__/store.spec.ts)",
       "Bash(sed -i \"s|from ''../store''|from ''../library/library-store''|g\" src/__tests__/store.spec.ts)",
-      "Bash(sed -i \"s|from ''../../library-state''|from ''../../library/library-state''|g\" src/services/__tests__/library.service.spec.ts)"
+      "Bash(sed -i \"s|from ''../../library-state''|from ''../../library/library-state''|g\" src/services/__tests__/library.service.spec.ts)",
+      "Bash(node -e \":*)",
+      "Bash(sed -i \"s|import { DataSourceFactory } from ''./container'';|import { DataSourceFactory } from ''./sources/data-source-factory'';|g\" src/main.ts)",
+      "Bash(sed -i \"s|import { DataSourceFactory, IDataSourceFactory } from ''../container'';|import { DataSourceFactory, IDataSourceFactory } from ''../sources/data-source-factory'';|g\" src/__tests__/container.spec.ts)",
+      "Bash(sed -i \"s|import { ILibraryService, IDataSourceFactory } from ''../container'';|import { ILibraryService } from ''../container'';\\\\nimport { IDataSourceFactory } from ''../sources/data-source-factory'';|g\" src/services/library.service.ts)"
     ]
   }
 }

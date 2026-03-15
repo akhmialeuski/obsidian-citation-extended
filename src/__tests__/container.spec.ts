@@ -1,4 +1,7 @@
-import { DataSourceFactory, IDataSourceFactory } from '../container';
+import {
+  DataSourceFactory,
+  IDataSourceFactory,
+} from '../sources/data-source-factory';
 import { DataSourceType } from '../data-source';
 import { DataSourceError } from '../core/errors';
 
