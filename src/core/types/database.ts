@@ -1,5 +1,4 @@
-export const databaseTypes = ['csl-json', 'biblatex'] as const;
-export type DatabaseType = (typeof databaseTypes)[number];
+export type DatabaseType = 'csl-json' | 'biblatex';
 
 export interface DatabaseConfig {
   name: string;

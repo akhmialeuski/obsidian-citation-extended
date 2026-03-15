@@ -29,7 +29,7 @@ const MAX_RETRY_DELAY_MS = 30_000;
 /**
  * Metadata collected from each source during loading.
  */
-export interface SourceMetadata {
+interface SourceMetadata {
   sourceId: string;
   databaseName: string;
   entryCount: number;
@@ -75,10 +75,6 @@ export class LibraryService implements ILibraryService {
 
   get state(): LibraryState {
     return this.store.getState();
-  }
-
-  getWorkerManager(): WorkerManager {
-    return this.loadWorker;
   }
 
   addSource(source: DataSource): void {

@@ -1,11 +1,7 @@
 // Types
 export { Author, Entry } from './types/entry';
 export { Library } from './types/library';
-export {
-  databaseTypes,
-  type DatabaseType,
-  type DatabaseConfig,
-} from './types/database';
+export { type DatabaseType, type DatabaseConfig } from './types/database';
 export type { TemplateContext } from './types/template-context';
 export type {
   ParseErrorInfo,

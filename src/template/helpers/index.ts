@@ -12,8 +12,3 @@ export function registerAllHelpers(hbs: HandlebarsInstance): void {
   registerPathHelpers(hbs);
   registerAuthorHelpers(hbs);
 }
-
-export { registerLogicHelpers } from './logic-helpers';
-export { registerStringHelpers } from './string-helpers';
-export { registerPathHelpers } from './path-helpers';
-export { registerAuthorHelpers } from './author-helpers';

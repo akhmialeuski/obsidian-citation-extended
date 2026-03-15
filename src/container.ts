@@ -1,10 +1,5 @@
-import {
-  Entry,
-  Library,
-  TemplateContext,
-  Result,
-  TemplateRenderError,
-} from './core';
+import { Entry, TemplateContext, Result, TemplateRenderError } from './core';
+import { Library } from './core';
 import { LibraryState } from './library/library-state';
 import { DataSource } from './data-source';
 import { SearchService } from './search/search.service';
@@ -13,7 +8,6 @@ import {
   VariableDefinition,
 } from './template/introspection.service';
 import { StoreSubscriber } from './library/library-store';
-import { TFile } from 'obsidian';
 
 // ---------------------------------------------------------------------------
 // Minimal store contract exposed through service interfaces
@@ -41,21 +35,6 @@ export interface ITemplateService {
     alternative?: boolean,
   ): Result<string, TemplateRenderError>;
   validate(templateStr: string): Result<void, TemplateRenderError>;
-}
-
-export interface INoteService {
-  openLiteratureNote(
-    citekey: string,
-    library: Library,
-    newPane: boolean,
-  ): Promise<void>;
-  /**
-   * @throws {TemplateRenderError} when the title or content template fails to render
-   */
-  getOrCreateLiteratureNoteFile(
-    citekey: string,
-    library: Library,
-  ): Promise<TFile>;
 }
 
 export interface ILibraryService {

@@ -1,6 +1,6 @@
 import { Library } from '../core';
 
-export const KNOWN_VARIABLE_DESCRIPTIONS: Record<string, string> = {
+const KNOWN_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   citekey: 'Unique citekey',
   abstract: '',
   authorString: 'Comma-separated list of author names',
