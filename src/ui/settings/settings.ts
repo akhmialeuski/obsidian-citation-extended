@@ -3,6 +3,7 @@ import { DataSourceDefinition } from '../../data-source';
 import { MergeStrategy } from '../../library/merge-strategy';
 import { DEFAULT_SETTINGS } from './settings-schema';
 import { DatabaseType } from '../../core';
+import { ReferenceListSortOrder } from '../modals/sort-entries';
 
 export class CitationsPluginSettings {
   public citationExportPath: string = DEFAULT_SETTINGS.citationExportPath;
@@ -21,6 +22,9 @@ export class CitationsPluginSettings {
     DEFAULT_SETTINGS.markdownCitationTemplate;
   public alternativeMarkdownCitationTemplate: string =
     DEFAULT_SETTINGS.alternativeMarkdownCitationTemplate;
+
+  public referenceListSortOrder: ReferenceListSortOrder =
+    DEFAULT_SETTINGS.referenceListSortOrder;
 
   public databases: DatabaseConfig[] = DEFAULT_SETTINGS.databases;
   public dataSources?: DataSourceDefinition[];

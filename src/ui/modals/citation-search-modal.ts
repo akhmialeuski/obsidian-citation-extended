@@ -3,6 +3,7 @@ import CitationPlugin from '../../main';
 import { Entry } from '../../core';
 import { LibraryState, LoadingStatus } from '../../library/library-state';
 import { SearchAction } from './actions/search-action';
+import { sortEntries } from './sort-entries';
 
 // Stub some methods we know are there..
 interface SuggestModalExt<T> extends SuggestModal<T> {
@@ -130,15 +131,19 @@ export class CitationSearchModal extends SuggestModal<Entry> {
       return [];
     }
 
+    const sortOrder = this.plugin.settings.referenceListSortOrder;
+
     if (!query) {
-      return Object.values(library.entries).slice(0, this.limit);
+      const entries = Object.values(library.entries);
+      return sortEntries(entries, sortOrder).slice(0, this.limit);
     }
 
     const ids = this.plugin.libraryService.searchService.search(query);
-    return ids
+    const entries = ids
       .slice(0, this.limit)
       .map((id) => library.entries[id])
       .filter(Boolean);
+    return sortEntries(entries, sortOrder);
   }
 
   setLoading(loading: boolean): void {
