@@ -2,7 +2,7 @@ import { App, TFile, TFolder, normalizePath } from 'obsidian';
 import * as path from 'path';
 import { CitationsPluginSettings } from '../ui/settings/settings';
 import { INoteService, ITemplateService } from '../container';
-import { Library } from '../core';
+import { Library, LiteratureNoteNotFoundError } from '../core';
 import { DISALLOWED_FILENAME_CHARACTERS_RE } from '../util';
 
 type ContentTemplateResolver = () => Promise<string>;
@@ -112,17 +112,60 @@ export class NoteService implements INoteService {
     throw new Error(`File at ${notePath} is not a TFile`);
   }
 
+  /**
+   * Looks up an existing literature note file without creating one.
+   * Returns null when the note does not exist in the vault.
+   *
+   * @throws {TemplateRenderError} when the title template fails to render
+   */
+  findExistingLiteratureNoteFile(
+    citekey: string,
+    library: Library,
+  ): TFile | null {
+    const notePath = this.getPathForCitekey(citekey, library);
+    const normalizedPath = normalizePath(notePath);
+
+    const file = this.app.vault.getAbstractFileByPath(normalizedPath);
+    if (file instanceof TFile) {
+      return file;
+    }
+
+    const matches = this.app.vault
+      .getMarkdownFiles()
+      .filter((f) => f.path.toLowerCase() === normalizedPath.toLowerCase());
+    if (matches.length > 0) {
+      return matches[0];
+    }
+
+    return null;
+  }
+
+  /**
+   * @throws {LiteratureNoteNotFoundError} when auto-creation is disabled and note does not exist
+   * @throws {TemplateRenderError} when the title or content template fails to render
+   */
   async openLiteratureNote(
     citekey: string,
     library: Library,
     newPane: boolean,
     selectedText?: string,
   ): Promise<void> {
-    const file = await this.getOrCreateLiteratureNoteFile(
-      citekey,
-      library,
-      selectedText,
-    );
+    let file: TFile;
+
+    if (this.settings.disableAutomaticNoteCreation) {
+      const existing = this.findExistingLiteratureNoteFile(citekey, library);
+      if (!existing) {
+        throw new LiteratureNoteNotFoundError(citekey);
+      }
+      file = existing;
+    } else {
+      file = await this.getOrCreateLiteratureNoteFile(
+        citekey,
+        library,
+        selectedText,
+      );
+    }
+
     await this.app.workspace.getLeaf(newPane).openFile(file);
   }
 }

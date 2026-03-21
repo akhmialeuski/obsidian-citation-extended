@@ -25,4 +25,6 @@ export class CitationsPluginSettings {
   public databases: DatabaseConfig[] = DEFAULT_SETTINGS.databases;
   public dataSources?: DataSourceDefinition[];
   public mergeStrategy?: MergeStrategy;
+  public disableAutomaticNoteCreation: boolean =
+    DEFAULT_SETTINGS.disableAutomaticNoteCreation;
 }

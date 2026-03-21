@@ -1,6 +1,6 @@
 import { Editor, MarkdownView, Notice } from 'obsidian';
 import CitationPlugin from '../main';
-import { LibraryNotReadyError } from '../core';
+import { LibraryNotReadyError, LiteratureNoteNotFoundError } from '../core';
 import { VaultExt, WorkspaceExt } from '../obsidian-extensions.d';
 
 export class EditorActions {
@@ -41,10 +41,14 @@ export class EditorActions {
         selectedText,
       );
     } catch (e) {
-      console.error('Failed to open literature note:', e);
-      new Notice(
-        'Unable to open literature note. Please check that the literature note folder exists.',
-      );
+      if (e instanceof LiteratureNoteNotFoundError) {
+        new Notice(e.message);
+      } else {
+        console.error('Failed to open literature note:', e);
+        new Notice(
+          'Unable to open literature note. Please check that the literature note folder exists.',
+        );
+      }
     }
   }
 

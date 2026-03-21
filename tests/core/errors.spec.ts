@@ -2,6 +2,7 @@ import {
   CitationError,
   LibraryNotReadyError,
   EntryNotFoundError,
+  LiteratureNoteNotFoundError,
   TemplateRenderError,
   DataSourceError,
 } from '../../src/core/errors';
@@ -79,6 +80,23 @@ describe('Domain errors', () => {
     });
   });
 
+  describe('LiteratureNoteNotFoundError', () => {
+    it('should include citekey in message', () => {
+      const error = new LiteratureNoteNotFoundError('smith2023');
+      expect(error.citekey).toBe('smith2023');
+      expect(error.message).toContain('smith2023');
+      expect(error.message).toContain('Automatic note creation is disabled');
+      expect(error.code).toBe('LITERATURE_NOTE_NOT_FOUND');
+      expect(error.name).toBe('LiteratureNoteNotFoundError');
+    });
+
+    it('should be instanceof CitationError', () => {
+      const error = new LiteratureNoteNotFoundError('key');
+      expect(error).toBeInstanceOf(CitationError);
+      expect(error).toBeInstanceOf(LiteratureNoteNotFoundError);
+    });
+  });
+
   describe('DataSourceError', () => {
     it('should set message and optional sourceId', () => {
       const error = new DataSourceError('load failed', 'source-0');
@@ -99,6 +117,7 @@ describe('Domain errors', () => {
       const errors = [
         new LibraryNotReadyError(),
         new EntryNotFoundError('key'),
+        new LiteratureNoteNotFoundError('key'),
         new TemplateRenderError('err'),
         new DataSourceError('err'),
       ];

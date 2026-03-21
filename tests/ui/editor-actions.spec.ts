@@ -1,6 +1,7 @@
 /** @jest-environment jsdom */
 import { EditorActions } from '../../src/ui/editor-actions';
 import { Notice } from 'obsidian';
+import { LiteratureNoteNotFoundError } from '../../src/core/errors';
 
 jest.mock(
   'obsidian',
@@ -125,6 +126,20 @@ describe('EditorActions', () => {
       );
       expect(errorSpy).toHaveBeenCalled();
       errorSpy.mockRestore();
+    });
+
+    it('shows user-friendly notice for LiteratureNoteNotFoundError', async () => {
+      const plugin = makePlugin();
+      plugin.noteService.openLiteratureNote = jest
+        .fn()
+        .mockRejectedValue(new LiteratureNoteNotFoundError('key1'));
+      const actions = new EditorActions(plugin);
+
+      await actions.openLiteratureNote('key1', false);
+
+      expect(Notice).toHaveBeenCalledWith(
+        expect.stringContaining('Automatic note creation is disabled'),
+      );
     });
   });
 
