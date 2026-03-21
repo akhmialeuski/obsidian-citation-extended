@@ -30,6 +30,13 @@ const KNOWN_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   selectedText: 'Text selected in the editor when the command was invoked',
   year: 'Publication year',
   zoteroSelectURI: 'URI to open the reference in Zotero',
+  currentDate:
+    'Current date when the note is created (use as {{currentDate}} or {{currentDate format="DD.MM.YYYY"}})',
+};
+
+/** Static examples for helper-based variables that are not derived from entry data */
+const KNOWN_VARIABLE_EXAMPLES: Record<string, string> = {
+  currentDate: '2024-01-15',
 };
 
 export interface VariableDefinition {
@@ -49,7 +56,11 @@ export class IntrospectionService {
     for (const [key, description] of Object.entries(
       KNOWN_VARIABLE_DESCRIPTIONS,
     )) {
-      variables.set(key, { key, description });
+      variables.set(key, {
+        key,
+        description,
+        example: KNOWN_VARIABLE_EXAMPLES[key],
+      });
     }
 
     if (!library || library.size === 0) {

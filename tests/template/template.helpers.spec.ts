@@ -2,6 +2,7 @@ import { TemplateService } from '../../src/template/template.service';
 import { CitationsPluginSettings } from '../../src/ui/settings/settings';
 import { Entry, TemplateContext } from '../../src/core';
 import { Result } from '../../src/core/result';
+import { formatDate } from '../../src/template/helpers/date-helpers';
 
 function expectOk<T>(result: Result<T>, expected: T) {
   expect(result).toEqual({ ok: true, value: expected });
@@ -418,6 +419,105 @@ describe('TemplateService', () => {
       } as unknown as TemplateContext);
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.value).toBe('Note: some selection');
+    });
+  });
+
+  describe('Date Helpers', () => {
+    describe('formatDate utility', () => {
+      const fixedDate = new Date(2024, 0, 15, 9, 5, 3); // 2024-01-15 09:05:03
+
+      it('should format YYYY-MM-DD', () => {
+        expect(formatDate(fixedDate, 'YYYY-MM-DD')).toBe('2024-01-15');
+      });
+
+      it('should format DD.MM.YYYY', () => {
+        expect(formatDate(fixedDate, 'DD.MM.YYYY')).toBe('15.01.2024');
+      });
+
+      it('should format YYYY/MM/DD', () => {
+        expect(formatDate(fixedDate, 'YYYY/MM/DD')).toBe('2024/01/15');
+      });
+
+      it('should format with time tokens HH:mm:ss', () => {
+        expect(formatDate(fixedDate, 'YYYY-MM-DD HH:mm:ss')).toBe(
+          '2024-01-15 09:05:03',
+        );
+      });
+
+      it('should handle single-digit month and day with zero padding', () => {
+        const date = new Date(2024, 0, 5); // January 5
+        expect(formatDate(date, 'MM-DD')).toBe('01-05');
+      });
+
+      it('should handle December (month 12)', () => {
+        const date = new Date(2024, 11, 31); // December 31
+        expect(formatDate(date, 'YYYY-MM-DD')).toBe('2024-12-31');
+      });
+
+      it('should preserve literal text around tokens', () => {
+        expect(formatDate(fixedDate, 'Date: YYYY-MM-DD end')).toBe(
+          'Date: 2024-01-15 end',
+        );
+      });
+    });
+
+    describe('currentDate helper', () => {
+      it('should render current date in default YYYY-MM-DD format', () => {
+        const now = new Date();
+        const expected = [
+          String(now.getFullYear()),
+          String(now.getMonth() + 1).padStart(2, '0'),
+          String(now.getDate()).padStart(2, '0'),
+        ].join('-');
+
+        const result = service.render('{{currentDate}}', mockContext);
+        expect(result.ok).toBe(true);
+        if (result.ok) expect(result.value).toBe(expected);
+      });
+
+      it('should accept a custom format via hash parameter', () => {
+        const now = new Date();
+        const expected = [
+          String(now.getDate()).padStart(2, '0'),
+          String(now.getMonth() + 1).padStart(2, '0'),
+          String(now.getFullYear()),
+        ].join('.');
+
+        const result = service.render(
+          '{{currentDate format="DD.MM.YYYY"}}',
+          mockContext,
+        );
+        expect(result.ok).toBe(true);
+        if (result.ok) expect(result.value).toBe(expected);
+      });
+
+      it('should render inline with surrounding text', () => {
+        const result = service.render(
+          'Created on: {{currentDate}}',
+          mockContext,
+        );
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+          // Verify the output matches the pattern "Created on: YYYY-MM-DD"
+          expect(result.value).toMatch(/^Created on: \d{4}-\d{2}-\d{2}$/);
+        }
+      });
+
+      it('should work with YYYY/MM/DD format', () => {
+        const now = new Date();
+        const expected = [
+          String(now.getFullYear()),
+          String(now.getMonth() + 1).padStart(2, '0'),
+          String(now.getDate()).padStart(2, '0'),
+        ].join('/');
+
+        const result = service.render(
+          '{{currentDate format="YYYY/MM/DD"}}',
+          mockContext,
+        );
+        expect(result.ok).toBe(true);
+        if (result.ok) expect(result.value).toBe(expected);
+      });
     });
   });
 });
