@@ -28,6 +28,7 @@ export {
   CitationError,
   LibraryNotReadyError,
   EntryNotFoundError,
+  LiteratureNoteNotFoundError,
   TemplateRenderError,
   DataSourceError,
 } from './errors';

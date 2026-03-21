@@ -43,6 +43,10 @@ export interface ITemplateService {
 
 export interface INoteService {
   getPathForCitekey(citekey: string, library: Library): string;
+  findExistingLiteratureNoteFile(
+    citekey: string,
+    library: Library,
+  ): TFile | null;
   getOrCreateLiteratureNoteFile(
     citekey: string,
     library: Library,

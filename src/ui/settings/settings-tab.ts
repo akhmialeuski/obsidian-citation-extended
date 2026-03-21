@@ -221,6 +221,21 @@ export class CitationSettingTab extends PluginSettingTab {
       'literatureNoteFolder',
     );
 
+    new Setting(containerEl)
+      .setName('Disable automatic note creation')
+      .setDesc(
+        'When enabled, the "Open literature note" command will only open existing notes. ' +
+          'No new notes will be created automatically. Useful when using another plugin (e.g. Zotero Integration) for note creation.',
+      )
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.disableAutomaticNoteCreation)
+          .onChange(async (value) => {
+            this.plugin.settings.disableAutomaticNoteCreation = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
     new Setting(containerEl).setName('Literature note templates').setHeading();
 
     this.buildSetting(

@@ -20,6 +20,7 @@ export const SettingsSchema = z.object({
     )
     .default([]),
   mergeStrategy: z.enum(['last-wins', 'merge']).optional(),
+  disableAutomaticNoteCreation: z.boolean().default(false),
 });
 
 export type CitationsPluginSettingsType = z.infer<typeof SettingsSchema>;
@@ -40,6 +41,7 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   alternativeMarkdownCitationTemplate: '@{{citekey}}',
   mergeStrategy: 'last-wins',
   databases: [],
+  disableAutomaticNoteCreation: false,
 };
 
 export function validateSettings(settings: unknown) {

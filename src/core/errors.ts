@@ -48,6 +48,19 @@ export class TemplateRenderError extends CitationError {
 }
 
 /**
+ * Thrown when automatic note creation is disabled and no existing note is found.
+ */
+export class LiteratureNoteNotFoundError extends CitationError {
+  constructor(public readonly citekey: string) {
+    super(
+      `No literature note found for "${citekey}". Automatic note creation is disabled.`,
+      'LITERATURE_NOTE_NOT_FOUND',
+    );
+    this.name = 'LiteratureNoteNotFoundError';
+  }
+}
+
+/**
  * Thrown when a data source operation fails (load, watch, etc.).
  */
 export class DataSourceError extends CitationError {

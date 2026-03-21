@@ -3,7 +3,10 @@ import { NoteService } from '../../src/notes/note.service';
 import { TemplateService } from '../../src/template/template.service';
 import { CitationsPluginSettings } from '../../src/ui/settings/settings';
 import { Library, Entry, TemplateContext } from '../../src/core';
-import { TemplateRenderError } from '../../src/core/errors';
+import {
+  TemplateRenderError,
+  LiteratureNoteNotFoundError,
+} from '../../src/core/errors';
 import { App } from 'obsidian';
 
 jest.mock(
@@ -142,6 +145,71 @@ describe('NoteService', () => {
     });
   });
 
+  describe('findExistingLiteratureNoteFile', () => {
+    it('returns TFile when found by exact path', () => {
+      const mockFile = { path: 'Reading notes/My Title.md' };
+      const { TFile } = jest.requireMock('obsidian');
+      Object.setPrototypeOf(mockFile, TFile.prototype);
+
+      (app as unknown as Record<string, unknown>).vault = {
+        getAbstractFileByPath: jest.fn(() => mockFile),
+        getMarkdownFiles: jest.fn(() => []),
+      };
+
+      const result = noteService.findExistingLiteratureNoteFile(
+        'citekey1',
+        library,
+      );
+      expect(result).toBe(mockFile);
+    });
+
+    it('returns TFile when found by case-insensitive match', () => {
+      const mockFile = { path: 'reading notes/my title.md' };
+      const { TFile } = jest.requireMock('obsidian');
+      Object.setPrototypeOf(mockFile, TFile.prototype);
+
+      (app as unknown as Record<string, unknown>).vault = {
+        getAbstractFileByPath: jest.fn(() => null),
+        getMarkdownFiles: jest.fn(() => [mockFile]),
+      };
+
+      const result = noteService.findExistingLiteratureNoteFile(
+        'citekey1',
+        library,
+      );
+      expect(result).toBe(mockFile);
+    });
+
+    it('returns null when note does not exist', () => {
+      (app as unknown as Record<string, unknown>).vault = {
+        getAbstractFileByPath: jest.fn(() => null),
+        getMarkdownFiles: jest.fn(() => []),
+      };
+
+      const result = noteService.findExistingLiteratureNoteFile(
+        'citekey1',
+        library,
+      );
+      expect(result).toBeNull();
+    });
+
+    it('returns null when path matches a non-TFile abstract file', () => {
+      const notAFile = { path: 'Reading notes/My Title.md' };
+      // Not setting TFile prototype — simulates a folder or other abstract file
+
+      (app as unknown as Record<string, unknown>).vault = {
+        getAbstractFileByPath: jest.fn(() => notAFile),
+        getMarkdownFiles: jest.fn(() => []),
+      };
+
+      const result = noteService.findExistingLiteratureNoteFile(
+        'citekey1',
+        library,
+      );
+      expect(result).toBeNull();
+    });
+  });
+
   describe('openLiteratureNote', () => {
     it('propagates errors from getOrCreateLiteratureNoteFile', async () => {
       // Mock vault so getOrCreateLiteratureNoteFile fails
@@ -183,6 +251,77 @@ describe('NoteService', () => {
 
       expect(app.workspace.getLeaf).toHaveBeenCalledWith(true);
       expect(openFileFn).toHaveBeenCalledWith(mockFile);
+    });
+
+    describe('with disableAutomaticNoteCreation enabled', () => {
+      beforeEach(() => {
+        settings.disableAutomaticNoteCreation = true;
+      });
+
+      it('opens existing note without creating a new one', async () => {
+        const mockFile = { path: 'Reading notes/My Title.md' };
+        const { TFile } = jest.requireMock('obsidian');
+        Object.setPrototypeOf(mockFile, TFile.prototype);
+
+        const openFileFn = jest.fn();
+        (app as unknown as Record<string, unknown>).vault = {
+          getAbstractFileByPath: jest.fn(() => mockFile),
+          getMarkdownFiles: jest.fn(() => []),
+          create: jest.fn(),
+        };
+        (app as unknown as Record<string, unknown>).workspace = {
+          getLeaf: jest.fn(() => ({
+            openFile: openFileFn,
+          })),
+        };
+
+        await noteService.openLiteratureNote('citekey1', library, false);
+
+        expect(openFileFn).toHaveBeenCalledWith(mockFile);
+        expect(app.vault.create).not.toHaveBeenCalled();
+      });
+
+      it('throws LiteratureNoteNotFoundError when note does not exist', async () => {
+        (app as unknown as Record<string, unknown>).vault = {
+          getAbstractFileByPath: jest.fn(() => null),
+          getMarkdownFiles: jest.fn(() => []),
+        };
+        (app as unknown as Record<string, unknown>).workspace = {
+          getLeaf: jest.fn(() => ({
+            openFile: jest.fn(),
+          })),
+        };
+
+        await expect(
+          noteService.openLiteratureNote('citekey1', library, false),
+        ).rejects.toThrow(LiteratureNoteNotFoundError);
+      });
+    });
+
+    describe('with disableAutomaticNoteCreation disabled (default)', () => {
+      it('creates note when it does not exist', async () => {
+        const mockFile = { path: 'Reading notes/My Title.md' };
+        const { TFile } = jest.requireMock('obsidian');
+        Object.setPrototypeOf(mockFile, TFile.prototype);
+
+        const openFileFn = jest.fn();
+        (app as unknown as Record<string, unknown>).vault = {
+          getAbstractFileByPath: jest.fn(() => null),
+          getMarkdownFiles: jest.fn(() => []),
+          createFolder: jest.fn().mockResolvedValue(undefined),
+          create: jest.fn().mockResolvedValue(mockFile),
+        };
+        (app as unknown as Record<string, unknown>).workspace = {
+          getLeaf: jest.fn(() => ({
+            openFile: openFileFn,
+          })),
+        };
+
+        await noteService.openLiteratureNote('citekey1', library, false);
+
+        expect(app.vault.create).toHaveBeenCalled();
+        expect(openFileFn).toHaveBeenCalledWith(mockFile);
+      });
     });
   });
 });
