@@ -7,6 +7,7 @@ class MockEntry extends Entry {
   type: string = 'article-journal';
   title!: string;
   authorString!: string;
+  ISBN?: string;
   eprint: string | null = null;
   eprinttype: string | null = null;
   files: string[] | null = null;

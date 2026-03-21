@@ -5,6 +5,7 @@ import { SearchAction } from './search-action';
 
 export class OpenNoteAction implements SearchAction {
   name = 'Open literature note';
+  selectedText?: string;
   constructor(private plugin: CitationPlugin) {}
 
   onChoose = async (item: Entry, evt: MouseEvent | KeyboardEvent) => {

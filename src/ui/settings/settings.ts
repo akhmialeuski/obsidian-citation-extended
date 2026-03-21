@@ -14,6 +14,8 @@ export class CitationsPluginSettings {
   public literatureNoteFolder: string = DEFAULT_SETTINGS.literatureNoteFolder;
   public literatureNoteContentTemplate: string =
     DEFAULT_SETTINGS.literatureNoteContentTemplate;
+  public literatureNoteContentTemplatePath: string =
+    DEFAULT_SETTINGS.literatureNoteContentTemplatePath;
 
   public markdownCitationTemplate: string =
     DEFAULT_SETTINGS.markdownCitationTemplate;

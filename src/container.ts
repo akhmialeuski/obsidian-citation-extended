@@ -24,7 +24,10 @@ export interface ILibraryStore {
 // ---------------------------------------------------------------------------
 
 export interface ITemplateService {
-  getTemplateVariables(entry: Entry): TemplateContext;
+  getTemplateVariables(
+    entry: Entry,
+    extras?: { selectedText?: string },
+  ): TemplateContext;
   render(
     templateStr: string,
     variables: TemplateContext,

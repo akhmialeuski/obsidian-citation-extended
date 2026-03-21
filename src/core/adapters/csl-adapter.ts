@@ -9,6 +9,7 @@ export interface EntryDataCSL {
   editor?: Author[];
   'container-title'?: string;
   DOI?: string;
+  ISBN?: string;
   keyword?: string;
   'event-place'?: string;
   issued?: { 'date-parts': [(number | string)[]] };
@@ -98,6 +99,10 @@ export class EntryCSLAdapter extends Entry {
 
   get DOI(): string | undefined {
     return this.data.DOI;
+  }
+
+  get ISBN(): string | undefined {
+    return this.data.ISBN;
   }
 
   get eventPlace(): string | undefined {

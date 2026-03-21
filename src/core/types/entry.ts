@@ -64,6 +64,7 @@ export abstract class Entry {
   public abstract publisher?: string;
   public abstract publisherPlace?: string;
 
+  public abstract ISBN?: string;
   public abstract series?: string;
   public abstract volume?: string;
 

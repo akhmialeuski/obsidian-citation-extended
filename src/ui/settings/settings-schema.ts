@@ -6,6 +6,7 @@ export const SettingsSchema = z.object({
   literatureNoteTitleTemplate: z.string().min(1),
   literatureNoteFolder: z.string(),
   literatureNoteContentTemplate: z.string().min(1),
+  literatureNoteContentTemplatePath: z.string().default(''),
   markdownCitationTemplate: z.string().min(1),
   alternativeMarkdownCitationTemplate: z.string().min(1),
   // Multi-source configuration
@@ -31,9 +32,10 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   literatureNoteContentTemplate:
     '---\n' +
     'title: {{quote title}}\n' +
-    'authors: {{authorString}}\n' +
+    'authors: {{quote authorString}}\n' +
     'year: {{year}}\n' +
     '---\n\n',
+  literatureNoteContentTemplatePath: '',
   markdownCitationTemplate: '[@{{citekey}}]',
   alternativeMarkdownCitationTemplate: '@{{citekey}}',
   mergeStrategy: 'last-wins',

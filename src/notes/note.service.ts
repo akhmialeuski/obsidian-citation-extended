@@ -5,14 +5,23 @@ import { INoteService, ITemplateService } from '../container';
 import { Library } from '../core';
 import { DISALLOWED_FILENAME_CHARACTERS_RE } from '../util';
 
+type ContentTemplateResolver = () => Promise<string>;
+
 const MAX_FILENAME_LENGTH = 200;
 
 export class NoteService implements INoteService {
+  private resolveContentTemplate: ContentTemplateResolver;
+
   constructor(
     private app: App,
     private settings: CitationsPluginSettings,
     private templateService: ITemplateService,
-  ) {}
+    resolveContentTemplate?: ContentTemplateResolver,
+  ) {
+    this.resolveContentTemplate =
+      resolveContentTemplate ??
+      (() => Promise.resolve(this.settings.literatureNoteContentTemplate));
+  }
 
   /**
    * @throws {TemplateRenderError} when the title template fails to render
@@ -82,7 +91,11 @@ export class NoteService implements INoteService {
 
         const entry = library.entries[citekey];
         const variables = this.templateService.getTemplateVariables(entry);
-        const contentResult = this.templateService.getContent(variables);
+        const templateStr = await this.resolveContentTemplate();
+        const contentResult = this.templateService.render(
+          templateStr,
+          variables,
+        );
         if (!contentResult.ok) {
           throw contentResult.error;
         }

@@ -241,6 +241,13 @@ export class CitationSettingTab extends PluginSettingTab {
       true,
       true,
     );
+
+    this.buildSetting(
+      containerEl,
+      'Literature note content template path',
+      'Optional: path to a vault file used as the content template. When set, this overrides the inline template above.',
+      'literatureNoteContentTemplatePath',
+    );
   }
 
   private displayTemplateSettings(containerEl: HTMLElement): void {

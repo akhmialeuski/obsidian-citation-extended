@@ -7,7 +7,9 @@ export interface TemplateContext {
   eprint?: string | null;
   eprinttype?: string | null;
   eventPlace?: string;
+  ISBN?: string;
   keywords?: string[];
+  lastname?: string;
   language?: string;
   note?: string;
   page?: string;
@@ -24,6 +26,8 @@ export interface TemplateContext {
   zoteroSelectURI: string;
   zoteroId?: string;
   date?: string | null;
+
+  selectedText?: string;
 
   entry: Record<string, unknown>;
 }
