@@ -16,7 +16,11 @@ export class EditorActions {
     return ext.activeEditor?.editor ?? null;
   }
 
-  async openLiteratureNote(citekey: string, newPane: boolean): Promise<void> {
+  async openLiteratureNote(
+    citekey: string,
+    newPane: boolean,
+    selectedText?: string,
+  ): Promise<void> {
     const library = this.plugin.libraryService.library;
     if (!library) {
       new Notice(new LibraryNotReadyError().message);
@@ -34,6 +38,7 @@ export class EditorActions {
         citekey,
         library,
         newPane,
+        selectedText,
       );
     } catch (e) {
       console.error('Failed to open literature note:', e);

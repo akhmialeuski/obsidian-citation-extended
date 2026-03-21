@@ -65,7 +65,7 @@ export class CitationSearchModal extends SuggestModal<Entry> {
     // Seed the search input with the editor's selected text
     if (this.action.selectedText) {
       this.inputEl.value = this.action.selectedText;
-      this.inputEl.dispatchEvent(new Event('input'));
+      this.inputEl.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
     // subscribe fires immediately with current state, so no separate updateState call needed

@@ -46,11 +46,13 @@ export interface INoteService {
   getOrCreateLiteratureNoteFile(
     citekey: string,
     library: Library,
+    selectedText?: string,
   ): Promise<TFile>;
   openLiteratureNote(
     citekey: string,
     library: Library,
     newPane: boolean,
+    selectedText?: string,
   ): Promise<void>;
 }
 

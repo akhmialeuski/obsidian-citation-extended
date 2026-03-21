@@ -11,7 +11,11 @@ export class OpenNoteAction implements SearchAction {
   onChoose = async (item: Entry, evt: MouseEvent | KeyboardEvent) => {
     if (evt instanceof MouseEvent || evt.key == 'Enter') {
       const newPane = evt instanceof KeyboardEvent && evt.ctrlKey;
-      await this.plugin.editorActions.openLiteratureNote(item.id, newPane);
+      await this.plugin.editorActions.openLiteratureNote(
+        item.id,
+        newPane,
+        this.selectedText,
+      );
     } else if (evt.key == 'Tab') {
       if (evt.shiftKey) {
         const files = item.files || [];

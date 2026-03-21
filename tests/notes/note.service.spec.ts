@@ -42,6 +42,9 @@ describe('NoteService', () => {
     jest
       .spyOn(templateService, 'getContent')
       .mockReturnValue({ ok: true, value: 'My Content' });
+    jest
+      .spyOn(templateService, 'render')
+      .mockReturnValue({ ok: true, value: 'My Content' });
 
     noteService = new NoteService(app, settings, templateService);
 
@@ -91,6 +94,52 @@ describe('NoteService', () => {
     expect(() => noteService.getPathForCitekey('citekey1', library)).toThrow(
       TemplateRenderError,
     );
+  });
+
+  describe('getOrCreateLiteratureNoteFile', () => {
+    it('calls templateService.render when creating a new file', async () => {
+      const mockFile = { path: 'Reading notes/My Title.md' };
+      const { TFile } = jest.requireMock('obsidian');
+      Object.setPrototypeOf(mockFile, TFile.prototype);
+
+      (app as unknown as Record<string, unknown>).vault = {
+        getAbstractFileByPath: jest.fn(() => null),
+        getMarkdownFiles: jest.fn(() => []),
+        createFolder: jest.fn().mockResolvedValue(undefined),
+        create: jest.fn().mockResolvedValue(mockFile),
+      };
+
+      const renderSpy = jest.spyOn(templateService, 'render');
+
+      await noteService.getOrCreateLiteratureNoteFile('citekey1', library);
+
+      expect(renderSpy).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({}),
+      );
+      expect(app.vault.create).toHaveBeenCalledWith(
+        expect.stringContaining('My Title.md'),
+        'My Content',
+      );
+    });
+
+    it('throws TemplateRenderError when render fails on new file', async () => {
+      jest.spyOn(templateService, 'render').mockReturnValue({
+        ok: false,
+        error: new TemplateRenderError('bad render'),
+      });
+
+      (app as unknown as Record<string, unknown>).vault = {
+        getAbstractFileByPath: jest.fn(() => null),
+        getMarkdownFiles: jest.fn(() => []),
+        createFolder: jest.fn().mockResolvedValue(undefined),
+        create: jest.fn(),
+      };
+
+      await expect(
+        noteService.getOrCreateLiteratureNoteFile('citekey1', library),
+      ).rejects.toThrow(TemplateRenderError);
+    });
   });
 
   describe('openLiteratureNote', () => {

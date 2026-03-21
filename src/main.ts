@@ -185,8 +185,8 @@ export default class CitationPlugin extends Plugin {
       if (file instanceof TFile) {
         return this.app.vault.read(file);
       }
-      console.warn(
-        `Citations plugin: template file not found at "${templatePath}", using inline template`,
+      new Notice(
+        `Citations: template file not found at "${templatePath}", using inline template`,
       );
     }
     return this.settings.literatureNoteContentTemplate;

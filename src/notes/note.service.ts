@@ -73,6 +73,7 @@ export class NoteService implements INoteService {
   async getOrCreateLiteratureNoteFile(
     citekey: string,
     library: Library,
+    selectedText?: string,
   ): Promise<TFile> {
     const notePath = this.getPathForCitekey(citekey, library);
     const normalizedPath = normalizePath(notePath);
@@ -90,7 +91,9 @@ export class NoteService implements INoteService {
         await this.ensureFolderExists(folder);
 
         const entry = library.entries[citekey];
-        const variables = this.templateService.getTemplateVariables(entry);
+        const variables = this.templateService.getTemplateVariables(entry, {
+          selectedText,
+        });
         const templateStr = await this.resolveContentTemplate();
         const contentResult = this.templateService.render(
           templateStr,
@@ -113,8 +116,13 @@ export class NoteService implements INoteService {
     citekey: string,
     library: Library,
     newPane: boolean,
+    selectedText?: string,
   ): Promise<void> {
-    const file = await this.getOrCreateLiteratureNoteFile(citekey, library);
+    const file = await this.getOrCreateLiteratureNoteFile(
+      citekey,
+      library,
+      selectedText,
+    );
     await this.app.workspace.getLeaf(newPane).openFile(file);
   }
 }

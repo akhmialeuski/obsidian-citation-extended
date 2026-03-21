@@ -102,6 +102,7 @@ describe('EditorActions', () => {
         'key1',
         plugin.libraryService.library,
         true,
+        undefined,
       );
       expect(Notice).not.toHaveBeenCalled();
     });

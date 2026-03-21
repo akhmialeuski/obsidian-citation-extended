@@ -38,7 +38,7 @@ export class TemplateService implements ITemplateService {
       eventPlace: entry.eventPlace,
       ISBN: entry.ISBN,
       keywords: entry.keywords,
-      lastname: entry.author?.[0]?.family,
+      lastname: entry.author?.[0]?.family ?? entry.author?.[0]?.literal,
       language: entry.language,
       note: entry.note,
       page: entry.page,
