@@ -28,6 +28,7 @@ function makePlugin(overrides: Record<string, any> = {}): any {
     },
     settings: {
       autoCreateNoteOnCitation: false,
+      disableAutomaticNoteCreation: false,
       ...(settingsOverrides as Record<string, unknown>),
     },
     libraryService: {
@@ -36,9 +37,6 @@ function makePlugin(overrides: Record<string, any> = {}): any {
           key1: { id: 'key1' },
         },
       },
-    },
-    settings: {
-      disableAutomaticNoteCreation: false,
     },
     noteService: {
       openLiteratureNote: jest.fn().mockResolvedValue(undefined),
