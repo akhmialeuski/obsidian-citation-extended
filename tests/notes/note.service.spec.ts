@@ -99,6 +99,72 @@ describe('NoteService', () => {
     );
   });
 
+  describe('subfolder support in title template', () => {
+    it('produces correct path when title contains a forward slash', () => {
+      jest
+        .spyOn(templateService, 'getTitle')
+        .mockReturnValue({ ok: true, value: 'article/smith2023' });
+
+      const result = noteService.getPathForCitekey('citekey1', library);
+      const normalized = result.replace(/\\/g, '/');
+      expect(normalized).toBe('Reading notes/article/smith2023.md');
+    });
+
+    it('produces correct path with multiple subfolder levels', () => {
+      jest
+        .spyOn(templateService, 'getTitle')
+        .mockReturnValue({ ok: true, value: 'journal/2024/smith2023' });
+
+      const result = noteService.getPathForCitekey('citekey1', library);
+      const normalized = result.replace(/\\/g, '/');
+      expect(normalized).toBe('Reading notes/journal/2024/smith2023.md');
+    });
+
+    it('strips empty segments caused by consecutive slashes', () => {
+      jest
+        .spyOn(templateService, 'getTitle')
+        .mockReturnValue({ ok: true, value: 'article//smith2023' });
+
+      const result = noteService.getPathForCitekey('citekey1', library);
+      const normalized = result.replace(/\\/g, '/');
+      expect(normalized).toBe('Reading notes/article/smith2023.md');
+    });
+
+    it('strips whitespace-only segments', () => {
+      jest
+        .spyOn(templateService, 'getTitle')
+        .mockReturnValue({ ok: true, value: 'article/ /smith2023' });
+
+      const result = noteService.getPathForCitekey('citekey1', library);
+      const normalized = result.replace(/\\/g, '/');
+      expect(normalized).toBe('Reading notes/article/smith2023.md');
+    });
+
+    it('sanitizes disallowed characters independently in each segment', () => {
+      jest
+        .spyOn(templateService, 'getTitle')
+        .mockReturnValue({ ok: true, value: 'Art:icle/smi*th2023' });
+
+      const result = noteService.getPathForCitekey('citekey1', library);
+      const normalized = result.replace(/\\/g, '/');
+      expect(normalized).toBe('Reading notes/Art_icle/smi_th2023.md');
+    });
+
+    it('truncates each segment independently to MAX_FILENAME_LENGTH', () => {
+      const longSegment = 'B'.repeat(250);
+      jest
+        .spyOn(templateService, 'getTitle')
+        .mockReturnValue({ ok: true, value: `${longSegment}/citekey` });
+
+      const result = noteService.getPathForCitekey('citekey1', library);
+      const normalized = result.replace(/\\/g, '/');
+      const parts = normalized.split('/');
+      // parts: ["Reading notes", <truncated>, "citekey.md"]
+      expect(parts[1].length).toBeLessThanOrEqual(200);
+      expect(parts[2]).toBe('citekey.md');
+    });
+  });
+
   describe('getOrCreateLiteratureNoteFile', () => {
     it('calls templateService.render when creating a new file', async () => {
       const mockFile = { path: 'Reading notes/My Title.md' };
@@ -142,6 +208,104 @@ describe('NoteService', () => {
       await expect(
         noteService.getOrCreateLiteratureNoteFile('citekey1', library),
       ).rejects.toThrow(TemplateRenderError);
+    });
+
+    it('finds a note moved to a subfolder via recursive search', async () => {
+      const { TFile } = jest.requireMock('obsidian');
+
+      // The note was moved from "Reading notes/My Title.md"
+      // to "Reading notes/archive/My Title.md"
+      const movedFile = {
+        path: 'Reading notes/archive/My Title.md',
+        name: 'My Title.md',
+      };
+      Object.setPrototypeOf(movedFile, TFile.prototype);
+
+      (app as unknown as Record<string, unknown>).vault = {
+        // Exact path lookup returns null (not at expected location)
+        getAbstractFileByPath: jest.fn(() => null),
+        // But the file exists under a subfolder
+        getMarkdownFiles: jest.fn(() => [movedFile]),
+        createFolder: jest.fn().mockResolvedValue(undefined),
+        create: jest.fn(),
+      };
+
+      const result = await noteService.getOrCreateLiteratureNoteFile(
+        'citekey1',
+        library,
+      );
+
+      expect(result).toBe(movedFile);
+      // Should NOT have created a new file
+      expect(app.vault.create).not.toHaveBeenCalled();
+    });
+
+    it('creates note in correct subfolder when title template includes path separators', async () => {
+      jest
+        .spyOn(templateService, 'getTitle')
+        .mockReturnValue({ ok: true, value: 'article/smith2023' });
+
+      const { TFile, TFolder } = jest.requireMock('obsidian');
+
+      const mockFile = { path: 'Reading notes/article/smith2023.md' };
+      Object.setPrototypeOf(mockFile, TFile.prototype);
+
+      const existingFolder = {};
+      Object.setPrototypeOf(existingFolder, TFolder.prototype);
+
+      (app as unknown as Record<string, unknown>).vault = {
+        getAbstractFileByPath: jest
+          .fn()
+          // First call: exact path lookup for the note — not found
+          .mockReturnValueOnce(null)
+          // Second call: ensureFolderExists checks "Reading notes" parent
+          .mockReturnValueOnce(existingFolder)
+          // Third call: ensureFolderExists checks "Reading notes/article"
+          .mockReturnValueOnce(null),
+        getMarkdownFiles: jest.fn(() => []),
+        createFolder: jest.fn().mockResolvedValue(undefined),
+        create: jest.fn().mockResolvedValue(mockFile),
+      };
+
+      const result = await noteService.getOrCreateLiteratureNoteFile(
+        'citekey1',
+        library,
+      );
+
+      expect(result).toBe(mockFile);
+      expect(app.vault.create).toHaveBeenCalledWith(
+        expect.stringContaining('article'),
+        'My Content',
+      );
+    });
+
+    it('does not find notes outside the literature note folder', async () => {
+      const { TFile } = jest.requireMock('obsidian');
+
+      // A file with the same name exists outside the literature note folder
+      const outsideFile = {
+        path: 'Other folder/My Title.md',
+        name: 'My Title.md',
+      };
+
+      const mockCreatedFile = { path: 'Reading notes/My Title.md' };
+      Object.setPrototypeOf(mockCreatedFile, TFile.prototype);
+
+      (app as unknown as Record<string, unknown>).vault = {
+        getAbstractFileByPath: jest.fn(() => null),
+        getMarkdownFiles: jest.fn(() => [outsideFile]),
+        createFolder: jest.fn().mockResolvedValue(undefined),
+        create: jest.fn().mockResolvedValue(mockCreatedFile),
+      };
+
+      const result = await noteService.getOrCreateLiteratureNoteFile(
+        'citekey1',
+        library,
+      );
+
+      // Should create a new file, not return the outside file
+      expect(result).toBe(mockCreatedFile);
+      expect(app.vault.create).toHaveBeenCalled();
     });
   });
 

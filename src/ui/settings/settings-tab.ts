@@ -269,7 +269,7 @@ export class CitationSettingTab extends PluginSettingTab {
     this.buildSetting(
       containerEl,
       'Literature note title template',
-      '',
+      'Use forward slashes to organise notes into subfolders, e.g. {{containerTitle}}/{{citekey}}.',
       'literatureNoteTitleTemplate',
       'text',
       true,
