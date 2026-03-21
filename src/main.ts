@@ -1,4 +1,10 @@
-import { FileSystemAdapter, Notice, Plugin } from 'obsidian';
+import {
+  FileSystemAdapter,
+  Notice,
+  Plugin,
+  TFile,
+  normalizePath,
+} from 'obsidian';
 import * as chokidar from 'chokidar';
 
 import { TemplateService } from './template/template.service';
@@ -100,6 +106,7 @@ export default class CitationPlugin extends Plugin {
       this.app,
       this.settings,
       this.templateService,
+      () => this.resolveContentTemplate(),
     );
     this.libraryService = new LibraryService(
       this.settings,
@@ -164,36 +171,66 @@ export default class CitationPlugin extends Plugin {
     );
   }
 
-  getInitialContentForCitekey(citekey: string): Result<string, CitationError> {
+  /**
+   * Resolves the content template string, reading from a vault file if
+   * `literatureNoteContentTemplatePath` is configured, otherwise falling
+   * back to the inline setting.
+   */
+  async resolveContentTemplate(): Promise<string> {
+    const templatePath = this.settings.literatureNoteContentTemplatePath;
+    if (templatePath) {
+      const file = this.app.vault.getAbstractFileByPath(
+        normalizePath(templatePath),
+      );
+      if (file instanceof TFile) {
+        return this.app.vault.read(file);
+      }
+      new Notice(
+        `Citations: template file not found at "${templatePath}", using inline template`,
+      );
+    }
+    return this.settings.literatureNoteContentTemplate;
+  }
+
+  async getInitialContentForCitekey(
+    citekey: string,
+    selectedText?: string,
+  ): Promise<Result<string, CitationError>> {
     const entryResult = this.getEntry(citekey);
     if (!entryResult.ok) return entryResult;
 
     const variables = this.templateService.getTemplateVariables(
       entryResult.value,
+      { selectedText },
     );
-    return this.templateService.getContent(variables);
+    const templateStr = await this.resolveContentTemplate();
+    return this.templateService.render(templateStr, variables);
   }
 
   getMarkdownCitationForCitekey(
     citekey: string,
+    selectedText?: string,
   ): Result<string, CitationError> {
     const entryResult = this.getEntry(citekey);
     if (!entryResult.ok) return entryResult;
 
     const variables = this.templateService.getTemplateVariables(
       entryResult.value,
+      { selectedText },
     );
     return this.templateService.getMarkdownCitation(variables);
   }
 
   getAlternativeMarkdownCitationForCitekey(
     citekey: string,
+    selectedText?: string,
   ): Result<string, CitationError> {
     const entryResult = this.getEntry(citekey);
     if (!entryResult.ok) return entryResult;
 
     const variables = this.templateService.getTemplateVariables(
       entryResult.value,
+      { selectedText },
     );
     return this.templateService.getMarkdownCitation(variables, true);
   }

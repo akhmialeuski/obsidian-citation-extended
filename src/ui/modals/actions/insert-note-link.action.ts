@@ -4,6 +4,7 @@ import { SearchAction } from './search-action';
 
 export class InsertNoteLinkAction implements SearchAction {
   name = 'Insert literature note link';
+  selectedText?: string;
   constructor(private plugin: CitationPlugin) {}
 
   onChoose = async (item: Entry) => {

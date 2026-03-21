@@ -46,11 +46,31 @@ describe('YAML Colon Handling', () => {
     const content = contentResult.value;
 
     expect(content).toContain('title: "My Title: A Subtitle"');
+    expect(content).toContain('authors: "John Doe"');
 
     const titleLine = content
       .split('\n')
       .find((line: string) => line.startsWith('title:'));
     expect(titleLine).toBe('title: "My Title: A Subtitle"');
+  });
+
+  test('should generate valid YAML when authorString contains colon', () => {
+    const entryWithColonAuthor = {
+      ...mockEntry,
+      authorString: 'Doe, J.: Editor',
+      toJSON: () => entryWithColonAuthor,
+    } as unknown as Entry;
+    settings.literatureNoteContentTemplate =
+      DEFAULT_SETTINGS.literatureNoteContentTemplate;
+
+    const variables =
+      templateService.getTemplateVariables(entryWithColonAuthor);
+    const contentResult = templateService.getContent(variables);
+
+    expect(contentResult.ok).toBe(true);
+    if (!contentResult.ok) return;
+
+    expect(contentResult.value).toContain('authors: "Doe, J.: Editor"');
   });
 
   test('should quote title correctly if it contains quotes', () => {

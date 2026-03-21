@@ -5,12 +5,17 @@ import { SearchAction } from './search-action';
 
 export class OpenNoteAction implements SearchAction {
   name = 'Open literature note';
+  selectedText?: string;
   constructor(private plugin: CitationPlugin) {}
 
   onChoose = async (item: Entry, evt: MouseEvent | KeyboardEvent) => {
     if (evt instanceof MouseEvent || evt.key == 'Enter') {
       const newPane = evt instanceof KeyboardEvent && evt.ctrlKey;
-      await this.plugin.editorActions.openLiteratureNote(item.id, newPane);
+      await this.plugin.editorActions.openLiteratureNote(
+        item.id,
+        newPane,
+        this.selectedText,
+      );
     } else if (evt.key == 'Tab') {
       if (evt.shiftKey) {
         const files = item.files || [];

@@ -1,12 +1,14 @@
-import { App, Notice } from 'obsidian';
+import { App, MarkdownView, Notice } from 'obsidian';
 import { LoadingStatus, LibraryState } from '../library/library-state';
 import { CitationSearchModal } from '../ui/modals/citation-search-modal';
 import { InsertCitationAction } from '../ui/modals/actions/insert-citation.action';
 import { InsertNoteLinkAction } from '../ui/modals/actions/insert-note-link.action';
 import { InsertNoteContentAction } from '../ui/modals/actions/insert-note-content.action';
 import { OpenNoteAction } from '../ui/modals/actions/open-note.action';
+import { SearchAction } from '../ui/modals/actions/search-action';
 import CitationPlugin from '../main';
 import { IUIService } from '../container';
+import { WorkspaceExt } from '../obsidian-extensions.d';
 
 export class UIService implements IUIService {
   private statusBarItem: HTMLElement;
@@ -76,18 +78,36 @@ export class UIService implements IUIService {
     }
   }
 
+  /**
+   * Returns the currently selected text from the active editor, if any.
+   */
+  private getSelectedText(): string {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (view?.editor) {
+      return view.editor.getSelection();
+    }
+    const ext = this.app.workspace as WorkspaceExt;
+    return ext.activeEditor?.editor?.getSelection() ?? '';
+  }
+
+  /**
+   * Opens a citation search modal, injecting the current editor selection
+   * into the action so templates can use {{selectedText}} and the search
+   * input is pre-filled.
+   */
+  private openSearchModal(action: SearchAction): void {
+    action.selectedText = this.getSelectedText();
+    const modal = new CitationSearchModal(this.app, this.plugin, action);
+    modal.open();
+  }
+
   registerCommands(): void {
     this.plugin.addCommand({
       id: 'open-literature-note',
       name: 'Open literature note',
 
       callback: () => {
-        const modal = new CitationSearchModal(
-          this.app,
-          this.plugin,
-          new OpenNoteAction(this.plugin),
-        );
-        modal.open();
+        this.openSearchModal(new OpenNoteAction(this.plugin));
       },
     });
 
@@ -109,12 +129,7 @@ export class UIService implements IUIService {
       name: 'Insert literature note link',
 
       callback: () => {
-        const modal = new CitationSearchModal(
-          this.app,
-          this.plugin,
-          new InsertNoteLinkAction(this.plugin),
-        );
-        modal.open();
+        this.openSearchModal(new InsertNoteLinkAction(this.plugin));
       },
     });
 
@@ -122,12 +137,7 @@ export class UIService implements IUIService {
       id: 'insert-literature-note-content',
       name: 'Insert literature note content in the current pane',
       callback: () => {
-        const modal = new CitationSearchModal(
-          this.app,
-          this.plugin,
-          new InsertNoteContentAction(this.plugin),
-        );
-        modal.open();
+        this.openSearchModal(new InsertNoteContentAction(this.plugin));
       },
     });
 
@@ -135,12 +145,7 @@ export class UIService implements IUIService {
       id: 'insert-markdown-citation',
       name: 'Insert Markdown citation',
       callback: () => {
-        const modal = new CitationSearchModal(
-          this.app,
-          this.plugin,
-          new InsertCitationAction(this.plugin),
-        );
-        modal.open();
+        this.openSearchModal(new InsertCitationAction(this.plugin));
       },
     });
   }

@@ -17,6 +17,7 @@ export class EntryBibLaTeXAdapter extends Entry {
   _containerTitle?: string;
   containerTitleShort?: string;
   DOI?: string;
+  ISBN?: string;
   eprint?: string;
   eprinttype?: string;
   event?: string;
@@ -51,6 +52,7 @@ export class EntryBibLaTeXAdapter extends Entry {
       this.getField('journaltitle');
     this.containerTitleShort = this.getField('shortjournal');
     this.DOI = this.getField('doi');
+    this.ISBN = this.getField('isbn');
     this.eprint = this.getField('eprint');
     this.eprinttype = this.getField('eprinttype');
     this.event = this.getField('eventtitle');

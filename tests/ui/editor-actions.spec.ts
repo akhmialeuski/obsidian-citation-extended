@@ -42,10 +42,12 @@ function makePlugin(overrides: Record<string, any> = {}): any {
     },
     getEntry: jest.fn(() => ({ ok: true, value: { id: 'key1' } })),
     getTitleForCitekey: jest.fn(() => ({ ok: true, value: 'Title' })),
-    getInitialContentForCitekey: jest.fn(() => ({
-      ok: true,
-      value: 'content',
-    })),
+    getInitialContentForCitekey: jest.fn(() =>
+      Promise.resolve({
+        ok: true,
+        value: 'content',
+      }),
+    ),
     getMarkdownCitationForCitekey: jest.fn(() => ({
       ok: true,
       value: '[@key1]',
@@ -100,6 +102,7 @@ describe('EditorActions', () => {
         'key1',
         plugin.libraryService.library,
         true,
+        undefined,
       );
       expect(Notice).not.toHaveBeenCalled();
     });
@@ -126,17 +129,20 @@ describe('EditorActions', () => {
   });
 
   describe('getActiveEditor fallback', () => {
-    it('returns editor from MarkdownView', () => {
-      const editor = { replaceRange: jest.fn(), getCursor: jest.fn() };
+    it('returns editor from MarkdownView', async () => {
+      const editor = {
+        replaceRange: jest.fn(),
+        getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+      };
       const plugin = makePlugin();
       plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
       const actions = new EditorActions(plugin);
 
-      actions.insertLiteratureNoteContent('key1');
+      await actions.insertLiteratureNoteContent('key1');
       expect(Notice).not.toHaveBeenCalled();
     });
 
-    it('falls back to workspace.activeEditor', () => {
+    it('falls back to workspace.activeEditor', async () => {
       const editor = {
         replaceRange: jest.fn(),
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
@@ -146,19 +152,19 @@ describe('EditorActions', () => {
       plugin.app.workspace.activeEditor = { editor };
       const actions = new EditorActions(plugin);
 
-      actions.insertLiteratureNoteContent('key1');
+      await actions.insertLiteratureNoteContent('key1');
 
       expect(editor.replaceRange).toHaveBeenCalled();
       expect(Notice).not.toHaveBeenCalled();
     });
 
-    it('shows notice when no editor is available', () => {
+    it('shows notice when no editor is available', async () => {
       const plugin = makePlugin();
       plugin.app.workspace.getActiveViewOfType = jest.fn(() => null);
       plugin.app.workspace.activeEditor = null;
       const actions = new EditorActions(plugin);
 
-      actions.insertLiteratureNoteContent('key1');
+      await actions.insertLiteratureNoteContent('key1');
 
       expect(Notice).toHaveBeenCalledWith('No active editor found');
     });
@@ -176,7 +182,10 @@ describe('EditorActions', () => {
 
       actions.insertMarkdownCitation('key1', false);
 
-      expect(plugin.getMarkdownCitationForCitekey).toHaveBeenCalledWith('key1');
+      expect(plugin.getMarkdownCitationForCitekey).toHaveBeenCalledWith(
+        'key1',
+        undefined,
+      );
       expect(editor.replaceRange).toHaveBeenCalledWith('[@key1]', {
         line: 0,
         ch: 0,
@@ -196,7 +205,7 @@ describe('EditorActions', () => {
 
       expect(
         plugin.getAlternativeMarkdownCitationForCitekey,
-      ).toHaveBeenCalledWith('key1');
+      ).toHaveBeenCalledWith('key1', undefined);
       expect(editor.replaceRange).toHaveBeenCalledWith('@key1', {
         line: 0,
         ch: 0,

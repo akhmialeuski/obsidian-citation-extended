@@ -10,7 +10,9 @@ const KNOWN_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   eprint: '',
   eprinttype: '',
   eventPlace: 'Location of event',
+  ISBN: 'International Standard Book Number',
   language: 'Language code (e.g. en, ru)',
+  lastname: 'Family name of the first author',
   note: '',
   page: 'Page or page range',
   publisher: '',
@@ -25,6 +27,7 @@ const KNOWN_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   date: 'Publication date (YYYY-MM-DD)',
   dateEnd: '',
   dateStart: '',
+  selectedText: 'Text selected in the editor when the command was invoked',
   year: 'Publication year',
   zoteroSelectURI: 'URI to open the reference in Zotero',
 };

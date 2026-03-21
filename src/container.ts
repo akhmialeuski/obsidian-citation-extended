@@ -24,7 +24,10 @@ export interface ILibraryStore {
 // ---------------------------------------------------------------------------
 
 export interface ITemplateService {
-  getTemplateVariables(entry: Entry): TemplateContext;
+  getTemplateVariables(
+    entry: Entry,
+    extras?: { selectedText?: string },
+  ): TemplateContext;
   render(
     templateStr: string,
     variables: TemplateContext,
@@ -43,11 +46,13 @@ export interface INoteService {
   getOrCreateLiteratureNoteFile(
     citekey: string,
     library: Library,
+    selectedText?: string,
   ): Promise<TFile>;
   openLiteratureNote(
     citekey: string,
     library: Library,
     newPane: boolean,
+    selectedText?: string,
   ): Promise<void>;
 }
 

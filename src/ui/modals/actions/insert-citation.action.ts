@@ -4,11 +4,16 @@ import { SearchAction } from './search-action';
 
 export class InsertCitationAction implements SearchAction {
   name = 'Insert citation';
+  selectedText?: string;
   constructor(private plugin: CitationPlugin) {}
 
   onChoose = (item: Entry, evt: MouseEvent | KeyboardEvent) => {
     const isAlternative = evt instanceof KeyboardEvent && evt.shiftKey;
-    this.plugin.editorActions.insertMarkdownCitation(item.id, isAlternative);
+    this.plugin.editorActions.insertMarkdownCitation(
+      item.id,
+      isAlternative,
+      this.selectedText,
+    );
   };
 
   getInstructions() {

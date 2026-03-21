@@ -5,14 +5,23 @@ import { INoteService, ITemplateService } from '../container';
 import { Library } from '../core';
 import { DISALLOWED_FILENAME_CHARACTERS_RE } from '../util';
 
+type ContentTemplateResolver = () => Promise<string>;
+
 const MAX_FILENAME_LENGTH = 200;
 
 export class NoteService implements INoteService {
+  private resolveContentTemplate: ContentTemplateResolver;
+
   constructor(
     private app: App,
     private settings: CitationsPluginSettings,
     private templateService: ITemplateService,
-  ) {}
+    resolveContentTemplate?: ContentTemplateResolver,
+  ) {
+    this.resolveContentTemplate =
+      resolveContentTemplate ??
+      (() => Promise.resolve(this.settings.literatureNoteContentTemplate));
+  }
 
   /**
    * @throws {TemplateRenderError} when the title template fails to render
@@ -64,6 +73,7 @@ export class NoteService implements INoteService {
   async getOrCreateLiteratureNoteFile(
     citekey: string,
     library: Library,
+    selectedText?: string,
   ): Promise<TFile> {
     const notePath = this.getPathForCitekey(citekey, library);
     const normalizedPath = normalizePath(notePath);
@@ -81,8 +91,14 @@ export class NoteService implements INoteService {
         await this.ensureFolderExists(folder);
 
         const entry = library.entries[citekey];
-        const variables = this.templateService.getTemplateVariables(entry);
-        const contentResult = this.templateService.getContent(variables);
+        const variables = this.templateService.getTemplateVariables(entry, {
+          selectedText,
+        });
+        const templateStr = await this.resolveContentTemplate();
+        const contentResult = this.templateService.render(
+          templateStr,
+          variables,
+        );
         if (!contentResult.ok) {
           throw contentResult.error;
         }
@@ -100,8 +116,13 @@ export class NoteService implements INoteService {
     citekey: string,
     library: Library,
     newPane: boolean,
+    selectedText?: string,
   ): Promise<void> {
-    const file = await this.getOrCreateLiteratureNoteFile(citekey, library);
+    const file = await this.getOrCreateLiteratureNoteFile(
+      citekey,
+      library,
+      selectedText,
+    );
     await this.app.workspace.getLeaf(newPane).openFile(file);
   }
 }

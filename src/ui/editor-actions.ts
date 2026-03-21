@@ -16,7 +16,11 @@ export class EditorActions {
     return ext.activeEditor?.editor ?? null;
   }
 
-  async openLiteratureNote(citekey: string, newPane: boolean): Promise<void> {
+  async openLiteratureNote(
+    citekey: string,
+    newPane: boolean,
+    selectedText?: string,
+  ): Promise<void> {
     const library = this.plugin.libraryService.library;
     if (!library) {
       new Notice(new LibraryNotReadyError().message);
@@ -34,6 +38,7 @@ export class EditorActions {
         citekey,
         library,
         newPane,
+        selectedText,
       );
     } catch (e) {
       console.error('Failed to open literature note:', e);
@@ -95,14 +100,20 @@ export class EditorActions {
     }
   }
 
-  insertLiteratureNoteContent(citekey: string): void {
+  async insertLiteratureNoteContent(
+    citekey: string,
+    selectedText?: string,
+  ): Promise<void> {
     const editor = this.getActiveEditor();
     if (!editor) {
       new Notice('No active editor found');
       return;
     }
 
-    const contentResult = this.plugin.getInitialContentForCitekey(citekey);
+    const contentResult = await this.plugin.getInitialContentForCitekey(
+      citekey,
+      selectedText,
+    );
     if (!contentResult.ok) {
       new Notice(contentResult.error.message);
       return;
@@ -112,7 +123,11 @@ export class EditorActions {
     editor.replaceRange(contentResult.value, cursor);
   }
 
-  insertMarkdownCitation(citekey: string, alternative = false): void {
+  insertMarkdownCitation(
+    citekey: string,
+    alternative = false,
+    selectedText?: string,
+  ): void {
     const editor = this.getActiveEditor();
     if (!editor) {
       new Notice('No active editor found');
@@ -120,8 +135,11 @@ export class EditorActions {
     }
 
     const citationResult = alternative
-      ? this.plugin.getAlternativeMarkdownCitationForCitekey(citekey)
-      : this.plugin.getMarkdownCitationForCitekey(citekey);
+      ? this.plugin.getAlternativeMarkdownCitationForCitekey(
+          citekey,
+          selectedText,
+        )
+      : this.plugin.getMarkdownCitationForCitekey(citekey, selectedText);
 
     if (!citationResult.ok) {
       new Notice(citationResult.error.message);

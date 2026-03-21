@@ -1,6 +1,6 @@
 import { TemplateService } from '../../src/template/template.service';
 import { CitationsPluginSettings } from '../../src/ui/settings/settings';
-import { TemplateContext, Entry } from '../../src/core';
+import { Entry, TemplateContext } from '../../src/core';
 import { Result } from '../../src/core/result';
 
 function expectOk<T>(result: Result<T>, expected: T) {
@@ -336,6 +336,88 @@ describe('TemplateService', () => {
 
       const vars = service.getTemplateVariables(entryMock);
       expect(vars.date).toBeNull();
+    });
+
+    it('should export ISBN shortcut', () => {
+      const entryMock = {
+        id: 'citekey',
+        ISBN: '978-3-16-148410-0',
+        toJSON: () => ({}),
+      } as unknown as Entry;
+
+      const vars = service.getTemplateVariables(entryMock);
+      expect(vars.ISBN).toBe('978-3-16-148410-0');
+    });
+
+    it('should export lastname as first author family name', () => {
+      const entryMock = {
+        id: 'citekey',
+        author: [
+          { given: 'John', family: 'Doe' },
+          { given: 'Jane', family: 'Smith' },
+        ],
+        toJSON: () => ({}),
+      } as unknown as Entry;
+
+      const vars = service.getTemplateVariables(entryMock);
+      expect(vars.lastname).toBe('Doe');
+    });
+
+    it('should handle missing author for lastname shortcut', () => {
+      const entryMock = {
+        id: 'citekey',
+        author: undefined,
+        toJSON: () => ({}),
+      } as unknown as Entry;
+
+      const vars = service.getTemplateVariables(entryMock);
+      expect(vars.lastname).toBeUndefined();
+    });
+
+    it('should export selectedText when provided via extras', () => {
+      const entryMock = {
+        id: 'citekey',
+        toJSON: () => ({}),
+      } as unknown as Entry;
+
+      const vars = service.getTemplateVariables(entryMock, {
+        selectedText: 'highlighted passage',
+      });
+      expect(vars.selectedText).toBe('highlighted passage');
+    });
+
+    it('should leave selectedText undefined when extras not provided', () => {
+      const entryMock = {
+        id: 'citekey',
+        toJSON: () => ({}),
+      } as unknown as Entry;
+
+      const vars = service.getTemplateVariables(entryMock);
+      expect(vars.selectedText).toBeUndefined();
+    });
+
+    it('should render ISBN in a template', () => {
+      const result = service.render('ISBN: {{ISBN}}', {
+        ISBN: '978-3-16-148410-0',
+      } as unknown as TemplateContext);
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value).toBe('ISBN: 978-3-16-148410-0');
+    });
+
+    it('should render lastname in a template', () => {
+      const result = service.render('Author: {{lastname}}', {
+        lastname: 'Einstein',
+      } as unknown as TemplateContext);
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value).toBe('Author: Einstein');
+    });
+
+    it('should render selectedText in a template', () => {
+      const result = service.render('Note: {{selectedText}}', {
+        selectedText: 'some selection',
+      } as unknown as TemplateContext);
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value).toBe('Note: some selection');
     });
   });
 });

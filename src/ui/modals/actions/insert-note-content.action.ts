@@ -4,10 +4,14 @@ import { SearchAction } from './search-action';
 
 export class InsertNoteContentAction implements SearchAction {
   name = 'Insert literature note content';
+  selectedText?: string;
   constructor(private plugin: CitationPlugin) {}
 
-  onChoose = (item: Entry) => {
-    this.plugin.editorActions.insertLiteratureNoteContent(item.id);
+  onChoose = async (item: Entry) => {
+    await this.plugin.editorActions.insertLiteratureNoteContent(
+      item.id,
+      this.selectedText,
+    );
   };
 
   getInstructions() {

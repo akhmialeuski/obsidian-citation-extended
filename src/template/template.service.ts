@@ -22,7 +22,10 @@ export class TemplateService implements ITemplateService {
     registerAllHelpers(this.hbs);
   }
 
-  public getTemplateVariables(entry: Entry): TemplateContext {
+  public getTemplateVariables(
+    entry: Entry,
+    extras?: { selectedText?: string },
+  ): TemplateContext {
     const shortcuts = {
       citekey: entry.id,
 
@@ -33,7 +36,9 @@ export class TemplateService implements ITemplateService {
       eprint: entry.eprint,
       eprinttype: entry.eprinttype,
       eventPlace: entry.eventPlace,
+      ISBN: entry.ISBN,
       keywords: entry.keywords,
+      lastname: entry.author?.[0]?.family ?? entry.author?.[0]?.literal,
       language: entry.language,
       note: entry.note,
       page: entry.page,
@@ -52,6 +57,7 @@ export class TemplateService implements ITemplateService {
       date: entry.issuedDate
         ? entry.issuedDate.toISOString().split('T')[0]
         : null,
+      selectedText: extras?.selectedText,
     };
 
     return { entry: entry.toJSON(), ...shortcuts };
