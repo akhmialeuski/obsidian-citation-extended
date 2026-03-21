@@ -1,5 +1,38 @@
 import { z } from 'zod';
 
+// ---- Citation style presets ------------------------------------------------
+
+export const CITATION_STYLE_PRESET_OPTIONS = [
+  'custom',
+  'textcite',
+  'parencite',
+  'citekey',
+] as const;
+
+export type CitationStylePreset =
+  (typeof CITATION_STYLE_PRESET_OPTIONS)[number];
+
+/** Maps each non-custom preset to its primary and alternative templates. */
+export const CITATION_STYLE_PRESETS: Record<
+  Exclude<CitationStylePreset, 'custom'>,
+  { primary: string; alternative: string }
+> = {
+  textcite: {
+    primary: '{{authorString}} ({{year}})',
+    alternative: '[@{{citekey}}]',
+  },
+  parencite: {
+    primary: '({{authorString}}, {{year}})',
+    alternative: '[@{{citekey}}]',
+  },
+  citekey: {
+    primary: '[@{{citekey}}]',
+    alternative: '@{{citekey}}',
+  },
+};
+
+// ---- Zod schema ------------------------------------------------------------
+
 export const SettingsSchema = z.object({
   citationExportPath: z.string(),
   citationExportFormat: z.enum(['csl-json', 'biblatex']),
@@ -7,6 +40,7 @@ export const SettingsSchema = z.object({
   literatureNoteFolder: z.string(),
   literatureNoteContentTemplate: z.string().min(1),
   literatureNoteContentTemplatePath: z.string().default(''),
+  citationStylePreset: z.enum(CITATION_STYLE_PRESET_OPTIONS).default('custom'),
   markdownCitationTemplate: z.string().min(1),
   alternativeMarkdownCitationTemplate: z.string().min(1),
   // Reference list sorting
@@ -42,6 +76,7 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
     'year: {{year}}\n' +
     '---\n\n',
   literatureNoteContentTemplatePath: '',
+  citationStylePreset: 'custom',
   markdownCitationTemplate: '[@{{citekey}}]',
   alternativeMarkdownCitationTemplate: '@{{citekey}}',
   referenceListSortOrder: 'default',
