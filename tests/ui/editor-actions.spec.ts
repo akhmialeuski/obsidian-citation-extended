@@ -14,6 +14,7 @@ jest.mock(
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only mock factory
 function makePlugin(overrides: Record<string, any> = {}): any {
+  const { settings: settingsOverrides, ...rest } = overrides;
   return {
     app: {
       workspace: {
@@ -25,15 +26,17 @@ function makePlugin(overrides: Record<string, any> = {}): any {
         fileToLinktext: jest.fn(() => 'link'),
       },
     },
+    settings: {
+      autoCreateNoteOnCitation: false,
+      disableAutomaticNoteCreation: false,
+      ...(settingsOverrides as Record<string, unknown>),
+    },
     libraryService: {
       library: {
         entries: {
           key1: { id: 'key1' },
         },
       },
-    },
-    settings: {
-      disableAutomaticNoteCreation: false,
     },
     noteService: {
       openLiteratureNote: jest.fn().mockResolvedValue(undefined),
@@ -61,7 +64,7 @@ function makePlugin(overrides: Record<string, any> = {}): any {
       ok: true,
       value: '@key1',
     })),
-    ...overrides,
+    ...rest,
   };
 }
 
@@ -253,7 +256,7 @@ describe('EditorActions', () => {
   });
 
   describe('insertMarkdownCitation', () => {
-    it('inserts primary citation', () => {
+    it('inserts primary citation', async () => {
       const editor = {
         replaceRange: jest.fn(),
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
@@ -262,7 +265,7 @@ describe('EditorActions', () => {
       plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
       const actions = new EditorActions(plugin);
 
-      actions.insertMarkdownCitation('key1', false);
+      await actions.insertMarkdownCitation('key1', false);
 
       expect(plugin.getMarkdownCitationForCitekey).toHaveBeenCalledWith(
         'key1',
@@ -274,7 +277,7 @@ describe('EditorActions', () => {
       });
     });
 
-    it('inserts alternative citation when alternative=true', () => {
+    it('inserts alternative citation when alternative=true', async () => {
       const editor = {
         replaceRange: jest.fn(),
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
@@ -283,7 +286,7 @@ describe('EditorActions', () => {
       plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
       const actions = new EditorActions(plugin);
 
-      actions.insertMarkdownCitation('key1', true);
+      await actions.insertMarkdownCitation('key1', true);
 
       expect(
         plugin.getAlternativeMarkdownCitationForCitekey,
@@ -292,6 +295,79 @@ describe('EditorActions', () => {
         line: 0,
         ch: 0,
       });
+    });
+
+    it('creates literature note when autoCreateNoteOnCitation is enabled', async () => {
+      const editor = {
+        replaceRange: jest.fn(),
+        getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+      };
+      const plugin = makePlugin({
+        settings: { autoCreateNoteOnCitation: true },
+      });
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+      const actions = new EditorActions(plugin);
+
+      await actions.insertMarkdownCitation('key1', false);
+
+      expect(editor.replaceRange).toHaveBeenCalledWith('[@key1]', {
+        line: 0,
+        ch: 0,
+      });
+      expect(
+        plugin.noteService.getOrCreateLiteratureNoteFile,
+      ).toHaveBeenCalledWith('key1', plugin.libraryService.library, undefined);
+    });
+
+    it('does not create literature note when autoCreateNoteOnCitation is disabled', async () => {
+      const editor = {
+        replaceRange: jest.fn(),
+        getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+      };
+      const plugin = makePlugin({
+        settings: { autoCreateNoteOnCitation: false },
+      });
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+      const actions = new EditorActions(plugin);
+
+      await actions.insertMarkdownCitation('key1', false);
+
+      expect(editor.replaceRange).toHaveBeenCalledWith('[@key1]', {
+        line: 0,
+        ch: 0,
+      });
+      expect(
+        plugin.noteService.getOrCreateLiteratureNoteFile,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('still inserts citation even if note creation fails', async () => {
+      const editor = {
+        replaceRange: jest.fn(),
+        getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+      };
+      const plugin = makePlugin({
+        settings: { autoCreateNoteOnCitation: true },
+      });
+      plugin.noteService.getOrCreateLiteratureNoteFile = jest
+        .fn()
+        .mockRejectedValue(new Error('Folder missing'));
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const actions = new EditorActions(plugin);
+
+      await actions.insertMarkdownCitation('key1', false);
+
+      expect(editor.replaceRange).toHaveBeenCalledWith('[@key1]', {
+        line: 0,
+        ch: 0,
+      });
+      expect(warnSpy).toHaveBeenCalledWith(
+        'Failed to auto-create literature note:',
+        expect.any(Error),
+      );
+      warnSpy.mockRestore();
     });
   });
 });

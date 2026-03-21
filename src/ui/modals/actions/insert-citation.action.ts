@@ -9,7 +9,7 @@ export class InsertCitationAction implements SearchAction {
 
   onChoose = (item: Entry, evt: MouseEvent | KeyboardEvent) => {
     const isAlternative = evt instanceof KeyboardEvent && evt.shiftKey;
-    this.plugin.editorActions.insertMarkdownCitation(
+    void this.plugin.editorActions.insertMarkdownCitation(
       item.id,
       isAlternative,
       this.selectedText,
