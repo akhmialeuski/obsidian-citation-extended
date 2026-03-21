@@ -75,37 +75,25 @@ export class NoteService implements INoteService {
     library: Library,
     selectedText?: string,
   ): Promise<TFile> {
-    const notePath = this.getPathForCitekey(citekey, library);
-    const normalizedPath = normalizePath(notePath);
-
-    let file = this.app.vault.getAbstractFileByPath(normalizedPath);
-    if (file == null) {
-      const matches = this.app.vault
-        .getMarkdownFiles()
-        .filter((f) => f.path.toLowerCase() == normalizedPath.toLowerCase());
-      if (matches.length > 0) {
-        file = matches[0];
-      } else {
-        // Ensure the target folder exists before creating the note
-        const folder = path.dirname(notePath);
-        await this.ensureFolderExists(folder);
-
-        const entry = library.entries[citekey];
-        const variables = this.templateService.getTemplateVariables(entry, {
-          selectedText,
-        });
-        const templateStr = await this.resolveContentTemplate();
-        const contentResult = this.templateService.render(
-          templateStr,
-          variables,
-        );
-        if (!contentResult.ok) {
-          throw contentResult.error;
-        }
-        file = await this.app.vault.create(notePath, contentResult.value);
-      }
+    const existing = this.findExistingLiteratureNoteFile(citekey, library);
+    if (existing) {
+      return existing;
     }
 
+    const notePath = this.getPathForCitekey(citekey, library);
+    const folder = path.dirname(notePath);
+    await this.ensureFolderExists(folder);
+
+    const entry = library.entries[citekey];
+    const variables = this.templateService.getTemplateVariables(entry, {
+      selectedText,
+    });
+    const templateStr = await this.resolveContentTemplate();
+    const contentResult = this.templateService.render(templateStr, variables);
+    if (!contentResult.ok) {
+      throw contentResult.error;
+    }
+    const file = await this.app.vault.create(notePath, contentResult.value);
     if (file instanceof TFile) {
       return file;
     }

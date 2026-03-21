@@ -32,11 +32,15 @@ function makePlugin(overrides: Record<string, any> = {}): any {
         },
       },
     },
+    settings: {
+      disableAutomaticNoteCreation: false,
+    },
     noteService: {
       openLiteratureNote: jest.fn().mockResolvedValue(undefined),
       getOrCreateLiteratureNoteFile: jest
         .fn()
         .mockResolvedValue({ path: 'note.md' }),
+      findExistingLiteratureNoteFile: jest.fn(() => null),
     },
     templateService: {
       getTemplateVariables: jest.fn(() => ({})),
@@ -182,6 +186,69 @@ describe('EditorActions', () => {
       await actions.insertLiteratureNoteContent('key1');
 
       expect(Notice).toHaveBeenCalledWith('No active editor found');
+    });
+  });
+
+  describe('insertLiteratureNoteLink', () => {
+    it('shows notice when disableAutomaticNoteCreation is on and note does not exist', async () => {
+      const editor = {
+        replaceSelection: jest.fn(),
+        getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+      };
+      const plugin = makePlugin();
+      plugin.settings.disableAutomaticNoteCreation = true;
+      plugin.noteService.findExistingLiteratureNoteFile = jest.fn(() => null);
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+      const actions = new EditorActions(plugin);
+
+      await actions.insertLiteratureNoteLink('key1');
+
+      expect(Notice).toHaveBeenCalledWith(
+        expect.stringContaining('Automatic note creation is disabled'),
+      );
+      expect(editor.replaceSelection).not.toHaveBeenCalled();
+    });
+
+    it('uses existing note when disableAutomaticNoteCreation is on and note exists', async () => {
+      const editor = {
+        replaceSelection: jest.fn(),
+        getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+      };
+      const mockFile = { path: 'notes/key1.md' };
+      const plugin = makePlugin();
+      plugin.settings.disableAutomaticNoteCreation = true;
+      plugin.noteService.findExistingLiteratureNoteFile = jest.fn(
+        () => mockFile,
+      );
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+      plugin.app.vault = { getConfig: jest.fn(() => false) };
+      const actions = new EditorActions(plugin);
+
+      await actions.insertLiteratureNoteLink('key1');
+
+      expect(
+        plugin.noteService.getOrCreateLiteratureNoteFile,
+      ).not.toHaveBeenCalled();
+      expect(editor.replaceSelection).toHaveBeenCalled();
+    });
+
+    it('creates note when disableAutomaticNoteCreation is off (default)', async () => {
+      const editor = {
+        replaceSelection: jest.fn(),
+        getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+      };
+      const plugin = makePlugin();
+      plugin.settings.disableAutomaticNoteCreation = false;
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+      plugin.app.vault = { getConfig: jest.fn(() => false) };
+      const actions = new EditorActions(plugin);
+
+      await actions.insertLiteratureNoteLink('key1');
+
+      expect(
+        plugin.noteService.getOrCreateLiteratureNoteFile,
+      ).toHaveBeenCalled();
+      expect(editor.replaceSelection).toHaveBeenCalled();
     });
   });
 

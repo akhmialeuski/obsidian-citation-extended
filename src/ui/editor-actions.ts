@@ -1,4 +1,4 @@
-import { Editor, MarkdownView, Notice } from 'obsidian';
+import { Editor, MarkdownView, Notice, TFile } from 'obsidian';
 import CitationPlugin from '../main';
 import { LibraryNotReadyError, LiteratureNoteNotFoundError } from '../core';
 import { VaultExt, WorkspaceExt } from '../obsidian-extensions.d';
@@ -72,10 +72,24 @@ export class EditorActions {
     }
 
     try {
-      const file = await this.plugin.noteService.getOrCreateLiteratureNoteFile(
-        citekey,
-        library,
-      );
+      let file: TFile;
+      if (this.plugin.settings.disableAutomaticNoteCreation) {
+        const existing = this.plugin.noteService.findExistingLiteratureNoteFile(
+          citekey,
+          library,
+        );
+        if (!existing) {
+          new Notice(new LiteratureNoteNotFoundError(citekey).message);
+          return;
+        }
+        file = existing;
+      } else {
+        file = await this.plugin.noteService.getOrCreateLiteratureNoteFile(
+          citekey,
+          library,
+        );
+      }
+
       const titleResult = this.plugin.getTitleForCitekey(citekey);
       if (!titleResult.ok) {
         new Notice(titleResult.error.message);
@@ -99,8 +113,12 @@ export class EditorActions {
 
       editor.replaceSelection(linkText);
     } catch (error) {
-      console.error('Failed to insert literature note link:', error);
-      new Notice('Failed to insert literature note link');
+      if (error instanceof LiteratureNoteNotFoundError) {
+        new Notice(error.message);
+      } else {
+        console.error('Failed to insert literature note link:', error);
+        new Notice('Failed to insert literature note link');
+      }
     }
   }
 
