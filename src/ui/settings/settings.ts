@@ -1,7 +1,11 @@
 import { DatabaseConfig } from '../../core';
 import { DataSourceDefinition } from '../../data-source';
 import { MergeStrategy } from '../../library/merge-strategy';
-import { DEFAULT_SETTINGS } from './settings-schema';
+import {
+  DEFAULT_SETTINGS,
+  CitationStylePreset,
+  CITATION_STYLE_PRESETS,
+} from './settings-schema';
 import { DatabaseType } from '../../core';
 import { ReferenceListSortOrder } from '../modals/sort-entries';
 
@@ -18,6 +22,8 @@ export class CitationsPluginSettings {
   public literatureNoteContentTemplatePath: string =
     DEFAULT_SETTINGS.literatureNoteContentTemplatePath;
 
+  public citationStylePreset: CitationStylePreset =
+    DEFAULT_SETTINGS.citationStylePreset;
   public markdownCitationTemplate: string =
     DEFAULT_SETTINGS.markdownCitationTemplate;
   public alternativeMarkdownCitationTemplate: string =
@@ -33,4 +39,27 @@ export class CitationsPluginSettings {
   public mergeStrategy?: MergeStrategy;
   public disableAutomaticNoteCreation: boolean =
     DEFAULT_SETTINGS.disableAutomaticNoteCreation;
+
+  /**
+   * Returns the effective primary citation template, taking the active
+   * preset into account.  When the preset is not 'custom', the preset
+   * value overrides the user-defined field.
+   */
+  getEffectiveMarkdownCitationTemplate(): string {
+    if (this.citationStylePreset !== 'custom') {
+      return CITATION_STYLE_PRESETS[this.citationStylePreset].primary;
+    }
+    return this.markdownCitationTemplate;
+  }
+
+  /**
+   * Returns the effective alternative citation template, taking the active
+   * preset into account.
+   */
+  getEffectiveAlternativeMarkdownCitationTemplate(): string {
+    if (this.citationStylePreset !== 'custom') {
+      return CITATION_STYLE_PRESETS[this.citationStylePreset].alternative;
+    }
+    return this.alternativeMarkdownCitationTemplate;
+  }
 }

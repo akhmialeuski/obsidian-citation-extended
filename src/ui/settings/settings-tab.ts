@@ -9,7 +9,12 @@ import {
 
 import CitationPlugin from '../../main';
 import { DatabaseType, DatabaseConfig, Entry } from '../../core';
-import { SettingsSchema, CitationsPluginSettingsType } from './settings-schema';
+import {
+  SettingsSchema,
+  CitationsPluginSettingsType,
+  CitationStylePreset,
+  CITATION_STYLE_PRESETS,
+} from './settings-schema';
 import { ReferenceListSortOrder } from '../modals/sort-entries';
 
 const CITATION_DATABASE_FORMAT_LABELS: Record<DatabaseType, string> = {
@@ -22,6 +27,13 @@ const SORT_ORDER_LABELS: Record<ReferenceListSortOrder, string> = {
   'year-desc': 'By year (newest first)',
   'year-asc': 'By year (oldest first)',
   'author-asc': 'By author (A to Z)',
+};
+
+const CITATION_STYLE_PRESET_LABELS: Record<CitationStylePreset, string> = {
+  custom: 'Custom',
+  textcite: 'Textcite — Author (Year)',
+  parencite: 'Parencite — (Author, Year)',
+  citekey: 'Citekey — [@citekey]',
 };
 
 const MOCK_ENTRY = {
@@ -395,24 +407,52 @@ export class CitationSettingTab extends PluginSettingTab {
       text: 'You can insert pandoc-style citations rather than literature notes by using the insert citation command. The below options allow customization of the citation format.',
     });
 
-    this.buildSetting(
+    // ---- Preset dropdown ---------------------------------------------------
+    new Setting(containerEl)
+      .setName('Citation style preset')
+      .setDesc(
+        'Select a built-in style or choose "Custom" to define your own templates.',
+      )
+      .addDropdown((dropdown) => {
+        dropdown.addOptions(CITATION_STYLE_PRESET_LABELS);
+        dropdown.setValue(this.plugin.settings.citationStylePreset);
+        dropdown.onChange((value) => {
+          void (async () => {
+            const preset = value as CitationStylePreset;
+            this.plugin.settings.citationStylePreset = preset;
+
+            // When switching to a named preset, update the stored template
+            // fields so they reflect the preset values (useful for display
+            // and as a fallback if the user later switches to custom).
+            if (preset !== 'custom') {
+              const templates = CITATION_STYLE_PRESETS[preset];
+              this.plugin.settings.markdownCitationTemplate = templates.primary;
+              this.plugin.settings.alternativeMarkdownCitationTemplate =
+                templates.alternative;
+            }
+
+            await this.plugin.saveSettings();
+            // Re-render so the template fields update their values / state
+            this.display();
+          })();
+        });
+      });
+
+    // ---- Template fields (disabled when a preset is active) ----------------
+    const isCustom = this.plugin.settings.citationStylePreset === 'custom';
+
+    this.buildMarkdownCitationTemplateSetting(
       containerEl,
       'Markdown primary citation template',
-      '',
       'markdownCitationTemplate',
-      'text',
-      true,
-      true,
+      isCustom,
     );
 
-    this.buildSetting(
+    this.buildMarkdownCitationTemplateSetting(
       containerEl,
       'Markdown secondary citation template',
-      '',
       'alternativeMarkdownCitationTemplate',
-      'text',
-      true,
-      true,
+      isCustom,
     );
 
     new Setting(containerEl)
@@ -428,6 +468,100 @@ export class CitationSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           });
       });
+  }
+
+  /**
+   * Builds a citation template text field with an optional preview.
+   * When `enabled` is false, the input is set to disabled and greyed out.
+   */
+  private buildMarkdownCitationTemplateSetting(
+    containerEl: HTMLElement,
+    name: string,
+    key: 'markdownCitationTemplate' | 'alternativeMarkdownCitationTemplate',
+    enabled: boolean,
+  ): void {
+    const setting = new Setting(containerEl).setName(name);
+    setting.settingEl.addClass('citation-setting-stacked');
+
+    if (!enabled) {
+      setting.setDesc('Controlled by the active citation style preset.');
+    }
+
+    const errorEl = containerEl.createDiv({
+      cls: 'citation-setting-error',
+      text: '',
+    });
+    errorEl.setCssProps({
+      color: 'var(--text-error)',
+      fontSize: '0.8em',
+      marginTop: '4px',
+      display: 'none',
+    });
+
+    // Preview element
+    const separator = containerEl.createEl('hr');
+    separator.setCssProps({
+      marginTop: '20px',
+      marginBottom: '20px',
+      borderColor: 'var(--background-modifier-border)',
+    });
+    const previewEl = containerEl.createDiv({
+      cls: 'citation-template-preview',
+    });
+    previewEl.setCssProps({
+      padding: '10px',
+      backgroundColor: 'var(--background-secondary)',
+      borderRadius: '4px',
+      fontFamily: 'var(--font-monospace)',
+      whiteSpace: 'pre-wrap',
+      fontSize: '0.8em',
+    });
+
+    const updatePreview = (value: string) => {
+      const variables =
+        this.plugin.templateService.getTemplateVariables(MOCK_ENTRY);
+      const result = this.plugin.templateService.render(value, variables);
+      if (result.ok) {
+        previewEl.setText(result.value);
+        previewEl.setCssProps({ color: 'var(--text-normal)' });
+      } else {
+        previewEl.setText(`Error rendering template: ${result.error.message} `);
+        previewEl.setCssProps({ color: 'var(--text-error)' });
+      }
+    };
+
+    const currentValue = this.plugin.settings[key];
+    updatePreview(currentValue);
+
+    const save = debounce(
+      async (value: string) => {
+        const fieldSchema = SettingsSchema.shape[key];
+        const result = fieldSchema.safeParse(value);
+        if (result.success) {
+          errorEl.setCssProps({ display: 'none' });
+          this.plugin.settings[key] = value;
+          await this.plugin.saveSettings();
+        } else {
+          errorEl.setText(result.error.issues[0].message);
+          errorEl.setCssProps({ display: 'block' });
+        }
+      },
+      500,
+      true,
+    );
+
+    setting.addText((component) => {
+      component.setValue(currentValue);
+      component.setDisabled(!enabled);
+      component.onChange((value) => {
+        save(value);
+        updatePreview(value);
+      });
+
+      if (!enabled) {
+        component.inputEl.setCssProps({ opacity: '0.5' });
+      }
+    });
   }
 
   private buildSetting<K extends keyof CitationsPluginSettingsType>(

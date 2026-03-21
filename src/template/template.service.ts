@@ -109,8 +109,8 @@ export class TemplateService implements ITemplateService {
     alternative = false,
   ): Result<string, TemplateRenderError> {
     const templateStr = alternative
-      ? this.settings.alternativeMarkdownCitationTemplate
-      : this.settings.markdownCitationTemplate;
+      ? this.settings.getEffectiveAlternativeMarkdownCitationTemplate()
+      : this.settings.getEffectiveMarkdownCitationTemplate();
     return this.render(templateStr, variables);
   }
 
