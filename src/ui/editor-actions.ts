@@ -145,11 +145,11 @@ export class EditorActions {
     editor.replaceRange(contentResult.value, cursor);
   }
 
-  insertMarkdownCitation(
+  async insertMarkdownCitation(
     citekey: string,
     alternative = false,
     selectedText?: string,
-  ): void {
+  ): Promise<void> {
     const editor = this.getActiveEditor();
     if (!editor) {
       new Notice('No active editor found');
@@ -170,5 +170,21 @@ export class EditorActions {
 
     const cursor = editor.getCursor();
     editor.replaceRange(citationResult.value, cursor);
+
+    // Silently create the literature note if the setting is enabled
+    if (this.plugin.settings.autoCreateNoteOnCitation) {
+      const library = this.plugin.libraryService.library;
+      if (library) {
+        try {
+          await this.plugin.noteService.getOrCreateLiteratureNoteFile(
+            citekey,
+            library,
+            selectedText,
+          );
+        } catch (e) {
+          console.warn('Failed to auto-create literature note:', e);
+        }
+      }
+    }
   }
 }

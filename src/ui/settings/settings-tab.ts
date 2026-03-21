@@ -414,6 +414,20 @@ export class CitationSettingTab extends PluginSettingTab {
       true,
       true,
     );
+
+    new Setting(containerEl)
+      .setName('Auto-create literature note on citation')
+      .setDesc(
+        'When enabled, inserting a citation will also create the literature note if it doesn\u2019t exist.',
+      )
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.autoCreateNoteOnCitation)
+          .onChange(async (value) => {
+            this.plugin.settings.autoCreateNoteOnCitation = value;
+            await this.plugin.saveSettings();
+          });
+      });
   }
 
   private buildSetting<K extends keyof CitationsPluginSettingsType>(

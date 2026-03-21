@@ -22,6 +22,8 @@ export class CitationsPluginSettings {
     DEFAULT_SETTINGS.markdownCitationTemplate;
   public alternativeMarkdownCitationTemplate: string =
     DEFAULT_SETTINGS.alternativeMarkdownCitationTemplate;
+  public autoCreateNoteOnCitation: boolean =
+    DEFAULT_SETTINGS.autoCreateNoteOnCitation;
 
   public referenceListSortOrder: ReferenceListSortOrder =
     DEFAULT_SETTINGS.referenceListSortOrder;

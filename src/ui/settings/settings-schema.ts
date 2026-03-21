@@ -13,6 +13,7 @@ export const SettingsSchema = z.object({
   referenceListSortOrder: z
     .enum(['default', 'year-desc', 'year-asc', 'author-asc'])
     .default('default'),
+  autoCreateNoteOnCitation: z.boolean().default(false),
   // Multi-source configuration
   databases: z
     .array(
@@ -44,6 +45,7 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   markdownCitationTemplate: '[@{{citekey}}]',
   alternativeMarkdownCitationTemplate: '@{{citekey}}',
   referenceListSortOrder: 'default',
+  autoCreateNoteOnCitation: false,
   mergeStrategy: 'last-wins',
   databases: [],
   disableAutomaticNoteCreation: false,
