@@ -9,6 +9,10 @@ export const SettingsSchema = z.object({
   literatureNoteContentTemplatePath: z.string().default(''),
   markdownCitationTemplate: z.string().min(1),
   alternativeMarkdownCitationTemplate: z.string().min(1),
+  // Reference list sorting
+  referenceListSortOrder: z
+    .enum(['default', 'year-desc', 'year-asc', 'author-asc'])
+    .default('default'),
   // Multi-source configuration
   databases: z
     .array(
@@ -39,6 +43,7 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   literatureNoteContentTemplatePath: '',
   markdownCitationTemplate: '[@{{citekey}}]',
   alternativeMarkdownCitationTemplate: '@{{citekey}}',
+  referenceListSortOrder: 'default',
   mergeStrategy: 'last-wins',
   databases: [],
   disableAutomaticNoteCreation: false,

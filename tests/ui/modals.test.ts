@@ -98,6 +98,9 @@ describe('CitationSearchModal', () => {
           entries: {},
         },
       },
+      settings: {
+        referenceListSortOrder: 'default',
+      },
       openLiteratureNote: jest.fn(),
       insertLiteratureNoteLink: jest.fn(),
       insertLiteratureNoteContent: jest.fn(),

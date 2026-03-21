@@ -10,10 +10,18 @@ import {
 import CitationPlugin from '../../main';
 import { DatabaseType, DatabaseConfig, Entry } from '../../core';
 import { SettingsSchema, CitationsPluginSettingsType } from './settings-schema';
+import { ReferenceListSortOrder } from '../modals/sort-entries';
 
 const CITATION_DATABASE_FORMAT_LABELS: Record<DatabaseType, string> = {
   'csl-json': 'CSL-JSON',
   biblatex: 'BibLaTeX',
+};
+
+const SORT_ORDER_LABELS: Record<ReferenceListSortOrder, string> = {
+  default: 'Default (file order)',
+  'year-desc': 'By year (newest first)',
+  'year-asc': 'By year (oldest first)',
+  'author-asc': 'By author (A to Z)',
 };
 
 const MOCK_ENTRY = {
@@ -62,6 +70,7 @@ export class CitationSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName('Citation plugin').setHeading();
 
     this.displayCitationDatabaseSettings(containerEl);
+    this.displayReferenceListSettings(containerEl);
     this.displayLiteratureNoteSettings(containerEl);
     this.displayTemplateSettings(containerEl);
     this.displayMarkdownCitationSettings(containerEl);
@@ -105,6 +114,25 @@ export class CitationSettingTab extends PluginSettingTab {
           })();
         });
     });
+  }
+
+  private displayReferenceListSettings(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName('Reference list').setHeading();
+
+    new Setting(containerEl)
+      .setName('Sort order')
+      .setDesc(
+        'Choose how references are sorted in the search modal. Default preserves the original file order.',
+      )
+      .addDropdown((dropdown) => {
+        dropdown.addOptions(SORT_ORDER_LABELS);
+        dropdown.setValue(this.plugin.settings.referenceListSortOrder);
+        dropdown.onChange(async (value) => {
+          this.plugin.settings.referenceListSortOrder =
+            value as ReferenceListSortOrder;
+          await this.plugin.saveSettings();
+        });
+      });
   }
 
   private renderDatabaseSetting(
