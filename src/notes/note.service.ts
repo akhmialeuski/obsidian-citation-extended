@@ -3,7 +3,7 @@ import * as path from 'path';
 import { CitationsPluginSettings } from '../ui/settings/settings';
 import { INoteService, ITemplateService } from '../container';
 import { Library, LiteratureNoteNotFoundError } from '../core';
-import { DISALLOWED_FILENAME_CHARACTERS_RE } from '../util';
+import { DISALLOWED_SEGMENT_CHARACTERS_RE } from '../util';
 
 type ContentTemplateResolver = () => Promise<string>;
 
@@ -24,6 +24,31 @@ export class NoteService implements INoteService {
   }
 
   /**
+   * Sanitize each segment of a rendered title independently.
+   *
+   * Forward slashes inside the title are treated as subfolder separators,
+   * allowing templates like `{{containerTitle}}/{{citekey}}` to produce
+   * nested paths.  Each individual segment is stripped of disallowed
+   * characters and truncated to {@link MAX_FILENAME_LENGTH}.
+   * Empty / whitespace-only segments are removed so stray slashes don't
+   * produce blank folder names.
+   */
+  private sanitizeTitlePath(rawTitle: string): string {
+    return rawTitle
+      .split('/')
+      .map((segment) => segment.trim())
+      .filter((segment) => segment.length > 0)
+      .map((segment) => {
+        let clean = segment.replace(DISALLOWED_SEGMENT_CHARACTERS_RE, '_');
+        if (clean.length > MAX_FILENAME_LENGTH) {
+          clean = clean.substring(0, MAX_FILENAME_LENGTH);
+        }
+        return clean;
+      })
+      .join('/');
+  }
+
+  /**
    * @throws {TemplateRenderError} when the title template fails to render
    */
   getPathForCitekey(citekey: string, library: Library): string {
@@ -33,19 +58,15 @@ export class NoteService implements INoteService {
     if (!titleResult.ok) {
       throw titleResult.error;
     }
-    let title = titleResult.value.replace(
-      DISALLOWED_FILENAME_CHARACTERS_RE,
-      '_',
-    );
-    // Truncate filename to avoid OS path length limits
-    if (title.length > MAX_FILENAME_LENGTH) {
-      title = title.substring(0, MAX_FILENAME_LENGTH);
-    }
+    const title = this.sanitizeTitlePath(titleResult.value);
     return path.join(this.settings.literatureNoteFolder, `${title}.md`);
   }
 
   /**
-   * Ensure the literature note folder exists, creating it if necessary.
+   * Ensure that a (possibly nested) folder path exists, creating any
+   * missing ancestors along the way.  Obsidian's `vault.createFolder`
+   * does not recursively create parent directories, so we walk up the
+   * path and create each level in order.
    */
   private async ensureFolderExists(folderPath: string): Promise<void> {
     if (!folderPath || folderPath === '/' || folderPath === '.') return;
@@ -54,6 +75,12 @@ export class NoteService implements INoteService {
     const existing = this.app.vault.getAbstractFileByPath(normalized);
     if (existing instanceof TFolder) return;
     if (existing) return; // Path exists but is a file — let vault.create handle the error
+
+    // Recursively ensure parent folders exist first
+    const parent = path.dirname(normalized);
+    if (parent && parent !== normalized && parent !== '.' && parent !== '/') {
+      await this.ensureFolderExists(parent);
+    }
 
     try {
       await this.app.vault.createFolder(normalized);
@@ -65,6 +92,33 @@ export class NoteService implements INoteService {
         console.warn('Citations: could not create folder:', normalized, e);
       }
     }
+  }
+
+  /**
+   * Search recursively within the literature note folder for a markdown
+   * file whose basename matches the expected filename (case-insensitive).
+   *
+   * This handles the scenario where a user has manually moved a literature
+   * note into a different subfolder — the plugin will still find it
+   * rather than creating a duplicate.
+   */
+  private findNoteInSubfolders(
+    expectedBasename: string,
+    rootFolder: string,
+  ): TFile | null {
+    const normalizedRoot = normalizePath(rootFolder).toLowerCase();
+    const normalizedBasename = expectedBasename.toLowerCase();
+
+    const matches = this.app.vault.getMarkdownFiles().filter((f) => {
+      const inFolder =
+        normalizedRoot === ''
+          ? true
+          : f.path.toLowerCase().startsWith(normalizedRoot + '/') ||
+            f.path.toLowerCase() === normalizedRoot;
+      return inFolder && f.name.toLowerCase() === normalizedBasename;
+    });
+
+    return matches.length > 0 ? matches[0] : null;
   }
 
   /**
@@ -123,6 +177,17 @@ export class NoteService implements INoteService {
       .filter((f) => f.path.toLowerCase() === normalizedPath.toLowerCase());
     if (matches.length > 0) {
       return matches[0];
+    }
+
+    // Recursive search: look for a file with the same basename anywhere
+    // under the literature note folder (handles manually moved notes)
+    const expectedBasename = path.basename(notePath);
+    const found = this.findNoteInSubfolders(
+      expectedBasename,
+      this.settings.literatureNoteFolder,
+    );
+    if (found) {
+      return found;
     }
 
     return null;

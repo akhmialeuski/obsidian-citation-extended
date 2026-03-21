@@ -5,6 +5,14 @@ import { WorkerRequest, WorkerResponse } from './core';
 export const DISALLOWED_FILENAME_CHARACTERS_RE = /[*"\\/<>:|?]/g;
 
 /**
+ * Characters disallowed inside a single filename segment.
+ * Unlike {@link DISALLOWED_FILENAME_CHARACTERS_RE}, this does NOT include
+ * the forward-slash `/`, so that path separators produced by title templates
+ * (e.g. `{{containerTitle}}/{{citekey}}`) are preserved.
+ */
+export const DISALLOWED_SEGMENT_CHARACTERS_RE = /[*"\\<>:|?]/g;
+
+/**
  * Manages a Worker, recording its state and optionally preventing
  * message postings before responses to prior messages have been received.
  */
