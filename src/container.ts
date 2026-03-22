@@ -82,3 +82,19 @@ export interface IUIService {
   init(): void;
   dispose(): void;
 }
+
+// ---------------------------------------------------------------------------
+// Platform adapter re-export for convenience
+// ---------------------------------------------------------------------------
+
+export type {
+  IPlatformAdapter,
+  IFileSystem,
+  IVaultAccess,
+  IVaultFile,
+  IWorkspaceAccess,
+  IEditorProxy,
+  IEditorPosition,
+  INotificationService,
+  IStatusBarItem,
+} from './platform/platform-adapter';
