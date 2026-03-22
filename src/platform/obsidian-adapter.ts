@@ -40,7 +40,8 @@ class ObsidianFileSystem implements IFileSystem {
   constructor(private app: App) {}
 
   async readFile(path: string): Promise<string> {
-    return FileSystemAdapter.readLocalFile(path);
+    const buffer = await FileSystemAdapter.readLocalFile(path);
+    return new TextDecoder('utf-8').decode(buffer);
   }
 
   async writeFile(path: string, content: string): Promise<void> {

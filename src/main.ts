@@ -23,6 +23,7 @@ import {
   EntryNotFoundError,
 } from './core';
 import { DataSourceFactory } from './sources/data-source-factory';
+import { ObsidianPlatformAdapter } from './platform/obsidian-adapter';
 import { DataSourceRegistry } from './sources/data-source-registry';
 import { DATA_SOURCE_TYPES } from './data-source';
 import { LocalFileSource } from './sources/local-file-source';
@@ -92,6 +93,8 @@ export default class CitationPlugin extends Plugin {
 
     const workerManager = new WorkerManager(new LoadWorker());
 
+    const platformAdapter = new ObsidianPlatformAdapter(this.app, this);
+
     const vaultAdapter =
       this.app.vault.adapter instanceof FileSystemAdapter
         ? this.app.vault.adapter
@@ -135,7 +138,7 @@ export default class CitationPlugin extends Plugin {
     );
     this.libraryService = new LibraryService(
       this.settings,
-      vaultAdapter,
+      platformAdapter,
       workerManager,
       [],
       mergeStrategy,

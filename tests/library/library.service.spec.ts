@@ -2,8 +2,7 @@ import { LibraryService } from '../../src/library/library.service';
 import { CitationsPluginSettings } from '../../src/ui/settings/settings';
 import { LoadingStatus } from '../../src/library/library-state';
 import { WorkerManager } from '../../src/util';
-
-import { FileSystemAdapter, Notice } from 'obsidian';
+import { createMockPlatformAdapter } from '../helpers/mock-platform';
 import * as fs from 'fs';
 import { TextDecoder } from 'util';
 
@@ -87,8 +86,8 @@ jest.mock('../../src/sources/local-file-source');
 describe('LibraryService', () => {
   let service: LibraryService;
   let settings: CitationsPluginSettings;
-  let vaultAdapter: { getBasePath: jest.Mock };
   let workerManager: { post: jest.Mock; dispose: jest.Mock };
+  let platform: ReturnType<typeof createMockPlatformAdapter>;
 
   beforeEach(() => {
     settings = new CitationsPluginSettings();
@@ -96,9 +95,7 @@ describe('LibraryService', () => {
       { name: 'Test', path: 'test.json', type: 'biblatex' },
     ];
 
-    vaultAdapter = {
-      getBasePath: jest.fn().mockReturnValue('/vault'),
-    };
+    platform = createMockPlatformAdapter();
 
     workerManager = {
       post: mockWorkerManagerPost,
@@ -118,17 +115,25 @@ describe('LibraryService', () => {
 
     service = new LibraryService(
       settings,
-      vaultAdapter as unknown as FileSystemAdapter,
+      platform,
       workerManager as unknown as WorkerManager,
       [],
     );
+    service.setDataSourceFactory({
+      create: (def, id) =>
+        new LocalFileSource(
+          id,
+          def.path,
+          def.format,
+          workerManager as unknown as WorkerManager,
+          null,
+        ),
+    });
 
     // Reset mocks
     (fs.promises.stat as jest.Mock).mockReset();
     mockWorkerManagerPost.mockReset();
     mockWorkerManagerPost.mockResolvedValue([]);
-
-    jest.mocked(Notice).mockClear();
 
     jest.spyOn(console, 'error').mockImplementation(() => {});
     jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -237,25 +242,25 @@ describe('LibraryService', () => {
     // Verify dispose called on sources.
   });
 
-  test('load() shows Notice when no databases are configured', async () => {
+  test('load() shows notification when no databases are configured', async () => {
     settings.databases = [];
 
     const result = await service.load();
 
     expect(result).toBeNull();
-    expect(Notice).toHaveBeenCalledTimes(1);
-    expect(Notice).toHaveBeenCalledWith(
+    expect(platform.notifications.show).toHaveBeenCalledTimes(1);
+    expect(platform.notifications.show).toHaveBeenCalledWith(
       'No citation databases configured. Please add at least one database in the citation plugin settings.',
     );
   });
 
-  test('load() does not show Notice when databases exist', async () => {
+  test('load() does not show notification when databases exist', async () => {
     settings.databases = [
       { name: 'Test', path: 'test.json', type: 'biblatex' },
     ];
 
     await service.load();
 
-    expect(Notice).not.toHaveBeenCalled();
+    expect(platform.notifications.show).not.toHaveBeenCalled();
   });
 });
