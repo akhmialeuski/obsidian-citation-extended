@@ -1,4 +1,4 @@
-import { SearchService } from '../../src/search/search.service';
+import { SearchService, normalizeTerm } from '../../src/search/search.service';
 import { Entry } from '../../src/core';
 
 // Mock Entry class
@@ -135,5 +135,91 @@ describe('SearchService', () => {
     // Search by partial author name
     const byPartial = service.search('Hop');
     expect(byPartial).toContain('hopf2020');
+  });
+
+  describe('diacritics normalization', () => {
+    test('should find entry with accented author when searching without accents', () => {
+      const diacriticEntries = [
+        new MockEntry({
+          id: 'maria2020',
+          title: 'Some Research Paper',
+          authorString: 'M\u00e2ri\u00e0a, Jean',
+          issuedDate: new Date(2020, 0, 1),
+        }),
+      ];
+
+      service.buildIndex(diacriticEntries);
+
+      const results = service.search('Maria');
+      expect(results).toContain('maria2020');
+    });
+
+    test('should find entry with umlauts when searching without diacritics', () => {
+      const diacriticEntries = [
+        new MockEntry({
+          id: 'muller2019',
+          title: 'Deutsche Forschung',
+          authorString: 'M\u00fcller, Hans',
+          issuedDate: new Date(2019, 0, 1),
+        }),
+      ];
+
+      service.buildIndex(diacriticEntries);
+
+      const results = service.search('Muller');
+      expect(results).toContain('muller2019');
+    });
+
+    test('should still match plain ASCII search terms', () => {
+      service.buildIndex(entries);
+
+      const results = service.search('Algorithms');
+      expect(results).toContain('1');
+      expect(results.length).toBe(1);
+    });
+
+    test('should find entry when query itself contains diacritics', () => {
+      const diacriticEntries = [
+        new MockEntry({
+          id: 'muller2019',
+          title: 'Deutsche Forschung',
+          authorString: 'M\u00fcller, Hans',
+          issuedDate: new Date(2019, 0, 1),
+        }),
+      ];
+
+      service.buildIndex(diacriticEntries);
+
+      // Searching with the accented form should also work
+      const results = service.search('M\u00fcller');
+      expect(results).toContain('muller2019');
+    });
+  });
+});
+
+describe('normalizeTerm', () => {
+  test('should strip acute and grave accents', () => {
+    expect(normalizeTerm('\u00e9\u00e8')).toBe('ee');
+  });
+
+  test('should strip circumflex and diaeresis', () => {
+    expect(normalizeTerm('\u00e2\u00fc')).toBe('au');
+  });
+
+  test('should convert to lowercase', () => {
+    expect(normalizeTerm('HELLO')).toBe('hello');
+  });
+
+  test('should handle plain ASCII unchanged (except case)', () => {
+    expect(normalizeTerm('Algorithm')).toBe('algorithm');
+  });
+
+  test('should handle combined diacritics and case', () => {
+    expect(normalizeTerm('M\u00e2ri\u00e0a')).toBe('mariaa');
+    expect(normalizeTerm('M\u00fcller')).toBe('muller');
+  });
+
+  test('should handle empty string', () => {
+    expect(normalizeTerm('')).toBe('');
   });
 });
