@@ -2,7 +2,15 @@
 
 All settings are accessible in **Settings** > **Citation plugin**.
 
+![Settings overview](images/settings-overview.png)
+
+---
+
 ## Citation Databases
+
+![Database settings](images/settings-databases.png)
+
+This section controls where the plugin reads your bibliography data from.
 
 | Setting | Description | Default |
 |---------|-------------|---------|
@@ -39,6 +47,10 @@ To use more than one bibliography source (e.g. personal library + shared team li
 4. Give each database a unique name (this label appears in the search modal for duplicates)
 5. If both databases contain the same citekey, the **merge strategy** controls which entry is used for note creation (see [Data Sources: Merge Strategies](data-sources.md#merge-strategies))
 
+![Multiple databases](images/settings-multiple-databases.png)
+
+---
+
 ## Hotkeys
 
 The plugin registers five commands but does **not** assign default hotkeys — you choose bindings that fit your workflow. To configure:
@@ -46,6 +58,8 @@ The plugin registers five commands but does **not** assign default hotkeys — y
 1. Open **Settings** > **Hotkeys**
 2. Search for `Citations`
 3. Click the `+` button next to any command to assign a key combination
+
+![Hotkey configuration](images/settings-hotkeys.png)
 
 **Recommended bindings** (adjust to taste):
 
@@ -57,18 +71,63 @@ The plugin registers five commands but does **not** assign default hotkeys — y
 | Insert literature note content | — | Used less frequently, assign if needed |
 | Refresh citation database | — | Rarely needed (auto-reload handles most cases) |
 
+---
+
 ## Literature Notes
+
+![Literature notes settings](images/settings-literature-notes.png)
+
+This section controls how literature notes are created, named, and where they are stored.
 
 | Setting | Description | Default |
 |---------|-------------|---------|
 | Literature note folder | Folder inside the vault where new notes are created | `Reading notes` |
 | Disable automatic note creation | When enabled, only opens existing notes — never creates new ones | `false` |
 | Literature note title template | Handlebars template for the note filename (without `.md` extension) | `@{{citekey}}` |
-| Literature note content template path | Path to a vault file used as the note body template | (empty) |
+| Literature note content template file | Path to a vault file used as the note body template | (empty) |
 
-The **content template path** points to a Markdown file in your vault that serves as the template body. This is the recommended approach — it lets you edit the template as a normal note with syntax highlighting. If the path is empty, an empty note body is created.
+### Literature note folder
+
+The folder path is relative to the vault root. If the folder doesn't exist, it will be created when the first note is saved. Examples:
+
+- `Reading notes` — notes saved to `<vault>/Reading notes/@smith2023.md`
+- `References/Literature` — nested folder structure
+- (empty) — notes saved directly in vault root
+
+### Disable automatic note creation
+
+When **off** (default): selecting a reference in the search modal creates a new note if one doesn't exist yet. When **on**: the command only opens existing notes and shows an error if no note exists for the selected reference. Useful when you create notes via another plugin (e.g. Zotero Integration) and only want to open them through this plugin.
+
+### Literature note title template
+
+A Handlebars template that produces the filename (without `.md`). The default `@{{citekey}}` creates files like `@smith2023.md`.
+
+**Common patterns:**
+
+| Template | Result | Use case |
+|----------|--------|----------|
+| `@{{citekey}}` | `@smith2023.md` | Default, easy to identify |
+| `{{citekey}}` | `smith2023.md` | Without @ prefix |
+| `{{lastname}} {{year}} — {{titleShort}}` | `Smith 2023 — Attention.md` | Human-readable |
+| `{{type}}/{{citekey}}` | `article-journal/@smith2023.md` | Subfolder by type |
+
+### Literature note content template file
+
+Path to a Markdown file in your vault that serves as the template body. This is the recommended approach — it lets you edit the template as a normal note with full syntax highlighting. If the path is empty, an empty note body is created.
+
+**How to set up:**
+
+1. Create a new note in your vault (e.g. `Templates/literature-note.md`)
+2. Write your template using Handlebars syntax (see [Template Examples](templates/examples.md))
+3. Enter the path `Templates/literature-note.md` in this setting
 
 > **Migration note:** Earlier versions of the plugin used an inline text field for the content template. If you upgrade from an older version, the plugin automatically migrates your inline template to a vault file and sets the path for you.
+
+### Show available variables
+
+Click the **Show variables** button to open a modal listing all template variables discovered from your loaded library, including dynamic fields from your bibliography. You can copy the full list as a Markdown table.
+
+![Variable list modal](images/settings-variable-list.png)
 
 ### Subfolder Support
 
@@ -84,7 +143,13 @@ The plugin searches recursively in subfolders when opening notes, so manually mo
 
 See [Template Examples: Subfolder Organization](templates/examples.md#subfolder-organization) for more patterns.
 
+---
+
 ## Markdown Citations
+
+![Markdown citation settings](images/settings-citations.png)
+
+This section controls what text is inserted when you use the **Insert Markdown citation** command.
 
 | Setting | Description | Default |
 |---------|-------------|---------|
@@ -93,23 +158,43 @@ See [Template Examples: Subfolder Organization](templates/examples.md#subfolder-
 | Secondary citation template | Template for the alternative format (activated by **Shift+Enter** in the search modal) | `@{{citekey}}` |
 | Auto-create literature note on citation | Create the literature note file when inserting a citation, if it doesn't exist yet | `false` |
 
-### Citation Style Presets
+### Citation style preset
 
-Presets auto-fill the primary and secondary template fields. Select `custom` to define your own.
+Select a built-in style to auto-fill both template fields, or choose `custom` to define your own. When a preset is active, the template fields are disabled — switch to `custom` to edit them.
 
 | Preset | Primary | Alternative | Use case |
 |--------|---------|-------------|----------|
-| textcite | `{{authorString}} ({{year}})` | `[@{{citekey}}]` | In-text narrative citation (APA/Chicago style) |
-| parencite | `({{authorString}}, {{year}})` | `[@{{citekey}}]` | Parenthetical citation (APA style) |
-| citekey | `[@{{citekey}}]` | `@{{citekey}}` | Pandoc-compatible citation for Markdown → PDF/DOCX workflows |
+| textcite | `{{authorString}} ({{year}})` | `[@{{citekey}}]` | In-text narrative citation: "Smith (2023) showed that..." |
+| parencite | `({{authorString}}, {{year}})` | `[@{{citekey}}]` | Parenthetical citation: "...as shown (Smith, 2023)" |
+| citekey | `[@{{citekey}}]` | `@{{citekey}}` | Pandoc-compatible: compile Markdown to PDF/DOCX with citeproc |
 | custom | User-defined | User-defined | Full control over both templates |
 
-When a preset is selected, the template fields are auto-filled and disabled. Switch to `custom` to edit them.
+### Primary vs secondary citation
+
+- **Primary**: inserted when you press **Enter** in the search modal
+- **Secondary**: inserted when you press **Shift+Enter** — use it for an alternative format (e.g. switch between `[@smith2023]` and `Smith (2023)`)
+
+### Auto-create literature note on citation
+
+When **on**: inserting a citation also creates the literature note file if it doesn't exist. When **off** (default): only the citation text is inserted, no note file is created. Enable this if you want every cited reference to have a corresponding note.
+
+---
 
 ## Display
+
+![Display settings](images/settings-display.png)
 
 | Setting | Description | Default |
 |---------|-------------|---------|
 | Sort order | How references are sorted in the search modal | `Default (file order)` |
 
-Sort options: Default, By year (newest first), By year (oldest first), By author (A to Z). Entries without the sort field are placed at the end.
+### Sort order options
+
+| Option | Behavior |
+|--------|----------|
+| Default (file order) | Entries appear in the order they are stored in the bibliography file |
+| By year (newest first) | Most recent publications first — useful for finding recent references quickly |
+| By year (oldest first) | Oldest publications first — useful for chronological review |
+| By author (A to Z) | Alphabetical by first author's last name |
+
+Entries missing the sort field (e.g. no year) are placed at the end of the list.

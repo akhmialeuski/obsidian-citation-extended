@@ -37,7 +37,7 @@ The plugin reads bibliography data from files exported by your reference manager
 3. Enter a friendly name, select the format, provide the file path
 4. The status indicator will show "Path verified" when the file is found
 
-`[screenshot placeholder: settings-databases]`
+![Database settings](images/settings-databases.png)
 
 ## Creating Your First Literature Note
 
@@ -46,4 +46,4 @@ The plugin reads bibliography data from files exported by your reference manager
 3. Select a reference — the plugin creates a note using your configured template
 4. The note is saved in your configured literature note folder
 
-`[screenshot placeholder: search-modal]`
+![Search modal](images/search-modal.png)
