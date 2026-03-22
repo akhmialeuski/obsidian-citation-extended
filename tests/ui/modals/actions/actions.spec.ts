@@ -3,7 +3,6 @@ import { InsertCitationAction } from '../../../../src/ui/modals/actions/insert-c
 import { InsertNoteContentAction } from '../../../../src/ui/modals/actions/insert-note-content.action';
 import { InsertNoteLinkAction } from '../../../../src/ui/modals/actions/insert-note-link.action';
 import { OpenNoteAction } from '../../../../src/ui/modals/actions/open-note.action';
-import { Notice } from 'obsidian';
 
 jest.mock(
   'obsidian',
@@ -22,6 +21,11 @@ function makePlugin(): any {
       insertLiteratureNoteContent: jest.fn().mockResolvedValue(undefined),
       insertLiteratureNoteLink: jest.fn().mockResolvedValue(undefined),
       openLiteratureNote: jest.fn().mockResolvedValue(undefined),
+    },
+    platform: {
+      notifications: {
+        show: jest.fn(),
+      },
     },
   };
 }
@@ -202,7 +206,7 @@ describe('OpenNoteAction', () => {
   beforeEach(() => {
     plugin = makePlugin();
     action = new OpenNoteAction(plugin);
-    (Notice as unknown as jest.Mock).mockClear();
+    (plugin.platform.notifications.show as jest.Mock).mockClear();
     // Mock global open (window.open in jsdom)
     openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
   });
@@ -272,7 +276,7 @@ describe('OpenNoteAction', () => {
     await action.onChoose(entry as never, evt);
 
     expect(openSpy).toHaveBeenCalledWith('file:///path/to/paper.pdf');
-    expect(Notice).not.toHaveBeenCalled();
+    expect(plugin.platform.notifications.show).not.toHaveBeenCalled();
   });
 
   it('shows Notice on Shift+Tab when no files available', async () => {
@@ -281,7 +285,7 @@ describe('OpenNoteAction', () => {
 
     await action.onChoose(entry as never, evt);
 
-    expect(Notice).toHaveBeenCalledWith(
+    expect(plugin.platform.notifications.show).toHaveBeenCalledWith(
       'This reference has no associated PDF files.',
     );
     expect(openSpy).not.toHaveBeenCalled();
@@ -293,7 +297,7 @@ describe('OpenNoteAction', () => {
 
     await action.onChoose(entry as never, evt);
 
-    expect(Notice).toHaveBeenCalledWith(
+    expect(plugin.platform.notifications.show).toHaveBeenCalledWith(
       'This reference has no associated PDF files.',
     );
   });
@@ -317,7 +321,7 @@ describe('OpenNoteAction', () => {
 
     await action.onChoose(entry as never, evt);
 
-    expect(Notice).toHaveBeenCalledWith(
+    expect(plugin.platform.notifications.show).toHaveBeenCalledWith(
       'This reference has no associated PDF files.',
     );
   });
@@ -330,7 +334,7 @@ describe('OpenNoteAction', () => {
 
     expect(plugin.editorActions.openLiteratureNote).not.toHaveBeenCalled();
     expect(openSpy).not.toHaveBeenCalled();
-    expect(Notice).not.toHaveBeenCalled();
+    expect(plugin.platform.notifications.show).not.toHaveBeenCalled();
   });
 
   it('returns correct instructions', () => {

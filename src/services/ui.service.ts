@@ -7,17 +7,17 @@ import { OpenNoteAction } from '../ui/modals/actions/open-note.action';
 import { SearchAction } from '../ui/modals/actions/search-action';
 import CitationPlugin from '../main';
 import { IUIService } from '../container';
+import { IStatusBarItem } from '../platform/platform-adapter';
 
 export class UIService implements IUIService {
-  private statusBarItem: HTMLElement;
+  private statusBarItem!: IStatusBarItem;
   private unsubscribe: (() => void) | null = null;
   private lastNotifiedStatus?: LoadingStatus;
 
-  constructor(private plugin: CitationPlugin) {
-    this.statusBarItem = this.plugin.addStatusBarItem();
-  }
+  constructor(private plugin: CitationPlugin) {}
 
   init(): void {
+    this.statusBarItem = this.plugin.platform.addStatusBarItem();
     this.unsubscribe = this.plugin.libraryService.store.subscribe(
       (state: LibraryState) => {
         this.updateStatusBar(state);

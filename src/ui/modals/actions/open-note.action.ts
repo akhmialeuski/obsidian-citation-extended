@@ -1,4 +1,3 @@
-import { Notice } from 'obsidian';
 import { Entry } from '../../../core';
 import CitationPlugin from '../../../main';
 import { SearchAction } from './search-action';
@@ -23,7 +22,9 @@ export class OpenNoteAction implements SearchAction {
           path.toLowerCase().endsWith('pdf'),
         );
         if (pdfPaths.length == 0) {
-          new Notice('This reference has no associated PDF files.');
+          this.plugin.platform.notifications.show(
+            'This reference has no associated PDF files.',
+          );
         } else {
           open(`file://${pdfPaths[0]}`);
         }
@@ -37,7 +38,10 @@ export class OpenNoteAction implements SearchAction {
     return [
       { command: '↑↓', purpose: 'to navigate' },
       { command: '↵', purpose: 'to open literature note' },
-      { command: 'ctrl ↵', purpose: 'to open literature note in a new pane' },
+      {
+        command: 'ctrl ↵',
+        purpose: 'to open literature note in a new pane',
+      },
       { command: 'tab', purpose: 'open in Zotero' },
       { command: 'shift tab', purpose: 'open PDF' },
       { command: 'esc', purpose: 'to dismiss' },

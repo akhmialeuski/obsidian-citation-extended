@@ -96,6 +96,11 @@ function makePlugin(initialState: LibraryState) {
       notifications: {
         show: mockNotificationsShow,
       },
+      addStatusBarItem: jest.fn(() => ({
+        setText: jest.fn(),
+        addClass: jest.fn(),
+        removeClass: jest.fn(),
+      })),
     },
     app: {
       workspace: {
@@ -258,7 +263,7 @@ describe('UIService', () => {
       const service = new UIService(plugin as never);
       service.init();
 
-      const statusBar = plugin.addStatusBarItem.mock.results[0].value;
+      const statusBar = plugin.platform.addStatusBarItem.mock.results[0].value;
       expect(statusBar.setText).toHaveBeenCalledWith('Citations: Idle');
       expect(statusBar.removeClass).toHaveBeenCalledWith('mod-error');
     });
@@ -272,7 +277,7 @@ describe('UIService', () => {
       const service = new UIService(plugin as never);
       service.init();
 
-      const statusBar = plugin.addStatusBarItem.mock.results[0].value;
+      const statusBar = plugin.platform.addStatusBarItem.mock.results[0].value;
       expect(statusBar.setText).toHaveBeenCalledWith('Citations: Loading...');
     });
 
@@ -286,7 +291,7 @@ describe('UIService', () => {
       const service = new UIService(plugin as never);
       service.init();
 
-      const statusBar = plugin.addStatusBarItem.mock.results[0].value;
+      const statusBar = plugin.platform.addStatusBarItem.mock.results[0].value;
       expect(statusBar.setText).toHaveBeenCalledWith('Citations: 42 entries');
     });
 
@@ -299,7 +304,7 @@ describe('UIService', () => {
       const service = new UIService(plugin as never);
       service.init();
 
-      const statusBar = plugin.addStatusBarItem.mock.results[0].value;
+      const statusBar = plugin.platform.addStatusBarItem.mock.results[0].value;
       expect(statusBar.setText).toHaveBeenCalledWith('Citations: 0 entries');
     });
 
@@ -312,7 +317,7 @@ describe('UIService', () => {
       const service = new UIService(plugin as never);
       service.init();
 
-      const statusBar = plugin.addStatusBarItem.mock.results[0].value;
+      const statusBar = plugin.platform.addStatusBarItem.mock.results[0].value;
       expect(statusBar.setText).toHaveBeenCalledWith('Citations: Error');
       expect(statusBar.addClass).toHaveBeenCalledWith('mod-error');
     });
@@ -326,7 +331,7 @@ describe('UIService', () => {
       const service = new UIService(plugin as never);
       service.init();
 
-      const statusBar = plugin.addStatusBarItem.mock.results[0].value;
+      const statusBar = plugin.platform.addStatusBarItem.mock.results[0].value;
       expect(statusBar.addClass).toHaveBeenCalledWith('mod-error');
 
       emit({

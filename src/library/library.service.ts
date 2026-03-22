@@ -48,6 +48,7 @@ export class LibraryService implements ILibraryService {
   private retryTimer: number | null = null;
   private retryCount = 0;
   private dataSourceFactory: IDataSourceFactory | null = null;
+  private sourceDbNameMap = new Map<string, string>();
 
   constructor(
     private settings: CitationsPluginSettings,
@@ -215,7 +216,6 @@ export class LibraryService implements ILibraryService {
       const allParseErrors: ParseErrorInfo[] = [];
 
       this.sourceMetadata = successfulResults.map((r) => {
-        const sourceIndex = parseInt(r.sourceId.replace('source-', ''), 10);
         const errorCount = r.parseErrors?.length ?? 0;
         totalParseErrors += errorCount;
         if (r.parseErrors) {
@@ -223,8 +223,7 @@ export class LibraryService implements ILibraryService {
         }
         return {
           sourceId: r.sourceId,
-          databaseName:
-            this.settings.databases[sourceIndex]?.name ?? r.sourceId,
+          databaseName: this.sourceDbNameMap.get(r.sourceId) ?? r.sourceId,
           entryCount: r.entries.length,
           parseErrorCount: errorCount,
           modifiedAt: r.modifiedAt,
@@ -301,13 +300,16 @@ export class LibraryService implements ILibraryService {
       console.warn('Citations plugin: No data source factory configured.');
       return [];
     }
+    this.sourceDbNameMap.clear();
     // TODO: derive DataSourceType from DatabaseConfig when vault-file sources are supported in settings
-    return this.settings.databases.map((db, index) =>
-      this.dataSourceFactory!.create(
+    return this.settings.databases.map((db, index) => {
+      const id = `source-${index}`;
+      this.sourceDbNameMap.set(id, db.name);
+      return this.dataSourceFactory!.create(
         { type: DATA_SOURCE_TYPES.LocalFile, path: db.path, format: db.type },
-        `source-${index}`,
-      ),
-    );
+        id,
+      );
+    });
   }
 
   private handleErrorRetry(): void {
