@@ -1,4 +1,3 @@
-import { App, MarkdownView, Notice } from 'obsidian';
 import { LoadingStatus, LibraryState } from '../library/library-state';
 import { CitationSearchModal } from '../ui/modals/citation-search-modal';
 import { InsertCitationAction } from '../ui/modals/actions/insert-citation.action';
@@ -8,21 +7,17 @@ import { OpenNoteAction } from '../ui/modals/actions/open-note.action';
 import { SearchAction } from '../ui/modals/actions/search-action';
 import CitationPlugin from '../main';
 import { IUIService } from '../container';
-import { WorkspaceExt } from '../obsidian-extensions.d';
+import { IStatusBarItem } from '../platform/platform-adapter';
 
 export class UIService implements IUIService {
-  private statusBarItem: HTMLElement;
+  private statusBarItem!: IStatusBarItem;
   private unsubscribe: (() => void) | null = null;
   private lastNotifiedStatus?: LoadingStatus;
 
-  constructor(
-    private app: App,
-    private plugin: CitationPlugin,
-  ) {
-    this.statusBarItem = this.plugin.addStatusBarItem();
-  }
+  constructor(private plugin: CitationPlugin) {}
 
   init(): void {
+    this.statusBarItem = this.plugin.platform.addStatusBarItem();
     this.unsubscribe = this.plugin.libraryService.store.subscribe(
       (state: LibraryState) => {
         this.updateStatusBar(state);
@@ -66,13 +61,13 @@ export class UIService implements IUIService {
     this.lastNotifiedStatus = state.status;
 
     if (state.status === LoadingStatus.Error && state.parseErrors.length > 0) {
-      new Notice(state.parseErrors[0]);
+      this.plugin.platform.notifications.show(state.parseErrors[0]);
     } else if (
       state.status === LoadingStatus.Success &&
       state.parseErrors.length > 0
     ) {
       const entryCount = state.progress?.current ?? 0;
-      new Notice(
+      this.plugin.platform.notifications.show(
         `Citations: Loaded ${entryCount} entries. ${state.parseErrors.length} entries skipped due to parse errors. Check console for details.`,
       );
     }
@@ -82,12 +77,8 @@ export class UIService implements IUIService {
    * Returns the currently selected text from the active editor, if any.
    */
   private getSelectedText(): string {
-    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (view?.editor) {
-      return view.editor.getSelection();
-    }
-    const ext = this.app.workspace as WorkspaceExt;
-    return ext.activeEditor?.editor?.getSelection() ?? '';
+    const editor = this.plugin.platform.workspace.getActiveEditor();
+    return editor?.getSelection() ?? '';
   }
 
   /**
@@ -97,7 +88,7 @@ export class UIService implements IUIService {
    */
   private openSearchModal(action: SearchAction): void {
     action.selectedText = this.getSelectedText();
-    const modal = new CitationSearchModal(this.app, this.plugin, action);
+    const modal = new CitationSearchModal(this.plugin.app, this.plugin, action);
     modal.open();
   }
 

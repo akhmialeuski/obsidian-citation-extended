@@ -12,7 +12,6 @@ import { NoteService } from './notes/note.service';
 import { LibraryService } from './library/library.service';
 import { UIService } from './services/ui.service';
 import { EditorActions } from './ui/editor-actions';
-import { MergeStrategy } from './library/merge-strategy';
 import {
   Entry,
   Result,
@@ -23,11 +22,17 @@ import {
   EntryNotFoundError,
 } from './core';
 import { DataSourceFactory } from './sources/data-source-factory';
+import { ObsidianPlatformAdapter } from './platform/obsidian-adapter';
+import { DataSourceRegistry } from './sources/data-source-registry';
+import { DATA_SOURCE_TYPES } from './data-source';
+import { LocalFileSource } from './sources/local-file-source';
+import { VaultFileSource } from './sources/vault-file-source';
 
 import { CitationSettingTab } from './ui/settings/settings-tab';
 import { CitationsPluginSettings } from './ui/settings/settings';
 import {
   DEFAULT_SETTINGS,
+  DEFAULT_CONTENT_TEMPLATE,
   validateSettings,
 } from './ui/settings/settings-schema';
 import { DISALLOWED_FILENAME_CHARACTERS_RE, WorkerManager } from './util';
@@ -40,6 +45,7 @@ export default class CitationPlugin extends Plugin {
   libraryService!: LibraryService;
   uiService!: UIService;
   editorActions!: EditorActions;
+  platform!: ObsidianPlatformAdapter;
 
   private fileWatcher?: chokidar.FSWatcher;
 
@@ -69,6 +75,19 @@ export default class CitationPlugin extends Plugin {
         });
         void this.saveSettings();
       }
+
+      // Migrate inline content template to a vault file
+      if (
+        this.settings.literatureNoteContentTemplate &&
+        !this.settings.literatureNoteContentTemplatePath
+      ) {
+        await this.migrateInlineTemplateToFile();
+      }
+
+      // Ensure new installs get a default template file
+      if (!this.settings.literatureNoteContentTemplatePath) {
+        await this.createDefaultTemplateFile();
+      }
     } else {
       console.warn(
         'Citations plugin: Settings validation failed',
@@ -83,41 +102,119 @@ export default class CitationPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
+  private static readonly DEFAULT_TEMPLATE_PATH =
+    'citation-content-template.md';
+
+  /**
+   * Migrate an inline content template to a vault file.
+   * Writes the template string to a file and updates the settings path.
+   */
+  private async migrateInlineTemplateToFile(): Promise<void> {
+    const templateContent = this.settings.literatureNoteContentTemplate;
+    if (!templateContent) return;
+
+    const filePath = CitationPlugin.DEFAULT_TEMPLATE_PATH;
+    const existingFile = this.app.vault.getAbstractFileByPath(
+      normalizePath(filePath),
+    );
+
+    if (!existingFile) {
+      try {
+        await this.app.vault.create(filePath, templateContent);
+        console.debug(
+          `Citations plugin: Migrated inline template to ${filePath}`,
+        );
+      } catch (e) {
+        console.warn('Citations plugin: Failed to migrate inline template:', e);
+        return;
+      }
+    }
+
+    this.settings.literatureNoteContentTemplatePath = filePath;
+    this.settings.literatureNoteContentTemplate = '';
+    await this.saveSettings();
+  }
+
+  /**
+   * Create a default template file for new installations.
+   */
+  private async createDefaultTemplateFile(): Promise<void> {
+    const filePath = CitationPlugin.DEFAULT_TEMPLATE_PATH;
+    const existingFile = this.app.vault.getAbstractFileByPath(
+      normalizePath(filePath),
+    );
+
+    if (!existingFile) {
+      try {
+        await this.app.vault.create(filePath, DEFAULT_CONTENT_TEMPLATE);
+        console.debug(
+          `Citations plugin: Created default template at ${filePath}`,
+        );
+      } catch (e) {
+        console.warn('Citations plugin: Failed to create default template:', e);
+        return;
+      }
+    }
+
+    this.settings.literatureNoteContentTemplatePath = filePath;
+    await this.saveSettings();
+  }
+
   async onload(): Promise<void> {
     await this.loadSettings();
 
     const workerManager = new WorkerManager(new LoadWorker());
+
+    this.platform = new ObsidianPlatformAdapter(this.app, this);
+    const platformAdapter = this.platform;
 
     const vaultAdapter =
       this.app.vault.adapter instanceof FileSystemAdapter
         ? this.app.vault.adapter
         : null;
 
-    const dataSourceFactory = new DataSourceFactory(
-      vaultAdapter,
-      workerManager,
-      this.app.vault,
+    // Register built-in data source types
+    const registry = new DataSourceRegistry();
+    registry.register(
+      DATA_SOURCE_TYPES.LocalFile,
+      (def, id) =>
+        new LocalFileSource(
+          id,
+          def.path,
+          def.format,
+          workerManager,
+          vaultAdapter,
+        ),
+    );
+    registry.register(
+      DATA_SOURCE_TYPES.VaultFile,
+      (def, id) =>
+        new VaultFileSource(
+          id,
+          def.path,
+          def.format,
+          workerManager,
+          this.app.vault,
+        ),
     );
 
-    const mergeStrategy = this.settings.mergeStrategy || MergeStrategy.LastWins;
+    const dataSourceFactory = new DataSourceFactory(registry);
 
     this.templateService = new TemplateService(this.settings);
     this.noteService = new NoteService(
-      this.app,
+      platformAdapter,
       this.settings,
       this.templateService,
       () => this.resolveContentTemplate(),
     );
     this.libraryService = new LibraryService(
       this.settings,
-      vaultAdapter,
+      platformAdapter,
       workerManager,
-      [],
-      mergeStrategy,
     );
     this.libraryService.setDataSourceFactory(dataSourceFactory);
 
-    this.uiService = new UIService(this.app, this);
+    this.uiService = new UIService(this);
     this.editorActions = new EditorActions(this);
 
     this.init();
@@ -172,9 +269,8 @@ export default class CitationPlugin extends Plugin {
   }
 
   /**
-   * Resolves the content template string, reading from a vault file if
-   * `literatureNoteContentTemplatePath` is configured, otherwise falling
-   * back to the inline setting.
+   * Resolves the content template string by reading from the configured
+   * vault file.  Falls back to the default template if the file is missing.
    */
   async resolveContentTemplate(): Promise<string> {
     const templatePath = this.settings.literatureNoteContentTemplatePath;
@@ -186,10 +282,10 @@ export default class CitationPlugin extends Plugin {
         return this.app.vault.read(file);
       }
       new Notice(
-        `Citations: template file not found at "${templatePath}", using inline template`,
+        `Citations: template file not found at "${templatePath}". Please check the path in settings.`,
       );
     }
-    return this.settings.literatureNoteContentTemplate;
+    return DEFAULT_CONTENT_TEMPLATE;
   }
 
   async getInitialContentForCitekey(

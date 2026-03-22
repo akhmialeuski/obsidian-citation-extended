@@ -422,6 +422,251 @@ describe('TemplateService', () => {
     });
   });
 
+  describe('Author Helpers — branch coverage', () => {
+    it('formatNames returns empty string when authors is not an array', () => {
+      expectOk(
+        service.render('{{formatNames notAnArray}}', {
+          ...mockContext,
+          notAnArray: 'just a string',
+        } as unknown as TemplateContext),
+        '',
+      );
+    });
+
+    it('formatNames returns empty string when author has no family/given/literal', () => {
+      expectOk(
+        service.render('{{formatNames authors}}', {
+          ...mockContext,
+          authors: [{}],
+        } as unknown as TemplateContext),
+        '',
+      );
+    });
+
+    it('formatNames with exactly 1 author', () => {
+      expectOk(
+        service.render('{{formatNames authors}}', {
+          ...mockContext,
+          authors: [{ family: 'Doe', given: 'John' }],
+        } as unknown as TemplateContext),
+        'Doe',
+      );
+    });
+
+    it('formatNames with 2 authors uses connector', () => {
+      expectOk(
+        service.render('{{formatNames authors}}', {
+          ...mockContext,
+          authors: [{ family: 'Doe' }, { family: 'Smith' }],
+        } as unknown as TemplateContext),
+        'Doe and Smith',
+      );
+    });
+
+    it('formatNames with max=3 and 4 authors shows first + et al.', () => {
+      expectOk(
+        service.render('{{formatNames authors max=3}}', {
+          ...mockContext,
+          authors: [
+            { family: 'Doe' },
+            { family: 'Smith' },
+            { family: 'Jones' },
+            { family: 'Brown' },
+          ],
+        } as unknown as TemplateContext),
+        'Doe et al.',
+      );
+    });
+
+    it('formatNames with max=3 and exactly 3 authors lists all', () => {
+      expectOk(
+        service.render('{{formatNames authors max=3}}', {
+          ...mockContext,
+          authors: [
+            { family: 'Doe' },
+            { family: 'Smith' },
+            { family: 'Jones' },
+          ],
+        } as unknown as TemplateContext),
+        'Doe, Smith and Jones',
+      );
+    });
+
+    it('formatNames uses literal name when family/given are absent', () => {
+      expectOk(
+        service.render('{{formatNames authors}}', {
+          ...mockContext,
+          authors: [{ literal: 'UNESCO' }],
+        } as unknown as TemplateContext),
+        'UNESCO',
+      );
+    });
+
+    it('formatNames returns empty string for empty array', () => {
+      expectOk(
+        service.render('{{formatNames authors}}', {
+          ...mockContext,
+          authors: [],
+        } as unknown as TemplateContext),
+        '',
+      );
+    });
+
+    it('join returns original value when input is not an array', () => {
+      expectOk(
+        service.render('{{join notArray ", "}}', {
+          ...mockContext,
+          notArray: 'hello',
+        } as unknown as TemplateContext),
+        'hello',
+      );
+    });
+
+    it('join works with array values', () => {
+      expectOk(
+        service.render('{{join items ", "}}', {
+          ...mockContext,
+          items: ['a', 'b', 'c'],
+        } as unknown as TemplateContext),
+        'a, b, c',
+      );
+    });
+
+    it('split returns original value when input is not a string', () => {
+      expectOk(
+        service.render('{{split notString ", "}}', {
+          ...mockContext,
+          notString: 42,
+        } as unknown as TemplateContext),
+        '42',
+      );
+    });
+  });
+
+  describe('Path Helpers — branch coverage', () => {
+    it('urlEncode returns original value when input is not a string', () => {
+      expectOk(
+        service.render('{{urlEncode notString}}', {
+          ...mockContext,
+          notString: 42,
+        } as unknown as TemplateContext),
+        '42',
+      );
+    });
+
+    it('basename returns original value when input is not a string', () => {
+      expectOk(
+        service.render('{{basename notString}}', {
+          ...mockContext,
+          notString: 42,
+        } as unknown as TemplateContext),
+        '42',
+      );
+    });
+
+    it('filename returns original value when input is not a string', () => {
+      expectOk(
+        service.render('{{filename notString}}', {
+          ...mockContext,
+          notString: 42,
+        } as unknown as TemplateContext),
+        '42',
+      );
+    });
+
+    it('dirname returns original value when input is not a string', () => {
+      expectOk(
+        service.render('{{dirname notString}}', {
+          ...mockContext,
+          notString: 42,
+        } as unknown as TemplateContext),
+        '42',
+      );
+    });
+
+    it('basename with backslash paths (Windows)', () => {
+      expectOk(
+        service.render('{{basename "C:\\path\\to\\file.txt"}}', mockContext),
+        'file.txt',
+      );
+    });
+
+    it('filename with backslash paths (Windows)', () => {
+      expectOk(
+        service.render('{{filename "C:\\path\\to\\file.txt"}}', mockContext),
+        'file',
+      );
+    });
+
+    it('dirname with backslash paths (Windows)', () => {
+      expectOk(
+        service.render('{{dirname "C:\\path\\to\\file.txt"}}', mockContext),
+        'C:\\path\\to',
+      );
+    });
+  });
+
+  describe('String Helpers — branch coverage', () => {
+    it('replace returns original value when input is not a string', () => {
+      expectOk(
+        service.render('{{replace notString "a" "b"}}', {
+          ...mockContext,
+          notString: 42,
+        } as unknown as TemplateContext),
+        '42',
+      );
+    });
+
+    it('replace returns original value and warns on invalid regex', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      expectOk(
+        service.render('{{replace "hello" "[invalid" "x"}}', mockContext),
+        'hello',
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid regex pattern'),
+      );
+      warnSpy.mockRestore();
+    });
+
+    it('truncate returns original value when input is not a string', () => {
+      expectOk(
+        service.render('{{truncate notString 5}}', {
+          ...mockContext,
+          notString: 42,
+        } as unknown as TemplateContext),
+        '42',
+      );
+    });
+
+    it('truncate returns original string when shorter than limit', () => {
+      expectOk(service.render('{{truncate "hi" 10}}', mockContext), 'hi');
+    });
+
+    it('match returns empty string when input is not a string', () => {
+      expectOk(
+        service.render('{{match notString "\\w+"}}', {
+          ...mockContext,
+          notString: 42,
+        } as unknown as TemplateContext),
+        '',
+      );
+    });
+
+    it('match returns empty string and warns on invalid regex', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      expectOk(service.render('{{match "hello" "[invalid"}}', mockContext), '');
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid regex pattern'),
+      );
+      warnSpy.mockRestore();
+    });
+
+    it('match returns empty string when no match found', () => {
+      expectOk(service.render('{{match "hello" "xyz"}}', mockContext), '');
+    });
+  });
+
   describe('Date Helpers', () => {
     describe('formatDate utility', () => {
       const fixedDate = new Date(2024, 0, 15, 9, 5, 3); // 2024-01-15 09:05:03

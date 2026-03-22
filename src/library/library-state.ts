@@ -1,3 +1,4 @@
+/** Lifecycle states of a bibliography library load operation. */
 export enum LoadingStatus {
   Idle = 'idle',
   Loading = 'loading',
@@ -5,6 +6,7 @@ export enum LoadingStatus {
   Error = 'error',
 }
 
+/** Snapshot of the library loading state exposed through {@link LibraryStore}. */
 export interface LibraryState {
   status: LoadingStatus;
   progress?: { current: number; total: number };

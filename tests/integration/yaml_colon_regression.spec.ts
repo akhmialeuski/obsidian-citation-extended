@@ -14,7 +14,7 @@ jest.mock(
 
 import { TemplateService } from '../../src/template/template.service';
 import { CitationsPluginSettings } from '../../src/ui/settings/settings';
-import { DEFAULT_SETTINGS } from '../../src/ui/settings/settings-schema';
+import { DEFAULT_CONTENT_TEMPLATE } from '../../src/ui/settings/settings-schema';
 import { Entry } from '../../src/core';
 
 describe('YAML Colon Handling', () => {
@@ -36,10 +36,11 @@ describe('YAML Colon Handling', () => {
   } as unknown as Entry;
 
   test('should generate valid YAML with default template when title has colon', () => {
-    settings.literatureNoteContentTemplate =
-      DEFAULT_SETTINGS.literatureNoteContentTemplate;
     const variables = templateService.getTemplateVariables(mockEntry);
-    const contentResult = templateService.getContent(variables);
+    const contentResult = templateService.render(
+      DEFAULT_CONTENT_TEMPLATE,
+      variables,
+    );
 
     expect(contentResult.ok).toBe(true);
     if (!contentResult.ok) return;
@@ -60,12 +61,13 @@ describe('YAML Colon Handling', () => {
       authorString: 'Doe, J.: Editor',
       toJSON: () => entryWithColonAuthor,
     } as unknown as Entry;
-    settings.literatureNoteContentTemplate =
-      DEFAULT_SETTINGS.literatureNoteContentTemplate;
 
     const variables =
       templateService.getTemplateVariables(entryWithColonAuthor);
-    const contentResult = templateService.getContent(variables);
+    const contentResult = templateService.render(
+      DEFAULT_CONTENT_TEMPLATE,
+      variables,
+    );
 
     expect(contentResult.ok).toBe(true);
     if (!contentResult.ok) return;
@@ -79,11 +81,12 @@ describe('YAML Colon Handling', () => {
       title: 'My "Quoted" Title',
       toJSON: () => entryWithQuotes,
     } as unknown as Entry;
-    settings.literatureNoteContentTemplate =
-      DEFAULT_SETTINGS.literatureNoteContentTemplate;
 
     const variables = templateService.getTemplateVariables(entryWithQuotes);
-    const contentResult = templateService.getContent(variables);
+    const contentResult = templateService.render(
+      DEFAULT_CONTENT_TEMPLATE,
+      variables,
+    );
 
     expect(contentResult.ok).toBe(true);
     if (!contentResult.ok) return;

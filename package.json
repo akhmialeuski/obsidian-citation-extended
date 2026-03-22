@@ -68,7 +68,7 @@
       "<rootDir>/src"
     ],
     "testMatch": [
-      "<rootDir>/tests/**/*.{spec,test}.ts"
+      "<rootDir>/tests/**/*.spec.ts"
     ],
     "moduleNameMapper": {
       "src/(.*)": "<rootDir>/src/$1"
@@ -80,7 +80,17 @@
     ],
     "transform": {
       "^.+\\.ts$": "ts-jest"
-    }
+    },
+    "collectCoverageFrom": [
+      "src/**/*.ts",
+      "!src/**/*.d.ts",
+      "!src/worker.ts"
+    ],
+    "coverageDirectory": "coverage",
+    "coverageReporters": [
+      "text",
+      "lcov"
+    ]
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "^4.53.3"

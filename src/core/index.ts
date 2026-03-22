@@ -1,7 +1,12 @@
 // Types
 export { Author, Entry } from './types/entry';
 export { Library } from './types/library';
-export { type DatabaseType, type DatabaseConfig } from './types/database';
+export {
+  type DatabaseType,
+  type DatabaseConfig,
+  DATABASE_FORMATS,
+  DATABASE_TYPE_LABELS,
+} from './types/database';
 export type { TemplateContext } from './types/template-context';
 export type {
   ParseErrorInfo,
@@ -31,4 +36,6 @@ export {
   LiteratureNoteNotFoundError,
   TemplateRenderError,
   DataSourceError,
+  UnsupportedFormatError,
+  BatchUpdateError,
 } from './errors';

@@ -7,7 +7,11 @@ import {
   TemplateRenderError,
   LiteratureNoteNotFoundError,
 } from '../../src/core/errors';
-import { App } from 'obsidian';
+import {
+  createMockPlatformAdapter,
+  IPlatformAdapter,
+  IVaultFile,
+} from '../helpers/mock-platform';
 
 jest.mock(
   'obsidian',
@@ -24,13 +28,13 @@ jest.mock(
 
 describe('NoteService', () => {
   let noteService: NoteService;
-  let app: App;
+  let platform: IPlatformAdapter;
   let settings: CitationsPluginSettings;
   let templateService: TemplateService;
   let library: Library;
 
   beforeEach(() => {
-    app = new App();
+    platform = createMockPlatformAdapter();
     settings = new CitationsPluginSettings();
     settings.literatureNoteFolder = 'Reading notes';
 
@@ -43,13 +47,10 @@ describe('NoteService', () => {
       .spyOn(templateService, 'getTitle')
       .mockReturnValue({ ok: true, value: 'My Title' });
     jest
-      .spyOn(templateService, 'getContent')
-      .mockReturnValue({ ok: true, value: 'My Content' });
-    jest
       .spyOn(templateService, 'render')
       .mockReturnValue({ ok: true, value: 'My Content' });
 
-    noteService = new NoteService(app, settings, templateService);
+    noteService = new NoteService(platform, settings, templateService);
 
     library = new Library({
       citekey1: { id: 'citekey1' } as Entry,
@@ -167,16 +168,15 @@ describe('NoteService', () => {
 
   describe('getOrCreateLiteratureNoteFile', () => {
     it('calls templateService.render when creating a new file', async () => {
-      const mockFile = { path: 'Reading notes/My Title.md' };
-      const { TFile } = jest.requireMock('obsidian');
-      Object.setPrototypeOf(mockFile, TFile.prototype);
-
-      (app as unknown as Record<string, unknown>).vault = {
-        getAbstractFileByPath: jest.fn(() => null),
-        getMarkdownFiles: jest.fn(() => []),
-        createFolder: jest.fn().mockResolvedValue(undefined),
-        create: jest.fn().mockResolvedValue(mockFile),
+      const mockFile: IVaultFile = {
+        path: 'Reading notes/My Title.md',
+        name: 'My Title.md',
       };
+
+      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(null);
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([]);
+      (platform.vault.createFolder as jest.Mock).mockResolvedValue(undefined);
+      (platform.vault.create as jest.Mock).mockResolvedValue(mockFile);
 
       const renderSpy = jest.spyOn(templateService, 'render');
 
@@ -186,7 +186,7 @@ describe('NoteService', () => {
         expect.any(String),
         expect.objectContaining({}),
       );
-      expect(app.vault.create).toHaveBeenCalledWith(
+      expect(platform.vault.create).toHaveBeenCalledWith(
         expect.stringContaining('My Title.md'),
         'My Content',
       );
@@ -198,12 +198,9 @@ describe('NoteService', () => {
         error: new TemplateRenderError('bad render'),
       });
 
-      (app as unknown as Record<string, unknown>).vault = {
-        getAbstractFileByPath: jest.fn(() => null),
-        getMarkdownFiles: jest.fn(() => []),
-        createFolder: jest.fn().mockResolvedValue(undefined),
-        create: jest.fn(),
-      };
+      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(null);
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([]);
+      (platform.vault.createFolder as jest.Mock).mockResolvedValue(undefined);
 
       await expect(
         noteService.getOrCreateLiteratureNoteFile('citekey1', library),
@@ -211,24 +208,19 @@ describe('NoteService', () => {
     });
 
     it('finds a note moved to a subfolder via recursive search', async () => {
-      const { TFile } = jest.requireMock('obsidian');
-
       // The note was moved from "Reading notes/My Title.md"
       // to "Reading notes/archive/My Title.md"
-      const movedFile = {
+      const movedFile: IVaultFile = {
         path: 'Reading notes/archive/My Title.md',
         name: 'My Title.md',
       };
-      Object.setPrototypeOf(movedFile, TFile.prototype);
 
-      (app as unknown as Record<string, unknown>).vault = {
-        // Exact path lookup returns null (not at expected location)
-        getAbstractFileByPath: jest.fn(() => null),
-        // But the file exists under a subfolder
-        getMarkdownFiles: jest.fn(() => [movedFile]),
-        createFolder: jest.fn().mockResolvedValue(undefined),
-        create: jest.fn(),
-      };
+      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(null);
+      (platform.vault.isFile as jest.Mock).mockReturnValue(false);
+      // But the file exists under a subfolder
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([
+        movedFile,
+      ]);
 
       const result = await noteService.getOrCreateLiteratureNoteFile(
         'citekey1',
@@ -237,7 +229,7 @@ describe('NoteService', () => {
 
       expect(result).toBe(movedFile);
       // Should NOT have created a new file
-      expect(app.vault.create).not.toHaveBeenCalled();
+      expect(platform.vault.create).not.toHaveBeenCalled();
     });
 
     it('creates note in correct subfolder when title template includes path separators', async () => {
@@ -245,27 +237,24 @@ describe('NoteService', () => {
         .spyOn(templateService, 'getTitle')
         .mockReturnValue({ ok: true, value: 'article/smith2023' });
 
-      const { TFile, TFolder } = jest.requireMock('obsidian');
-
-      const mockFile = { path: 'Reading notes/article/smith2023.md' };
-      Object.setPrototypeOf(mockFile, TFile.prototype);
-
-      const existingFolder = {};
-      Object.setPrototypeOf(existingFolder, TFolder.prototype);
-
-      (app as unknown as Record<string, unknown>).vault = {
-        getAbstractFileByPath: jest
-          .fn()
-          // First call: exact path lookup for the note — not found
-          .mockReturnValueOnce(null)
-          // Second call: ensureFolderExists checks "Reading notes" parent
-          .mockReturnValueOnce(existingFolder)
-          // Third call: ensureFolderExists checks "Reading notes/article"
-          .mockReturnValueOnce(null),
-        getMarkdownFiles: jest.fn(() => []),
-        createFolder: jest.fn().mockResolvedValue(undefined),
-        create: jest.fn().mockResolvedValue(mockFile),
+      const mockFile: IVaultFile = {
+        path: 'Reading notes/article/smith2023.md',
+        name: 'smith2023.md',
       };
+
+      (platform.vault.getAbstractFileByPath as jest.Mock)
+        // First call: exact path lookup for the note — not found
+        .mockReturnValueOnce(null)
+        // findExistingLiteratureNoteFile second path (isFile check) — not applicable
+        // ensureFolderExists checks "Reading notes" parent
+        .mockReturnValueOnce(null) // isFolder check
+        .mockReturnValueOnce({ path: 'Reading notes' }) // ensureFolderExists parent
+        .mockReturnValueOnce(null); // ensureFolderExists child
+      (platform.vault.isFile as jest.Mock).mockReturnValue(false);
+      (platform.vault.isFolder as jest.Mock).mockReturnValue(false);
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([]);
+      (platform.vault.createFolder as jest.Mock).mockResolvedValue(undefined);
+      (platform.vault.create as jest.Mock).mockResolvedValue(mockFile);
 
       const result = await noteService.getOrCreateLiteratureNoteFile(
         'citekey1',
@@ -273,30 +262,31 @@ describe('NoteService', () => {
       );
 
       expect(result).toBe(mockFile);
-      expect(app.vault.create).toHaveBeenCalledWith(
+      expect(platform.vault.create).toHaveBeenCalledWith(
         expect.stringContaining('article'),
         'My Content',
       );
     });
 
     it('does not find notes outside the literature note folder', async () => {
-      const { TFile } = jest.requireMock('obsidian');
-
       // A file with the same name exists outside the literature note folder
-      const outsideFile = {
+      const outsideFile: IVaultFile = {
         path: 'Other folder/My Title.md',
         name: 'My Title.md',
       };
 
-      const mockCreatedFile = { path: 'Reading notes/My Title.md' };
-      Object.setPrototypeOf(mockCreatedFile, TFile.prototype);
-
-      (app as unknown as Record<string, unknown>).vault = {
-        getAbstractFileByPath: jest.fn(() => null),
-        getMarkdownFiles: jest.fn(() => [outsideFile]),
-        createFolder: jest.fn().mockResolvedValue(undefined),
-        create: jest.fn().mockResolvedValue(mockCreatedFile),
+      const mockCreatedFile: IVaultFile = {
+        path: 'Reading notes/My Title.md',
+        name: 'My Title.md',
       };
+
+      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(null);
+      (platform.vault.isFile as jest.Mock).mockReturnValue(false);
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([
+        outsideFile,
+      ]);
+      (platform.vault.createFolder as jest.Mock).mockResolvedValue(undefined);
+      (platform.vault.create as jest.Mock).mockResolvedValue(mockCreatedFile);
 
       const result = await noteService.getOrCreateLiteratureNoteFile(
         'citekey1',
@@ -305,20 +295,21 @@ describe('NoteService', () => {
 
       // Should create a new file, not return the outside file
       expect(result).toBe(mockCreatedFile);
-      expect(app.vault.create).toHaveBeenCalled();
+      expect(platform.vault.create).toHaveBeenCalled();
     });
   });
 
   describe('findExistingLiteratureNoteFile', () => {
-    it('returns TFile when found by exact path', () => {
-      const mockFile = { path: 'Reading notes/My Title.md' };
-      const { TFile } = jest.requireMock('obsidian');
-      Object.setPrototypeOf(mockFile, TFile.prototype);
-
-      (app as unknown as Record<string, unknown>).vault = {
-        getAbstractFileByPath: jest.fn(() => mockFile),
-        getMarkdownFiles: jest.fn(() => []),
+    it('returns IVaultFile when found by exact path', () => {
+      const mockFile: IVaultFile = {
+        path: 'Reading notes/My Title.md',
+        name: 'My Title.md',
       };
+
+      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(
+        mockFile,
+      );
+      (platform.vault.isFile as jest.Mock).mockReturnValue(true);
 
       const result = noteService.findExistingLiteratureNoteFile(
         'citekey1',
@@ -327,15 +318,16 @@ describe('NoteService', () => {
       expect(result).toBe(mockFile);
     });
 
-    it('returns TFile when found by case-insensitive match', () => {
-      const mockFile = { path: 'reading notes/my title.md' };
-      const { TFile } = jest.requireMock('obsidian');
-      Object.setPrototypeOf(mockFile, TFile.prototype);
-
-      (app as unknown as Record<string, unknown>).vault = {
-        getAbstractFileByPath: jest.fn(() => null),
-        getMarkdownFiles: jest.fn(() => [mockFile]),
+    it('returns IVaultFile when found by case-insensitive match', () => {
+      const mockFile: IVaultFile = {
+        path: 'reading notes/my title.md',
+        name: 'my title.md',
       };
+
+      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(null);
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([
+        mockFile,
+      ]);
 
       const result = noteService.findExistingLiteratureNoteFile(
         'citekey1',
@@ -345,10 +337,8 @@ describe('NoteService', () => {
     });
 
     it('returns null when note does not exist', () => {
-      (app as unknown as Record<string, unknown>).vault = {
-        getAbstractFileByPath: jest.fn(() => null),
-        getMarkdownFiles: jest.fn(() => []),
-      };
+      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(null);
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([]);
 
       const result = noteService.findExistingLiteratureNoteFile(
         'citekey1',
@@ -357,14 +347,18 @@ describe('NoteService', () => {
       expect(result).toBeNull();
     });
 
-    it('returns null when path matches a non-TFile abstract file', () => {
-      const notAFile = { path: 'Reading notes/My Title.md' };
-      // Not setting TFile prototype — simulates a folder or other abstract file
-
-      (app as unknown as Record<string, unknown>).vault = {
-        getAbstractFileByPath: jest.fn(() => notAFile),
-        getMarkdownFiles: jest.fn(() => []),
+    it('returns null when path matches a non-file abstract file', () => {
+      const notAFile: IVaultFile = {
+        path: 'Reading notes/My Title.md',
+        name: 'My Title.md',
       };
+
+      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(
+        notAFile,
+      );
+      // isFile returns false — simulates a folder or other abstract file
+      (platform.vault.isFile as jest.Mock).mockReturnValue(false);
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([]);
 
       const result = noteService.findExistingLiteratureNoteFile(
         'citekey1',
@@ -376,18 +370,14 @@ describe('NoteService', () => {
 
   describe('openLiteratureNote', () => {
     it('propagates errors from getOrCreateLiteratureNoteFile', async () => {
-      // Mock vault so getOrCreateLiteratureNoteFile fails
-      (app as unknown as Record<string, unknown>).vault = {
-        getAbstractFileByPath: jest.fn(() => null),
-        getMarkdownFiles: jest.fn(() => []),
-        createFolder: jest.fn().mockRejectedValue(new Error('Disk full')),
-        create: jest.fn().mockRejectedValue(new Error('Disk full')),
-      };
-      (app as unknown as Record<string, unknown>).workspace = {
-        getLeaf: jest.fn(() => ({
-          openFile: jest.fn(),
-        })),
-      };
+      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(null);
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([]);
+      (platform.vault.createFolder as jest.Mock).mockRejectedValue(
+        new Error('Disk full'),
+      );
+      (platform.vault.create as jest.Mock).mockRejectedValue(
+        new Error('Disk full'),
+      );
 
       await expect(
         noteService.openLiteratureNote('citekey1', library, false),
@@ -395,26 +385,19 @@ describe('NoteService', () => {
     });
 
     it('opens the file in the requested pane on success', async () => {
-      const mockFile = { path: 'Reading notes/My Title.md' };
-      const openFileFn = jest.fn();
-      (app as unknown as Record<string, unknown>).vault = {
-        getAbstractFileByPath: jest.fn(() => mockFile),
-      };
-      (app as unknown as Record<string, unknown>).workspace = {
-        getLeaf: jest.fn(() => ({
-          openFile: openFileFn,
-        })),
+      const mockFile: IVaultFile = {
+        path: 'Reading notes/My Title.md',
+        name: 'My Title.md',
       };
 
-      // getAbstractFileByPath returns a mock that is not instanceof TFile,
-      // so we need to make it pass the check
-      const { TFile } = jest.requireMock('obsidian');
-      Object.setPrototypeOf(mockFile, TFile.prototype);
+      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(
+        mockFile,
+      );
+      (platform.vault.isFile as jest.Mock).mockReturnValue(true);
 
       await noteService.openLiteratureNote('citekey1', library, true);
 
-      expect(app.workspace.getLeaf).toHaveBeenCalledWith(true);
-      expect(openFileFn).toHaveBeenCalledWith(mockFile);
+      expect(platform.workspace.openFile).toHaveBeenCalledWith(mockFile, true);
     });
 
     describe('with disableAutomaticNoteCreation enabled', () => {
@@ -423,38 +406,30 @@ describe('NoteService', () => {
       });
 
       it('opens existing note without creating a new one', async () => {
-        const mockFile = { path: 'Reading notes/My Title.md' };
-        const { TFile } = jest.requireMock('obsidian');
-        Object.setPrototypeOf(mockFile, TFile.prototype);
+        const mockFile: IVaultFile = {
+          path: 'Reading notes/My Title.md',
+          name: 'My Title.md',
+        };
 
-        const openFileFn = jest.fn();
-        (app as unknown as Record<string, unknown>).vault = {
-          getAbstractFileByPath: jest.fn(() => mockFile),
-          getMarkdownFiles: jest.fn(() => []),
-          create: jest.fn(),
-        };
-        (app as unknown as Record<string, unknown>).workspace = {
-          getLeaf: jest.fn(() => ({
-            openFile: openFileFn,
-          })),
-        };
+        (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(
+          mockFile,
+        );
+        (platform.vault.isFile as jest.Mock).mockReturnValue(true);
 
         await noteService.openLiteratureNote('citekey1', library, false);
 
-        expect(openFileFn).toHaveBeenCalledWith(mockFile);
-        expect(app.vault.create).not.toHaveBeenCalled();
+        expect(platform.workspace.openFile).toHaveBeenCalledWith(
+          mockFile,
+          false,
+        );
+        expect(platform.vault.create).not.toHaveBeenCalled();
       });
 
       it('throws LiteratureNoteNotFoundError when note does not exist', async () => {
-        (app as unknown as Record<string, unknown>).vault = {
-          getAbstractFileByPath: jest.fn(() => null),
-          getMarkdownFiles: jest.fn(() => []),
-        };
-        (app as unknown as Record<string, unknown>).workspace = {
-          getLeaf: jest.fn(() => ({
-            openFile: jest.fn(),
-          })),
-        };
+        (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(
+          null,
+        );
+        (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([]);
 
         await expect(
           noteService.openLiteratureNote('citekey1', library, false),
@@ -464,27 +439,25 @@ describe('NoteService', () => {
 
     describe('with disableAutomaticNoteCreation disabled (default)', () => {
       it('creates note when it does not exist', async () => {
-        const mockFile = { path: 'Reading notes/My Title.md' };
-        const { TFile } = jest.requireMock('obsidian');
-        Object.setPrototypeOf(mockFile, TFile.prototype);
+        const mockFile: IVaultFile = {
+          path: 'Reading notes/My Title.md',
+          name: 'My Title.md',
+        };
 
-        const openFileFn = jest.fn();
-        (app as unknown as Record<string, unknown>).vault = {
-          getAbstractFileByPath: jest.fn(() => null),
-          getMarkdownFiles: jest.fn(() => []),
-          createFolder: jest.fn().mockResolvedValue(undefined),
-          create: jest.fn().mockResolvedValue(mockFile),
-        };
-        (app as unknown as Record<string, unknown>).workspace = {
-          getLeaf: jest.fn(() => ({
-            openFile: openFileFn,
-          })),
-        };
+        (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(
+          null,
+        );
+        (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([]);
+        (platform.vault.createFolder as jest.Mock).mockResolvedValue(undefined);
+        (platform.vault.create as jest.Mock).mockResolvedValue(mockFile);
 
         await noteService.openLiteratureNote('citekey1', library, false);
 
-        expect(app.vault.create).toHaveBeenCalled();
-        expect(openFileFn).toHaveBeenCalledWith(mockFile);
+        expect(platform.vault.create).toHaveBeenCalled();
+        expect(platform.workspace.openFile).toHaveBeenCalledWith(
+          mockFile,
+          false,
+        );
       });
     });
   });

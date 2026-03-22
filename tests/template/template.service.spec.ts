@@ -193,10 +193,9 @@ describe('TemplateService', () => {
       if (result.ok) expect(result.value).toBe('Title: My Title');
     });
 
-    test('renderContent', () => {
-      settings.literatureNoteContentTemplate = 'Content: {{year}}';
+    test('render arbitrary content template', () => {
       const variables = { year: '2023' } as unknown as TemplateContext;
-      const result = service.getContent(variables);
+      const result = service.render('Content: {{year}}', variables);
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.value).toBe('Content: 2023');
     });

@@ -1,5 +1,4 @@
-import { FileSystemAdapter, Notice } from 'obsidian';
-import * as path from 'path';
+import type { IPlatformAdapter } from '../platform/platform-adapter';
 import { CitationsPluginSettings } from '../ui/settings/settings';
 import { Entry, Library, ParseErrorInfo } from '../core';
 import { WorkerManager } from '../util';
@@ -7,9 +6,8 @@ import { LoadingStatus, LibraryState } from './library-state';
 import {
   DataSource,
   DataSourceLoadResult,
-  DataSourceType,
+  DATA_SOURCE_TYPES,
 } from '../data-source';
-import { MergeStrategy } from './merge-strategy';
 import { SearchService } from '../search/search.service';
 import {
   IntrospectionService,
@@ -18,7 +16,6 @@ import {
 import { ILibraryService } from '../container';
 import { IDataSourceFactory } from '../sources/data-source-factory';
 import { LibraryStore } from './library-store';
-import { LocalFileSource } from '../sources/local-file-source';
 
 const LOAD_TIMEOUT_MS = 10_000;
 const LOAD_DEBOUNCE_MS = 1_000;
@@ -51,13 +48,13 @@ export class LibraryService implements ILibraryService {
   private retryTimer: number | null = null;
   private retryCount = 0;
   private dataSourceFactory: IDataSourceFactory | null = null;
+  private sourceDbNameMap = new Map<string, string>();
 
   constructor(
     private settings: CitationsPluginSettings,
-    private vaultAdapter: FileSystemAdapter | null,
+    private platform: IPlatformAdapter,
     workerManager: WorkerManager,
     sources: DataSource[] = [],
-    private mergeStrategy: MergeStrategy = MergeStrategy.LastWins,
   ) {
     this.loadWorker = workerManager;
     this.sources = sources;
@@ -101,11 +98,7 @@ export class LibraryService implements ILibraryService {
   }
 
   resolveLibraryPath(rawPath: string): string {
-    const vaultRoot =
-      this.vaultAdapter instanceof FileSystemAdapter
-        ? this.vaultAdapter.getBasePath()
-        : '/';
-    return path.resolve(vaultRoot, rawPath);
+    return this.platform.resolvePath(rawPath);
   }
 
   private setState(newState: Partial<LibraryState>): void {
@@ -141,7 +134,7 @@ export class LibraryService implements ILibraryService {
       console.warn(
         'Citations plugin: No data sources configured. Please update plugin settings.',
       );
-      new Notice(
+      this.platform.notifications.show(
         'No citation databases configured. Please add at least one database in the citation plugin settings.',
       );
       return null;
@@ -223,7 +216,6 @@ export class LibraryService implements ILibraryService {
       const allParseErrors: ParseErrorInfo[] = [];
 
       this.sourceMetadata = successfulResults.map((r) => {
-        const sourceIndex = parseInt(r.sourceId.replace('source-', ''), 10);
         const errorCount = r.parseErrors?.length ?? 0;
         totalParseErrors += errorCount;
         if (r.parseErrors) {
@@ -231,8 +223,7 @@ export class LibraryService implements ILibraryService {
         }
         return {
           sourceId: r.sourceId,
-          databaseName:
-            this.settings.databases[sourceIndex]?.name ?? r.sourceId,
+          databaseName: this.sourceDbNameMap.get(r.sourceId) ?? r.sourceId,
           entryCount: r.entries.length,
           parseErrorCount: errorCount,
           modifiedAt: r.modifiedAt,
@@ -301,24 +292,24 @@ export class LibraryService implements ILibraryService {
   };
 
   private createSources(): DataSource[] {
-    if (this.dataSourceFactory) {
-      return this.settings.databases.map((db, index) =>
-        this.dataSourceFactory!.create(
-          { type: DataSourceType.LocalFile, path: db.path, format: db.type },
-          `source-${index}`,
-        ),
-      );
+    // If sources were injected via constructor, use them as-is
+    if (this.sources.length > 0) {
+      return this.sources;
     }
-    return this.settings.databases.map(
-      (db, index) =>
-        new LocalFileSource(
-          `source-${index}`,
-          db.path,
-          db.type,
-          this.loadWorker,
-          this.vaultAdapter,
-        ),
-    );
+    if (!this.dataSourceFactory) {
+      console.warn('Citations plugin: No data source factory configured.');
+      return [];
+    }
+    this.sourceDbNameMap.clear();
+    // TODO: derive DataSourceType from DatabaseConfig when vault-file sources are supported in settings
+    return this.settings.databases.map((db, index) => {
+      const id = `source-${index}`;
+      this.sourceDbNameMap.set(id, db.name);
+      return this.dataSourceFactory!.create(
+        { type: DATA_SOURCE_TYPES.LocalFile, path: db.path, format: db.type },
+        id,
+      );
+    });
   }
 
   private handleErrorRetry(): void {
@@ -338,8 +329,6 @@ export class LibraryService implements ILibraryService {
   }
 
   initWatcher(): void {
-    this.sources.forEach((s) => s.dispose());
-
     if (this.sources.length === 0) {
       return;
     }

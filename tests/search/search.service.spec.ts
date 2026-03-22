@@ -104,6 +104,15 @@ describe('SearchService', () => {
     expect(service.search('')).toEqual([]);
   });
 
+  test('isReady should return true when not indexing', () => {
+    expect(service.isReady).toBe(true);
+  });
+
+  test('isReady should return true after buildIndex completes', () => {
+    service.buildIndex(entries);
+    expect(service.isReady).toBe(true);
+  });
+
   // Regression test for GitHub issue #220:
   // "Insert literature note link won't search by author name"
   test('should find entries by author name in Insert Literature Note Link (#220)', () => {

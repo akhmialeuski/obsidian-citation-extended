@@ -1,6 +1,6 @@
 import CitationPlugin from '../../src/main';
 import { CitationsPluginSettings } from '../../src/ui/settings/settings';
-import { App, PluginManifest, TFile } from 'obsidian';
+import { App, PluginManifest } from 'obsidian';
 import { NoteService } from '../../src/notes/note.service';
 import { LibraryService } from '../../src/library/library.service';
 import { EditorActions } from '../../src/ui/editor-actions';
@@ -38,6 +38,7 @@ jest.mock(
     PluginSettingTab: class {},
     Setting: class {},
     SuggestModal: class {},
+    Modal: class {},
   }),
   { virtual: true },
 );
@@ -114,18 +115,33 @@ describe('Issue 161: Insert Literature Note Link', () => {
       getTitle: jest.fn().mockReturnValue({ ok: true, value: 'Test Article' }),
     } as unknown as CitationPlugin['templateService'];
 
+    // Setup platform mock for EditorActions
+    plugin.platform = {
+      workspace: {
+        getActiveEditor: jest.fn().mockReturnValue(mockEditor),
+        openFile: jest.fn().mockResolvedValue(undefined),
+        getConfig: jest.fn().mockReturnValue(false), // useMarkdownLinks = false by default
+        fileToLinktext: jest.fn(),
+      },
+      notifications: {
+        show: jest.fn(),
+      },
+    } as unknown as typeof plugin.platform;
+
     plugin.editorActions = new EditorActions(plugin);
   });
 
   test('should use fileToLinktext for WikiLinks to ensure correct path resolution', async () => {
     // Arrange
-    const mockFile = new TFile();
-    mockFile.path = 'Reading Notes/Test Article.md';
+    const mockFile = {
+      path: 'Reading Notes/Test Article.md',
+      name: 'Test Article.md',
+    };
 
     (
       plugin.noteService.getOrCreateLiteratureNoteFile as jest.Mock
     ).mockResolvedValue(mockFile);
-    (app.metadataCache.fileToLinktext as jest.Mock).mockReturnValue(
+    (plugin.platform.workspace.fileToLinktext as jest.Mock).mockReturnValue(
       'Reading Notes/Test Article',
     );
 
@@ -136,14 +152,12 @@ describe('Issue 161: Insert Literature Note Link', () => {
     expect(
       plugin.noteService.getOrCreateLiteratureNoteFile,
     ).toHaveBeenCalledWith('test_key', expect.anything());
-    expect(app.metadataCache.fileToLinktext).toHaveBeenCalledWith(
+    expect(plugin.platform.workspace.fileToLinktext).toHaveBeenCalledWith(
       mockFile,
       '',
       true,
     );
 
-    // This expectation reflects the DESIRED behavior (fixing the bug)
-    // The current code likely does `[[Test Article]]` which might fail if the desired behavior is `[[Reading Notes/Test Article]]`
     expect(mockEditor.replaceSelection).toHaveBeenCalledWith(
       '[[Reading Notes/Test Article]]',
     );
@@ -151,16 +165,16 @@ describe('Issue 161: Insert Literature Note Link', () => {
 
   test('should use fileToLinktext for Markdown links', async () => {
     // Arrange
-    (
-      app.vault as unknown as { getConfig: jest.Mock }
-    ).getConfig.mockReturnValue(true); // useMarkdownLinks = true
-    const mockFile = new TFile();
-    mockFile.path = 'Reading Notes/Test Article.md';
+    (plugin.platform.workspace.getConfig as jest.Mock).mockReturnValue(true); // useMarkdownLinks = true
+    const mockFile = {
+      path: 'Reading Notes/Test Article.md',
+      name: 'Test Article.md',
+    };
 
     (
       plugin.noteService.getOrCreateLiteratureNoteFile as jest.Mock
     ).mockResolvedValue(mockFile);
-    (app.metadataCache.fileToLinktext as jest.Mock).mockReturnValue(
+    (plugin.platform.workspace.fileToLinktext as jest.Mock).mockReturnValue(
       'Reading Notes/Test Article.md',
     );
 
@@ -168,13 +182,11 @@ describe('Issue 161: Insert Literature Note Link', () => {
     await plugin.editorActions.insertLiteratureNoteLink('test_key');
 
     // Assert
-    expect(app.metadataCache.fileToLinktext).toHaveBeenCalledWith(
+    expect(plugin.platform.workspace.fileToLinktext).toHaveBeenCalledWith(
       mockFile,
       '',
       false,
     );
-    // Note: main.ts currently does encodeURI(fileToLinktext(...))
-    // We expect standard markdown link format
     expect(mockEditor.replaceSelection).toHaveBeenCalledWith(
       '[Test Article](Reading%20Notes/Test%20Article.md)',
     );

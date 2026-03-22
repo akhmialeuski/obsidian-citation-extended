@@ -13,6 +13,10 @@ export function normalizeTerm(term: string): string {
     .toLowerCase();
 }
 
+/**
+ * Full-text search over bibliography entries powered by MiniSearch.
+ * Supports fuzzy matching, prefix search, and diacritics normalization.
+ */
 export class SearchService {
   private index: MiniSearch;
   private isIndexing = false;
