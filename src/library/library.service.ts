@@ -7,7 +7,7 @@ import { LoadingStatus, LibraryState } from './library-state';
 import {
   DataSource,
   DataSourceLoadResult,
-  DataSourceType,
+  DATA_SOURCE_TYPES,
 } from '../data-source';
 import { MergeStrategy } from './merge-strategy';
 import { SearchService } from '../search/search.service';
@@ -304,7 +304,7 @@ export class LibraryService implements ILibraryService {
     if (this.dataSourceFactory) {
       return this.settings.databases.map((db, index) =>
         this.dataSourceFactory!.create(
-          { type: DataSourceType.LocalFile, path: db.path, format: db.type },
+          { type: DATA_SOURCE_TYPES.LocalFile, path: db.path, format: db.type },
           `source-${index}`,
         ),
       );

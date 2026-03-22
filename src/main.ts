@@ -23,6 +23,10 @@ import {
   EntryNotFoundError,
 } from './core';
 import { DataSourceFactory } from './sources/data-source-factory';
+import { DataSourceRegistry } from './sources/data-source-registry';
+import { DATA_SOURCE_TYPES } from './data-source';
+import { LocalFileSource } from './sources/local-file-source';
+import { VaultFileSource } from './sources/vault-file-source';
 
 import { CitationSettingTab } from './ui/settings/settings-tab';
 import { CitationsPluginSettings } from './ui/settings/settings';
@@ -93,11 +97,32 @@ export default class CitationPlugin extends Plugin {
         ? this.app.vault.adapter
         : null;
 
-    const dataSourceFactory = new DataSourceFactory(
-      vaultAdapter,
-      workerManager,
-      this.app.vault,
+    // Register built-in data source types
+    const registry = new DataSourceRegistry();
+    registry.register(
+      DATA_SOURCE_TYPES.LocalFile,
+      (def, id) =>
+        new LocalFileSource(
+          id,
+          def.path,
+          def.format,
+          workerManager,
+          vaultAdapter,
+        ),
     );
+    registry.register(
+      DATA_SOURCE_TYPES.VaultFile,
+      (def, id) =>
+        new VaultFileSource(
+          id,
+          def.path,
+          def.format,
+          workerManager,
+          this.app.vault,
+        ),
+    );
+
+    const dataSourceFactory = new DataSourceFactory(registry);
 
     const mergeStrategy = this.settings.mergeStrategy || MergeStrategy.LastWins;
 
