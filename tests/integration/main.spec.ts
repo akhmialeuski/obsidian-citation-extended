@@ -36,6 +36,7 @@ jest.mock(
     PluginSettingTab: class {},
     Setting: class {},
     SuggestModal: class {},
+    Modal: class {},
   }),
   { virtual: true },
 );

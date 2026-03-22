@@ -50,6 +50,7 @@ jest.mock(
       };
     },
     SuggestModal: class {},
+    Modal: class {},
     Notice: jest.fn(),
     TFile: class {},
     Events: class {

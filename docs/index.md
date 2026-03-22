@@ -12,4 +12,3 @@ Welcome to the documentation for Obsidian Citation Extended, a plugin that integ
   - [Template Variables](templates/variables.md) — All available variables with examples
   - [Template Helpers](templates/helpers.md) — Comparison, string, date, author helpers
   - [Template Examples](templates/examples.md) — Recipes for common workflows
-- [Development](development.md) — Architecture, adding data sources, contributing

@@ -63,24 +63,6 @@ When the same citekey appears in multiple databases:
 
 **Example:** You have a personal library (`My Library`) and a shared team library (`Team`). With "Last wins", entries from `Team` (listed second) override `My Library` when both have the same citekey. To reverse this, drag `My Library` below `Team` in the settings list.
 
-## Architecture: Adding a New Data Source
-
-The plugin uses a **DataSourceRegistry** pattern (open/closed principle). To add a new source type:
-
-1. Implement the `DataSource` interface (`load()`, `watch()`, `dispose()`)
-2. Register it in `main.ts`:
-
-```typescript
-registry.register('my-source', (def, id) =>
-  new MyCustomSource(id, def.path, def.format, workerManager),
-);
-```
-
-3. Add the type to `DataSourceType` and `DATABASE_TYPE_LABELS`
-4. The settings UI automatically picks up the new type from the labels map
-
-See [Development Guide](development.md) for architectural details.
-
 ## Coming Soon
 
 - **Hayagriva (YAML)** — native support for the Hayagriva bibliography format

@@ -21,6 +21,7 @@ import {
   CITATION_STYLE_PRESETS,
 } from './settings-schema';
 import { ReferenceListSortOrder } from '../modals/sort-entries';
+import { VariableListModal } from '../modals/variable-list-modal';
 
 const SORT_ORDER_LABELS: Record<ReferenceListSortOrder, string> = {
   default: 'Default (file order)',
@@ -264,6 +265,18 @@ export class CitationSettingTab extends PluginSettingTab {
       }),
       createSpan({ text: ' documentation.' }),
     );
+
+    new Setting(containerEl)
+      .setName('Show available variables')
+      .setDesc(
+        'Display all template variables discovered from your loaded library, including dynamic fields.',
+      )
+      .addButton((button) => {
+        button.setButtonText('Show variables').onClick(() => {
+          const variables = this.plugin.libraryService.getTemplateVariables();
+          new VariableListModal(this.app, variables).open();
+        });
+      });
   }
 
   // ---------------------------------------------------------------------------
