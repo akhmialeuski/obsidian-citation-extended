@@ -155,6 +155,7 @@ describe('EditorActions', () => {
       const editor = {
         replaceRange: jest.fn(),
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+        setCursor: jest.fn(),
       };
       const plugin = makePlugin();
       plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
@@ -168,6 +169,7 @@ describe('EditorActions', () => {
       const editor = {
         replaceRange: jest.fn(),
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+        setCursor: jest.fn(),
       };
       const plugin = makePlugin();
       plugin.app.workspace.getActiveViewOfType = jest.fn(() => null);
@@ -189,6 +191,22 @@ describe('EditorActions', () => {
       await actions.insertLiteratureNoteContent('key1');
 
       expect(Notice).toHaveBeenCalledWith('No active editor found');
+    });
+
+    it('moves cursor to end of inserted content', async () => {
+      const editor = {
+        replaceRange: jest.fn(),
+        getCursor: jest.fn(() => ({ line: 1, ch: 3 })),
+        setCursor: jest.fn(),
+      };
+      const plugin = makePlugin();
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+      const actions = new EditorActions(plugin);
+
+      await actions.insertLiteratureNoteContent('key1');
+
+      // 'content' is 7 chars, starting at line:1 ch:3, so cursor at line:1 ch:10
+      expect(editor.setCursor).toHaveBeenCalledWith({ line: 1, ch: 10 });
     });
   });
 
@@ -260,6 +278,7 @@ describe('EditorActions', () => {
       const editor = {
         replaceRange: jest.fn(),
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+        setCursor: jest.fn(),
       };
       const plugin = makePlugin();
       plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
@@ -281,6 +300,7 @@ describe('EditorActions', () => {
       const editor = {
         replaceRange: jest.fn(),
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+        setCursor: jest.fn(),
       };
       const plugin = makePlugin();
       plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
@@ -297,10 +317,27 @@ describe('EditorActions', () => {
       });
     });
 
+    it('moves cursor to end of inserted citation text', async () => {
+      const editor = {
+        replaceRange: jest.fn(),
+        getCursor: jest.fn(() => ({ line: 2, ch: 5 })),
+        setCursor: jest.fn(),
+      };
+      const plugin = makePlugin();
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+      const actions = new EditorActions(plugin);
+
+      await actions.insertMarkdownCitation('key1', false);
+
+      // '[@key1]' is 7 chars, starting at ch:5, so cursor should be at ch:12
+      expect(editor.setCursor).toHaveBeenCalledWith({ line: 2, ch: 12 });
+    });
+
     it('creates literature note when autoCreateNoteOnCitation is enabled', async () => {
       const editor = {
         replaceRange: jest.fn(),
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+        setCursor: jest.fn(),
       };
       const plugin = makePlugin({
         settings: { autoCreateNoteOnCitation: true },
@@ -323,6 +360,7 @@ describe('EditorActions', () => {
       const editor = {
         replaceRange: jest.fn(),
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+        setCursor: jest.fn(),
       };
       const plugin = makePlugin({
         settings: { autoCreateNoteOnCitation: false },
@@ -345,6 +383,7 @@ describe('EditorActions', () => {
       const editor = {
         replaceRange: jest.fn(),
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+        setCursor: jest.fn(),
       };
       const plugin = makePlugin({
         settings: { autoCreateNoteOnCitation: true },
