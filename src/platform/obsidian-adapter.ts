@@ -83,10 +83,8 @@ class ObsidianVaultAccess implements IVaultAccess {
 
   getAbstractFileByPath(path: string): IVaultFile | null {
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (file instanceof TFile) {
-      return { path: file.path, name: file.name };
-    }
-    return null;
+    if (!file) return null;
+    return { path: file.path, name: file.name };
   }
 
   getMarkdownFiles(): IVaultFile[] {
@@ -106,6 +104,20 @@ class ObsidianVaultAccess implements IVaultAccess {
       return this.app.vault.read(tFile);
     }
     throw new Error(`Cannot read file at ${file.path}`);
+  }
+
+  async createFolder(path: string): Promise<void> {
+    await this.app.vault.createFolder(path);
+  }
+
+  isFile(file: IVaultFile): boolean {
+    const abstract = this.app.vault.getAbstractFileByPath(file.path);
+    return abstract instanceof TFile;
+  }
+
+  isFolder(path: string): boolean {
+    const abstract = this.app.vault.getAbstractFileByPath(path);
+    return abstract instanceof TFolder;
   }
 }
 

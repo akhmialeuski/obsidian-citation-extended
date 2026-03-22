@@ -1,19 +1,16 @@
-import { Editor, MarkdownView, Notice, TFile } from 'obsidian';
 import CitationPlugin from '../main';
 import { LibraryNotReadyError, LiteratureNoteNotFoundError } from '../core';
-import { VaultExt, WorkspaceExt } from '../obsidian-extensions.d';
+import { IEditorProxy } from '../platform/platform-adapter';
 
 export class EditorActions {
   constructor(private plugin: CitationPlugin) {}
 
-  private getActiveEditor(): Editor | null {
-    // Standard MarkdownView approach
-    const view = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
-    if (view?.editor) return view.editor;
+  private get platform() {
+    return this.plugin.platform;
+  }
 
-    // Fallback: activeEditor supports Canvas text nodes, Lineage, etc.
-    const ext = this.plugin.app.workspace as WorkspaceExt;
-    return ext.activeEditor?.editor ?? null;
+  private getActiveEditor(): IEditorProxy | null {
+    return this.platform.workspace.getActiveEditor();
   }
 
   async openLiteratureNote(
@@ -23,13 +20,13 @@ export class EditorActions {
   ): Promise<void> {
     const library = this.plugin.libraryService.library;
     if (!library) {
-      new Notice(new LibraryNotReadyError().message);
+      this.platform.notifications.show(new LibraryNotReadyError().message);
       return;
     }
 
     const entryResult = this.plugin.getEntry(citekey);
     if (!entryResult.ok) {
-      new Notice(entryResult.error.message);
+      this.platform.notifications.show(entryResult.error.message);
       return;
     }
 
@@ -42,10 +39,10 @@ export class EditorActions {
       );
     } catch (e) {
       if (e instanceof LiteratureNoteNotFoundError) {
-        new Notice(e.message);
+        this.platform.notifications.show(e.message);
       } else {
         console.error('Failed to open literature note:', e);
-        new Notice(
+        this.platform.notifications.show(
           'Unable to open literature note. Please check that the literature note folder exists.',
         );
       }
@@ -55,31 +52,33 @@ export class EditorActions {
   async insertLiteratureNoteLink(citekey: string): Promise<void> {
     const editor = this.getActiveEditor();
     if (!editor) {
-      new Notice('No active editor found');
+      this.platform.notifications.show('No active editor found');
       return;
     }
 
     const library = this.plugin.libraryService.library;
     if (!library) {
-      new Notice(new LibraryNotReadyError().message);
+      this.platform.notifications.show(new LibraryNotReadyError().message);
       return;
     }
 
     const entryResult = this.plugin.getEntry(citekey);
     if (!entryResult.ok) {
-      new Notice(entryResult.error.message);
+      this.platform.notifications.show(entryResult.error.message);
       return;
     }
 
     try {
-      let file: TFile;
+      let file;
       if (this.plugin.settings.disableAutomaticNoteCreation) {
         const existing = this.plugin.noteService.findExistingLiteratureNoteFile(
           citekey,
           library,
         );
         if (!existing) {
-          new Notice(new LiteratureNoteNotFoundError(citekey).message);
+          this.platform.notifications.show(
+            new LiteratureNoteNotFoundError(citekey).message,
+          );
           return;
         }
         file = existing;
@@ -92,32 +91,32 @@ export class EditorActions {
 
       const titleResult = this.plugin.getTitleForCitekey(citekey);
       if (!titleResult.ok) {
-        new Notice(titleResult.error.message);
+        this.platform.notifications.show(titleResult.error.message);
         return;
       }
 
-      const useMarkdown = (this.plugin.app.vault as VaultExt).getConfig(
-        'useMarkdownLinks',
-      );
+      const useMarkdown = this.platform.workspace.getConfig('useMarkdownLinks');
 
       let linkText: string;
       if (useMarkdown) {
         const uri = encodeURI(
-          this.plugin.app.metadataCache.fileToLinktext(file, '', false),
+          this.platform.workspace.fileToLinktext(file, '', false),
         );
         linkText = `[${titleResult.value}](${uri})`;
       } else {
-        linkText = this.plugin.app.metadataCache.fileToLinktext(file, '', true);
+        linkText = this.platform.workspace.fileToLinktext(file, '', true);
         linkText = `[[${linkText}]]`;
       }
 
       editor.replaceSelection(linkText);
     } catch (error) {
       if (error instanceof LiteratureNoteNotFoundError) {
-        new Notice(error.message);
+        this.platform.notifications.show(error.message);
       } else {
         console.error('Failed to insert literature note link:', error);
-        new Notice('Failed to insert literature note link');
+        this.platform.notifications.show(
+          'Failed to insert literature note link',
+        );
       }
     }
   }
@@ -128,7 +127,7 @@ export class EditorActions {
   ): Promise<void> {
     const editor = this.getActiveEditor();
     if (!editor) {
-      new Notice('No active editor found');
+      this.platform.notifications.show('No active editor found');
       return;
     }
 
@@ -137,7 +136,7 @@ export class EditorActions {
       selectedText,
     );
     if (!contentResult.ok) {
-      new Notice(contentResult.error.message);
+      this.platform.notifications.show(contentResult.error.message);
       return;
     }
 
@@ -160,7 +159,7 @@ export class EditorActions {
   ): Promise<void> {
     const editor = this.getActiveEditor();
     if (!editor) {
-      new Notice('No active editor found');
+      this.platform.notifications.show('No active editor found');
       return;
     }
 
@@ -172,7 +171,7 @@ export class EditorActions {
       : this.plugin.getMarkdownCitationForCitekey(citekey, selectedText);
 
     if (!citationResult.ok) {
-      new Notice(citationResult.error.message);
+      this.platform.notifications.show(citationResult.error.message);
       return;
     }
 

@@ -1,7 +1,8 @@
 /** @jest-environment jsdom */
 import { UIService } from '../../src/services/ui.service';
 import { LoadingStatus, LibraryState } from '../../src/library/library-state';
-import { Notice } from 'obsidian';
+
+const mockNotificationsShow = jest.fn();
 
 jest.mock(
   'obsidian',
@@ -88,6 +89,14 @@ function makePlugin(initialState: LibraryState) {
       },
       load: jest.fn().mockResolvedValue(null),
     },
+    platform: {
+      workspace: {
+        getActiveEditor: jest.fn(() => null),
+      },
+      notifications: {
+        show: mockNotificationsShow,
+      },
+    },
     app: {
       workspace: {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- flexible mock
@@ -111,7 +120,7 @@ function makePlugin(initialState: LibraryState) {
 
 describe('UIService', () => {
   beforeEach(() => {
-    (Notice as unknown as jest.Mock).mockClear();
+    mockNotificationsShow.mockClear();
     mockModalOpen.mockClear();
     mockModalInstances.length = 0;
   });
@@ -123,10 +132,12 @@ describe('UIService', () => {
         parseErrors: ['Unable to load citations'],
       });
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
-      expect(Notice).toHaveBeenCalledWith('Unable to load citations');
+      expect(mockNotificationsShow).toHaveBeenCalledWith(
+        'Unable to load citations',
+      );
     });
 
     it('shows a notice on Success with parseErrors', () => {
@@ -136,13 +147,13 @@ describe('UIService', () => {
         progress: { current: 10, total: 10 },
       });
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
-      expect(Notice).toHaveBeenCalledWith(
+      expect(mockNotificationsShow).toHaveBeenCalledWith(
         expect.stringContaining('10 entries'),
       );
-      expect(Notice).toHaveBeenCalledWith(
+      expect(mockNotificationsShow).toHaveBeenCalledWith(
         expect.stringContaining('1 entries skipped'),
       );
     });
@@ -153,10 +164,10 @@ describe('UIService', () => {
         parseErrors: [],
       });
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
-      expect(Notice).not.toHaveBeenCalled();
+      expect(mockNotificationsShow).not.toHaveBeenCalled();
     });
 
     it('does not show duplicate notices for the same status', () => {
@@ -166,15 +177,15 @@ describe('UIService', () => {
       };
       const { plugin, emit } = makePlugin(initialState);
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
       // First notice from subscribe
-      expect(Notice).toHaveBeenCalledTimes(1);
+      expect(mockNotificationsShow).toHaveBeenCalledTimes(1);
 
       // Emit same status again — should NOT create a second notice
       emit({ status: LoadingStatus.Error, parseErrors: ['error msg'] });
-      expect(Notice).toHaveBeenCalledTimes(1);
+      expect(mockNotificationsShow).toHaveBeenCalledTimes(1);
     });
 
     it('shows a new notice when status transitions', () => {
@@ -183,18 +194,18 @@ describe('UIService', () => {
         parseErrors: [],
       });
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
       // Loading does not produce a notice
-      expect(Notice).toHaveBeenCalledTimes(0);
+      expect(mockNotificationsShow).toHaveBeenCalledTimes(0);
 
       // Transition to Error
       emit({
         status: LoadingStatus.Error,
         parseErrors: ['load failed'],
       });
-      expect(Notice).toHaveBeenCalledTimes(1);
+      expect(mockNotificationsShow).toHaveBeenCalledTimes(1);
 
       // Transition to Loading again
       emit({ status: LoadingStatus.Loading, parseErrors: [] });
@@ -206,7 +217,7 @@ describe('UIService', () => {
         parseErrors: ['warn1'],
         progress: { current: 5, total: 5 },
       });
-      expect(Notice).toHaveBeenCalledTimes(2);
+      expect(mockNotificationsShow).toHaveBeenCalledTimes(2);
     });
 
     it('does not show notice on Success with no parseErrors', () => {
@@ -216,10 +227,10 @@ describe('UIService', () => {
         progress: { current: 10, total: 10 },
       });
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
-      expect(Notice).not.toHaveBeenCalled();
+      expect(mockNotificationsShow).not.toHaveBeenCalled();
     });
 
     it('shows 0 entries when progress is undefined on Success', () => {
@@ -228,10 +239,12 @@ describe('UIService', () => {
         parseErrors: ['some error'],
       });
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
-      expect(Notice).toHaveBeenCalledWith(expect.stringContaining('0 entries'));
+      expect(mockNotificationsShow).toHaveBeenCalledWith(
+        expect.stringContaining('0 entries'),
+      );
     });
   });
 
@@ -242,7 +255,7 @@ describe('UIService', () => {
         parseErrors: [],
       });
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
       const statusBar = plugin.addStatusBarItem.mock.results[0].value;
@@ -256,7 +269,7 @@ describe('UIService', () => {
         parseErrors: [],
       });
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
       const statusBar = plugin.addStatusBarItem.mock.results[0].value;
@@ -270,7 +283,7 @@ describe('UIService', () => {
         progress: { current: 42, total: 42 },
       });
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
       const statusBar = plugin.addStatusBarItem.mock.results[0].value;
@@ -283,7 +296,7 @@ describe('UIService', () => {
         parseErrors: [],
       });
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
       const statusBar = plugin.addStatusBarItem.mock.results[0].value;
@@ -296,7 +309,7 @@ describe('UIService', () => {
         parseErrors: ['err'],
       });
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
       const statusBar = plugin.addStatusBarItem.mock.results[0].value;
@@ -310,7 +323,7 @@ describe('UIService', () => {
         parseErrors: ['err'],
       });
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
       const statusBar = plugin.addStatusBarItem.mock.results[0].value;
@@ -327,18 +340,17 @@ describe('UIService', () => {
   });
 
   describe('getSelectedText (via registerCommands)', () => {
-    it('returns selection from MarkdownView editor', () => {
+    it('returns selection from active editor', () => {
       const { plugin, getCommand } = makePlugin({
         status: LoadingStatus.Idle,
         parseErrors: [],
       });
 
       const mockEditor = { getSelection: jest.fn(() => 'selected text') };
-      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({
-        editor: mockEditor,
-      }));
+      (plugin.platform.workspace as Record<string, unknown>).getActiveEditor =
+        jest.fn(() => mockEditor);
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
       const cmd = getCommand('open-literature-note');
@@ -356,70 +368,15 @@ describe('UIService', () => {
       expect(passedAction.selectedText).toBe('selected text');
     });
 
-    it('falls back to workspace activeEditor when no MarkdownView', () => {
-      const { plugin, getCommand } = makePlugin({
-        status: LoadingStatus.Idle,
-        parseErrors: [],
-      });
-
-      plugin.app.workspace.getActiveViewOfType = jest.fn(() => null);
-      (plugin.app.workspace as Record<string, unknown>).activeEditor = {
-        editor: { getSelection: jest.fn(() => 'fallback text') },
-      };
-
-      const service = new UIService(plugin.app as never, plugin as never);
-      service.init();
-
-      const cmd = getCommand('open-literature-note');
-      cmd!.callback();
-
-      const { CitationSearchModal } = jest.requireMock(
-        '../../src/ui/modals/citation-search-modal',
-      );
-      const lastCall =
-        CitationSearchModal.mock.calls[
-          CitationSearchModal.mock.calls.length - 1
-        ];
-      const passedAction = lastCall[2];
-      expect(passedAction.selectedText).toBe('fallback text');
-    });
-
     it('returns empty string when no editor is available', () => {
       const { plugin, getCommand } = makePlugin({
         status: LoadingStatus.Idle,
         parseErrors: [],
       });
 
-      plugin.app.workspace.getActiveViewOfType = jest.fn(() => null);
-      (plugin.app.workspace as Record<string, unknown>).activeEditor = null;
+      plugin.platform.workspace.getActiveEditor = jest.fn(() => null);
 
-      const service = new UIService(plugin.app as never, plugin as never);
-      service.init();
-
-      const cmd = getCommand('open-literature-note');
-      cmd!.callback();
-
-      const { CitationSearchModal } = jest.requireMock(
-        '../../src/ui/modals/citation-search-modal',
-      );
-      const lastCall =
-        CitationSearchModal.mock.calls[
-          CitationSearchModal.mock.calls.length - 1
-        ];
-      const passedAction = lastCall[2];
-      expect(passedAction.selectedText).toBe('');
-    });
-
-    it('returns empty string when activeEditor has no editor property', () => {
-      const { plugin, getCommand } = makePlugin({
-        status: LoadingStatus.Idle,
-        parseErrors: [],
-      });
-
-      plugin.app.workspace.getActiveViewOfType = jest.fn(() => null);
-      (plugin.app.workspace as Record<string, unknown>).activeEditor = {};
-
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
       const cmd = getCommand('open-literature-note');
@@ -444,7 +401,7 @@ describe('UIService', () => {
         parseErrors: [],
       });
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
       expect(commands).toHaveLength(5);
@@ -457,7 +414,7 @@ describe('UIService', () => {
         parseErrors: [],
       });
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
       const cmd = getCommand('open-literature-note');
@@ -475,7 +432,7 @@ describe('UIService', () => {
         parseErrors: [],
       });
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
       const cmd = getCommand('update-bib-data');
@@ -493,7 +450,7 @@ describe('UIService', () => {
         parseErrors: [],
       });
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
       const cmd = getCommand('insert-citation');
@@ -511,7 +468,7 @@ describe('UIService', () => {
         parseErrors: [],
       });
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
       const cmd = getCommand('insert-literature-note-content');
@@ -531,7 +488,7 @@ describe('UIService', () => {
         parseErrors: [],
       });
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
       const cmd = getCommand('insert-markdown-citation');
@@ -551,7 +508,7 @@ describe('UIService', () => {
         parseErrors: [],
       });
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
       const cmd = getCommand('insert-markdown-citation');
@@ -571,11 +528,10 @@ describe('UIService', () => {
       });
 
       const mockEditor = { getSelection: jest.fn(() => 'injected text') };
-      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({
-        editor: mockEditor,
-      }));
+      (plugin.platform.workspace as Record<string, unknown>).getActiveEditor =
+        jest.fn(() => mockEditor);
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
       const cmd = getCommand('insert-citation');
@@ -600,7 +556,7 @@ describe('UIService', () => {
         parseErrors: [],
       });
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       service.init();
 
       const unsubscribeFn =
@@ -619,7 +575,7 @@ describe('UIService', () => {
         parseErrors: [],
       });
 
-      const service = new UIService(plugin.app as never, plugin as never);
+      const service = new UIService(plugin as never);
       // Should not throw
       service.dispose();
     });

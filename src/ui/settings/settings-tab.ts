@@ -393,24 +393,6 @@ export class CitationSettingTab extends PluginSettingTab {
     });
   }
 
-  private buildTextArea<K extends keyof CitationsPluginSettingsType>(
-    containerEl: HTMLElement,
-    name: string,
-    desc: string,
-    key: K,
-  ): void {
-    const setting = new Setting(containerEl).setName(name).setDesc(desc);
-    setting.settingEl.addClass('citation-setting-stacked');
-    const errorEl = this.createErrorEl(containerEl);
-    const save = this.createSaveHandler(key, errorEl);
-
-    setting.addTextArea((component) => {
-      const value = this.plugin.settings[key];
-      component.setValue(this.settingValueToString(value));
-      component.onChange(save);
-    });
-  }
-
   private buildCitationTemplateField(
     containerEl: HTMLElement,
     name: string,

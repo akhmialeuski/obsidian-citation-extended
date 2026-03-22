@@ -8,7 +8,6 @@ import {
   DataSourceLoadResult,
   DATA_SOURCE_TYPES,
 } from '../data-source';
-import { MergeStrategy } from './merge-strategy';
 import { SearchService } from '../search/search.service';
 import {
   IntrospectionService,
@@ -55,7 +54,6 @@ export class LibraryService implements ILibraryService {
     private platform: IPlatformAdapter,
     workerManager: WorkerManager,
     sources: DataSource[] = [],
-    private mergeStrategy: MergeStrategy = MergeStrategy.LastWins,
   ) {
     this.loadWorker = workerManager;
     this.sources = sources;
@@ -329,8 +327,6 @@ export class LibraryService implements ILibraryService {
   }
 
   initWatcher(): void {
-    this.sources.forEach((s) => s.dispose());
-
     if (this.sources.length === 0) {
       return;
     }

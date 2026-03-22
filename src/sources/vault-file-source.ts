@@ -10,6 +10,7 @@ import {
   EntryDataBibLaTeX,
   EntryDataCSL,
   WorkerResponse,
+  UnsupportedFormatError,
 } from '../core';
 import { WorkerManager } from '../util';
 
@@ -85,7 +86,7 @@ export class VaultFileSource implements DataSource {
     } else if (this.format === DATABASE_FORMATS.CslJson) {
       return entries.map((e) => new EntryCSLAdapter(e as EntryDataCSL));
     } else {
-      throw new Error('Unsupported database format');
+      throw new UnsupportedFormatError(this.format);
     }
   }
 

@@ -821,7 +821,7 @@ describe('LibraryService', () => {
   // ---- initWatcher() (lines 331-354) --------------------------------------
 
   describe('initWatcher()', () => {
-    it('disposes existing sources before setting up new watchers', async () => {
+    it('sets up watchers for injected sources after load', async () => {
       const mockSource = createMockDataSource('src-0', []);
 
       const serviceWithSources = new LibraryService(
@@ -833,8 +833,7 @@ describe('LibraryService', () => {
 
       await serviceWithSources.load();
 
-      // dispose is called once by initWatcher, then watch is set up
-      expect(mockSource.dispose).toHaveBeenCalled();
+      // initWatcher no longer calls dispose before watch
       expect(mockSource.watch).toHaveBeenCalled();
 
       serviceWithSources.dispose();

@@ -1,7 +1,7 @@
-import { App, TFile, TFolder, normalizePath } from 'obsidian';
 import * as path from 'path';
 import { CitationsPluginSettings } from '../ui/settings/settings';
-import { INoteService, ITemplateService } from '../container';
+import { INoteService, ITemplateService, IPlatformAdapter } from '../container';
+import { IVaultFile } from '../platform/platform-adapter';
 import { Library, LiteratureNoteNotFoundError } from '../core';
 import { DISALLOWED_SEGMENT_CHARACTERS_RE } from '../util';
 
@@ -13,7 +13,7 @@ export class NoteService implements INoteService {
   private resolveContentTemplate: ContentTemplateResolver;
 
   constructor(
-    private app: App,
+    private platform: IPlatformAdapter,
     private settings: CitationsPluginSettings,
     private templateService: ITemplateService,
     resolveContentTemplate?: ContentTemplateResolver,
@@ -70,9 +70,9 @@ export class NoteService implements INoteService {
   private async ensureFolderExists(folderPath: string): Promise<void> {
     if (!folderPath || folderPath === '/' || folderPath === '.') return;
 
-    const normalized = normalizePath(folderPath);
-    const existing = this.app.vault.getAbstractFileByPath(normalized);
-    if (existing instanceof TFolder) return;
+    const normalized = this.platform.normalizePath(folderPath);
+    const existing = this.platform.vault.getAbstractFileByPath(normalized);
+    if (existing && this.platform.vault.isFolder(normalized)) return;
     if (existing) return; // Path exists but is a file — let vault.create handle the error
 
     // Recursively ensure parent folders exist first
@@ -82,7 +82,7 @@ export class NoteService implements INoteService {
     }
 
     try {
-      await this.app.vault.createFolder(normalized);
+      await this.platform.vault.createFolder(normalized);
     } catch (e) {
       // createFolder throws if the folder already exists (concurrent creation).
       // Log unexpected errors but don't block note creation.
@@ -104,11 +104,13 @@ export class NoteService implements INoteService {
   private findNoteInSubfolders(
     expectedBasename: string,
     rootFolder: string,
-  ): TFile | null {
-    const normalizedRoot = normalizePath(rootFolder).toLowerCase();
+  ): IVaultFile | null {
+    const normalizedRoot = this.platform
+      .normalizePath(rootFolder)
+      .toLowerCase();
     const normalizedBasename = expectedBasename.toLowerCase();
 
-    const matches = this.app.vault.getMarkdownFiles().filter((f) => {
+    const matches = this.platform.vault.getMarkdownFiles().filter((f) => {
       const inFolder =
         normalizedRoot === ''
           ? true
@@ -127,7 +129,7 @@ export class NoteService implements INoteService {
     citekey: string,
     library: Library,
     selectedText?: string,
-  ): Promise<TFile> {
+  ): Promise<IVaultFile> {
     const existing = this.findExistingLiteratureNoteFile(citekey, library);
     if (existing) {
       return existing;
@@ -146,11 +148,7 @@ export class NoteService implements INoteService {
     if (!contentResult.ok) {
       throw contentResult.error;
     }
-    const file = await this.app.vault.create(notePath, contentResult.value);
-    if (file instanceof TFile) {
-      return file;
-    }
-    throw new Error(`File at ${notePath} is not a TFile`);
+    return this.platform.vault.create(notePath, contentResult.value);
   }
 
   /**
@@ -162,16 +160,16 @@ export class NoteService implements INoteService {
   findExistingLiteratureNoteFile(
     citekey: string,
     library: Library,
-  ): TFile | null {
+  ): IVaultFile | null {
     const notePath = this.getPathForCitekey(citekey, library);
-    const normalizedPath = normalizePath(notePath);
+    const normalizedPath = this.platform.normalizePath(notePath);
 
-    const file = this.app.vault.getAbstractFileByPath(normalizedPath);
-    if (file instanceof TFile) {
+    const file = this.platform.vault.getAbstractFileByPath(normalizedPath);
+    if (file && this.platform.vault.isFile(file)) {
       return file;
     }
 
-    const matches = this.app.vault
+    const matches = this.platform.vault
       .getMarkdownFiles()
       .filter((f) => f.path.toLowerCase() === normalizedPath.toLowerCase());
     if (matches.length > 0) {
@@ -202,7 +200,7 @@ export class NoteService implements INoteService {
     newPane: boolean,
     selectedText?: string,
   ): Promise<void> {
-    let file: TFile;
+    let file: IVaultFile;
 
     if (this.settings.disableAutomaticNoteCreation) {
       const existing = this.findExistingLiteratureNoteFile(citekey, library);
@@ -218,6 +216,6 @@ export class NoteService implements INoteService {
       );
     }
 
-    await this.app.workspace.getLeaf(newPane).openFile(file);
+    await this.platform.workspace.openFile(file, newPane);
   }
 }

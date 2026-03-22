@@ -12,7 +12,6 @@ import { NoteService } from './notes/note.service';
 import { LibraryService } from './library/library.service';
 import { UIService } from './services/ui.service';
 import { EditorActions } from './ui/editor-actions';
-import { MergeStrategy } from './library/merge-strategy';
 import {
   Entry,
   Result,
@@ -46,6 +45,7 @@ export default class CitationPlugin extends Plugin {
   libraryService!: LibraryService;
   uiService!: UIService;
   editorActions!: EditorActions;
+  platform!: ObsidianPlatformAdapter;
 
   private fileWatcher?: chokidar.FSWatcher;
 
@@ -165,7 +165,8 @@ export default class CitationPlugin extends Plugin {
 
     const workerManager = new WorkerManager(new LoadWorker());
 
-    const platformAdapter = new ObsidianPlatformAdapter(this.app, this);
+    this.platform = new ObsidianPlatformAdapter(this.app, this);
+    const platformAdapter = this.platform;
 
     const vaultAdapter =
       this.app.vault.adapter instanceof FileSystemAdapter
@@ -199,11 +200,9 @@ export default class CitationPlugin extends Plugin {
 
     const dataSourceFactory = new DataSourceFactory(registry);
 
-    const mergeStrategy = this.settings.mergeStrategy || MergeStrategy.LastWins;
-
     this.templateService = new TemplateService(this.settings);
     this.noteService = new NoteService(
-      this.app,
+      platformAdapter,
       this.settings,
       this.templateService,
       () => this.resolveContentTemplate(),
@@ -212,12 +211,10 @@ export default class CitationPlugin extends Plugin {
       this.settings,
       platformAdapter,
       workerManager,
-      [],
-      mergeStrategy,
     );
     this.libraryService.setDataSourceFactory(dataSourceFactory);
 
-    this.uiService = new UIService(this.app, this);
+    this.uiService = new UIService(this);
     this.editorActions = new EditorActions(this);
 
     this.init();

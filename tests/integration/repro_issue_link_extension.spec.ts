@@ -1,6 +1,6 @@
 import CitationPlugin from '../../src/main';
 import { CitationsPluginSettings } from '../../src/ui/settings/settings';
-import { App, PluginManifest, TFile } from 'obsidian';
+import { App, PluginManifest } from 'obsidian';
 import { LibraryService } from '../../src/library/library.service';
 import { NoteService } from '../../src/notes/note.service';
 import { TemplateService } from '../../src/template/template.service';
@@ -77,7 +77,6 @@ jest.mock('web-worker:./worker', () => class {}, { virtual: true });
 describe('Bug Reproduction: Incorrect Markdown Link Extension', () => {
   let plugin: CitationPlugin;
   let app: App;
-  let mockFile: TFile;
 
   beforeEach(() => {
     app = new App();
@@ -96,13 +95,51 @@ describe('Bug Reproduction: Incorrect Markdown Link Extension', () => {
       .fn()
       .mockReturnValue({ ok: true, value: 'Test Note Title' });
 
+    // Setup platform mock
+    const mockEditor = {
+      replaceSelection: jest.fn(),
+    };
+    plugin.platform = {
+      workspace: {
+        getActiveEditor: jest.fn().mockReturnValue(mockEditor),
+        openFile: jest.fn().mockResolvedValue(undefined),
+        getConfig: jest.fn(),
+        fileToLinktext: jest.fn(),
+      },
+      notifications: {
+        show: jest.fn(),
+      },
+      vault: {
+        getAbstractFileByPath: jest.fn().mockReturnValue(null),
+        getMarkdownFiles: jest.fn().mockReturnValue([]),
+        create: jest.fn(),
+        read: jest.fn(),
+        createFolder: jest.fn().mockResolvedValue(undefined),
+        isFile: jest.fn().mockReturnValue(true),
+        isFolder: jest.fn().mockReturnValue(false),
+      },
+      normalizePath: jest.fn((p: string) => p),
+      resolvePath: jest.fn((p: string) => p),
+      fileSystem: {
+        readFile: jest.fn(),
+        writeFile: jest.fn(),
+        exists: jest.fn(),
+        createFolder: jest.fn(),
+        getBasePath: jest.fn().mockReturnValue('/vault'),
+      },
+      addStatusBarItem: jest.fn(() => ({
+        setText: jest.fn(),
+        addClass: jest.fn(),
+        removeClass: jest.fn(),
+      })),
+    } as unknown as typeof plugin.platform;
+
     plugin.noteService = new NoteService(
-      app,
+      plugin.platform,
       plugin.settings,
       plugin.templateService,
     );
-    mockFile = new TFile();
-    (mockFile as unknown as { path: string }).path = 'Test Note Title.md';
+    const mockFile = { path: 'Test Note Title.md', name: 'Test Note Title.md' };
     plugin.noteService.getOrCreateLiteratureNoteFile = jest
       .fn()
       .mockResolvedValue(mockFile);
@@ -113,56 +150,34 @@ describe('Bug Reproduction: Incorrect Markdown Link Extension', () => {
     } as unknown as LibraryService;
 
     plugin.editorActions = new EditorActions(plugin);
-
-    // Mock Active Editor
-    const mockEditor = {
-      replaceSelection: jest.fn(),
-    };
-    (app.workspace.getActiveViewOfType as jest.Mock).mockReturnValue({
-      editor: mockEditor,
-    });
   });
 
   it('should generate WikiLink WITHOUT .md extension when useMarkdownLinks is false', async () => {
-    // START: Mock setup for reproduction
     // Simulate "Use Markdown links" = false (WikiLinks)
-    (
-      app.vault as unknown as { getConfig: jest.Mock }
-    ).getConfig.mockReturnValue(false);
+    (plugin.platform.workspace.getConfig as jest.Mock).mockReturnValue(false);
 
     // Mock fileToLinktext behavior
-    // When called with omitMdExtension = false (current bug), it returns "File.md"
-    // When called with omitMdExtension = true (expected fix), it returns "File"
-    (app.metadataCache.fileToLinktext as jest.Mock).mockImplementation(
-      (file, path, omitMdExtension) => {
+    (plugin.platform.workspace.fileToLinktext as jest.Mock).mockImplementation(
+      (_file: unknown, _path: unknown, omitMdExtension: boolean) => {
         if (omitMdExtension) {
           return 'Test Note Title';
         }
         return 'Test Note Title.md';
       },
     );
-    // END: Mock setup
 
     await plugin.editorActions.insertLiteratureNoteLink('test-citekey');
 
-    // Expected behavior after fix:
-    // app.metadataCache.fileToLinktext should be called with omitMdExtension = true
-    // AND the inserted text should be [[Test Note Title]]
-
-    // CURRENT BUGGY BEHAVIOR ASSERTION (to confirm reproduction):
-    // Expect it to FAIL if we asserted correctness right now, OR assert the buggy state to prove it exists.
-    // Let's assert the CORRECT behavior, so the test fails, proving the bug exists.
-
-    expect(app.metadataCache.fileToLinktext).toHaveBeenCalledWith(
+    expect(plugin.platform.workspace.fileToLinktext).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
       true, // Expect omitMdExtension to be true
     );
 
-    // Get the mock editor from the mocked getActiveViewOfType return value
-    const mockView = (app.workspace.getActiveViewOfType as jest.Mock).mock
-      .results[0]?.value as { editor: { replaceSelection: jest.Mock } };
-    expect(mockView.editor.replaceSelection).toHaveBeenCalledWith(
+    // Get the mock editor from the platform workspace
+    const mockEditor = (plugin.platform.workspace.getActiveEditor as jest.Mock)
+      .mock.results[0]?.value as { replaceSelection: jest.Mock };
+    expect(mockEditor.replaceSelection).toHaveBeenCalledWith(
       '[[Test Note Title]]',
     );
   });

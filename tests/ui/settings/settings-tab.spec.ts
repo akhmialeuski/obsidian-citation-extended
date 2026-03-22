@@ -923,37 +923,7 @@ describe('CitationSettingTab', () => {
     });
   });
 
-  // -----------------------------------------------------------------------
-  // buildTextArea — tested directly via reflection (covers lines 396-412)
-  // -----------------------------------------------------------------------
-
-  describe('buildTextArea (direct)', () => {
-    it('creates a stacked setting with text area', () => {
-      const container = document.createElement('div');
-      const buildTextArea = (
-        tab as unknown as {
-          buildTextArea(
-            containerEl: HTMLElement,
-            name: string,
-            desc: string,
-            key: string,
-          ): void;
-        }
-      ).buildTextArea.bind(tab);
-
-      buildTextArea(
-        container,
-        'Test Field',
-        'Test description',
-        'literatureNoteFolder',
-      );
-
-      // Should have created a setting element and an error element
-      expect(container.children.length).toBeGreaterThan(0);
-      const errorEl = container.querySelector('.citation-setting-error');
-      expect(errorEl).not.toBeNull();
-    });
-  });
+  // buildTextArea was removed as dead code in the refactoring
 
   // -----------------------------------------------------------------------
   // Citation preset onChange (covers lines 304-316)

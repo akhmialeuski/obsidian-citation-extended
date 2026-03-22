@@ -30,6 +30,9 @@ export function createMockPlatformAdapter(
     getMarkdownFiles: jest.fn().mockReturnValue([]),
     create: jest.fn().mockResolvedValue({ path: 'new.md', name: 'new.md' }),
     read: jest.fn().mockResolvedValue(''),
+    createFolder: jest.fn().mockResolvedValue(undefined),
+    isFile: jest.fn().mockReturnValue(true),
+    isFolder: jest.fn().mockReturnValue(false),
     ...(overrides.vault as Partial<IVaultAccess>),
   };
 

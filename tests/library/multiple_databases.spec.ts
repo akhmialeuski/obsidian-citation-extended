@@ -6,7 +6,6 @@ import { CitationsPluginSettings } from '../../src/ui/settings/settings';
 import { Entry } from '../../src/core';
 import { WorkerManager } from '../../src/util';
 import { LocalFileSource } from '../../src/sources/local-file-source';
-import { MergeStrategy } from '../../src/library/merge-strategy';
 import { createMockPlatformAdapter } from '../helpers/mock-platform';
 
 jest.mock('../../src/sources/local-file-source');
@@ -85,7 +84,6 @@ describe('LibraryService - Multiple Databases', () => {
       createMockPlatformAdapter(),
       workerManager,
       [],
-      MergeStrategy.LastWins,
     );
     service.setDataSourceFactory({
       create: (def, id) =>
@@ -130,7 +128,6 @@ describe('LibraryService - Multiple Databases', () => {
       createMockPlatformAdapter(),
       workerManager,
       [],
-      MergeStrategy.LastWins,
     );
     service.setDataSourceFactory({
       create: (def, id) =>

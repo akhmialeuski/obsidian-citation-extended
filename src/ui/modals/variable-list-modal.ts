@@ -38,10 +38,16 @@ export class VariableListModal extends Modal {
     copyBtn.addClass('mod-cta');
     copyBtn.addEventListener('click', () => {
       const md = this.formatAsMarkdown();
-      void navigator.clipboard.writeText(md).then(() => {
-        copyBtn.setText('Copied!');
-        setTimeout(() => copyBtn.setText('Copy all'), 1500);
-      });
+      void navigator.clipboard
+        .writeText(md)
+        .then(() => {
+          copyBtn.setText('Copied!');
+          window.setTimeout(() => copyBtn.setText('Copy all'), 1500);
+        })
+        .catch(() => {
+          copyBtn.setText('Copy failed');
+          window.setTimeout(() => copyBtn.setText('Copy all'), 1500);
+        });
     });
 
     const table = contentEl.createEl('table');

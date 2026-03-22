@@ -28,6 +28,7 @@ class MockTFile {
 
 class MockTFolder {
   path = '';
+  name = '';
 }
 
 class MockFileSystemAdapter {
@@ -320,12 +321,13 @@ describe('ObsidianPlatformAdapter', () => {
         expect(result).toBeNull();
       });
 
-      it('returns null when path points to a folder (not TFile)', () => {
+      it('returns file descriptor even when path points to a folder', () => {
         const folder = makeTFolder('notes');
         mockGetAbstractFileByPath.mockReturnValue(folder);
 
         const result = adapter.vault.getAbstractFileByPath('notes');
-        expect(result).toBeNull();
+        // getAbstractFileByPath now returns any abstract file; use isFile/isFolder to distinguish
+        expect(result).toEqual({ path: 'notes', name: '' });
       });
     });
 
@@ -365,6 +367,70 @@ describe('ObsidianPlatformAdapter', () => {
           '# New Note',
         );
         expect(result).toEqual({ path: 'notes/new.md', name: 'new.md' });
+      });
+    });
+
+    describe('createFolder', () => {
+      it('delegates to vault.createFolder', async () => {
+        await adapter.vault.createFolder('notes/subfolder');
+
+        expect(mockVaultCreateFolder).toHaveBeenCalledWith('notes/subfolder');
+      });
+    });
+
+    describe('isFile', () => {
+      it('returns true when path points to a TFile', () => {
+        const tFile = makeTFile('notes/test.md', 'test.md');
+        mockGetAbstractFileByPath.mockReturnValue(tFile);
+
+        const result = adapter.vault.isFile({
+          path: 'notes/test.md',
+          name: 'test.md',
+        });
+        expect(result).toBe(true);
+      });
+
+      it('returns false when path points to a folder', () => {
+        const folder = makeTFolder('notes');
+        mockGetAbstractFileByPath.mockReturnValue(folder);
+
+        const result = adapter.vault.isFile({ path: 'notes', name: '' });
+        expect(result).toBe(false);
+      });
+
+      it('returns false when path does not exist', () => {
+        mockGetAbstractFileByPath.mockReturnValue(null);
+
+        const result = adapter.vault.isFile({
+          path: 'missing.md',
+          name: 'missing.md',
+        });
+        expect(result).toBe(false);
+      });
+    });
+
+    describe('isFolder', () => {
+      it('returns true when path points to a TFolder', () => {
+        const folder = makeTFolder('notes');
+        mockGetAbstractFileByPath.mockReturnValue(folder);
+
+        const result = adapter.vault.isFolder('notes');
+        expect(result).toBe(true);
+      });
+
+      it('returns false when path points to a TFile', () => {
+        const tFile = makeTFile('notes/test.md', 'test.md');
+        mockGetAbstractFileByPath.mockReturnValue(tFile);
+
+        const result = adapter.vault.isFolder('notes/test.md');
+        expect(result).toBe(false);
+      });
+
+      it('returns false when path does not exist', () => {
+        mockGetAbstractFileByPath.mockReturnValue(null);
+
+        const result = adapter.vault.isFolder('missing');
+        expect(result).toBe(false);
       });
     });
 

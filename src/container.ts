@@ -1,7 +1,7 @@
 import { Entry, TemplateContext, Result, TemplateRenderError } from './core';
 import { Library } from './core';
-import { TFile } from 'obsidian';
 import { LibraryState } from './library/library-state';
+import type { IVaultFile } from './platform/platform-adapter';
 import { DataSource } from './data-source';
 import { SearchService } from './search/search.service';
 import {
@@ -48,12 +48,12 @@ export interface INoteService {
   findExistingLiteratureNoteFile(
     citekey: string,
     library: Library,
-  ): TFile | null;
+  ): IVaultFile | null;
   getOrCreateLiteratureNoteFile(
     citekey: string,
     library: Library,
     selectedText?: string,
-  ): Promise<TFile>;
+  ): Promise<IVaultFile>;
   openLiteratureNote(
     citekey: string,
     library: Library,

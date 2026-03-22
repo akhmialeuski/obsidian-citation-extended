@@ -47,6 +47,15 @@ export interface IVaultAccess {
 
   /** Read the textual content of an existing vault file. */
   read(file: IVaultFile): Promise<string>;
+
+  /** Create a folder at the given path. Throws if already exists (implementation-dependent). */
+  createFolder(path: string): Promise<void>;
+
+  /** Returns true when the vault file represents a regular file (not a folder). */
+  isFile(file: IVaultFile): boolean;
+
+  /** Returns true when the vault path points to an existing folder. */
+  isFolder(path: string): boolean;
 }
 
 // ---------------------------------------------------------------------------

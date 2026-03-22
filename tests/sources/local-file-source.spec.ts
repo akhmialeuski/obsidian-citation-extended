@@ -441,7 +441,7 @@ describe('LocalFileSource', () => {
       );
 
       await expect(source.load()).rejects.toThrow(
-        'Unsupported database format',
+        'Unsupported bibliography format',
       );
     });
 
