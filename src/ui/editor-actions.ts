@@ -143,6 +143,14 @@ export class EditorActions {
 
     const cursor = editor.getCursor();
     editor.replaceRange(contentResult.value, cursor);
+
+    // Move cursor to end of inserted content
+    const lines = contentResult.value.split('\n');
+    const lastLineLength = lines[lines.length - 1].length;
+    const newLine = cursor.line + lines.length - 1;
+    const newCh =
+      lines.length === 1 ? cursor.ch + lastLineLength : lastLineLength;
+    editor.setCursor({ line: newLine, ch: newCh });
   }
 
   async insertMarkdownCitation(
@@ -170,6 +178,14 @@ export class EditorActions {
 
     const cursor = editor.getCursor();
     editor.replaceRange(citationResult.value, cursor);
+
+    // Move cursor to end of inserted text so the user can continue typing
+    const lines = citationResult.value.split('\n');
+    const lastLineLength = lines[lines.length - 1].length;
+    const newLine = cursor.line + lines.length - 1;
+    const newCh =
+      lines.length === 1 ? cursor.ch + lastLineLength : lastLineLength;
+    editor.setCursor({ line: newLine, ch: newCh });
 
     // Silently create the literature note if the setting is enabled
     if (this.plugin.settings.autoCreateNoteOnCitation) {
