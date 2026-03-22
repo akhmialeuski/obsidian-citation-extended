@@ -39,12 +39,18 @@ const KNOWN_VARIABLE_EXAMPLES: Record<string, string> = {
   currentDate: '2024-01-15',
 };
 
+/** Descriptor for a single Handlebars template variable surfaced by introspection. */
 export interface VariableDefinition {
   key: string;
   description: string;
   example?: string;
 }
 
+/**
+ * Discovers template variables available for Handlebars templates by
+ * combining a static catalogue of known fields with runtime sampling of
+ * library entries.
+ */
 export class IntrospectionService {
   /**
    * Analyze the library to find all available template variables.

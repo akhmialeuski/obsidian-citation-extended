@@ -160,6 +160,11 @@ class ObsidianNotificationService implements INotificationService {
 // Composite adapter
 // ---------------------------------------------------------------------------
 
+/**
+ * Concrete {@link IPlatformAdapter} implementation backed by the Obsidian runtime.
+ * Composes file-system, vault, workspace, and notification sub-adapters
+ * so that service-layer code never imports `obsidian` directly.
+ */
 export class ObsidianPlatformAdapter implements IPlatformAdapter {
   readonly fileSystem: IFileSystem;
   readonly vault: IVaultAccess;

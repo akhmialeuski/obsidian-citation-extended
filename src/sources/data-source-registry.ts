@@ -27,6 +27,10 @@ export interface IDataSourceRegistry {
   has(type: string): boolean;
 }
 
+/**
+ * Default {@link IDataSourceRegistry} implementation backed by an in-memory map.
+ * Source types are registered at plugin startup; duplicate registrations throw.
+ */
 export class DataSourceRegistry implements IDataSourceRegistry {
   private creators = new Map<string, DataSourceCreator>();
 

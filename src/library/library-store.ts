@@ -1,5 +1,6 @@
 import { LoadingStatus, LibraryState } from './library-state';
 
+/** Callback invoked whenever the store state changes. */
 export type StoreSubscriber<T> = (state: T) => void;
 
 /**
