@@ -1,8 +1,8 @@
 import { LibraryService } from '../../src/library/library.service';
 import { CitationsPluginSettings } from '../../src/ui/settings/settings';
-import { FileSystemAdapter } from 'obsidian';
 import { WorkerManager } from '../../src/util';
 import { LoadingStatus } from '../../src/library/library-state';
+import { createMockPlatformAdapter } from '../helpers/mock-platform';
 
 import { LocalFileSource } from '../../src/sources/local-file-source';
 
@@ -44,15 +44,18 @@ global.window = {
 describe('LibraryService Loading Behavior', () => {
   let service: LibraryService;
   let settings: CitationsPluginSettings;
-  let adapter: FileSystemAdapter;
   let workerManager: WorkerManager;
 
   beforeEach(() => {
     settings = new CitationsPluginSettings();
-    adapter = new FileSystemAdapter();
+    const platform = createMockPlatformAdapter();
     workerManager = new WorkerManager({} as Worker);
 
-    service = new LibraryService(settings, adapter, workerManager);
+    service = new LibraryService(settings, platform, workerManager);
+    service.setDataSourceFactory({
+      create: (def, id) =>
+        new LocalFileSource(id, def.path, def.format, workerManager, null),
+    });
 
     jest.spyOn(console, 'error').mockImplementation(() => {});
     jest.spyOn(console, 'warn').mockImplementation(() => {});

@@ -2,8 +2,7 @@ import { LibraryService } from '../../src/library/library.service';
 import { CitationsPluginSettings } from '../../src/ui/settings/settings';
 import { LoadingStatus } from '../../src/library/library-state';
 import { WorkerManager } from '../../src/util';
-
-import { FileSystemAdapter } from 'obsidian';
+import { createMockPlatformAdapter } from '../helpers/mock-platform';
 import * as fs from 'fs';
 import { TextDecoder } from 'util';
 
@@ -90,7 +89,6 @@ jest.mock('../../src/sources/local-file-source');
 describe('LibraryService', () => {
   let service: LibraryService;
   let settings: CitationsPluginSettings;
-  let vaultAdapter: { getBasePath: jest.Mock };
   let workerManager: { post: jest.Mock; dispose: jest.Mock };
 
   beforeEach(() => {
@@ -99,9 +97,7 @@ describe('LibraryService', () => {
       { name: 'Test', path: 'test.json', type: 'biblatex' },
     ];
 
-    vaultAdapter = {
-      getBasePath: jest.fn().mockReturnValue('/vault'),
-    };
+    const platform = createMockPlatformAdapter();
 
     workerManager = {
       post: mockWorkerManagerPost,
@@ -121,10 +117,20 @@ describe('LibraryService', () => {
 
     service = new LibraryService(
       settings,
-      vaultAdapter as unknown as FileSystemAdapter,
+      platform,
       workerManager as unknown as WorkerManager,
       [],
     );
+    service.setDataSourceFactory({
+      create: (def, id) =>
+        new LocalFileSource(
+          id,
+          def.path,
+          def.format,
+          workerManager as unknown as WorkerManager,
+          null,
+        ),
+    });
 
     // Reset mocks
     (fs.promises.stat as jest.Mock).mockReset();

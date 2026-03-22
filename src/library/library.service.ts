@@ -1,5 +1,5 @@
-import { FileSystemAdapter } from 'obsidian';
 import * as path from 'path';
+import type { IPlatformAdapter } from '../platform/platform-adapter';
 import { CitationsPluginSettings } from '../ui/settings/settings';
 import { Entry, Library, ParseErrorInfo } from '../core';
 import { WorkerManager } from '../util';
@@ -18,7 +18,6 @@ import {
 import { ILibraryService } from '../container';
 import { IDataSourceFactory } from '../sources/data-source-factory';
 import { LibraryStore } from './library-store';
-import { LocalFileSource } from '../sources/local-file-source';
 
 const LOAD_TIMEOUT_MS = 10_000;
 const LOAD_DEBOUNCE_MS = 1_000;
@@ -54,7 +53,7 @@ export class LibraryService implements ILibraryService {
 
   constructor(
     private settings: CitationsPluginSettings,
-    private vaultAdapter: FileSystemAdapter | null,
+    private platform: IPlatformAdapter,
     workerManager: WorkerManager,
     sources: DataSource[] = [],
     private mergeStrategy: MergeStrategy = MergeStrategy.LastWins,
@@ -101,10 +100,7 @@ export class LibraryService implements ILibraryService {
   }
 
   resolveLibraryPath(rawPath: string): string {
-    const vaultRoot =
-      this.vaultAdapter instanceof FileSystemAdapter
-        ? this.vaultAdapter.getBasePath()
-        : '/';
+    const vaultRoot = this.platform.fileSystem.getBasePath() || '/';
     return path.resolve(vaultRoot, rawPath);
   }
 
@@ -298,23 +294,19 @@ export class LibraryService implements ILibraryService {
   };
 
   private createSources(): DataSource[] {
-    if (this.dataSourceFactory) {
-      return this.settings.databases.map((db, index) =>
-        this.dataSourceFactory!.create(
-          { type: DATA_SOURCE_TYPES.LocalFile, path: db.path, format: db.type },
-          `source-${index}`,
-        ),
-      );
+    // If sources were injected via constructor, use them as-is
+    if (this.sources.length > 0) {
+      return this.sources;
     }
-    return this.settings.databases.map(
-      (db, index) =>
-        new LocalFileSource(
-          `source-${index}`,
-          db.path,
-          db.type,
-          this.loadWorker,
-          this.vaultAdapter,
-        ),
+    if (!this.dataSourceFactory) {
+      console.warn('Citations plugin: No data source factory configured.');
+      return [];
+    }
+    return this.settings.databases.map((db, index) =>
+      this.dataSourceFactory!.create(
+        { type: DATA_SOURCE_TYPES.LocalFile, path: db.path, format: db.type },
+        `source-${index}`,
+      ),
     );
   }
 

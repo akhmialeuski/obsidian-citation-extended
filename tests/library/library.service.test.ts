@@ -1,7 +1,7 @@
 import { LibraryService } from '../../src/library/library.service';
 import { CitationsPluginSettings } from '../../src/ui/settings/settings';
-import { FileSystemAdapter } from 'obsidian';
 import { WorkerManager } from '../../src/util';
+import { createMockPlatformAdapter } from '../helpers/mock-platform';
 
 jest.mock(
   'obsidian',
@@ -30,7 +30,6 @@ jest.mock(
 describe('LibraryService', () => {
   let service: LibraryService;
   let settings: CitationsPluginSettings;
-  let adapter: FileSystemAdapter;
 
   beforeEach(() => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -38,12 +37,10 @@ describe('LibraryService', () => {
     jest.spyOn(console, 'debug').mockImplementation(() => {});
 
     settings = new CitationsPluginSettings();
-    adapter = new FileSystemAdapter();
-
-    // Mock WorkerManager
+    const platform = createMockPlatformAdapter();
     const workerManager = new WorkerManager({} as Worker);
 
-    service = new LibraryService(settings, adapter, workerManager);
+    service = new LibraryService(settings, platform, workerManager);
   });
 
   afterEach(() => {
@@ -52,8 +49,5 @@ describe('LibraryService', () => {
 
   it('should dispose resources', () => {
     service.dispose();
-    // Verify dispose logic (e.g. timers cleared, sources disposed)
-    // Since we don't have easy access to private properties, we assume it works if it doesn't throw.
-    // Or we could mock sources and check if they are disposed.
   });
 });
