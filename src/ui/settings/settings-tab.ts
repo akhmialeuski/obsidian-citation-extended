@@ -411,7 +411,7 @@ export class CitationSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Citation style preset')
       .setDesc(
-        'Select a built-in style or choose "Custom" to define your own templates.',
+        'Select a built-in style or choose "custom" to define your own templates.',
       )
       .addDropdown((dropdown) => {
         dropdown.addOptions(CITATION_STYLE_PRESET_LABELS);
