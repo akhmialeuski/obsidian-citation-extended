@@ -36,9 +36,11 @@ describe('YAML Colon Handling', () => {
   } as unknown as Entry;
 
   test('should generate valid YAML with default template when title has colon', () => {
-    settings.literatureNoteContentTemplate = DEFAULT_CONTENT_TEMPLATE;
     const variables = templateService.getTemplateVariables(mockEntry);
-    const contentResult = templateService.getContent(variables);
+    const contentResult = templateService.render(
+      DEFAULT_CONTENT_TEMPLATE,
+      variables,
+    );
 
     expect(contentResult.ok).toBe(true);
     if (!contentResult.ok) return;
@@ -59,11 +61,13 @@ describe('YAML Colon Handling', () => {
       authorString: 'Doe, J.: Editor',
       toJSON: () => entryWithColonAuthor,
     } as unknown as Entry;
-    settings.literatureNoteContentTemplate = DEFAULT_CONTENT_TEMPLATE;
 
     const variables =
       templateService.getTemplateVariables(entryWithColonAuthor);
-    const contentResult = templateService.getContent(variables);
+    const contentResult = templateService.render(
+      DEFAULT_CONTENT_TEMPLATE,
+      variables,
+    );
 
     expect(contentResult.ok).toBe(true);
     if (!contentResult.ok) return;
@@ -77,10 +81,12 @@ describe('YAML Colon Handling', () => {
       title: 'My "Quoted" Title',
       toJSON: () => entryWithQuotes,
     } as unknown as Entry;
-    settings.literatureNoteContentTemplate = DEFAULT_CONTENT_TEMPLATE;
 
     const variables = templateService.getTemplateVariables(entryWithQuotes);
-    const contentResult = templateService.getContent(variables);
+    const contentResult = templateService.render(
+      DEFAULT_CONTENT_TEMPLATE,
+      variables,
+    );
 
     expect(contentResult.ok).toBe(true);
     if (!contentResult.ok) return;

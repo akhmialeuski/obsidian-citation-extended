@@ -14,6 +14,7 @@ import { StoreSubscriber } from './library/library-store';
 // Minimal store contract exposed through service interfaces
 // ---------------------------------------------------------------------------
 
+/** Read-only store contract exposed to consumers that need reactive library state. */
 export interface ILibraryStore {
   subscribe(fn: StoreSubscriber<LibraryState>): () => void;
   getState(): LibraryState;
@@ -23,6 +24,7 @@ export interface ILibraryStore {
 // Service interfaces -- allow the UI layer to depend on abstractions
 // ---------------------------------------------------------------------------
 
+/** Handlebars-based template compilation, rendering, and validation. */
 export interface ITemplateService {
   getTemplateVariables(
     entry: Entry,
@@ -33,7 +35,6 @@ export interface ITemplateService {
     variables: TemplateContext,
   ): Result<string, TemplateRenderError>;
   getTitle(variables: TemplateContext): Result<string, TemplateRenderError>;
-  getContent(variables: TemplateContext): Result<string, TemplateRenderError>;
   getMarkdownCitation(
     variables: TemplateContext,
     alternative?: boolean,
@@ -41,6 +42,7 @@ export interface ITemplateService {
   validate(templateStr: string): Result<void, TemplateRenderError>;
 }
 
+/** Literature note CRUD — path resolution, lookup, creation, and opening. */
 export interface INoteService {
   getPathForCitekey(citekey: string, library: Library): string;
   findExistingLiteratureNoteFile(
@@ -60,6 +62,7 @@ export interface INoteService {
   ): Promise<void>;
 }
 
+/** Orchestrates bibliography loading, data-source management, and search indexing. */
 export interface ILibraryService {
   readonly library: Library | null;
   readonly state: LibraryState;
@@ -78,6 +81,7 @@ export interface ILibraryService {
   initWatcher(): void;
 }
 
+/** Manages Obsidian commands, hotkeys, and status-bar widgets for the plugin. */
 export interface IUIService {
   init(): void;
   dispose(): void;

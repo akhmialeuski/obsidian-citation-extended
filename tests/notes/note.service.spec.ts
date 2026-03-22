@@ -43,9 +43,6 @@ describe('NoteService', () => {
       .spyOn(templateService, 'getTitle')
       .mockReturnValue({ ok: true, value: 'My Title' });
     jest
-      .spyOn(templateService, 'getContent')
-      .mockReturnValue({ ok: true, value: 'My Content' });
-    jest
       .spyOn(templateService, 'render')
       .mockReturnValue({ ok: true, value: 'My Content' });
 

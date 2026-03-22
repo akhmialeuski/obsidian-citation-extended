@@ -98,12 +98,6 @@ export class TemplateService implements ITemplateService {
     return this.render(this.settings.literatureNoteTitleTemplate, variables);
   }
 
-  public getContent(
-    variables: TemplateContext,
-  ): Result<string, TemplateRenderError> {
-    return this.render(this.settings.literatureNoteContentTemplate, variables);
-  }
-
   public getMarkdownCitation(
     variables: TemplateContext,
     alternative = false,
