@@ -1,4 +1,4 @@
-import { FileSystemAdapter } from 'obsidian';
+import { FileSystemAdapter, Notice } from 'obsidian';
 import * as path from 'path';
 import { CitationsPluginSettings } from '../ui/settings/settings';
 import { Entry, Library, ParseErrorInfo } from '../core';
@@ -140,6 +140,9 @@ export class LibraryService implements ILibraryService {
     if (this.settings.databases.length === 0) {
       console.warn(
         'Citations plugin: No data sources configured. Please update plugin settings.',
+      );
+      new Notice(
+        'No citation databases configured. Please add at least one database in the citation plugin settings.',
       );
       return null;
     }

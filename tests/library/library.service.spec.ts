@@ -3,7 +3,7 @@ import { CitationsPluginSettings } from '../../src/ui/settings/settings';
 import { LoadingStatus } from '../../src/library/library-state';
 import { WorkerManager } from '../../src/util';
 
-import { FileSystemAdapter } from 'obsidian';
+import { FileSystemAdapter, Notice } from 'obsidian';
 import * as fs from 'fs';
 import { TextDecoder } from 'util';
 
@@ -22,10 +22,7 @@ jest.mock(
       static readLocalFile = jest.fn();
       getBasePath = jest.fn().mockReturnValue('/');
     },
-    Notice: class {
-      hide = jest.fn();
-      show = jest.fn();
-    },
+    Notice: jest.fn(),
   }),
   { virtual: true },
 );
@@ -130,6 +127,8 @@ describe('LibraryService', () => {
     (fs.promises.stat as jest.Mock).mockReset();
     mockWorkerManagerPost.mockReset();
     mockWorkerManagerPost.mockResolvedValue([]);
+
+    jest.mocked(Notice).mockClear();
 
     jest.spyOn(console, 'error').mockImplementation(() => {});
     jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -236,5 +235,27 @@ describe('LibraryService', () => {
     await service.load();
     service.dispose();
     // Verify dispose called on sources.
+  });
+
+  test('load() shows Notice when no databases are configured', async () => {
+    settings.databases = [];
+
+    const result = await service.load();
+
+    expect(result).toBeNull();
+    expect(Notice).toHaveBeenCalledTimes(1);
+    expect(Notice).toHaveBeenCalledWith(
+      'No citation databases configured. Please add at least one database in the citation plugin settings.',
+    );
+  });
+
+  test('load() does not show Notice when databases exist', async () => {
+    settings.databases = [
+      { name: 'Test', path: 'test.json', type: 'biblatex' },
+    ];
+
+    await service.load();
+
+    expect(Notice).not.toHaveBeenCalled();
   });
 });
