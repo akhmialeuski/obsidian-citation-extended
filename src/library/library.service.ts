@@ -1,4 +1,3 @@
-import * as path from 'path';
 import type { IPlatformAdapter } from '../platform/platform-adapter';
 import { CitationsPluginSettings } from '../ui/settings/settings';
 import { Entry, Library, ParseErrorInfo } from '../core';
@@ -100,8 +99,7 @@ export class LibraryService implements ILibraryService {
   }
 
   resolveLibraryPath(rawPath: string): string {
-    const vaultRoot = this.platform.fileSystem.getBasePath() || '/';
-    return path.resolve(vaultRoot, rawPath);
+    return this.platform.resolvePath(rawPath);
   }
 
   private setState(newState: Partial<LibraryState>): void {

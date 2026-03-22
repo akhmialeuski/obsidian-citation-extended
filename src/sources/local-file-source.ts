@@ -9,6 +9,7 @@ import {
   EntryBibLaTeXAdapter,
   EntryCSLAdapter,
   DatabaseType,
+  DATABASE_FORMATS,
   EntryDataBibLaTeX,
   EntryDataCSL,
   WorkerResponse,
@@ -90,11 +91,11 @@ export class LocalFileSource implements DataSource {
    * Convert EntryData to Entry objects using the appropriate adapter
    */
   private convertToEntries(entries: EntryData[]): Entry[] {
-    if (this.format === 'biblatex') {
+    if (this.format === DATABASE_FORMATS.BibLaTeX) {
       return entries.map(
         (e) => new EntryBibLaTeXAdapter(e as EntryDataBibLaTeX),
       );
-    } else if (this.format === 'csl-json') {
+    } else if (this.format === DATABASE_FORMATS.CslJson) {
       return entries.map((e) => new EntryCSLAdapter(e as EntryDataCSL));
     } else {
       throw new Error('Unsupported database format');

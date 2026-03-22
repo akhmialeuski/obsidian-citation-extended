@@ -33,6 +33,7 @@ import { CitationSettingTab } from './ui/settings/settings-tab';
 import { CitationsPluginSettings } from './ui/settings/settings';
 import {
   DEFAULT_SETTINGS,
+  DEFAULT_CONTENT_TEMPLATE,
   validateSettings,
 } from './ui/settings/settings-schema';
 import { DISALLOWED_FILENAME_CHARACTERS_RE, WorkerManager } from './util';
@@ -74,6 +75,19 @@ export default class CitationPlugin extends Plugin {
         });
         void this.saveSettings();
       }
+
+      // Migrate inline content template to a vault file
+      if (
+        this.settings.literatureNoteContentTemplate &&
+        !this.settings.literatureNoteContentTemplatePath
+      ) {
+        await this.migrateInlineTemplateToFile();
+      }
+
+      // Ensure new installs get a default template file
+      if (!this.settings.literatureNoteContentTemplatePath) {
+        await this.createDefaultTemplateFile();
+      }
     } else {
       console.warn(
         'Citations plugin: Settings validation failed',
@@ -86,6 +100,64 @@ export default class CitationPlugin extends Plugin {
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
+  }
+
+  private static readonly DEFAULT_TEMPLATE_PATH =
+    'citation-content-template.md';
+
+  /**
+   * Migrate an inline content template to a vault file.
+   * Writes the template string to a file and updates the settings path.
+   */
+  private async migrateInlineTemplateToFile(): Promise<void> {
+    const templateContent = this.settings.literatureNoteContentTemplate;
+    if (!templateContent) return;
+
+    const filePath = CitationPlugin.DEFAULT_TEMPLATE_PATH;
+    const existingFile = this.app.vault.getAbstractFileByPath(
+      normalizePath(filePath),
+    );
+
+    if (!existingFile) {
+      try {
+        await this.app.vault.create(filePath, templateContent);
+        console.debug(
+          `Citations plugin: Migrated inline template to ${filePath}`,
+        );
+      } catch (e) {
+        console.warn('Citations plugin: Failed to migrate inline template:', e);
+        return;
+      }
+    }
+
+    this.settings.literatureNoteContentTemplatePath = filePath;
+    this.settings.literatureNoteContentTemplate = '';
+    await this.saveSettings();
+  }
+
+  /**
+   * Create a default template file for new installations.
+   */
+  private async createDefaultTemplateFile(): Promise<void> {
+    const filePath = CitationPlugin.DEFAULT_TEMPLATE_PATH;
+    const existingFile = this.app.vault.getAbstractFileByPath(
+      normalizePath(filePath),
+    );
+
+    if (!existingFile) {
+      try {
+        await this.app.vault.create(filePath, DEFAULT_CONTENT_TEMPLATE);
+        console.debug(
+          `Citations plugin: Created default template at ${filePath}`,
+        );
+      } catch (e) {
+        console.warn('Citations plugin: Failed to create default template:', e);
+        return;
+      }
+    }
+
+    this.settings.literatureNoteContentTemplatePath = filePath;
+    await this.saveSettings();
   }
 
   async onload(): Promise<void> {
@@ -200,9 +272,8 @@ export default class CitationPlugin extends Plugin {
   }
 
   /**
-   * Resolves the content template string, reading from a vault file if
-   * `literatureNoteContentTemplatePath` is configured, otherwise falling
-   * back to the inline setting.
+   * Resolves the content template string by reading from the configured
+   * vault file.  Falls back to the default template if the file is missing.
    */
   async resolveContentTemplate(): Promise<string> {
     const templatePath = this.settings.literatureNoteContentTemplatePath;
@@ -214,10 +285,10 @@ export default class CitationPlugin extends Plugin {
         return this.app.vault.read(file);
       }
       new Notice(
-        `Citations: template file not found at "${templatePath}", using inline template`,
+        `Citations: template file not found at "${templatePath}". Please check the path in settings.`,
       );
     }
-    return this.settings.literatureNoteContentTemplate;
+    return DEFAULT_CONTENT_TEMPLATE;
   }
 
   async getInitialContentForCitekey(

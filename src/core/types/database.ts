@@ -1,15 +1,25 @@
 /**
- * Supported bibliography file formats.
- * New formats (e.g. 'hayagriva') can be added here and handled by a
- * corresponding parser registered in the worker or adapter layer.
+ * Known bibliography file format constants.
+ * Use these instead of string literals throughout the codebase.
  */
-export type DatabaseType = 'csl-json' | 'biblatex' | 'hayagriva';
+export const DATABASE_FORMATS = {
+  CslJson: 'csl-json',
+  BibLaTeX: 'biblatex',
+  Hayagriva: 'hayagriva',
+} as const;
+
+/**
+ * Supported bibliography file formats.
+ * Derived from DATABASE_FORMATS constants — add new formats there.
+ */
+export type DatabaseType =
+  (typeof DATABASE_FORMATS)[keyof typeof DATABASE_FORMATS];
 
 /** Human-readable labels for database format dropdowns. */
 export const DATABASE_TYPE_LABELS: Record<DatabaseType, string> = {
-  'csl-json': 'CSL-JSON',
-  biblatex: 'BibLaTeX',
-  hayagriva: 'Hayagriva (YAML)',
+  [DATABASE_FORMATS.CslJson]: 'CSL-JSON',
+  [DATABASE_FORMATS.BibLaTeX]: 'BibLaTeX',
+  [DATABASE_FORMATS.Hayagriva]: 'Hayagriva (YAML)',
 };
 
 export interface DatabaseConfig {

@@ -8,7 +8,12 @@ import {
 } from 'obsidian';
 
 import CitationPlugin from '../../main';
-import { DatabaseType, DatabaseConfig, DATABASE_TYPE_LABELS } from '../../core';
+import {
+  DatabaseType,
+  DatabaseConfig,
+  DATABASE_TYPE_LABELS,
+  DATABASE_FORMATS,
+} from '../../core';
 import {
   SettingsSchema,
   CitationsPluginSettingsType,
@@ -84,7 +89,7 @@ export class CitationSettingTab extends PluginSettingTab {
             }
             this.plugin.settings.databases.push({
               name: `Database ${this.plugin.settings.databases.length + 1}`,
-              type: 'csl-json',
+              type: DATABASE_FORMATS.CslJson,
               path: '',
             });
             await this.plugin.saveSettings();
@@ -229,17 +234,10 @@ export class CitationSettingTab extends PluginSettingTab {
       'literatureNoteTitleTemplate',
     );
 
-    this.buildTextArea(
-      containerEl,
-      'Literature note content template',
-      '',
-      'literatureNoteContentTemplate',
-    );
-
     this.buildTextField(
       containerEl,
-      'Literature note content template path',
-      'Optional: path to a vault file used as the content template. When set, this overrides the inline template above.',
+      'Literature note content template file',
+      'Path to a vault file used as the content template for new literature notes.',
       'literatureNoteContentTemplatePath',
     );
 

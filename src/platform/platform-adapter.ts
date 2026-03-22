@@ -120,6 +120,9 @@ export interface IPlatformAdapter {
   /** Normalize a path for the current platform. */
   normalizePath(path: string): string;
 
+  /** Resolve a relative path against the vault root (platform-aware). */
+  resolvePath(rawPath: string): string;
+
   /** Add a status bar element (returns a no-op stub on mobile). */
   addStatusBarItem(): IStatusBarItem;
 }

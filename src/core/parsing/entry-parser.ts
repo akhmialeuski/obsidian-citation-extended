@@ -1,6 +1,6 @@
 import * as BibTeXParser from '@retorquere/bibtex-parser';
 
-import { DatabaseType } from '../types/database';
+import { DatabaseType, DATABASE_FORMATS } from '../types/database';
 import { EntryData } from '../adapters/biblatex-adapter';
 import { ParseErrorInfo, WorkerResponse } from '../types/worker-protocol';
 
@@ -17,9 +17,9 @@ export function loadEntries(
   let libraryArray: EntryData[] = [];
   const parseErrors: ParseErrorInfo[] = [];
 
-  if (databaseType == 'csl-json') {
+  if (databaseType === DATABASE_FORMATS.CslJson) {
     libraryArray = JSON.parse(databaseRaw);
-  } else if (databaseType == 'biblatex') {
+  } else if (databaseType === DATABASE_FORMATS.BibLaTeX) {
     const options: BibTeXParser.ParserOptions = {
       errorHandler: (err) => {
         const msg = String(err);

@@ -52,6 +52,7 @@ export function createMockPlatformAdapter(
     workspace,
     notifications,
     normalizePath: jest.fn((p: string) => p),
+    resolvePath: jest.fn((p: string) => `/vault/${p}`),
     addStatusBarItem: jest.fn(
       (): IStatusBarItem => ({
         setText: jest.fn(),

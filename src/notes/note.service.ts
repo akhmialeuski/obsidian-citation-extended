@@ -19,8 +19,7 @@ export class NoteService implements INoteService {
     resolveContentTemplate?: ContentTemplateResolver,
   ) {
     this.resolveContentTemplate =
-      resolveContentTemplate ??
-      (() => Promise.resolve(this.settings.literatureNoteContentTemplate));
+      resolveContentTemplate ?? (() => Promise.resolve(''));
   }
 
   /**

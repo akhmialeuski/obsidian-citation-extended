@@ -8,6 +8,7 @@ import {
   TFolder,
   normalizePath,
 } from 'obsidian';
+import * as nodePath from 'path';
 
 import type {
   IEditorProxy,
@@ -175,8 +176,18 @@ export class ObsidianPlatformAdapter implements IPlatformAdapter {
     this.notifications = new ObsidianNotificationService();
   }
 
-  normalizePath(path: string): string {
-    return normalizePath(path);
+  normalizePath(p: string): string {
+    return normalizePath(p);
+  }
+
+  resolvePath(rawPath: string): string {
+    const basePath = this.fileSystem.getBasePath();
+    if (!basePath) {
+      // Mobile or vault-only environment — return as-is
+      return rawPath;
+    }
+    // Node.js path.resolve handles Windows/Linux/macOS path separators
+    return nodePath.resolve(basePath, rawPath);
   }
 
   addStatusBarItem(): IStatusBarItem {

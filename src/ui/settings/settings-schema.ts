@@ -38,7 +38,8 @@ export const SettingsSchema = z.object({
   citationExportFormat: z.enum(['csl-json', 'biblatex', 'hayagriva']),
   literatureNoteTitleTemplate: z.string().min(1),
   literatureNoteFolder: z.string(),
-  literatureNoteContentTemplate: z.string().min(1),
+  // Legacy: kept for migration. New installs use only the path field.
+  literatureNoteContentTemplate: z.string().optional().default(''),
   literatureNoteContentTemplatePath: z.string().default(''),
   citationStylePreset: z.enum(CITATION_STYLE_PRESET_OPTIONS).default('custom'),
   markdownCitationTemplate: z.string().min(1),
@@ -64,17 +65,20 @@ export const SettingsSchema = z.object({
 
 export type CitationsPluginSettingsType = z.infer<typeof SettingsSchema>;
 
+/** Default content template written to a file during migration. */
+export const DEFAULT_CONTENT_TEMPLATE =
+  '---\n' +
+  'title: {{quote title}}\n' +
+  'authors: {{quote authorString}}\n' +
+  'year: {{year}}\n' +
+  '---\n\n';
+
 export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   citationExportPath: '',
   citationExportFormat: 'csl-json',
   literatureNoteTitleTemplate: '@{{citekey}}',
   literatureNoteFolder: 'Reading notes',
-  literatureNoteContentTemplate:
-    '---\n' +
-    'title: {{quote title}}\n' +
-    'authors: {{quote authorString}}\n' +
-    'year: {{year}}\n' +
-    '---\n\n',
+  literatureNoteContentTemplate: '',
   literatureNoteContentTemplatePath: '',
   citationStylePreset: 'custom',
   markdownCitationTemplate: '[@{{citekey}}]',

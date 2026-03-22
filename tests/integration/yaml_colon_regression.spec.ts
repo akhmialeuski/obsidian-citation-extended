@@ -14,7 +14,7 @@ jest.mock(
 
 import { TemplateService } from '../../src/template/template.service';
 import { CitationsPluginSettings } from '../../src/ui/settings/settings';
-import { DEFAULT_SETTINGS } from '../../src/ui/settings/settings-schema';
+import { DEFAULT_CONTENT_TEMPLATE } from '../../src/ui/settings/settings-schema';
 import { Entry } from '../../src/core';
 
 describe('YAML Colon Handling', () => {
@@ -36,8 +36,7 @@ describe('YAML Colon Handling', () => {
   } as unknown as Entry;
 
   test('should generate valid YAML with default template when title has colon', () => {
-    settings.literatureNoteContentTemplate =
-      DEFAULT_SETTINGS.literatureNoteContentTemplate;
+    settings.literatureNoteContentTemplate = DEFAULT_CONTENT_TEMPLATE;
     const variables = templateService.getTemplateVariables(mockEntry);
     const contentResult = templateService.getContent(variables);
 
@@ -60,8 +59,7 @@ describe('YAML Colon Handling', () => {
       authorString: 'Doe, J.: Editor',
       toJSON: () => entryWithColonAuthor,
     } as unknown as Entry;
-    settings.literatureNoteContentTemplate =
-      DEFAULT_SETTINGS.literatureNoteContentTemplate;
+    settings.literatureNoteContentTemplate = DEFAULT_CONTENT_TEMPLATE;
 
     const variables =
       templateService.getTemplateVariables(entryWithColonAuthor);
@@ -79,8 +77,7 @@ describe('YAML Colon Handling', () => {
       title: 'My "Quoted" Title',
       toJSON: () => entryWithQuotes,
     } as unknown as Entry;
-    settings.literatureNoteContentTemplate =
-      DEFAULT_SETTINGS.literatureNoteContentTemplate;
+    settings.literatureNoteContentTemplate = DEFAULT_CONTENT_TEMPLATE;
 
     const variables = templateService.getTemplateVariables(entryWithQuotes);
     const contentResult = templateService.getContent(variables);
