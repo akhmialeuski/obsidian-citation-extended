@@ -51,7 +51,6 @@ export class CitationSettingTab extends PluginSettingTab {
     this.renderLiteratureNotesSection(containerEl);
     this.renderCitationsSection(containerEl);
     this.renderDisplaySection(containerEl);
-    this.renderDocumentationSection(containerEl);
   }
 
   // ---------------------------------------------------------------------------
@@ -243,6 +242,30 @@ export class CitationSettingTab extends PluginSettingTab {
       'Optional: path to a vault file used as the content template. When set, this overrides the inline template above.',
       'literatureNoteContentTemplatePath',
     );
+
+    const linksEl = containerEl.createEl('p', {
+      cls: 'setting-item-description',
+    });
+    linksEl.append(
+      createSpan({
+        text: 'For template variables, helpers, and examples see the ',
+      }),
+      createEl('a', {
+        text: 'Template variables',
+        href: `${DOCS_BASE}/templates/variables.md`,
+      }),
+      createSpan({ text: ', ' }),
+      createEl('a', {
+        text: 'Template helpers',
+        href: `${DOCS_BASE}/templates/helpers.md`,
+      }),
+      createSpan({ text: ', and ' }),
+      createEl('a', {
+        text: 'Template examples',
+        href: `${DOCS_BASE}/templates/examples.md`,
+      }),
+      createSpan({ text: ' documentation.' }),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -336,38 +359,6 @@ export class CitationSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         });
       });
-  }
-
-  // ---------------------------------------------------------------------------
-  // Section 5: Documentation links
-  // ---------------------------------------------------------------------------
-
-  private renderDocumentationSection(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName('Documentation').setHeading();
-
-    const linksEl = containerEl.createEl('p', {
-      cls: 'setting-item-description',
-    });
-    linksEl.append(
-      createSpan({
-        text: 'For template variables, helpers, and examples see the ',
-      }),
-      createEl('a', {
-        text: 'Template variables',
-        href: `${DOCS_BASE}/templates/variables.md`,
-      }),
-      createSpan({ text: ', ' }),
-      createEl('a', {
-        text: 'Template helpers',
-        href: `${DOCS_BASE}/templates/helpers.md`,
-      }),
-      createSpan({ text: ', and ' }),
-      createEl('a', {
-        text: 'Template examples',
-        href: `${DOCS_BASE}/templates/examples.md`,
-      }),
-      createSpan({ text: ' documentation.' }),
-    );
   }
 
   // ---------------------------------------------------------------------------
