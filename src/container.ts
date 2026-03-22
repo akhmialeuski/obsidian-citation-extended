@@ -104,3 +104,14 @@ export type {
 // ---------------------------------------------------------------------------
 
 export type { IDataSourceRegistry } from './sources/data-source-registry';
+
+// ---------------------------------------------------------------------------
+// Batch note update re-export
+// ---------------------------------------------------------------------------
+
+export type {
+  IBatchNoteOrchestrator,
+  BatchUpdateRequest,
+  BatchUpdateResult,
+  BatchUpdateProgress,
+} from './notes/batch/batch-update.types';
