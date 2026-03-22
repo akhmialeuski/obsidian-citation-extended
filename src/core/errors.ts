@@ -72,3 +72,29 @@ export class DataSourceError extends CitationError {
     this.name = 'DataSourceError';
   }
 }
+
+/**
+ * Thrown when an unsupported bibliography format is encountered.
+ */
+export class UnsupportedFormatError extends CitationError {
+  constructor(public readonly format: string) {
+    super(
+      `Unsupported bibliography format: "${format}". Supported formats: csl-json, biblatex.`,
+      'UNSUPPORTED_FORMAT',
+    );
+    this.name = 'UnsupportedFormatError';
+  }
+}
+
+/**
+ * Thrown when a batch note update operation fails.
+ */
+export class BatchUpdateError extends CitationError {
+  constructor(
+    message: string,
+    public readonly failedCitekeys: string[] = [],
+  ) {
+    super(message, 'BATCH_UPDATE_ERROR');
+    this.name = 'BatchUpdateError';
+  }
+}

@@ -8,7 +8,12 @@ import {
 } from 'obsidian';
 
 import CitationPlugin from '../../main';
-import { DatabaseType, DatabaseConfig, Entry } from '../../core';
+import {
+  DatabaseType,
+  DatabaseConfig,
+  Entry,
+  DATABASE_TYPE_LABELS,
+} from '../../core';
 import {
   SettingsSchema,
   CitationsPluginSettingsType,
@@ -17,10 +22,7 @@ import {
 } from './settings-schema';
 import { ReferenceListSortOrder } from '../modals/sort-entries';
 
-const CITATION_DATABASE_FORMAT_LABELS: Record<DatabaseType, string> = {
-  'csl-json': 'CSL-JSON',
-  biblatex: 'BibLaTeX',
-};
+const CITATION_DATABASE_FORMAT_LABELS = DATABASE_TYPE_LABELS;
 
 const SORT_ORDER_LABELS: Record<ReferenceListSortOrder, string> = {
   default: 'Default (file order)',
