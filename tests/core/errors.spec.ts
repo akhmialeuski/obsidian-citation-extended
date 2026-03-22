@@ -5,6 +5,8 @@ import {
   LiteratureNoteNotFoundError,
   TemplateRenderError,
   DataSourceError,
+  UnsupportedFormatError,
+  BatchUpdateError,
 } from '../../src/core/errors';
 
 describe('Domain errors', () => {
@@ -112,6 +114,41 @@ describe('Domain errors', () => {
     });
   });
 
+  describe('UnsupportedFormatError', () => {
+    it('should include format in message', () => {
+      const error = new UnsupportedFormatError('yaml');
+      expect(error.format).toBe('yaml');
+      expect(error.message).toContain('yaml');
+      expect(error.code).toBe('UNSUPPORTED_FORMAT');
+      expect(error.name).toBe('UnsupportedFormatError');
+    });
+
+    it('should be instanceof CitationError', () => {
+      const error = new UnsupportedFormatError('xml');
+      expect(error).toBeInstanceOf(CitationError);
+    });
+  });
+
+  describe('BatchUpdateError', () => {
+    it('should set message and failedCitekeys', () => {
+      const error = new BatchUpdateError('batch failed', ['key1', 'key2']);
+      expect(error.message).toBe('batch failed');
+      expect(error.failedCitekeys).toEqual(['key1', 'key2']);
+      expect(error.code).toBe('BATCH_UPDATE_ERROR');
+      expect(error.name).toBe('BatchUpdateError');
+    });
+
+    it('should default failedCitekeys to empty array', () => {
+      const error = new BatchUpdateError('no citekeys');
+      expect(error.failedCitekeys).toEqual([]);
+    });
+
+    it('should be instanceof CitationError', () => {
+      const error = new BatchUpdateError('err');
+      expect(error).toBeInstanceOf(CitationError);
+    });
+  });
+
   describe('prototype chain (ES5 compatibility)', () => {
     it('should support instanceof checks for all error subclasses', () => {
       const errors = [
@@ -120,6 +157,8 @@ describe('Domain errors', () => {
         new LiteratureNoteNotFoundError('key'),
         new TemplateRenderError('err'),
         new DataSourceError('err'),
+        new UnsupportedFormatError('xml'),
+        new BatchUpdateError('err'),
       ];
 
       for (const error of errors) {

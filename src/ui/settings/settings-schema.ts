@@ -35,7 +35,7 @@ export const CITATION_STYLE_PRESETS: Record<
 
 export const SettingsSchema = z.object({
   citationExportPath: z.string(),
-  citationExportFormat: z.enum(['csl-json', 'biblatex']),
+  citationExportFormat: z.enum(['csl-json', 'biblatex', 'hayagriva']),
   literatureNoteTitleTemplate: z.string().min(1),
   literatureNoteFolder: z.string(),
   literatureNoteContentTemplate: z.string().min(1),
@@ -53,7 +53,7 @@ export const SettingsSchema = z.object({
     .array(
       z.object({
         name: z.string(),
-        type: z.enum(['csl-json', 'biblatex']),
+        type: z.enum(['csl-json', 'biblatex', 'hayagriva']),
         path: z.string(),
       }),
     )
