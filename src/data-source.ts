@@ -2,12 +2,21 @@ import { Entry, DatabaseType, ParseErrorInfo } from './core';
 import { MergeStrategy } from './library/merge-strategy';
 
 /**
- * Discriminates the transport mechanism used by a data source.
+ * Known built-in data source transport types.
+ * Additional types can be registered via {@link DataSourceRegistry}.
  */
-export enum DataSourceType {
-  LocalFile = 'local-file',
-  VaultFile = 'vault-file',
-}
+export const DATA_SOURCE_TYPES = {
+  LocalFile: 'local-file',
+  VaultFile: 'vault-file',
+} as const;
+
+/**
+ * Discriminates the transport mechanism used by a data source.
+ * String-based to allow extensibility via the registry pattern.
+ */
+export type DataSourceType =
+  | (typeof DATA_SOURCE_TYPES)[keyof typeof DATA_SOURCE_TYPES]
+  | string;
 
 /**
  * DataSource interface defines a contract for loading bibliography entries

@@ -1,49 +1,20 @@
-import { FileSystemAdapter, Vault } from 'obsidian';
-import {
-  DataSource,
-  DataSourceDefinition,
-  DataSourceType,
-} from '../data-source';
-import { DataSourceError } from '../core/errors';
-import { WorkerManager } from '../util';
-import { LocalFileSource } from './local-file-source';
-import { VaultFileSource } from './vault-file-source';
+import { DataSource, DataSourceDefinition } from '../data-source';
+import { IDataSourceRegistry } from './data-source-registry';
 
 export interface IDataSourceFactory {
   create(def: DataSourceDefinition, id: string): DataSource;
 }
 
+/**
+ * Delegates data source creation to a {@link IDataSourceRegistry}.
+ *
+ * Replaces the former exhaustive switch — new source types are registered
+ * in the registry at startup rather than hard-coded here.
+ */
 export class DataSourceFactory implements IDataSourceFactory {
-  constructor(
-    private vaultAdapter: FileSystemAdapter | null,
-    private workerManager: WorkerManager,
-    private vault: Vault,
-  ) {}
+  constructor(private registry: IDataSourceRegistry) {}
 
   create(def: DataSourceDefinition, id: string): DataSource {
-    switch (def.type) {
-      case DataSourceType.LocalFile:
-        return new LocalFileSource(
-          id,
-          def.path,
-          def.format,
-          this.workerManager,
-          this.vaultAdapter,
-        );
-      case DataSourceType.VaultFile:
-        return new VaultFileSource(
-          id,
-          def.path,
-          def.format,
-          this.workerManager,
-          this.vault,
-        );
-      default: {
-        const exhaustiveCheck: never = def.type;
-        throw new DataSourceError(
-          `Unknown data source type: ${String(exhaustiveCheck)}`,
-        );
-      }
-    }
+    return this.registry.create(def, id);
   }
 }

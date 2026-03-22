@@ -98,3 +98,9 @@ export type {
   INotificationService,
   IStatusBarItem,
 } from './platform/platform-adapter';
+
+// ---------------------------------------------------------------------------
+// Data source registry re-export
+// ---------------------------------------------------------------------------
+
+export type { IDataSourceRegistry } from './sources/data-source-registry';

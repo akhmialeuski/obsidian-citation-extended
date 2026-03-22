@@ -2,43 +2,38 @@ import {
   DataSourceFactory,
   IDataSourceFactory,
 } from '../../src/sources/data-source-factory';
-import { DataSourceType } from '../../src/data-source';
+import { DATA_SOURCE_TYPES } from '../../src/data-source';
 import { DataSourceError } from '../../src/core/errors';
-
-jest.mock(
-  'obsidian',
-  () => ({
-    FileSystemAdapter: class {},
-    Vault: class {},
-  }),
-  { virtual: true },
-);
-
-jest.mock('../../src/sources/local-file-source', () => ({
-  LocalFileSource: jest.fn().mockImplementation((id: string) => ({
-    id,
-    type: 'local',
-  })),
-}));
-
-jest.mock('../../src/sources/vault-file-source', () => ({
-  VaultFileSource: jest.fn().mockImplementation((id: string) => ({
-    id,
-    type: 'vault',
-  })),
-}));
+import {
+  DataSourceRegistry,
+  IDataSourceRegistry,
+} from '../../src/sources/data-source-registry';
 
 describe('DataSourceFactory', () => {
+  let registry: IDataSourceRegistry;
   let factory: IDataSourceFactory;
 
   beforeEach(() => {
-    factory = new DataSourceFactory(null, {} as never, {} as never);
+    registry = new DataSourceRegistry();
+    registry.register(DATA_SOURCE_TYPES.LocalFile, (def, id) => ({
+      id,
+      load: jest.fn(),
+      watch: jest.fn(),
+      dispose: jest.fn(),
+    }));
+    registry.register(DATA_SOURCE_TYPES.VaultFile, (def, id) => ({
+      id,
+      load: jest.fn(),
+      watch: jest.fn(),
+      dispose: jest.fn(),
+    }));
+    factory = new DataSourceFactory(registry);
   });
 
-  it('should create LocalFileSource for DataSourceType.LocalFile', () => {
+  it('should create source for DATA_SOURCE_TYPES.LocalFile', () => {
     const source = factory.create(
       {
-        type: DataSourceType.LocalFile,
+        type: DATA_SOURCE_TYPES.LocalFile,
         path: '/some/path.bib',
         format: 'biblatex',
       },
@@ -49,10 +44,10 @@ describe('DataSourceFactory', () => {
     expect(source.id).toBe('source-0');
   });
 
-  it('should create VaultFileSource for DataSourceType.VaultFile', () => {
+  it('should create source for DATA_SOURCE_TYPES.VaultFile', () => {
     const source = factory.create(
       {
-        type: DataSourceType.VaultFile,
+        type: DATA_SOURCE_TYPES.VaultFile,
         path: 'vault/path.json',
         format: 'csl-json',
       },
@@ -63,11 +58,11 @@ describe('DataSourceFactory', () => {
     expect(source.id).toBe('source-1');
   });
 
-  it('should throw DataSourceError for unknown types', () => {
+  it('should throw DataSourceError for unregistered types', () => {
     expect(() =>
       factory.create(
         {
-          type: 'unknown' as DataSourceType,
+          type: 'unknown-type',
           path: 'x',
           format: 'biblatex',
         },
