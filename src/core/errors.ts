@@ -79,7 +79,7 @@ export class DataSourceError extends CitationError {
 export class UnsupportedFormatError extends CitationError {
   constructor(public readonly format: string) {
     super(
-      `Unsupported bibliography format: "${format}". Supported formats: csl-json, biblatex.`,
+      `Unsupported bibliography format: "${format}".`,
       'UNSUPPORTED_FORMAT',
     );
     this.name = 'UnsupportedFormatError';
