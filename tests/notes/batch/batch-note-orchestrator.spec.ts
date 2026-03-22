@@ -1,8 +1,8 @@
-import { BatchNoteOrchestrator } from '../../../src/notes/batch/batch-note-orchestrator';
-import type {
-  BatchUpdateRequest,
-  IBatchNoteOrchestrator,
-} from '../../../src/notes/batch/batch-update.types';
+import {
+  BatchNoteOrchestrator,
+  type BatchUpdateRequest,
+  type IBatchNoteOrchestrator,
+} from '../../../src/notes/batch';
 
 describe('BatchNoteOrchestrator', () => {
   let orchestrator: IBatchNoteOrchestrator;

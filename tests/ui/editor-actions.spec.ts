@@ -211,6 +211,137 @@ describe('EditorActions', () => {
   });
 
   describe('insertLiteratureNoteLink', () => {
+    it('shows notice when no active editor is found', async () => {
+      const plugin = makePlugin();
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => null);
+      plugin.app.workspace.activeEditor = null;
+      const actions = new EditorActions(plugin);
+
+      await actions.insertLiteratureNoteLink('key1');
+
+      expect(Notice).toHaveBeenCalledWith('No active editor found');
+    });
+
+    it('shows notice when library is null', async () => {
+      const editor = { replaceSelection: jest.fn() };
+      const plugin = makePlugin({
+        libraryService: { library: null },
+      });
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+      const actions = new EditorActions(plugin);
+
+      await actions.insertLiteratureNoteLink('key1');
+
+      expect(Notice).toHaveBeenCalledWith(
+        expect.stringContaining('still loading'),
+      );
+      expect(editor.replaceSelection).not.toHaveBeenCalled();
+    });
+
+    it('shows notice when entry is not found', async () => {
+      const editor = { replaceSelection: jest.fn() };
+      const plugin = makePlugin();
+      plugin.getEntry = jest.fn(() => ({
+        ok: false,
+        error: { message: 'Entry not found: key2' },
+      }));
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+      const actions = new EditorActions(plugin);
+
+      await actions.insertLiteratureNoteLink('key2');
+
+      expect(Notice).toHaveBeenCalledWith('Entry not found: key2');
+      expect(editor.replaceSelection).not.toHaveBeenCalled();
+    });
+
+    it('shows notice when getTitleForCitekey fails', async () => {
+      const editor = { replaceSelection: jest.fn() };
+      const plugin = makePlugin();
+      plugin.getTitleForCitekey = jest.fn(() => ({
+        ok: false,
+        error: { message: 'Template render failed' },
+      }));
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+      plugin.app.vault = { getConfig: jest.fn(() => false) };
+      const actions = new EditorActions(plugin);
+
+      await actions.insertLiteratureNoteLink('key1');
+
+      expect(Notice).toHaveBeenCalledWith('Template render failed');
+      expect(editor.replaceSelection).not.toHaveBeenCalled();
+    });
+
+    it('inserts markdown link when useMarkdownLinks is true', async () => {
+      const editor = { replaceSelection: jest.fn() };
+      const plugin = makePlugin();
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+      plugin.app.vault = { getConfig: jest.fn(() => true) };
+      plugin.app.metadataCache.fileToLinktext = jest.fn(() => 'notes/key1');
+      const actions = new EditorActions(plugin);
+
+      await actions.insertLiteratureNoteLink('key1');
+
+      expect(editor.replaceSelection).toHaveBeenCalledWith(
+        '[Title](notes/key1)',
+      );
+    });
+
+    it('inserts wikilink when useMarkdownLinks is false', async () => {
+      const editor = { replaceSelection: jest.fn() };
+      const plugin = makePlugin();
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+      plugin.app.vault = { getConfig: jest.fn(() => false) };
+      plugin.app.metadataCache.fileToLinktext = jest.fn(() => 'link');
+      const actions = new EditorActions(plugin);
+
+      await actions.insertLiteratureNoteLink('key1');
+
+      expect(editor.replaceSelection).toHaveBeenCalledWith('[[link]]');
+    });
+
+    it('shows notice when getOrCreateLiteratureNoteFile throws LiteratureNoteNotFoundError', async () => {
+      const editor = { replaceSelection: jest.fn() };
+      const plugin = makePlugin();
+      plugin.noteService.getOrCreateLiteratureNoteFile = jest
+        .fn()
+        .mockRejectedValue(new LiteratureNoteNotFoundError('key1'));
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+      const actions = new EditorActions(plugin);
+
+      await actions.insertLiteratureNoteLink('key1');
+
+      expect(Notice).toHaveBeenCalledWith(
+        expect.stringContaining('Automatic note creation is disabled'),
+      );
+      expect(editor.replaceSelection).not.toHaveBeenCalled();
+    });
+
+    it('shows generic notice when getOrCreateLiteratureNoteFile throws unknown error', async () => {
+      const editor = { replaceSelection: jest.fn() };
+      const plugin = makePlugin();
+      plugin.noteService.getOrCreateLiteratureNoteFile = jest
+        .fn()
+        .mockRejectedValue(new Error('Disk full'));
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+
+      const errorSpy = jest
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      const actions = new EditorActions(plugin);
+
+      await actions.insertLiteratureNoteLink('key1');
+
+      expect(Notice).toHaveBeenCalledWith(
+        'Failed to insert literature note link',
+      );
+      expect(errorSpy).toHaveBeenCalledWith(
+        'Failed to insert literature note link:',
+        expect.any(Error),
+      );
+      expect(editor.replaceSelection).not.toHaveBeenCalled();
+      errorSpy.mockRestore();
+    });
+
     it('shows notice when disableAutomaticNoteCreation is on and note does not exist', async () => {
       const editor = {
         replaceSelection: jest.fn(),
@@ -273,7 +404,181 @@ describe('EditorActions', () => {
     });
   });
 
+  describe('insertLiteratureNoteContent', () => {
+    it('shows notice when content result is an error', async () => {
+      const editor = {
+        replaceRange: jest.fn(),
+        getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+        setCursor: jest.fn(),
+      };
+      const plugin = makePlugin();
+      plugin.getInitialContentForCitekey = jest.fn(() =>
+        Promise.resolve({
+          ok: false,
+          error: { message: 'Template render failed' },
+        }),
+      );
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+      const actions = new EditorActions(plugin);
+
+      await actions.insertLiteratureNoteContent('key1');
+
+      expect(Notice).toHaveBeenCalledWith('Template render failed');
+      expect(editor.replaceRange).not.toHaveBeenCalled();
+    });
+
+    it('handles multi-line content and positions cursor correctly', async () => {
+      const editor = {
+        replaceRange: jest.fn(),
+        getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+        setCursor: jest.fn(),
+      };
+      const plugin = makePlugin();
+      plugin.getInitialContentForCitekey = jest.fn(() =>
+        Promise.resolve({
+          ok: true,
+          value: 'line1\nline2\nline3',
+        }),
+      );
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+      const actions = new EditorActions(plugin);
+
+      await actions.insertLiteratureNoteContent('key1');
+
+      // 3 lines, starting at line:0 ch:0
+      // newLine = 0 + 3 - 1 = 2, newCh = 'line3'.length = 5
+      expect(editor.setCursor).toHaveBeenCalledWith({ line: 2, ch: 5 });
+    });
+
+    it('passes selectedText to getInitialContentForCitekey', async () => {
+      const editor = {
+        replaceRange: jest.fn(),
+        getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+        setCursor: jest.fn(),
+      };
+      const plugin = makePlugin();
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+      const actions = new EditorActions(plugin);
+
+      await actions.insertLiteratureNoteContent('key1', 'selected text');
+
+      expect(plugin.getInitialContentForCitekey).toHaveBeenCalledWith(
+        'key1',
+        'selected text',
+      );
+    });
+  });
+
   describe('insertMarkdownCitation', () => {
+    it('shows notice when no active editor is found', async () => {
+      const plugin = makePlugin();
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => null);
+      plugin.app.workspace.activeEditor = null;
+      const actions = new EditorActions(plugin);
+
+      await actions.insertMarkdownCitation('key1', false);
+
+      expect(Notice).toHaveBeenCalledWith('No active editor found');
+    });
+
+    it('shows notice when citation result is an error', async () => {
+      const editor = {
+        replaceRange: jest.fn(),
+        getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+        setCursor: jest.fn(),
+      };
+      const plugin = makePlugin();
+      plugin.getMarkdownCitationForCitekey = jest.fn(() => ({
+        ok: false,
+        error: { message: 'Template render failed' },
+      }));
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+      const actions = new EditorActions(plugin);
+
+      await actions.insertMarkdownCitation('key1', false);
+
+      expect(Notice).toHaveBeenCalledWith('Template render failed');
+      expect(editor.replaceRange).not.toHaveBeenCalled();
+    });
+
+    it('shows notice when alternative citation result is an error', async () => {
+      const editor = {
+        replaceRange: jest.fn(),
+        getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+        setCursor: jest.fn(),
+      };
+      const plugin = makePlugin();
+      plugin.getAlternativeMarkdownCitationForCitekey = jest.fn(() => ({
+        ok: false,
+        error: { message: 'Alternative template failed' },
+      }));
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+      const actions = new EditorActions(plugin);
+
+      await actions.insertMarkdownCitation('key1', true);
+
+      expect(Notice).toHaveBeenCalledWith('Alternative template failed');
+      expect(editor.replaceRange).not.toHaveBeenCalled();
+    });
+
+    it('passes selectedText to citation methods', async () => {
+      const editor = {
+        replaceRange: jest.fn(),
+        getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+        setCursor: jest.fn(),
+      };
+      const plugin = makePlugin();
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+      const actions = new EditorActions(plugin);
+
+      await actions.insertMarkdownCitation('key1', false, 'my selection');
+
+      expect(plugin.getMarkdownCitationForCitekey).toHaveBeenCalledWith(
+        'key1',
+        'my selection',
+      );
+    });
+
+    it('handles multi-line citation and positions cursor correctly', async () => {
+      const editor = {
+        replaceRange: jest.fn(),
+        getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+        setCursor: jest.fn(),
+      };
+      const plugin = makePlugin();
+      plugin.getMarkdownCitationForCitekey = jest.fn(() => ({
+        ok: true,
+        value: 'line1\nline2',
+      }));
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+      const actions = new EditorActions(plugin);
+
+      await actions.insertMarkdownCitation('key1', false);
+
+      // 2 lines: newLine = 0 + 2 - 1 = 1, newCh = 'line2'.length = 5
+      expect(editor.setCursor).toHaveBeenCalledWith({ line: 1, ch: 5 });
+    });
+
+    it('does not auto-create note when library is null', async () => {
+      const editor = {
+        replaceRange: jest.fn(),
+        getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+        setCursor: jest.fn(),
+      };
+      const plugin = makePlugin({
+        settings: { autoCreateNoteOnCitation: true },
+        libraryService: { library: null },
+      });
+      plugin.app.workspace.getActiveViewOfType = jest.fn(() => ({ editor }));
+      const actions = new EditorActions(plugin);
+
+      await actions.insertMarkdownCitation('key1', false);
+
+      expect(
+        plugin.noteService.getOrCreateLiteratureNoteFile,
+      ).not.toHaveBeenCalled();
+    });
+
     it('inserts primary citation', async () => {
       const editor = {
         replaceRange: jest.fn(),
