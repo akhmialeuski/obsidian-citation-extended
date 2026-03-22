@@ -305,6 +305,7 @@ export class LibraryService implements ILibraryService {
       console.warn('Citations plugin: No data source factory configured.');
       return [];
     }
+    // TODO: derive DataSourceType from DatabaseConfig when vault-file sources are supported in settings
     return this.settings.databases.map((db, index) =>
       this.dataSourceFactory!.create(
         { type: DATA_SOURCE_TYPES.LocalFile, path: db.path, format: db.type },
