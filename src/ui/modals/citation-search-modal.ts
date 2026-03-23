@@ -123,6 +123,9 @@ export class CitationSearchModal extends SuggestModal<Entry> {
     }
     this.inputEl.removeEventListener('keydown', this.boundKeydown);
     this.inputEl.removeEventListener('keyup', this.boundKeyup);
+
+    // Notify the action that the modal has closed (used by multi-select actions)
+    this.action.onClose?.();
   }
 
   getSuggestions(query: string): Entry[] {
@@ -161,6 +164,19 @@ export class CitationSearchModal extends SuggestModal<Entry> {
 
   onChooseSuggestion(item: Entry, evt: MouseEvent | KeyboardEvent): void {
     Promise.resolve(this.action.onChoose(item, evt)).catch(console.error);
+
+    // In multi-select mode, re-open the modal after each selection
+    if (this.action.keepOpen) {
+      // SuggestModal.close() is called automatically — reopen immediately
+      setTimeout(() => {
+        const modal = new CitationSearchModal(
+          this.app,
+          this.plugin,
+          this.action,
+        );
+        modal.open();
+      }, 50);
+    }
   }
 
   renderSuggestion(entry: Entry, el: HTMLElement): void {

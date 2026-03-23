@@ -51,6 +51,37 @@ Inserts a formatted citation string (e.g. `[@smith2023]`) at the cursor position
 
 **How it works:** Open the search modal, pick a reference, and the citation string is inserted at your cursor. Hold Shift when pressing Enter to use the alternative format — e.g. switch between `[@smith2023]` (primary) and `@smith2023` (secondary).
 
+## Open Literature Note for Citation at Cursor
+
+Opens the literature note for the citation under the cursor, without opening the search modal.
+
+- **Command**: `Citations: Open literature note for citation at cursor`
+- Parses the current line for citation patterns: `[@citekey]`, `@citekey`, `[[@citekey]]`
+- If a citekey is found, opens the corresponding literature note directly
+
+**How it works:** Place your cursor inside or next to a citation (e.g. `[@smith2023]`), then run the command. The plugin extracts the citekey and opens the note. No modal appears — it's a direct shortcut for navigating from a citation to its note.
+
+## Insert Subsequent Citation
+
+Appends a new citekey to an existing citation at the cursor position.
+
+- **Command**: `Citations: Insert subsequent citation`
+- Transforms `[@key1]` → `[@key1; @key2]` when the cursor is inside a citation
+- If no existing citation is found at the cursor, falls back to normal citation insertion
+
+**How it works:** Place your cursor inside an existing `[@...]` citation, run the command, select a reference from the search modal, and it's appended with a semicolon separator. This is the standard Pandoc syntax for multi-cite references.
+
+## Insert Multiple Citations
+
+Insert several citations at once in a combined `[@key1; @key2; @key3]` format.
+
+- **Command**: `Citations: Insert multiple citations`
+- The modal stays open after each selection — keep adding references
+- Press **Shift+Enter** to add the last reference and insert immediately
+- Press **Esc** to finalize and insert all collected citations
+
+**How it works:** Open the modal, select references one by one (each Enter adds one and reopens the modal), then press Esc to insert the combined citation string at your cursor.
+
 ## Refresh Citation Database
 
 Manually reloads all configured citation databases.
@@ -65,7 +96,7 @@ Manually reloads all configured citation databases.
 
 The search modal supports:
 
-- **Full-text search** across title, author, year, and citekey
+- **Full-text search** across title, author, year, citekey, and Zotero ID
 - **Fuzzy matching** (handles typos — "attenshun" finds "Attention")
 - **Accent-insensitive search** (e.g. "Muller" finds "Müller", "Gomez" finds "Gómez")
 - **Prefix matching** (typing "smith" matches "Smith2023", "Smithson2021", etc.)

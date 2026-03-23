@@ -13,6 +13,7 @@ import {
   EntryDataBibLaTeX,
   EntryDataCSL,
   WorkerResponse,
+  HayagrivaAdapter,
   UnsupportedFormatError,
 } from '../core';
 import { WorkerManager } from '../util';
@@ -98,6 +99,12 @@ export class LocalFileSource implements DataSource {
       );
     } else if (this.format === DATABASE_FORMATS.CslJson) {
       return entries.map((e) => new EntryCSLAdapter(e as EntryDataCSL));
+    } else if (this.format === DATABASE_FORMATS.Hayagriva) {
+      return entries.map((e) => {
+        const raw = e as unknown as Record<string, unknown>;
+        const citekey = (raw._hayagrivaCitekey as string) || '';
+        return new HayagrivaAdapter(citekey, raw);
+      });
     } else {
       throw new UnsupportedFormatError(this.format);
     }

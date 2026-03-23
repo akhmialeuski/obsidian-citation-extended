@@ -30,6 +30,8 @@ export class CitationsPluginSettings {
     DEFAULT_SETTINGS.alternativeMarkdownCitationTemplate;
   public autoCreateNoteOnCitation: boolean =
     DEFAULT_SETTINGS.autoCreateNoteOnCitation;
+  public literatureNoteLinkDisplayTemplate: string =
+    DEFAULT_SETTINGS.literatureNoteLinkDisplayTemplate;
 
   public referenceListSortOrder: ReferenceListSortOrder =
     DEFAULT_SETTINGS.referenceListSortOrder;

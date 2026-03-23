@@ -284,8 +284,9 @@ describe('EditorActions', () => {
 
       await actions.insertLiteratureNoteLink('key1');
 
+      // Display text defaults to citekey for Markdown links (#271)
       expect(editor.replaceSelection).toHaveBeenCalledWith(
-        '[Title](notes/key1)',
+        '[key1](notes/key1)',
       );
     });
 

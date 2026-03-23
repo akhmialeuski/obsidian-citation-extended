@@ -2,6 +2,16 @@ import CitationPlugin from '../main';
 import { LibraryNotReadyError, LiteratureNoteNotFoundError } from '../core';
 import { IEditorProxy } from '../platform/platform-adapter';
 
+/**
+ * Regex patterns to detect a citation citekey at the cursor position.
+ * Matches: [@citekey], @citekey, [[@citekey]], [[citekey]]
+ */
+const CITEKEY_PATTERNS = [
+  /\[@([^\]]+)\]/g, // [@citekey]
+  /\[\[@([^\]|]+)(?:\|[^\]]+)?\]\]/g, // [[@citekey]] or [[@citekey|alias]]
+  /(?:^|[^[])@([\w:.#$%&\-+?<>~/]+)/g, // standalone @citekey
+];
+
 export class EditorActions {
   constructor(private plugin: CitationPlugin) {}
 
@@ -97,15 +107,41 @@ export class EditorActions {
 
       const useMarkdown = this.platform.workspace.getConfig('useMarkdownLinks');
 
+      // Resolve the display text for the link.  When a custom template is set
+      // it overrides the default (citekey for Markdown, title for Wiki).
+      const displayTemplate =
+        this.plugin.settings.literatureNoteLinkDisplayTemplate;
+      let displayText: string;
+      if (displayTemplate) {
+        const vars = this.plugin.templateService.getTemplateVariables(
+          entryResult.value,
+        );
+        const renderResult = this.plugin.templateService.render(
+          displayTemplate,
+          vars,
+        );
+        displayText = renderResult.ok ? renderResult.value : citekey;
+      } else {
+        // Default: citekey for Markdown links (#271), title for Wiki links
+        displayText = useMarkdown ? citekey : titleResult.value;
+      }
+
       let linkText: string;
       if (useMarkdown) {
         const uri = encodeURI(
           this.platform.workspace.fileToLinktext(file, '', false),
         );
-        linkText = `[${titleResult.value}](${uri})`;
+        linkText = `[${displayText}](${uri})`;
       } else {
-        linkText = this.platform.workspace.fileToLinktext(file, '', true);
-        linkText = `[[${linkText}]]`;
+        const wikiTarget = this.platform.workspace.fileToLinktext(
+          file,
+          '',
+          true,
+        );
+        linkText =
+          displayText !== titleResult.value
+            ? `[[${wikiTarget}|${displayText}]]`
+            : `[[${wikiTarget}]]`;
       }
 
       editor.replaceSelection(linkText);
@@ -201,5 +237,86 @@ export class EditorActions {
         }
       }
     }
+  }
+
+  /**
+   * Extract a citekey from the text surrounding the cursor position.
+   * Scans the current line for known citation patterns.
+   */
+  extractCitekeyAtCursor(editor: IEditorProxy): string | null {
+    const cursor = editor.getCursor();
+    const line = editor.getLine(cursor.line);
+    const ch = cursor.ch;
+
+    for (const pattern of CITEKEY_PATTERNS) {
+      // Reset lastIndex for global regex
+      pattern.lastIndex = 0;
+      let match;
+      while ((match = pattern.exec(line)) !== null) {
+        const start = match.index;
+        const end = start + match[0].length;
+        if (ch >= start && ch <= end) {
+          return match[1];
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Insert an additional citekey into an existing citation at cursor (#149).
+   * Transforms [@key1] → [@key1; @key2] when the cursor is inside a citation.
+   * If no existing citation is found, falls back to normal citation insertion.
+   */
+  async insertSubsequentCitation(newCitekey: string): Promise<void> {
+    const editor = this.getActiveEditor();
+    if (!editor) {
+      this.platform.notifications.show('No active editor found');
+      return;
+    }
+
+    const cursor = editor.getCursor();
+    const line = editor.getLine(cursor.line);
+
+    // Find the [@...] citation block that contains the cursor
+    const citationPattern = /\[(@[^\]]+)\]/g;
+    let match;
+    while ((match = citationPattern.exec(line)) !== null) {
+      const start = match.index;
+      const end = start + match[0].length;
+      if (cursor.ch >= start && cursor.ch <= end) {
+        // Insert "; @newCitekey" before the closing bracket
+        const insertPos = { line: cursor.line, ch: end - 1 };
+        editor.replaceRange(`; @${newCitekey}`, insertPos);
+        // Move cursor to end of inserted text
+        editor.setCursor({
+          line: cursor.line,
+          ch: insertPos.ch + `; @${newCitekey}`.length,
+        });
+        return;
+      }
+    }
+
+    // No existing citation at cursor — insert as normal citation
+    await this.insertMarkdownCitation(newCitekey, false);
+  }
+
+  /**
+   * Open the literature note for the citation under the cursor (#203).
+   */
+  async openNoteAtCursor(): Promise<void> {
+    const editor = this.getActiveEditor();
+    if (!editor) {
+      this.platform.notifications.show('No active editor found');
+      return;
+    }
+
+    const citekey = this.extractCitekeyAtCursor(editor);
+    if (!citekey) {
+      this.platform.notifications.show('No citation found at cursor position.');
+      return;
+    }
+
+    await this.openLiteratureNote(citekey, false);
   }
 }

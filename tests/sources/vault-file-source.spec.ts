@@ -348,7 +348,7 @@ describe('VaultFileSource', () => {
       const source = new VaultFileSource(
         defaultId,
         defaultPath,
-        'hayagriva' as any,
+        'unknown-format' as any,
         createMockWorkerManager({
           entries: [sampleBibLaTeXEntry],
           parseErrors: [],

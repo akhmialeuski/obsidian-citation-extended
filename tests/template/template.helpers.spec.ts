@@ -606,6 +606,78 @@ describe('TemplateService', () => {
     });
   });
 
+  describe('PDF Link Helpers', () => {
+    it('pdfLink returns file:// URI for the first PDF', () => {
+      expectOk(
+        service.render('{{pdfLink files}}', {
+          ...mockContext,
+          files: ['/home/user/papers/smith2023.pdf'],
+        } as unknown as TemplateContext),
+        'file:///home/user/papers/smith2023.pdf',
+      );
+    });
+
+    it('pdfLink returns empty string when no PDFs in file list', () => {
+      expectOk(
+        service.render('{{pdfLink files}}', {
+          ...mockContext,
+          files: ['/home/user/notes.txt'],
+        } as unknown as TemplateContext),
+        '',
+      );
+    });
+
+    it('pdfLink returns empty string when files is not an array', () => {
+      expectOk(
+        service.render('{{pdfLink files}}', {
+          ...mockContext,
+          files: null,
+        } as unknown as TemplateContext),
+        '',
+      );
+    });
+
+    it('pdfLink picks the first PDF when multiple exist', () => {
+      expectOk(
+        service.render('{{pdfLink files}}', {
+          ...mockContext,
+          files: ['/notes.txt', '/first.pdf', '/second.pdf'],
+        } as unknown as TemplateContext),
+        'file:///first.pdf',
+      );
+    });
+
+    it('pdfLink URL-encodes spaces in paths', () => {
+      expectOk(
+        service.render('{{pdfLink files}}', {
+          ...mockContext,
+          files: ['/home/user/My Library/Smith 2023.pdf'],
+        } as unknown as TemplateContext),
+        'file:///home/user/My%20Library/Smith%202023.pdf',
+      );
+    });
+
+    it('pdfMarkdownLink returns Markdown link for the first PDF', () => {
+      expectOk(
+        service.render('{{pdfMarkdownLink files}}', {
+          ...mockContext,
+          files: ['/papers/smith2023.pdf'],
+        } as unknown as TemplateContext),
+        '[smith2023](file:///papers/smith2023.pdf)',
+      );
+    });
+
+    it('pdfMarkdownLink returns empty string when no PDFs', () => {
+      expectOk(
+        service.render('{{pdfMarkdownLink files}}', {
+          ...mockContext,
+          files: [],
+        } as unknown as TemplateContext),
+        '',
+      );
+    });
+  });
+
   describe('String Helpers — branch coverage', () => {
     it('replace returns original value when input is not a string', () => {
       expectOk(

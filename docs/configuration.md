@@ -156,6 +156,7 @@ This section controls what text is inserted when you use the **Insert Markdown c
 | Primary citation template | Template for the main citation format | `[@{{citekey}}]` |
 | Secondary citation template | Template for the alternative format (activated by **Shift+Enter** in the search modal) | `@{{citekey}}` |
 | Auto-create literature note on citation | Create the literature note file when inserting a citation, if it doesn't exist yet | `false` |
+| Literature note link display template | Custom Handlebars template for the display text of inserted literature note links. Leave empty to use defaults (citekey for Markdown, title for Wiki) | (empty) |
 
 ### Citation style preset
 

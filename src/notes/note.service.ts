@@ -187,6 +187,13 @@ export class NoteService implements INoteService {
       return found;
     }
 
+    // Vault-wide search: look for the file anywhere in the vault (#256).
+    // This handles notes moved completely outside the literature note folder.
+    const vaultWide = this.findNoteInSubfolders(expectedBasename, '');
+    if (vaultWide) {
+      return vaultWide;
+    }
+
     return null;
   }
 

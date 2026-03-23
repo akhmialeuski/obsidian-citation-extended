@@ -268,15 +268,10 @@ describe('NoteService', () => {
       );
     });
 
-    it('does not find notes outside the literature note folder', async () => {
+    it('finds notes outside the literature note folder via vault-wide search (#256)', async () => {
       // A file with the same name exists outside the literature note folder
       const outsideFile: IVaultFile = {
         path: 'Other folder/My Title.md',
-        name: 'My Title.md',
-      };
-
-      const mockCreatedFile: IVaultFile = {
-        path: 'Reading notes/My Title.md',
         name: 'My Title.md',
       };
 
@@ -285,17 +280,15 @@ describe('NoteService', () => {
       (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([
         outsideFile,
       ]);
-      (platform.vault.createFolder as jest.Mock).mockResolvedValue(undefined);
-      (platform.vault.create as jest.Mock).mockResolvedValue(mockCreatedFile);
 
       const result = await noteService.getOrCreateLiteratureNoteFile(
         'citekey1',
         library,
       );
 
-      // Should create a new file, not return the outside file
-      expect(result).toBe(mockCreatedFile);
-      expect(platform.vault.create).toHaveBeenCalled();
+      // Vault-wide fallback should find the moved note without creating a duplicate
+      expect(result).toBe(outsideFile);
+      expect(platform.vault.create).not.toHaveBeenCalled();
     });
   });
 

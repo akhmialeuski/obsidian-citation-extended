@@ -26,7 +26,7 @@ export class SearchService {
     // @ts-expect-error -- minisearch types are not perfect
     const MiniSearchConstructor = MiniSearch.default || MiniSearch;
     this.index = new MiniSearchConstructor({
-      fields: ['title', 'authorString', 'year', 'id'],
+      fields: ['title', 'authorString', 'year', 'id', 'zoteroId'],
       storeFields: ['id'],
       // Normalize diacritics at index time so accented characters match their base forms
       processTerm: (term: string) => normalizeTerm(term),
@@ -55,6 +55,7 @@ export class SearchService {
       title: entry.title || '',
       authorString: entry.authorString || '',
       year: entry.year?.toString() || '',
+      zoteroId: entry.zoteroId || '',
     }));
 
     this.index.addAll(docs);

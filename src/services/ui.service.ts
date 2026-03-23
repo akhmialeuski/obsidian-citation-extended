@@ -1,6 +1,8 @@
 import { LoadingStatus, LibraryState } from '../library/library-state';
 import { CitationSearchModal } from '../ui/modals/citation-search-modal';
 import { InsertCitationAction } from '../ui/modals/actions/insert-citation.action';
+import { InsertSubsequentCitationAction } from '../ui/modals/actions/insert-subsequent-citation.action';
+import { InsertMultiCitationAction } from '../ui/modals/actions/insert-multi-citation.action';
 import { InsertNoteLinkAction } from '../ui/modals/actions/insert-note-link.action';
 import { InsertNoteContentAction } from '../ui/modals/actions/insert-note-content.action';
 import { OpenNoteAction } from '../ui/modals/actions/open-note.action';
@@ -137,6 +139,30 @@ export class UIService implements IUIService {
       name: 'Insert Markdown citation',
       callback: () => {
         this.openSearchModal(new InsertCitationAction(this.plugin));
+      },
+    });
+
+    this.plugin.addCommand({
+      id: 'open-note-at-cursor',
+      name: 'Open literature note for citation at cursor',
+      callback: () => {
+        void this.plugin.editorActions.openNoteAtCursor();
+      },
+    });
+
+    this.plugin.addCommand({
+      id: 'insert-subsequent-citation',
+      name: 'Insert subsequent citation',
+      callback: () => {
+        this.openSearchModal(new InsertSubsequentCitationAction(this.plugin));
+      },
+    });
+
+    this.plugin.addCommand({
+      id: 'insert-multiple-citations',
+      name: 'Insert multiple citations',
+      callback: () => {
+        this.openSearchModal(new InsertMultiCitationAction(this.plugin));
       },
     });
   }
