@@ -16,7 +16,7 @@ export const DATA_SOURCE_TYPES = {
  */
 export type DataSourceType =
   | (typeof DATA_SOURCE_TYPES)[keyof typeof DATA_SOURCE_TYPES]
-  | string;
+  | (string & {});
 
 /**
  * DataSource interface defines a contract for loading bibliography entries
