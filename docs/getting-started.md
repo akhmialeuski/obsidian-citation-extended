@@ -37,7 +37,7 @@ The plugin reads bibliography data from files exported by your reference manager
 3. Enter a friendly name, select the format, provide the file path
 4. The status indicator will show "Path verified" when the file is found
 
-![Database settings](images/settings-databases.png)
+![Database settings](images/settings-multiple-databases.png)
 
 ## Creating Your First Literature Note
 

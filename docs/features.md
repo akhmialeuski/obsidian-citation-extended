@@ -14,7 +14,7 @@ Opens (or creates) a literature note for a selected reference.
 
 **How it works:** A search modal opens where you type to find a reference by title, author, year, or citekey. Press Enter to open the corresponding literature note. If the note doesn't exist, it's created from your content template.
 
-![Open literature note](images/open-literature-note.png)
+![Open literature note](images/search-modal.png)
 
 ## Insert Literature Note Link
 
@@ -72,5 +72,3 @@ The search modal supports:
 - **Configurable sort order**: default, by year (newest/oldest first), by author (A-Z)
 
 The search index is rebuilt each time the library loads. On a typical library (1000-5000 entries) this takes under 200ms.
-
-![Search modal](images/search-modal-features.png)

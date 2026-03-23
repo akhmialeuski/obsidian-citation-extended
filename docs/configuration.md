@@ -2,7 +2,8 @@
 
 All settings are accessible in **Settings** > **Citation plugin**.
 
-![Settings overview](images/settings-overview.png)
+![Settings overview](images/settings-overview_1.png)
+![Settings overview](images/settings-overview_2.png)
 
 ---
 
@@ -58,8 +59,6 @@ The plugin registers five commands but does **not** assign default hotkeys — y
 1. Open **Settings** > **Hotkeys**
 2. Search for `Citations`
 3. Click the `+` button next to any command to assign a key combination
-
-![Hotkey configuration](images/settings-hotkeys.png)
 
 **Recommended bindings** (adjust to taste):
 
