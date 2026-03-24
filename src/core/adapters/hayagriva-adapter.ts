@@ -216,9 +216,9 @@ export function parseHayagrivaYaml(
 
   for (const line of lines) {
     // Top-level key (no indentation, ends with colon)
-    if (/^[a-zA-Z0-9_-]+:\s*$/.test(line)) {
+    if (/^[\w.-]+:\s*$/.test(line)) {
       flushBlock();
-      currentKey = line.replace(':', '').trim();
+      currentKey = line.replace(/:\s*$/, '').trim();
       currentBlock = [];
     } else if (currentKey !== null) {
       currentBlock.push(line);

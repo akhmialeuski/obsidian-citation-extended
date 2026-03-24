@@ -25,6 +25,8 @@ export class CitationSearchModal extends SuggestModal<Entry> {
   private unsubscribeStore?: () => void;
   private boundKeydown = (ev: KeyboardEvent) => this.onInputKeydown(ev);
   private boundKeyup = (ev: KeyboardEvent) => this.onInputKeyup(ev);
+  /** True when the modal is closing to immediately reopen (keepOpen cycle). */
+  private isReopening = false;
 
   constructor(app: App, plugin: CitationPlugin, action: SearchAction) {
     super(app);
@@ -124,9 +126,9 @@ export class CitationSearchModal extends SuggestModal<Entry> {
     this.inputEl.removeEventListener('keydown', this.boundKeydown);
     this.inputEl.removeEventListener('keyup', this.boundKeyup);
 
-    // Only notify the action when the modal is truly dismissed,
-    // not when it self-closes for a keepOpen reopen cycle
-    if (!this.action.keepOpen) {
+    // Notify the action only when the modal is truly dismissed (Esc or
+    // Shift+Enter), not during intermediate keepOpen reopen cycles.
+    if (!this.isReopening) {
       this.action.onClose?.();
     }
   }
@@ -166,11 +168,14 @@ export class CitationSearchModal extends SuggestModal<Entry> {
   }
 
   onChooseSuggestion(item: Entry, evt: MouseEvent | KeyboardEvent): void {
-    Promise.resolve(this.action.onChoose(item, evt)).catch(console.error);
+    const result = this.action.onChoose(item, evt);
+    if (result instanceof Promise) {
+      void result.catch((e: unknown) => console.error(e));
+    }
 
     // In multi-select mode, re-open the modal after each selection
     if (this.action.keepOpen) {
-      // SuggestModal.close() is called automatically — reopen immediately
+      this.isReopening = true;
       setTimeout(() => {
         const modal = new CitationSearchModal(
           this.app,

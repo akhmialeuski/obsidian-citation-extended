@@ -12,6 +12,7 @@ import {
   WorkerResponse,
   UnsupportedFormatError,
   HayagrivaAdapter,
+  HayagrivaEntryData,
 } from '../core';
 import { WorkerManager } from '../util';
 
@@ -88,9 +89,14 @@ export class VaultFileSource implements DataSource {
       return entries.map((e) => new EntryCSLAdapter(e as EntryDataCSL));
     } else if (this.format === DATABASE_FORMATS.Hayagriva) {
       return entries.map((e) => {
-        const raw = e as unknown as Record<string, unknown>;
-        const citekey = (raw._hayagrivaCitekey as string) || '';
-        return new HayagrivaAdapter(citekey, raw);
+        const { _hayagrivaCitekey, ...rest } = e as unknown as Record<
+          string,
+          unknown
+        >;
+        return new HayagrivaAdapter(
+          (_hayagrivaCitekey as string) ?? '',
+          rest as HayagrivaEntryData,
+        );
       });
     } else {
       throw new UnsupportedFormatError(this.format);

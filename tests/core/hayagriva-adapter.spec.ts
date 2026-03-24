@@ -184,4 +184,16 @@ entry1:
     expect(adapter.containerTitle).toBe('Nature Machine Intelligence');
     expect(adapter.publisher).toBe('Springer Nature');
   });
+
+  it('should parse citekeys containing dots', () => {
+    const yaml = `einstein.1905.relativity:
+  type: article
+  title: On the Electrodynamics of Moving Bodies
+  date: 1905
+`;
+
+    const entries = parseHayagrivaYaml(yaml);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].citekey).toBe('einstein.1905.relativity');
+  });
 });

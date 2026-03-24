@@ -191,6 +191,9 @@ export class NoteService implements INoteService {
     // This handles notes moved completely outside the literature note folder.
     const vaultWide = this.findNoteInSubfolders(expectedBasename, '');
     if (vaultWide) {
+      console.warn(
+        `Citations: note "${expectedBasename}" found outside the literature note folder at "${vaultWide.path}". Using vault-wide match.`,
+      );
       return vaultWide;
     }
 

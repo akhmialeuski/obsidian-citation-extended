@@ -9,7 +9,7 @@ import { OpenNoteAction } from '../ui/modals/actions/open-note.action';
 import { SearchAction } from '../ui/modals/actions/search-action';
 import CitationPlugin from '../main';
 import { IUIService } from '../container';
-import { IStatusBarItem, IEditorProxy } from '../platform/platform-adapter';
+import { IStatusBarItem } from '../platform/platform-adapter';
 
 export class UIService implements IUIService {
   private statusBarItem!: IStatusBarItem;
@@ -175,12 +175,14 @@ export class UIService implements IUIService {
    */
   private registerEditorContextMenu(): void {
     this.plugin.registerEvent(
-      this.plugin.app.workspace.on('editor-menu', (menu, editor) => {
-        // The Obsidian Editor object implements getLine/getCursor,
-        // which is all extractCitekeyAtCursor needs.
-        const citekey = this.plugin.editorActions.extractCitekeyAtCursor(
-          editor as unknown as IEditorProxy,
-        );
+      this.plugin.app.workspace.on('editor-menu', (menu) => {
+        // Use the platform adapter to get the active editor proxy
+        // instead of casting the event's editor parameter directly
+        const proxyEditor = this.plugin.platform.workspace.getActiveEditor();
+        if (!proxyEditor) return;
+
+        const citekey =
+          this.plugin.editorActions.extractCitekeyAtCursor(proxyEditor);
         if (!citekey) return;
 
         menu.addItem((item) => {
