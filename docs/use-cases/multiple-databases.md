@@ -54,7 +54,7 @@ The plugin supports up to 20 databases loaded simultaneously. All entries are me
 
 ### Searching Across Databases
 
-1. Press `Ctrl+Shift+E` (or any command that opens the search modal).
+1. Open the Command Palette (`Ctrl+P`) and run any command that opens the search modal (or press your configured hotkey, e.g. `Ctrl+Shift+E`).
 
 2. Search as usual. The modal searches across all loaded databases simultaneously. Results from different databases are interleaved based on search relevance.
 

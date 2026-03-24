@@ -12,7 +12,7 @@ The plugin offers three approaches for this, each suited to a different situatio
 - (Optional) Hotkeys assigned:
   - **Citations: Insert multiple citations** — for building a new multi-cite from scratch
   - **Citations: Insert subsequent citation** — for appending to an existing citation
-  - **Citations: Insert Markdown citation** — for single citations (`Ctrl+Shift+E` recommended)
+  - **Citations: Insert Markdown citation** — for single citations (suggested hotkey: `Ctrl+Shift+E`)
 
 ## Scenario 1: Insert Multiple Citations at Once
 
@@ -142,7 +142,7 @@ Use this as a quick alternative when you only need two citations and don't want 
 
 ### Step-by-Step
 
-1. Insert the first citation normally with **Insert Markdown citation** (`Ctrl+Shift+E`):
+1. Insert the first citation normally with **Insert Markdown citation** (via Command Palette or your configured hotkey):
 
    ```markdown
    The results confirm previous findings [@lecun2015]

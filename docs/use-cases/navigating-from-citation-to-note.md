@@ -30,7 +30,7 @@ The plugin provides a direct command that reads the citation under your cursor a
    Transformer architectures [@vaswa|ni2017] have become the foundation
    ```
 
-3. Press `Ctrl+Shift+G` (or open the Command Palette with `Ctrl+P` and run **Citations: Open literature note for citation at cursor**).
+3. Open the Command Palette (`Ctrl+P`) and run **Citations: Open literature note for citation at cursor** (or press your configured hotkey, e.g. `Ctrl+Shift+G`).
 
 4. The plugin parses the current line, finds the citation pattern `[@vaswani2017]`, extracts the citekey `vaswani2017`, and opens the literature note directly.
 
@@ -65,7 +65,7 @@ If the plugin cannot find a recognized citation pattern on the current line, not
    [@huang2017] and EfficientNet [@tan2019].
    ```
 
-2. To review your notes on the ResNet paper, place your cursor on the line containing `[@he2016]` and press `Ctrl+Shift+G`.
+2. To review your notes on the ResNet paper, place your cursor on the line containing `[@he2016]` and run **Citations: Open literature note for citation at cursor** (via the Command Palette or your configured hotkey, e.g. `Ctrl+Shift+G`).
 
 3. The note `Reading notes/@he2016.md` opens. Read your notes, add new thoughts, then navigate back using Obsidian's back button (`Ctrl+Alt+Left` on Windows/Linux or `Cmd+Alt+Left` on macOS).
 
@@ -79,7 +79,7 @@ If the plugin cannot find a recognized citation pattern on the current line, not
 The attention mechanism [@vaswani2017] was a breakthrough.
 ```
 
-**Action:** Press `Ctrl+Shift+G`
+**Action:** Run **Citations: Open literature note for citation at cursor** (via Command Palette or your configured hotkey, e.g. `Ctrl+Shift+G`)
 
 **Result:** The file `Reading notes/@vaswani2017.md` opens in the editor. If the file does not exist and auto-creation is enabled, it is created with your configured template content.
 
@@ -93,7 +93,7 @@ If you use Obsidian wiki links as your citation format (instead of Pandoc syntax
 The attention mechanism [[@vaswani2017]] was a breakthrough.
 ```
 
-Place your cursor on this line and press `Ctrl+Shift+G`. The plugin extracts `vaswani2017` from the `[[@vaswani2017]]` pattern and opens the note.
+Place your cursor on this line and run the command. The plugin extracts `vaswani2017` from the `[[@vaswani2017]]` pattern and opens the note.
 
 ### With In-Text Citations
 
@@ -111,10 +111,10 @@ The two commands serve different purposes:
 
 | Command | When to use | Modal? |
 |---------|------------|--------|
-| **Open literature note** (`Ctrl+Shift+O`) | You want to browse and search your library | Yes — search modal opens |
-| **Open literature note for citation at cursor** (`Ctrl+Shift+G`) | You see a specific citation and want to jump to it | No — direct navigation |
+| **Open literature note** (suggested: `Ctrl+Shift+O`) | You want to browse and search your library | Yes — search modal opens |
+| **Open literature note for citation at cursor** (suggested: `Ctrl+Shift+G`) | You see a specific citation and want to jump to it | No — direct navigation |
 
-Use `Ctrl+Shift+G` for fast in-context navigation and `Ctrl+Shift+O` for exploratory browsing.
+Use **Open literature note for citation at cursor** for fast in-context navigation and **Open literature note** for exploratory browsing.
 
 ### Using the Right-Click Context Menu
 
@@ -136,7 +136,7 @@ Instead of memorizing a keyboard shortcut, you can right-click directly on a cit
 
 | Method | Best for |
 |--------|----------|
-| `Ctrl+Shift+G` | Fast, hands-on-keyboard workflow. You know the citation is there. |
+| Your configured hotkey (e.g. `Ctrl+Shift+G`) | Fast, hands-on-keyboard workflow. You know the citation is there. |
 | Right-click → "Open note for @..." | Discovery. You see the citekey in the menu item and confirm before navigating. |
 
 Both methods produce identical results — the only difference is the interaction style.

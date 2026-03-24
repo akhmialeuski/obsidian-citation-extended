@@ -17,7 +17,7 @@ The plugin automates this entirely: select a reference, and a fully formatted li
 
 ### Creating a Literature Note for the First Time
 
-1. Press `Ctrl+Shift+O` (or open the Command Palette with `Ctrl+P` and search for **Citations: Open literature note**).
+1. Open the Command Palette (`Ctrl+P`) and search for **Citations: Open literature note** (or press your configured hotkey, e.g. `Ctrl+Shift+O`).
 
 2. The search modal appears. Type the title, author, or citekey of the reference. For example, type `goodfellow deep learning`:
 
@@ -77,7 +77,7 @@ The plugin automates this entirely: select a reference, and a fully formatted li
 
 ### Opening an Existing Literature Note
 
-1. Press `Ctrl+Shift+O` again and search for the same reference.
+1. Run **Citations: Open literature note** again and search for the same reference.
 
 2. The plugin finds the existing note at `Reading notes/@goodfellow2016.md` and opens it directly — no duplicate is created.
 

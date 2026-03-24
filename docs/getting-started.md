@@ -48,7 +48,7 @@ If you use [Typst](https://typst.app) for typesetting, you can use your Hayagriv
 
 ## Creating Your First Literature Note
 
-1. Press `Ctrl+Shift+O` (or use the command palette: **Open literature note**)
+1. Open the Command Palette (`Ctrl+P`) and run **Citations: Open literature note** (or press your configured hotkey, e.g. `Ctrl+Shift+O`)
 2. Search for a reference by title, author, or year
 3. Select a reference — the plugin creates a note using your configured template
 4. The note is saved in your configured literature note folder

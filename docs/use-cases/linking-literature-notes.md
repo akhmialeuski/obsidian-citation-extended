@@ -24,7 +24,7 @@ This is different from inserting a citation (`[@citekey]`). A literature note li
    For the theoretical foundation, see |
    ```
 
-3. Press `Ctrl+Shift+L` (or open the Command Palette with `Ctrl+P` and run **Citations: Insert literature note link**).
+3. Open the Command Palette (`Ctrl+P`) and run **Citations: Insert literature note link** (or press your configured hotkey, e.g. `Ctrl+Shift+L`).
 
 4. The search modal opens. Type `lecun deep` to find the reference:
 

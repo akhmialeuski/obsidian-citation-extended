@@ -85,7 +85,7 @@ lecun2015:
 
 ### Creating Literature Notes from Hayagriva Entries
 
-1. Press `Ctrl+Shift+O` to open the literature note command.
+1. Open the Command Palette (`Ctrl+P`) and run **Citations: Open literature note** (or press your configured hotkey, e.g. `Ctrl+Shift+O`).
 
 2. Search for an entry. Type `vaswani`:
 

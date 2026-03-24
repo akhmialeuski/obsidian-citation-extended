@@ -24,7 +24,7 @@ This is the most frequent action you will perform with the plugin. A fast citati
 
    (The `|` represents your cursor position.)
 
-2. Press `Ctrl+Shift+E` (or open the Command Palette with `Ctrl+P` and search for **Citations: Insert Markdown citation**).
+2. Open the Command Palette (`Ctrl+P`) and search for **Citations: Insert Markdown citation** (or press your configured hotkey, e.g. `Ctrl+Shift+E`).
 
 3. The search modal appears. Type the author name, title, or year of the source you want to cite. For example, type `vaswani attention`:
 
@@ -60,7 +60,7 @@ The plugin supports two citation formats: primary (Enter) and secondary (Shift+E
    According to |, the self-attention mechanism...
    ```
 
-2. Press `Ctrl+Shift+E` to open the search modal.
+2. Run **Citations: Insert Markdown citation** to open the search modal (via Command Palette or your configured hotkey).
 
 3. Type `vaswani` to find the entry.
 
@@ -190,7 +190,7 @@ Vaswani and Shazeer et al. (2017)
 
 ## Tips
 
-- **Speed matters.** Assigning `Ctrl+Shift+E` to the citation command makes it nearly instant — your fingers never leave the keyboard.
+- **Speed matters.** Assigning a hotkey (e.g. `Ctrl+Shift+E`) to the citation command makes it nearly instant — your fingers never leave the keyboard.
 - **Primary vs. secondary is contextual.** Use primary for parenthetical citations at the end of a sentence and secondary for narrative citations woven into your prose.
 - **The modal remembers nothing between invocations.** Each time you open it, the search field is empty. For inserting many citations in a row, see [Multi-Citation Workflow](multi-citation-workflow.md).
 - **Cursor positioning.** After insertion, the cursor is always placed at the end of the inserted text. This means you can type a period, a space, or continue your sentence immediately.

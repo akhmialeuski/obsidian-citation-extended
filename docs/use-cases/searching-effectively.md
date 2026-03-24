@@ -15,7 +15,7 @@ The plugin uses MiniSearch for full-text indexing, providing fuzzy matching, pre
 
 ### Searching by Title
 
-1. Open any search modal (e.g., `Ctrl+Shift+E` for citations).
+1. Open any search modal (e.g., via the Command Palette or your configured hotkey for **Insert Markdown citation**).
 
 2. Type a few words from the title:
 
