@@ -7,8 +7,11 @@ import { HayagrivaAdapter, HayagrivaEntryData } from './hayagriva-adapter';
 import { UnsupportedFormatError } from '../errors';
 
 /**
- * A registry mapping DatabaseType to an adapter constructor function.
- * Each format's adapter knows how to convert raw EntryData to Entry objects.
+ * A registry mapping each DatabaseType to a function that wraps raw
+ * EntryData objects in the appropriate typed adapter.
+ *
+ * Every format follows the same pattern: cast the raw object to the
+ * format-specific interface and pass it to the adapter constructor.
  */
 const ENTRY_ADAPTERS: Record<DatabaseType, (entries: EntryData[]) => Entry[]> =
   {
@@ -19,16 +22,9 @@ const ENTRY_ADAPTERS: Record<DatabaseType, (entries: EntryData[]) => Entry[]> =
       entries.map((e) => new EntryCSLAdapter(e as EntryDataCSL)),
 
     [DATABASE_FORMATS.Hayagriva]: (entries) =>
-      entries.map((e) => {
-        const { _hayagrivaCitekey, ...rest } = e as unknown as Record<
-          string,
-          unknown
-        >;
-        return new HayagrivaAdapter(
-          (_hayagrivaCitekey as string) ?? '',
-          rest as HayagrivaEntryData,
-        );
-      }),
+      entries.map(
+        (e) => new HayagrivaAdapter(e as unknown as HayagrivaEntryData),
+      ),
   };
 
 /**

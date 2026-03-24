@@ -50,12 +50,9 @@ function parseBibLaTeX(raw: string): ParseResult {
 
 function parseHayagriva(raw: string): ParseResult {
   const hayagrivaEntries = parseHayagrivaYaml(raw);
+  // Each entry already has `id` injected by the parser — same as CSL-JSON
   const entries = hayagrivaEntries.map(
-    ({ citekey, data }) =>
-      ({
-        _hayagrivaCitekey: citekey,
-        ...data,
-      }) as unknown as EntryData,
+    ({ data }) => data as unknown as EntryData,
   );
   return { entries, parseErrors: [] };
 }

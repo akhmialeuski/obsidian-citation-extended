@@ -6,6 +6,8 @@ import { Author, Entry } from '../types/entry';
  * See: https://github.com/typst/hayagriva
  */
 export interface HayagrivaEntryData {
+  /** Citekey — injected by the parser from the top-level YAML key. */
+  id: string;
   type?: string;
   title?: string;
   author?: (string | { family?: string; given?: string })[];
@@ -68,7 +70,6 @@ function toDate(dateStr: string): Date | null {
  * parser ({@link parseHayagrivaYaml} in `parsing/hayagriva-parser.ts`).
  */
 export class HayagrivaAdapter extends Entry {
-  private _citekey: string;
   private data: HayagrivaEntryData;
 
   eprint: string | null = null;
@@ -79,21 +80,20 @@ export class HayagrivaAdapter extends Entry {
   _compositeCitekey?: string;
   private _id?: string;
 
-  constructor(citekey: string, data: HayagrivaEntryData) {
+  constructor(data: HayagrivaEntryData) {
     super();
-    this._citekey = citekey;
     this.data = data;
   }
 
   get id(): string {
-    return this._id || this._citekey;
+    return this._id || this.data.id;
   }
   set id(value: string) {
     this._id = value;
   }
 
   get citekey(): string {
-    return this._citekey;
+    return this.data.id;
   }
 
   get type(): string {

@@ -3,7 +3,8 @@ import { parseHayagrivaYaml } from '../../src/core/parsing/hayagriva-parser';
 
 describe('HayagrivaAdapter', () => {
   it('should create an entry with basic fields', () => {
-    const adapter = new HayagrivaAdapter('smith2023', {
+    const adapter = new HayagrivaAdapter({
+      id: 'smith2023',
       type: 'article',
       title: 'A Test Paper',
       date: '2023-06-15',
@@ -20,7 +21,8 @@ describe('HayagrivaAdapter', () => {
   });
 
   it('should parse string authors', () => {
-    const adapter = new HayagrivaAdapter('test', {
+    const adapter = new HayagrivaAdapter({
+      id: 'test',
       author: ['John Doe', 'Jane Smith'],
     });
 
@@ -32,7 +34,8 @@ describe('HayagrivaAdapter', () => {
   });
 
   it('should parse structured authors', () => {
-    const adapter = new HayagrivaAdapter('test', {
+    const adapter = new HayagrivaAdapter({
+      id: 'test',
       author: [{ given: 'Albert', family: 'Einstein' }],
     });
 
@@ -40,7 +43,8 @@ describe('HayagrivaAdapter', () => {
   });
 
   it('should handle single-name authors as literal', () => {
-    const adapter = new HayagrivaAdapter('test', {
+    const adapter = new HayagrivaAdapter({
+      id: 'test',
       author: ['UNESCO'],
     });
 
@@ -48,47 +52,50 @@ describe('HayagrivaAdapter', () => {
   });
 
   it('should parse date with year only', () => {
-    const adapter = new HayagrivaAdapter('test', { date: '2023' });
+    const adapter = new HayagrivaAdapter({ id: 'test', date: '2023' });
     expect(adapter.issuedDate).toEqual(new Date(Date.UTC(2023, 0, 1)));
     expect(adapter.year).toBe(2023);
   });
 
   it('should parse date with year and month', () => {
-    const adapter = new HayagrivaAdapter('test', { date: '2023-06' });
+    const adapter = new HayagrivaAdapter({ id: 'test', date: '2023-06' });
     expect(adapter.issuedDate).toEqual(new Date(Date.UTC(2023, 5, 1)));
   });
 
   it('should parse full date', () => {
-    const adapter = new HayagrivaAdapter('test', { date: '2023-06-15' });
+    const adapter = new HayagrivaAdapter({ id: 'test', date: '2023-06-15' });
     expect(adapter.issuedDate).toEqual(new Date(Date.UTC(2023, 5, 15)));
   });
 
   it('should return null for missing date', () => {
-    const adapter = new HayagrivaAdapter('test', {});
+    const adapter = new HayagrivaAdapter({ id: 'test' });
     expect(adapter.issuedDate).toBeNull();
   });
 
   it('should get container title from parent', () => {
-    const adapter = new HayagrivaAdapter('test', {
+    const adapter = new HayagrivaAdapter({
+      id: 'test',
       parent: { title: 'Nature' },
     });
     expect(adapter.containerTitle).toBe('Nature');
   });
 
   it('should get publisher from parent if not set directly', () => {
-    const adapter = new HayagrivaAdapter('test', {
+    const adapter = new HayagrivaAdapter({
+      id: 'test',
       parent: { publisher: 'Springer' },
     });
     expect(adapter.publisher).toBe('Springer');
   });
 
   it('should generate zoteroSelectURI', () => {
-    const adapter = new HayagrivaAdapter('smith2023', {});
+    const adapter = new HayagrivaAdapter({ id: 'smith2023' });
     expect(adapter.zoteroSelectURI).toBe('zotero://select/items/@smith2023');
   });
 
   it('should support toJSON', () => {
-    const adapter = new HayagrivaAdapter('test', {
+    const adapter = new HayagrivaAdapter({
+      id: 'test',
       title: 'Hello',
       date: '2023',
     });
@@ -114,6 +121,7 @@ jones2022:
     const entries = parseHayagrivaYaml(yaml);
     expect(entries).toHaveLength(2);
     expect(entries[0].citekey).toBe('smith2023');
+    expect(entries[0].data.id).toBe('smith2023');
     expect(entries[0].data.title).toBe('A Test Paper');
     expect(entries[0].data.type).toBe('article');
     expect(entries[1].citekey).toBe('jones2022');
@@ -178,7 +186,7 @@ entry1:
 `;
 
     const entries = parseHayagrivaYaml(yaml);
-    const adapter = new HayagrivaAdapter(entries[0].citekey, entries[0].data);
+    const adapter = new HayagrivaAdapter(entries[0].data);
     expect(adapter.containerTitle).toBe('Nature Machine Intelligence');
     expect(adapter.publisher).toBe('Springer Nature');
   });
@@ -193,5 +201,6 @@ entry1:
     const entries = parseHayagrivaYaml(yaml);
     expect(entries).toHaveLength(1);
     expect(entries[0].citekey).toBe('einstein.1905.relativity');
+    expect(entries[0].data.id).toBe('einstein.1905.relativity');
   });
 });

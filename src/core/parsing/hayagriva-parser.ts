@@ -95,11 +95,10 @@ export function parseHayagrivaYaml(
   const flushBlock = () => {
     if (currentKey && currentBlock.length > 0) {
       try {
-        const data = parseSimpleYamlBlock(currentBlock);
-        results.push({
-          citekey: currentKey,
-          data: data as unknown as HayagrivaEntryData,
-        });
+        const raw = parseSimpleYamlBlock(currentBlock);
+        // Inject the citekey as `id` so the adapter receives it uniformly
+        const data = { id: currentKey, ...raw } as HayagrivaEntryData;
+        results.push({ citekey: currentKey, data });
       } catch (e) {
         console.warn(
           `Citations plugin: Failed to parse Hayagriva entry "${currentKey}":`,

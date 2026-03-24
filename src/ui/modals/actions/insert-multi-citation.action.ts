@@ -48,6 +48,7 @@ export class InsertMultiCitationAction implements SearchAction {
     const editor = this.plugin.platform.workspace.getActiveEditor();
     if (!editor) {
       this.plugin.platform.notifications.show('No active editor found');
+      this.collectedKeys = [];
       return;
     }
 
