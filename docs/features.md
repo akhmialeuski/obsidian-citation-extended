@@ -1,6 +1,8 @@
 # Features
 
-The plugin provides five commands, accessible via the Command Palette (`Ctrl+P`) or custom hotkeys. No hotkeys are assigned by default — configure them in **Settings** > **Hotkeys** > search for "Citations". See [Configuration: Hotkeys](configuration.md#hotkeys) for recommended bindings.
+The plugin provides eight commands, accessible via the Command Palette (`Ctrl+P`) or custom hotkeys. No hotkeys are assigned by default — configure them in **Settings** > **Hotkeys** > search for "Citations". See [Configuration: Hotkeys](configuration.md#hotkeys) for recommended bindings.
+
+![All plugin commands in the Command Palette](images/command-palette-all-commands.png)
 
 ## Open Literature Note
 
@@ -24,6 +26,9 @@ Inserts a wiki-link or markdown link to a literature note at the cursor position
 - **Suggested hotkey**: `Ctrl+Shift+L`
 - Respects your vault's link format preference (wiki `[[…]]` vs markdown `[…](…)`)
 - If the note doesn't exist, it is created automatically (unless disabled in settings)
+- **Markdown links** use the citekey as display text: `[smith2023](path/to/note.md)` — this preserves special characters (colons, slashes) that would be stripped from filenames
+- **Wiki links** use the note title: `[[Reading notes/@smith2023]]`
+- **Custom display text**: set `Literature note link display template` in settings to use a Handlebars template like `{{authorString}} ({{year}})` for both link types (see [Configuration](configuration.md#literature-note-link-display-template))
 
 **How it works:** Select a reference from the search modal, and a link to its literature note is inserted where your cursor was. Useful for referencing sources inline while writing.
 
@@ -82,6 +87,8 @@ Insert several citations at once in a combined `[@key1; @key2; @key3]` format.
 
 **How it works:** Open the modal, select references one by one (each Enter adds one and reopens the modal), then press Esc to insert the combined citation string at your cursor.
 
+![Multi-citation search modal](images/multi-citation-modal.png)
+
 ## Refresh Citation Database
 
 Manually reloads all configured citation databases.
@@ -96,10 +103,21 @@ Manually reloads all configured citation databases.
 
 The search modal supports:
 
-- **Full-text search** across title, author, year, citekey, and Zotero ID
+- **Full-text search** across title, author, year, citekey, and Zotero ID (e.g. searching `W5JRT78A` finds the entry with that Zotero item key)
 - **Fuzzy matching** (handles typos — "attenshun" finds "Attention")
 - **Accent-insensitive search** (e.g. "Muller" finds "Müller", "Gomez" finds "Gómez")
 - **Prefix matching** (typing "smith" matches "Smith2023", "Smithson2021", etc.)
 - **Configurable sort order**: default, by year (newest/oldest first), by author (A-Z)
 
 The search index is rebuilt each time the library loads. On a typical library (1000-5000 entries) this takes under 200ms.
+
+## Note Lookup
+
+When opening or linking a literature note, the plugin uses a four-step lookup to find existing notes:
+
+1. **Exact path match** — checks the expected path directly (e.g. `Reading notes/@smith2023.md`)
+2. **Case-insensitive match** — handles renamed notes with different casing
+3. **Subfolder search** — recursively scans the literature note folder for notes moved into subfolders
+4. **Vault-wide search** — scans the entire vault as a last resort, finding notes moved completely outside the literature note folder
+
+This prevents duplicate note creation when you reorganize your vault. The plugin finds your note regardless of where you moved it.

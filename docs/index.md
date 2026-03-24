@@ -5,7 +5,7 @@ Welcome to the documentation for Obsidian Citation Extended, a plugin that integ
 ## Table of Contents
 
 - [Getting Started](getting-started.md) — Installation, Zotero/Mendeley setup, first literature note
-- [Features](features.md) — The five main commands and how to use them
+- [Features](features.md) — Eight commands: cite, link, multi-cite, navigate, and more
 - [Configuration](configuration.md) — All settings explained, with defaults
 - [Data Sources](data-sources.md) — File formats, multiple databases, merge strategies
 - **Templates**

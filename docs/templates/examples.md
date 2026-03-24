@@ -114,9 +114,9 @@ Smith, Jones
 
 ## Literature Note with PDF Link
 
-Extends the minimal template with a clickable link to the local PDF file stored by your reference manager. The `urlEncode` helper escapes spaces and special characters in the file path so the `file://` URL works correctly on all platforms.
+Extends the minimal template with a clickable link to the local PDF file stored by your reference manager. Two approaches are available:
 
-This template requires that your bibliography entries include a `file` field (common in BibLaTeX exports from Zotero with the Better BibTeX plugin).
+**Using `pdfMarkdownLink` helper** (recommended) — automatically finds the first PDF from the entry's file list and generates a complete Markdown link. No need to know the exact field name:
 
 ```handlebars
 ---
@@ -126,7 +126,7 @@ authors: {{quote authorString}}
 
 # {{title}}
 
-[Open PDF](file://{{urlEncode entry.data.fields.file}})
+{{pdfMarkdownLink entry.files}}
 
 {{abstract}}
 ```
@@ -141,10 +141,32 @@ authors: "Smith, Jones"
 
 # Attention Is All You Need
 
-[Open PDF](file:///home/user/Zotero/storage/smith2023.pdf)
+[smith2023](file:///home/user/Zotero/storage/smith2023.pdf)
 
 This paper surveys recent advances in…
 ```
+
+**Using `pdfLink` helper** — generates just the `file://` URI, letting you control the link text:
+
+```handlebars
+{{#if (pdfLink entry.files)}}
+[Open PDF]({{pdfLink entry.files}})
+{{/if}}
+```
+
+**Expected output:**
+
+```markdown
+[Open PDF](file:///home/user/Zotero/storage/smith2023.pdf)
+```
+
+**Using `urlEncode` with raw field** — for advanced users who need to access the file field directly (e.g. from BibLaTeX `entry.data.fields.file`):
+
+```handlebars
+[Open PDF](file://{{urlEncode entry.data.fields.file}})
+```
+
+All three approaches require that your bibliography entries include file path information. This is common in BibLaTeX exports from Zotero with the Better BibTeX plugin.
 
 ---
 
