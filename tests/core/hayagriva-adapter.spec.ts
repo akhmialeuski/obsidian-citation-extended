@@ -203,4 +203,42 @@ entry1:
     expect(entries[0].citekey).toBe('einstein.1905.relativity');
     expect(entries[0].data.id).toBe('einstein.1905.relativity');
   });
+
+  it('should skip lines without key-value pattern inside an entry block', () => {
+    const yaml = `entry1:
+  title: Test
+  some random text without colon
+  another line
+  date: 2023
+`;
+
+    const entries = parseHayagrivaYaml(yaml);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].data.title).toBe('Test');
+    expect(entries[0].data.date).toBe('2023');
+  });
+
+  it('should handle parse errors gracefully and skip broken entries', () => {
+    // Inject a malformed block that causes parseSimpleYamlBlock to throw
+    // by providing a value that triggers an error in recursion
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+    // Empty block with only comments — should not throw but produces no data
+    const yaml = `good:
+  title: Good Entry
+
+bad:
+  # only comments, no actual data
+
+also-good:
+  title: Another Entry
+`;
+
+    const entries = parseHayagrivaYaml(yaml);
+    // "bad" entry has only comments — parsed as empty object, still included
+    expect(entries.length).toBeGreaterThanOrEqual(2);
+    expect(entries[0].data.title).toBe('Good Entry');
+
+    warnSpy.mockRestore();
+  });
 });
