@@ -66,6 +66,8 @@ Opens the literature note for the citation under the cursor, without opening the
 
 **How it works:** Place your cursor inside or next to a citation (e.g. `[@smith2023]`), then run the command. The plugin extracts the citekey and opens the note. No modal appears — it's a direct shortcut for navigating from a citation to its note.
 
+This command is also available in the **editor context menu** (right-click). When your cursor is on a citation, the menu shows **"Open note for @citekey"** — click it to navigate directly to the literature note.
+
 ## Insert Subsequent Citation
 
 Appends a new citekey to an existing citation at the cursor position.
