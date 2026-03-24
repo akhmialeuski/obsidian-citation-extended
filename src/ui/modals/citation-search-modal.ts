@@ -124,8 +124,11 @@ export class CitationSearchModal extends SuggestModal<Entry> {
     this.inputEl.removeEventListener('keydown', this.boundKeydown);
     this.inputEl.removeEventListener('keyup', this.boundKeyup);
 
-    // Notify the action that the modal has closed (used by multi-select actions)
-    this.action.onClose?.();
+    // Only notify the action when the modal is truly dismissed,
+    // not when it self-closes for a keepOpen reopen cycle
+    if (!this.action.keepOpen) {
+      this.action.onClose?.();
+    }
   }
 
   getSuggestions(query: string): Entry[] {

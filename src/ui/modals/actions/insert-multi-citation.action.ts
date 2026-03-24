@@ -27,6 +27,7 @@ export class InsertMultiCitationAction implements SearchAction {
 
     // Shift+Enter finalizes and inserts immediately
     if (evt instanceof KeyboardEvent && evt.shiftKey) {
+      this.keepOpen = false;
       this.insertCollected();
     }
   };

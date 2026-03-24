@@ -7,8 +7,8 @@ import { IEditorProxy } from '../platform/platform-adapter';
  * Matches: [@citekey], @citekey, [[@citekey]], [[citekey]]
  */
 const CITEKEY_PATTERNS = [
+  /\[\[@([^\]|]+)(?:\|[^\]]+)?\]\]/g, // [[@citekey]] or [[@citekey|alias]] — must be before [@...] to avoid partial match
   /\[@([^\]]+)\]/g, // [@citekey]
-  /\[\[@([^\]|]+)(?:\|[^\]]+)?\]\]/g, // [[@citekey]] or [[@citekey|alias]]
   /(?:^|[^[])@([\w:.#$%&\-+?<>~/]+)/g, // standalone @citekey
 ];
 

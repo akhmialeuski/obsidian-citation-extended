@@ -233,51 +233,79 @@ export function parseHayagrivaYaml(
  * Parse a simple indented YAML block into a HayagrivaEntryData object.
  * This handles the most common Hayagriva fields without a full YAML parser.
  */
+/**
+ * Measure the indentation level of a line (number of leading spaces).
+ */
+function indentLevel(line: string): number {
+  const match = line.match(/^(\s*)/);
+  return match ? match[1].length : 0;
+}
+
 function parseSimpleYamlBlock(lines: string[]): HayagrivaEntryData {
   const data: Record<string, unknown> = {};
-  let currentListKey: string | null = null;
-  let currentList: string[] = [];
+  let i = 0;
 
-  const flushList = () => {
-    if (currentListKey && currentList.length > 0) {
-      data[currentListKey] = currentList;
-      currentList = [];
-      currentListKey = null;
-    }
-  };
-
-  for (const line of lines) {
+  while (i < lines.length) {
+    const line = lines[i];
     const trimmed = line.trimStart();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-
-    // List item
-    if (trimmed.startsWith('- ')) {
-      if (currentListKey) {
-        currentList.push(
-          trimmed
-            .substring(2)
-            .trim()
-            .replace(/^["']|["']$/g, ''),
-        );
-      }
+    if (!trimmed || trimmed.startsWith('#')) {
+      i++;
       continue;
     }
 
-    // Key-value pair
+    // Key-value pair at the current indentation level
     const kvMatch = trimmed.match(/^([a-zA-Z_-]+):\s*(.*)$/);
-    if (kvMatch) {
-      flushList();
-      const key = kvMatch[1];
-      const value = kvMatch[2].trim().replace(/^["']|["']$/g, '');
-      if (!value) {
-        // Next lines might be a list or nested block
-        currentListKey = key;
+    if (!kvMatch) {
+      i++;
+      continue;
+    }
+
+    const key = kvMatch[1];
+    const value = kvMatch[2].trim().replace(/^["']|["']$/g, '');
+    const baseIndent = indentLevel(line);
+
+    if (value) {
+      // Simple scalar value
+      data[key] = value;
+      i++;
+    } else {
+      // Empty value — collect child lines (list or nested object)
+      i++;
+      const childLines: string[] = [];
+      while (i < lines.length) {
+        const nextLine = lines[i];
+        const nextTrimmed = nextLine.trimStart();
+        if (!nextTrimmed || nextTrimmed.startsWith('#')) {
+          childLines.push(nextLine);
+          i++;
+          continue;
+        }
+        if (indentLevel(nextLine) <= baseIndent) break;
+        childLines.push(nextLine);
+        i++;
+      }
+
+      // Determine whether children are a list or a nested object
+      const firstContentLine = childLines.find(
+        (l) => l.trim() && !l.trim().startsWith('#'),
+      );
+      if (firstContentLine && firstContentLine.trim().startsWith('- ')) {
+        // List items
+        data[key] = childLines
+          .filter((l) => l.trim().startsWith('- '))
+          .map((l) =>
+            l
+              .trim()
+              .substring(2)
+              .trim()
+              .replace(/^["']|["']$/g, ''),
+          );
       } else {
-        data[key] = value;
+        // Nested object — recurse
+        data[key] = parseSimpleYamlBlock(childLines);
       }
     }
   }
-  flushList();
 
   return data as unknown as HayagrivaEntryData;
 }

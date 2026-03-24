@@ -150,4 +150,38 @@ entry1:
     expect(entries).toHaveLength(1);
     expect(entries[0].data.title).toBe('Test');
   });
+
+  it('should parse nested parent block', () => {
+    const yaml = `smith2023:
+  type: article
+  title: A Test Paper
+  parent:
+    title: Nature
+    publisher: Springer
+    volume: "5"
+`;
+
+    const entries = parseHayagrivaYaml(yaml);
+    expect(entries).toHaveLength(1);
+    const parent = entries[0].data.parent as Record<string, string>;
+    expect(parent).toBeDefined();
+    expect(parent.title).toBe('Nature');
+    expect(parent.publisher).toBe('Springer');
+    expect(parent.volume).toBe('5');
+  });
+
+  it('should parse nested parent and use it in adapter', () => {
+    const yaml = `smith2023:
+  type: article
+  title: Attention
+  parent:
+    title: Nature Machine Intelligence
+    publisher: Springer Nature
+`;
+
+    const entries = parseHayagrivaYaml(yaml);
+    const adapter = new HayagrivaAdapter(entries[0].citekey, entries[0].data);
+    expect(adapter.containerTitle).toBe('Nature Machine Intelligence');
+    expect(adapter.publisher).toBe('Springer Nature');
+  });
 });

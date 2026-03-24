@@ -408,6 +408,58 @@ describe('EditorActions', () => {
     });
   });
 
+  describe('extractCitekeyAtCursor', () => {
+    function makeEditor(line: string, ch: number) {
+      return {
+        getCursor: jest.fn(() => ({ line: 0, ch })),
+        getLine: jest.fn(() => line),
+      };
+    }
+
+    it('extracts citekey from [@key] when cursor is inside', () => {
+      const plugin = makePlugin();
+      const actions = new EditorActions(plugin);
+      const editor = makeEditor('See [@smith2023] for details', 8);
+      expect(actions.extractCitekeyAtCursor(editor as never)).toBe('smith2023');
+    });
+
+    it('extracts citekey from standalone @key', () => {
+      const plugin = makePlugin();
+      const actions = new EditorActions(plugin);
+      const editor = makeEditor('As shown by @smith2023 recently', 15);
+      expect(actions.extractCitekeyAtCursor(editor as never)).toBe('smith2023');
+    });
+
+    it('extracts citekey from [[@key]]', () => {
+      const plugin = makePlugin();
+      const actions = new EditorActions(plugin);
+      const editor = makeEditor('Link to [[@smith2023]] here', 14);
+      expect(actions.extractCitekeyAtCursor(editor as never)).toBe('smith2023');
+    });
+
+    it('extracts citekey from [[@key|alias]]', () => {
+      const plugin = makePlugin();
+      const actions = new EditorActions(plugin);
+      const editor = makeEditor('Link to [[@smith2023|Smith]] here', 14);
+      expect(actions.extractCitekeyAtCursor(editor as never)).toBe('smith2023');
+    });
+
+    it('returns null when cursor is not on a citation', () => {
+      const plugin = makePlugin();
+      const actions = new EditorActions(plugin);
+      const editor = makeEditor('No citations here at all', 10);
+      expect(actions.extractCitekeyAtCursor(editor as never)).toBeNull();
+    });
+
+    it('handles multiple citations on the same line', () => {
+      const plugin = makePlugin();
+      const actions = new EditorActions(plugin);
+      // Cursor at position 25 — inside second citation
+      const editor = makeEditor('See [@smith2023] and [@jones2022] here', 25);
+      expect(actions.extractCitekeyAtCursor(editor as never)).toBe('jones2022');
+    });
+  });
+
   describe('insertLiteratureNoteContent', () => {
     it('shows notice when content result is an error', async () => {
       const editor = {
