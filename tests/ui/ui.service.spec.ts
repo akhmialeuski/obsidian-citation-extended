@@ -102,11 +102,18 @@ function makePlugin(initialState: LibraryState) {
         removeClass: jest.fn(),
       })),
     },
+    registerEvent: jest.fn(),
+    editorActions: {
+      extractCitekeyAtCursor: jest.fn(() => null),
+      openLiteratureNote: jest.fn().mockResolvedValue(undefined),
+      openNoteAtCursor: jest.fn().mockResolvedValue(undefined),
+    },
     app: {
       workspace: {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- flexible mock
         getActiveViewOfType: jest.fn((): any => null),
         activeEditor: null as unknown,
+        on: jest.fn(() => ({ id: 'mock-event-ref' })),
       },
     },
   };

@@ -1,5 +1,7 @@
 /** @jest-environment jsdom */
 import { InsertCitationAction } from '../../../../src/ui/modals/actions/insert-citation.action';
+import { InsertSubsequentCitationAction } from '../../../../src/ui/modals/actions/insert-subsequent-citation.action';
+import { InsertMultiCitationAction } from '../../../../src/ui/modals/actions/insert-multi-citation.action';
 import { InsertNoteContentAction } from '../../../../src/ui/modals/actions/insert-note-content.action';
 import { InsertNoteLinkAction } from '../../../../src/ui/modals/actions/insert-note-link.action';
 import { OpenNoteAction } from '../../../../src/ui/modals/actions/open-note.action';
@@ -13,16 +15,30 @@ jest.mock(
   { virtual: true },
 );
 
+function makeMockEditor() {
+  return {
+    getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+    replaceRange: jest.fn(),
+    setCursor: jest.fn(),
+  };
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only mock factory
 function makePlugin(): any {
+  const editor = makeMockEditor();
   return {
+    _editor: editor,
     editorActions: {
       insertMarkdownCitation: jest.fn(),
+      insertSubsequentCitation: jest.fn().mockResolvedValue(undefined),
       insertLiteratureNoteContent: jest.fn().mockResolvedValue(undefined),
       insertLiteratureNoteLink: jest.fn().mockResolvedValue(undefined),
       openLiteratureNote: jest.fn().mockResolvedValue(undefined),
     },
     platform: {
+      workspace: {
+        getActiveEditor: jest.fn(() => editor),
+      },
       notifications: {
         show: jest.fn(),
       },
@@ -360,6 +376,139 @@ describe('OpenNoteAction', () => {
     expect(instructions[5]).toEqual({
       command: 'esc',
       purpose: 'to dismiss',
+    });
+  });
+});
+
+describe('InsertSubsequentCitationAction', () => {
+  let plugin: ReturnType<typeof makePlugin>;
+  let action: InsertSubsequentCitationAction;
+
+  beforeEach(() => {
+    plugin = makePlugin();
+    action = new InsertSubsequentCitationAction(plugin);
+  });
+
+  it('has the correct name', () => {
+    expect(action.name).toBe('Insert subsequent citation');
+  });
+
+  it('calls insertSubsequentCitation on onChoose', () => {
+    const entry = makeEntry();
+    action.onChoose(entry as never);
+
+    expect(plugin.editorActions.insertSubsequentCitation).toHaveBeenCalledWith(
+      'test2024',
+    );
+  });
+
+  it('returns correct instructions', () => {
+    const instructions = action.getInstructions();
+    expect(instructions).toHaveLength(3);
+    expect(instructions[0]).toEqual({ command: '↑↓', purpose: 'to navigate' });
+    expect(instructions[1]).toEqual({
+      command: '↵',
+      purpose: 'to append citation to existing',
+    });
+  });
+});
+
+describe('InsertMultiCitationAction', () => {
+  let plugin: ReturnType<typeof makePlugin>;
+  let action: InsertMultiCitationAction;
+
+  beforeEach(() => {
+    plugin = makePlugin();
+    action = new InsertMultiCitationAction(plugin);
+  });
+
+  it('has the correct name', () => {
+    expect(action.name).toBe(
+      'Insert multiple citations (Enter = add, Esc = insert)',
+    );
+  });
+
+  it('has keepOpen=true by default', () => {
+    expect(action.keepOpen).toBe(true);
+  });
+
+  it('collects citekeys on repeated onChoose calls', () => {
+    const entry1 = makeEntry({ id: 'key1' });
+    const entry2 = makeEntry({ id: 'key2' });
+    const evt = new KeyboardEvent('keyup', { key: 'Enter' });
+
+    action.onChoose(entry1 as never, evt);
+    action.onChoose(entry2 as never, evt);
+
+    // Keys are collected but not yet inserted — trigger onClose
+    action.onClose();
+
+    expect(plugin._editor.replaceRange).toHaveBeenCalledWith('[@key1; @key2]', {
+      line: 0,
+      ch: 0,
+    });
+  });
+
+  it('avoids duplicate citekeys', () => {
+    const entry1 = makeEntry({ id: 'key1' });
+    const evt = new KeyboardEvent('keyup', { key: 'Enter' });
+
+    action.onChoose(entry1 as never, evt);
+    action.onChoose(entry1 as never, evt);
+
+    action.onClose();
+
+    expect(plugin._editor.replaceRange).toHaveBeenCalledWith('[@key1]', {
+      line: 0,
+      ch: 0,
+    });
+  });
+
+  it('inserts immediately on Shift+Enter and sets keepOpen=false', () => {
+    const entry1 = makeEntry({ id: 'key1' });
+    const evt = new KeyboardEvent('keyup', {
+      key: 'Enter',
+      shiftKey: true,
+    });
+
+    action.onChoose(entry1 as never, evt);
+
+    expect(action.keepOpen).toBe(false);
+    expect(plugin._editor.replaceRange).toHaveBeenCalledWith('[@key1]', {
+      line: 0,
+      ch: 0,
+    });
+  });
+
+  it('onClose is a no-op when no keys collected', () => {
+    action.onClose();
+
+    expect(plugin._editor.replaceRange).not.toHaveBeenCalled();
+  });
+
+  it('shows notice when no active editor on insert', () => {
+    plugin.platform.workspace.getActiveEditor = jest.fn(() => null);
+    const entry1 = makeEntry({ id: 'key1' });
+    const evt = new KeyboardEvent('keyup', { key: 'Enter' });
+
+    action.onChoose(entry1 as never, evt);
+    action.onClose();
+
+    expect(plugin.platform.notifications.show).toHaveBeenCalledWith(
+      'No active editor found',
+    );
+  });
+
+  it('returns correct instructions', () => {
+    const instructions = action.getInstructions();
+    expect(instructions).toHaveLength(4);
+    expect(instructions[2]).toEqual({
+      command: 'shift ↵',
+      purpose: 'to add and insert immediately',
+    });
+    expect(instructions[3]).toEqual({
+      command: 'esc',
+      purpose: 'to insert collected citations',
     });
   });
 });

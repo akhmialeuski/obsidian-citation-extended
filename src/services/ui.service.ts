@@ -9,7 +9,7 @@ import { OpenNoteAction } from '../ui/modals/actions/open-note.action';
 import { SearchAction } from '../ui/modals/actions/search-action';
 import CitationPlugin from '../main';
 import { IUIService } from '../container';
-import { IStatusBarItem } from '../platform/platform-adapter';
+import { IStatusBarItem, IEditorProxy } from '../platform/platform-adapter';
 
 export class UIService implements IUIService {
   private statusBarItem!: IStatusBarItem;
@@ -28,6 +28,7 @@ export class UIService implements IUIService {
     );
 
     this.registerCommands();
+    this.registerEditorContextMenu();
   }
 
   private updateStatusBar(state: LibraryState): void {
@@ -165,6 +166,33 @@ export class UIService implements IUIService {
         this.openSearchModal(new InsertMultiCitationAction(this.plugin));
       },
     });
+  }
+
+  /**
+   * Register a context menu item that appears on right-click in the editor
+   * when the cursor is positioned on a citation. Uses the Obsidian
+   * `editor-menu` workspace event.
+   */
+  private registerEditorContextMenu(): void {
+    this.plugin.registerEvent(
+      this.plugin.app.workspace.on('editor-menu', (menu, editor) => {
+        // The Obsidian Editor object implements getLine/getCursor,
+        // which is all extractCitekeyAtCursor needs.
+        const citekey = this.plugin.editorActions.extractCitekeyAtCursor(
+          editor as unknown as IEditorProxy,
+        );
+        if (!citekey) return;
+
+        menu.addItem((item) => {
+          item
+            .setTitle(`Open note for @${citekey}`)
+            .setIcon('book-open')
+            .onClick(() => {
+              void this.plugin.editorActions.openLiteratureNote(citekey, false);
+            });
+        });
+      }),
+    );
   }
 
   dispose(): void {

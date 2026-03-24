@@ -607,6 +607,7 @@ describe('EditorActions', () => {
         replaceRange: jest.fn(),
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
         setCursor: jest.fn(),
+        getLine: jest.fn(() => ''),
       };
       const plugin = makePlugin();
       plugin.getMarkdownCitationForCitekey = jest.fn(() => ({
@@ -775,6 +776,118 @@ describe('EditorActions', () => {
         expect.any(Error),
       );
       warnSpy.mockRestore();
+    });
+  });
+
+  describe('insertSubsequentCitation', () => {
+    it('shows notice when no active editor', async () => {
+      const plugin = makePlugin();
+      plugin.platform.workspace.getActiveEditor = jest.fn(() => null);
+      const actions = new EditorActions(plugin);
+
+      await actions.insertSubsequentCitation('key2');
+
+      expect(mockNotificationsShow).toHaveBeenCalledWith(
+        'No active editor found',
+      );
+    });
+
+    it('appends citekey to existing citation at cursor', async () => {
+      const editor = {
+        getCursor: jest.fn(() => ({ line: 0, ch: 5 })),
+        getLine: jest.fn(() => 'See [@key1] for details'),
+        replaceRange: jest.fn(),
+        setCursor: jest.fn(),
+      };
+      const plugin = makePlugin();
+      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = new EditorActions(plugin);
+
+      await actions.insertSubsequentCitation('key2');
+
+      // Should insert "; @key2" before the closing bracket at position 10
+      expect(editor.replaceRange).toHaveBeenCalledWith('; @key2', {
+        line: 0,
+        ch: 10,
+      });
+      expect(editor.setCursor).toHaveBeenCalledWith({
+        line: 0,
+        ch: 17,
+      });
+    });
+
+    it('falls back to normal citation when cursor is not inside a citation', async () => {
+      const editor = {
+        getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+        getLine: jest.fn(() => 'No citation here'),
+        replaceRange: jest.fn(),
+        setCursor: jest.fn(),
+      };
+      const plugin = makePlugin();
+      plugin.getMarkdownCitationForCitekey = jest.fn(() => ({
+        ok: true,
+        value: '[@key2]',
+      }));
+      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = new EditorActions(plugin);
+
+      await actions.insertSubsequentCitation('key2');
+
+      // Should fall back to insertMarkdownCitation
+      expect(editor.replaceRange).toHaveBeenCalledWith('[@key2]', {
+        line: 0,
+        ch: 0,
+      });
+    });
+  });
+
+  describe('openNoteAtCursor', () => {
+    it('shows notice when no active editor', async () => {
+      const plugin = makePlugin();
+      plugin.platform.workspace.getActiveEditor = jest.fn(() => null);
+      const actions = new EditorActions(plugin);
+
+      await actions.openNoteAtCursor();
+
+      expect(mockNotificationsShow).toHaveBeenCalledWith(
+        'No active editor found',
+      );
+    });
+
+    it('shows notice when no citation at cursor', async () => {
+      const editor = {
+        getCursor: jest.fn(() => ({ line: 0, ch: 5 })),
+        getLine: jest.fn(() => 'No citation here'),
+      };
+      const plugin = makePlugin();
+      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = new EditorActions(plugin);
+
+      await actions.openNoteAtCursor();
+
+      expect(mockNotificationsShow).toHaveBeenCalledWith(
+        'No citation found at cursor position.',
+      );
+    });
+
+    it('opens literature note when citation is found at cursor', async () => {
+      const editor = {
+        getCursor: jest.fn(() => ({ line: 0, ch: 8 })),
+        getLine: jest.fn(() => 'See [@smith2023] for details'),
+      };
+      const plugin = makePlugin();
+      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = new EditorActions(plugin);
+
+      await actions.openNoteAtCursor();
+
+      // Should call openLiteratureNote -> noteService.openLiteratureNote
+      expect(plugin.noteService.openLiteratureNote).toHaveBeenCalledWith(
+        'smith2023',
+        expect.anything(),
+        false,
+        undefined,
+      );
     });
   });
 });
