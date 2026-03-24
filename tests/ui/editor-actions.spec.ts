@@ -284,8 +284,9 @@ describe('EditorActions', () => {
 
       await actions.insertLiteratureNoteLink('key1');
 
+      // Display text defaults to citekey for Markdown links (#271)
       expect(editor.replaceSelection).toHaveBeenCalledWith(
-        '[Title](notes/key1)',
+        '[key1](notes/key1)',
       );
     });
 
@@ -404,6 +405,58 @@ describe('EditorActions', () => {
         plugin.noteService.getOrCreateLiteratureNoteFile,
       ).toHaveBeenCalled();
       expect(editor.replaceSelection).toHaveBeenCalled();
+    });
+  });
+
+  describe('extractCitekeyAtCursor', () => {
+    function makeEditor(line: string, ch: number) {
+      return {
+        getCursor: jest.fn(() => ({ line: 0, ch })),
+        getLine: jest.fn(() => line),
+      };
+    }
+
+    it('extracts citekey from [@key] when cursor is inside', () => {
+      const plugin = makePlugin();
+      const actions = new EditorActions(plugin);
+      const editor = makeEditor('See [@smith2023] for details', 8);
+      expect(actions.extractCitekeyAtCursor(editor as never)).toBe('smith2023');
+    });
+
+    it('extracts citekey from standalone @key', () => {
+      const plugin = makePlugin();
+      const actions = new EditorActions(plugin);
+      const editor = makeEditor('As shown by @smith2023 recently', 15);
+      expect(actions.extractCitekeyAtCursor(editor as never)).toBe('smith2023');
+    });
+
+    it('extracts citekey from [[@key]]', () => {
+      const plugin = makePlugin();
+      const actions = new EditorActions(plugin);
+      const editor = makeEditor('Link to [[@smith2023]] here', 14);
+      expect(actions.extractCitekeyAtCursor(editor as never)).toBe('smith2023');
+    });
+
+    it('extracts citekey from [[@key|alias]]', () => {
+      const plugin = makePlugin();
+      const actions = new EditorActions(plugin);
+      const editor = makeEditor('Link to [[@smith2023|Smith]] here', 14);
+      expect(actions.extractCitekeyAtCursor(editor as never)).toBe('smith2023');
+    });
+
+    it('returns null when cursor is not on a citation', () => {
+      const plugin = makePlugin();
+      const actions = new EditorActions(plugin);
+      const editor = makeEditor('No citations here at all', 10);
+      expect(actions.extractCitekeyAtCursor(editor as never)).toBeNull();
+    });
+
+    it('handles multiple citations on the same line', () => {
+      const plugin = makePlugin();
+      const actions = new EditorActions(plugin);
+      // Cursor at position 25 — inside second citation
+      const editor = makeEditor('See [@smith2023] and [@jones2022] here', 25);
+      expect(actions.extractCitekeyAtCursor(editor as never)).toBe('jones2022');
     });
   });
 
@@ -554,6 +607,7 @@ describe('EditorActions', () => {
         replaceRange: jest.fn(),
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
         setCursor: jest.fn(),
+        getLine: jest.fn(() => ''),
       };
       const plugin = makePlugin();
       plugin.getMarkdownCitationForCitekey = jest.fn(() => ({
@@ -722,6 +776,118 @@ describe('EditorActions', () => {
         expect.any(Error),
       );
       warnSpy.mockRestore();
+    });
+  });
+
+  describe('insertSubsequentCitation', () => {
+    it('shows notice when no active editor', async () => {
+      const plugin = makePlugin();
+      plugin.platform.workspace.getActiveEditor = jest.fn(() => null);
+      const actions = new EditorActions(plugin);
+
+      await actions.insertSubsequentCitation('key2');
+
+      expect(mockNotificationsShow).toHaveBeenCalledWith(
+        'No active editor found',
+      );
+    });
+
+    it('appends citekey to existing citation at cursor', async () => {
+      const editor = {
+        getCursor: jest.fn(() => ({ line: 0, ch: 5 })),
+        getLine: jest.fn(() => 'See [@key1] for details'),
+        replaceRange: jest.fn(),
+        setCursor: jest.fn(),
+      };
+      const plugin = makePlugin();
+      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = new EditorActions(plugin);
+
+      await actions.insertSubsequentCitation('key2');
+
+      // Should insert "; @key2" before the closing bracket at position 10
+      expect(editor.replaceRange).toHaveBeenCalledWith('; @key2', {
+        line: 0,
+        ch: 10,
+      });
+      expect(editor.setCursor).toHaveBeenCalledWith({
+        line: 0,
+        ch: 17,
+      });
+    });
+
+    it('falls back to normal citation when cursor is not inside a citation', async () => {
+      const editor = {
+        getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+        getLine: jest.fn(() => 'No citation here'),
+        replaceRange: jest.fn(),
+        setCursor: jest.fn(),
+      };
+      const plugin = makePlugin();
+      plugin.getMarkdownCitationForCitekey = jest.fn(() => ({
+        ok: true,
+        value: '[@key2]',
+      }));
+      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = new EditorActions(plugin);
+
+      await actions.insertSubsequentCitation('key2');
+
+      // Should fall back to insertMarkdownCitation
+      expect(editor.replaceRange).toHaveBeenCalledWith('[@key2]', {
+        line: 0,
+        ch: 0,
+      });
+    });
+  });
+
+  describe('openNoteAtCursor', () => {
+    it('shows notice when no active editor', async () => {
+      const plugin = makePlugin();
+      plugin.platform.workspace.getActiveEditor = jest.fn(() => null);
+      const actions = new EditorActions(plugin);
+
+      await actions.openNoteAtCursor();
+
+      expect(mockNotificationsShow).toHaveBeenCalledWith(
+        'No active editor found',
+      );
+    });
+
+    it('shows notice when no citation at cursor', async () => {
+      const editor = {
+        getCursor: jest.fn(() => ({ line: 0, ch: 5 })),
+        getLine: jest.fn(() => 'No citation here'),
+      };
+      const plugin = makePlugin();
+      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = new EditorActions(plugin);
+
+      await actions.openNoteAtCursor();
+
+      expect(mockNotificationsShow).toHaveBeenCalledWith(
+        'No citation found at cursor position.',
+      );
+    });
+
+    it('opens literature note when citation is found at cursor', async () => {
+      const editor = {
+        getCursor: jest.fn(() => ({ line: 0, ch: 8 })),
+        getLine: jest.fn(() => 'See [@smith2023] for details'),
+      };
+      const plugin = makePlugin();
+      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = new EditorActions(plugin);
+
+      await actions.openNoteAtCursor();
+
+      // Should call openLiteratureNote -> noteService.openLiteratureNote
+      expect(plugin.noteService.openLiteratureNote).toHaveBeenCalledWith(
+        'smith2023',
+        expect.anything(),
+        false,
+        undefined,
+      );
     });
   });
 });

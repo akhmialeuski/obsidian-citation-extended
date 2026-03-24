@@ -1,6 +1,6 @@
 # Template Helpers
 
-Helpers extend Handlebars with custom logic for use inside `{{...}}` expressions. The plugin registers **20 helpers** across five categories. All helpers are available in both literature note templates and citation templates.
+Helpers extend Handlebars with custom logic for use inside `{{...}}` expressions. The plugin registers **22 helpers** across five categories. All helpers are available in both literature note templates and citation templates.
 
 Helpers can be **nested** using parentheses — the inner helper resolves first:
 
@@ -415,6 +415,36 @@ Extract the directory path from a file path (everything before the last separato
 ```
 **Output:** `/home/user/papers`
 
+### `pdfLink`
+
+Generate a `file://` URI pointing to the first PDF attachment of a reference. Returns an empty string when no PDF is available. Spaces and special characters are URL-encoded.
+
+```handlebars
+{{pdfLink entry.files}}
+```
+
+**Input:** `files: ["/home/user/papers/Smith 2023.pdf"]`
+**Output:** `file:///home/user/papers/Smith%202023.pdf`
+
+Combine with Markdown link syntax for a clickable link:
+
+```handlebars
+[Open PDF]({{pdfLink entry.files}})
+```
+
+**Output:** `[Open PDF](file:///home/user/papers/Smith%202023.pdf)`
+
+### `pdfMarkdownLink`
+
+Generate a complete Markdown link to the first PDF attachment. The link text is the filename without extension. Returns an empty string when no PDF is available.
+
+```handlebars
+{{pdfMarkdownLink entry.files}}
+```
+
+**Input:** `files: ["/home/user/papers/smith2023.pdf"]`
+**Output:** `[smith2023](file:///home/user/papers/smith2023.pdf)`
+
 ---
 
 ## Quick Reference
@@ -436,3 +466,5 @@ Extract the directory path from a file path (everything before the last separato
 | Path | `basename` | Filename with extension |
 | Path | `filename` | Filename without extension |
 | Path | `dirname` | Directory path |
+| Path | `pdfLink` | `file://` URI to first PDF |
+| Path | `pdfMarkdownLink` | Markdown link to first PDF |

@@ -347,6 +347,25 @@ export class CitationSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           });
       });
+
+    new Setting(containerEl)
+      .setName('Literature note link display template')
+      .setDesc(
+        'Handlebars template for the display text of inserted literature note links. ' +
+          'Leave empty to use defaults (citekey for Markdown links, title for Wiki links). ' +
+          'Example: {{authorString}} ({{year}})',
+      )
+      .addText((text) => {
+        text
+          .setPlaceholder('{{authorString}} ({{year}})')
+          .setValue(this.plugin.settings.literatureNoteLinkDisplayTemplate)
+          .onChange(
+            debounce(async (value: string) => {
+              this.plugin.settings.literatureNoteLinkDisplayTemplate = value;
+              await this.plugin.saveSettings();
+            }, 500),
+          );
+      });
   }
 
   // ---------------------------------------------------------------------------

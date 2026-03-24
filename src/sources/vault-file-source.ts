@@ -1,16 +1,10 @@
 import { Vault, EventRef, TFile } from 'obsidian';
 import { DataSource, DataSourceLoadResult } from '../data-source';
 import {
-  Entry,
   EntryData,
-  EntryBibLaTeXAdapter,
-  EntryCSLAdapter,
   DatabaseType,
-  DATABASE_FORMATS,
-  EntryDataBibLaTeX,
-  EntryDataCSL,
   WorkerResponse,
-  UnsupportedFormatError,
+  convertToEntries,
 } from '../core';
 import { WorkerManager } from '../util';
 
@@ -60,7 +54,7 @@ export class VaultFileSource implements DataSource {
 
       return {
         sourceId: this.id,
-        entries: this.convertToEntries(result.entries),
+        entries: convertToEntries(this.format, result.entries),
         modifiedAt: new Date(file.stat.mtime),
         parseErrors: result.parseErrors,
       };
@@ -72,21 +66,6 @@ export class VaultFileSource implements DataSource {
       throw new Error(
         `Failed to load from ${this.filePath}: ${(error as Error).message}`,
       );
-    }
-  }
-
-  /**
-   * Convert EntryData to Entry objects using the appropriate adapter
-   */
-  private convertToEntries(entries: EntryData[]): Entry[] {
-    if (this.format === DATABASE_FORMATS.BibLaTeX) {
-      return entries.map(
-        (e) => new EntryBibLaTeXAdapter(e as EntryDataBibLaTeX),
-      );
-    } else if (this.format === DATABASE_FORMATS.CslJson) {
-      return entries.map((e) => new EntryCSLAdapter(e as EntryDataCSL));
-    } else {
-      throw new UnsupportedFormatError(this.format);
     }
   }
 

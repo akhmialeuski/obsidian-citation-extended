@@ -54,7 +54,7 @@ To use more than one bibliography source (e.g. personal library + shared team li
 
 ## Hotkeys
 
-The plugin registers five commands but does **not** assign default hotkeys — you choose bindings that fit your workflow. To configure:
+The plugin registers eight commands but does **not** assign default hotkeys — you choose bindings that fit your workflow. To configure:
 
 1. Open **Settings** > **Hotkeys**
 2. Search for `Citations`
@@ -67,6 +67,9 @@ The plugin registers five commands but does **not** assign default hotkeys — y
 | Open literature note | `Ctrl+Shift+O` | Mnemonic: **O**pen note |
 | Insert Markdown citation | `Ctrl+Shift+E` | Quick citation insertion while writing |
 | Insert literature note link | `Ctrl+Shift+L` | Mnemonic: **L**ink |
+| Open literature note for citation at cursor | `Ctrl+Shift+G` | No modal — jumps directly to the note for the citation under cursor |
+| Insert subsequent citation | — | Appends `; @key2` to an existing `[@key1]` at cursor |
+| Insert multiple citations | — | Multi-select modal: add references one by one, insert combined `[@...]` on close |
 | Insert literature note content | — | Used less frequently, assign if needed |
 | Refresh citation database | — | Rarely needed (auto-reload handles most cases) |
 
@@ -138,7 +141,7 @@ Use forward slashes in the title template to organize notes into subfolders:
 
 This creates notes like `Reading notes/article-journal/@smith2023.md`. Missing folders are created automatically.
 
-The plugin searches recursively in subfolders when opening notes, so manually moved notes are still found.
+The plugin searches recursively in subfolders when opening notes, so manually moved notes are still found. If a note is moved completely outside the literature note folder (e.g. into a project-specific folder), the plugin performs a vault-wide search as a last resort before creating a duplicate.
 
 See [Template Examples: Subfolder Organization](templates/examples.md#subfolder-organization) for more patterns.
 
@@ -156,6 +159,7 @@ This section controls what text is inserted when you use the **Insert Markdown c
 | Primary citation template | Template for the main citation format | `[@{{citekey}}]` |
 | Secondary citation template | Template for the alternative format (activated by **Shift+Enter** in the search modal) | `@{{citekey}}` |
 | Auto-create literature note on citation | Create the literature note file when inserting a citation, if it doesn't exist yet | `false` |
+| Literature note link display template | Custom Handlebars template for the display text of inserted literature note links. Leave empty to use defaults (citekey for Markdown, title for Wiki) | (empty) |
 
 ### Citation style preset
 
@@ -176,6 +180,24 @@ Select a built-in style to auto-fill both template fields, or choose `custom` to
 ### Auto-create literature note on citation
 
 When **on**: inserting a citation also creates the literature note file if it doesn't exist. When **off** (default): only the citation text is inserted, no note file is created. Enable this if you want every cited reference to have a corresponding note.
+
+### Literature note link display template
+
+Controls the display text shown in links inserted by the **Insert literature note link** command. Leave empty to use the defaults:
+
+- **Markdown links** (`[display](path)`): display text = citekey (e.g. `[smith2023](notes/smith2023.md)`)
+- **Wiki links** (`[[path]]`): display text = note title
+
+When a template is set, it is rendered with all template variables (just like citation templates) and used as the display text for both link formats. For wiki links, the alias syntax `[[path|display]]` is used.
+
+**Common patterns:**
+
+| Template | Result (Markdown) | Result (Wiki) |
+|----------|-------------------|---------------|
+| (empty — default) | `[smith2023](path)` | `[[path]]` |
+| `{{authorString}} ({{year}})` | `[Smith, Jones (2023)](path)` | `[[path\|Smith, Jones (2023)]]` |
+| `{{titleShort}}` | `[Attention](path)` | `[[path\|Attention]]` |
+| `@{{citekey}}` | `[@smith2023](path)` | `[[path\|@smith2023]]` |
 
 ---
 

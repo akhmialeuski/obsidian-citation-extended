@@ -187,8 +187,9 @@ describe('Issue 161: Insert Literature Note Link', () => {
       '',
       false,
     );
+    // Display text defaults to citekey for Markdown links (#271)
     expect(mockEditor.replaceSelection).toHaveBeenCalledWith(
-      '[Test Article](Reading%20Notes/Test%20Article.md)',
+      '[test_key](Reading%20Notes/Test%20Article.md)',
     );
   });
 });

@@ -432,7 +432,7 @@ describe('LocalFileSource', () => {
       const source = new LocalFileSource(
         defaultId,
         defaultPath,
-        'hayagriva' as any,
+        'unknown-format' as any,
         createMockWorkerManager({
           entries: [sampleBibLaTeXEntry],
           parseErrors: [],

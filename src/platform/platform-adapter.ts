@@ -73,6 +73,8 @@ export interface IEditorProxy {
   setCursor(pos: IEditorPosition): void;
   replaceSelection(text: string): void;
   replaceRange(text: string, pos: IEditorPosition): void;
+  /** Return the content of the line at the given zero-based line number. */
+  getLine(lineNumber: number): string;
 }
 
 // ---------------------------------------------------------------------------

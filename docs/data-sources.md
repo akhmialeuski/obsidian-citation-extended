@@ -8,7 +8,7 @@ The plugin supports loading bibliography data from multiple sources and formats.
 |--------|-----------|-------------|
 | **CSL-JSON** | `.json` | Standard citation format, fast loading |
 | **BibLaTeX** | `.bib` | Rich format with PDF paths, keywords, notes. Slower to parse but more data available |
-| **Hayagriva** (planned) | `.yml` | YAML-based bibliography format |
+| **Hayagriva** | `.yml` / `.yaml` | YAML-based bibliography format used by [Typst](https://typst.app). Supports basic fields: title, author, date, DOI, URL, parent (container) |
 
 ### Choosing a Format
 
@@ -63,8 +63,36 @@ When the same citekey appears in multiple databases:
 
 **Example:** You have a personal library (`My Library`) and a shared team library (`Team`). With "Last wins", entries from `Team` (listed second) override `My Library` when both have the same citekey. To reverse this, drag `My Library` below `Team` in the settings list.
 
+### Hayagriva (YAML)
+
+YAML-based bibliography format designed for [Typst](https://typst.app). Each top-level key is a citekey, with fields indented below it.
+
+**Example `.yml` file:**
+```yaml
+smith2023:
+  type: article
+  title: Attention Is All You Need
+  author:
+    - John Smith
+    - Jane Doe
+  date: 2023-06-15
+  url: https://example.com
+  doi: 10.1234/test
+  parent:
+    title: Nature
+    publisher: Springer
+
+jones2022:
+  type: book
+  title: Machine Learning Basics
+  author:
+    - Bob Jones
+  date: 2022
+```
+
+**When to use:** If you use Typst as your typesetting system and already maintain a Hayagriva bibliography. The plugin uses a built-in YAML parser for common Hayagriva fields — complex nested structures may need a dedicated YAML library in future versions.
+
 ## Coming Soon
 
-- **Hayagriva (YAML)** — native support for the Hayagriva bibliography format
 - **Readwise API** — load highlights and annotations from Readwise
 - **HTTP/Network sources** — fetch bibliography from a URL

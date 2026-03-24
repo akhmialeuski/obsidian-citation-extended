@@ -146,6 +146,47 @@ describe('SearchService', () => {
     expect(byPartial).toContain('hopf2020');
   });
 
+  test('should search by Zotero ID', () => {
+    const zoteroEntries = [
+      new MockEntry({
+        id: 'smith2020',
+        title: 'Some Paper',
+        authorString: 'Smith',
+        issuedDate: new Date(2020, 0, 1),
+        zoteroId: 'W5JRT78A',
+      }),
+      new MockEntry({
+        id: 'jones2021',
+        title: 'Another Paper',
+        authorString: 'Jones',
+        issuedDate: new Date(2021, 0, 1),
+        zoteroId: 'ABCD1234',
+      }),
+    ];
+
+    service.buildIndex(zoteroEntries);
+
+    const results = service.search('W5JRT78A');
+    expect(results).toContain('smith2020');
+  });
+
+  test('should find entry by partial Zotero ID prefix', () => {
+    const zoteroEntries = [
+      new MockEntry({
+        id: 'smith2020',
+        title: 'Some Paper',
+        authorString: 'Smith',
+        issuedDate: new Date(2020, 0, 1),
+        zoteroId: 'W5JRT78A',
+      }),
+    ];
+
+    service.buildIndex(zoteroEntries);
+
+    const results = service.search('W5JRT');
+    expect(results).toContain('smith2020');
+  });
+
   describe('diacritics normalization', () => {
     test('should find entry with accented author when searching without accents', () => {
       const diacriticEntries = [

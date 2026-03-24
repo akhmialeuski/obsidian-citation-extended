@@ -49,6 +49,7 @@ export const SettingsSchema = z.object({
     .enum(['default', 'year-desc', 'year-asc', 'author-asc'])
     .default('default'),
   autoCreateNoteOnCitation: z.boolean().default(false),
+  literatureNoteLinkDisplayTemplate: z.string().default(''),
   // Multi-source configuration
   databases: z
     .array(
@@ -85,6 +86,7 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   alternativeMarkdownCitationTemplate: '@{{citekey}}',
   referenceListSortOrder: 'default',
   autoCreateNoteOnCitation: false,
+  literatureNoteLinkDisplayTemplate: '',
   mergeStrategy: 'last-wins',
   databases: [],
   disableAutomaticNoteCreation: false,

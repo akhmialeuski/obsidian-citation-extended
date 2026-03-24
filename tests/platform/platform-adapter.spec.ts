@@ -108,6 +108,7 @@ describe('IPlatformAdapter mock factory', () => {
       setCursor: jest.fn(),
       replaceSelection: jest.fn(),
       replaceRange: jest.fn(),
+      getLine: jest.fn().mockReturnValue(''),
     };
 
     const adapter = createMockPlatformAdapter({
@@ -136,11 +137,11 @@ describe('IPlatformAdapter mock factory', () => {
     const adapter = createMockPlatformAdapter();
 
     const item = adapter.addStatusBarItem();
-    item.setText('loading...');
+    item.setText('Loading...');
     item.addClass('mod-error');
     item.removeClass('mod-error');
 
-    expect(item.setText).toHaveBeenCalledWith('loading...');
+    expect(item.setText).toHaveBeenCalledWith('Loading...');
     expect(item.addClass).toHaveBeenCalledWith('mod-error');
     expect(item.removeClass).toHaveBeenCalledWith('mod-error');
   });

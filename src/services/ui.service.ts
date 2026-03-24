@@ -1,20 +1,22 @@
 import { LoadingStatus, LibraryState } from '../library/library-state';
-import { CitationSearchModal } from '../ui/modals/citation-search-modal';
-import { InsertCitationAction } from '../ui/modals/actions/insert-citation.action';
-import { InsertNoteLinkAction } from '../ui/modals/actions/insert-note-link.action';
-import { InsertNoteContentAction } from '../ui/modals/actions/insert-note-content.action';
-import { OpenNoteAction } from '../ui/modals/actions/open-note.action';
-import { SearchAction } from '../ui/modals/actions/search-action';
 import CitationPlugin from '../main';
 import { IUIService } from '../container';
 import { IStatusBarItem } from '../platform/platform-adapter';
+import { CommandRegistry } from './command-registry';
+import { ContextMenuHandler } from './context-menu-handler';
 
 export class UIService implements IUIService {
   private statusBarItem!: IStatusBarItem;
   private unsubscribe: (() => void) | null = null;
   private lastNotifiedStatus?: LoadingStatus;
 
-  constructor(private plugin: CitationPlugin) {}
+  private commandRegistry: CommandRegistry;
+  private contextMenuHandler: ContextMenuHandler;
+
+  constructor(private plugin: CitationPlugin) {
+    this.commandRegistry = new CommandRegistry(plugin);
+    this.contextMenuHandler = new ContextMenuHandler(plugin);
+  }
 
   init(): void {
     this.statusBarItem = this.plugin.platform.addStatusBarItem();
@@ -25,7 +27,8 @@ export class UIService implements IUIService {
       },
     );
 
-    this.registerCommands();
+    this.commandRegistry.registerAll();
+    this.contextMenuHandler.register();
   }
 
   private updateStatusBar(state: LibraryState): void {
@@ -71,74 +74,6 @@ export class UIService implements IUIService {
         `Citations: Loaded ${entryCount} entries. ${state.parseErrors.length} entries skipped due to parse errors. Check console for details.`,
       );
     }
-  }
-
-  /**
-   * Returns the currently selected text from the active editor, if any.
-   */
-  private getSelectedText(): string {
-    const editor = this.plugin.platform.workspace.getActiveEditor();
-    return editor?.getSelection() ?? '';
-  }
-
-  /**
-   * Opens a citation search modal, injecting the current editor selection
-   * into the action so templates can use {{selectedText}} and the search
-   * input is pre-filled.
-   */
-  private openSearchModal(action: SearchAction): void {
-    action.selectedText = this.getSelectedText();
-    const modal = new CitationSearchModal(this.plugin.app, this.plugin, action);
-    modal.open();
-  }
-
-  registerCommands(): void {
-    this.plugin.addCommand({
-      id: 'open-literature-note',
-      name: 'Open literature note',
-
-      callback: () => {
-        this.openSearchModal(new OpenNoteAction(this.plugin));
-      },
-    });
-
-    this.plugin.addCommand({
-      id: 'update-bib-data',
-      name: 'Refresh citation database',
-
-      callback: () => {
-        void this.plugin.libraryService.load();
-      },
-    });
-
-    // Use `callback` instead of `editorCallback` so that insert commands
-    // are available in Canvas text nodes, Lineage views, and other
-    // non-standard editor contexts.  The plugin methods already null-guard
-    // the editor and show a Notice when none is found.
-    this.plugin.addCommand({
-      id: 'insert-citation',
-      name: 'Insert literature note link',
-
-      callback: () => {
-        this.openSearchModal(new InsertNoteLinkAction(this.plugin));
-      },
-    });
-
-    this.plugin.addCommand({
-      id: 'insert-literature-note-content',
-      name: 'Insert literature note content in the current pane',
-      callback: () => {
-        this.openSearchModal(new InsertNoteContentAction(this.plugin));
-      },
-    });
-
-    this.plugin.addCommand({
-      id: 'insert-markdown-citation',
-      name: 'Insert Markdown citation',
-      callback: () => {
-        this.openSearchModal(new InsertCitationAction(this.plugin));
-      },
-    });
   }
 
   dispose(): void {

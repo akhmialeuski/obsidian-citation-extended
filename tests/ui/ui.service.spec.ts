@@ -102,11 +102,18 @@ function makePlugin(initialState: LibraryState) {
         removeClass: jest.fn(),
       })),
     },
+    registerEvent: jest.fn(),
+    editorActions: {
+      extractCitekeyAtCursor: jest.fn(() => null),
+      openLiteratureNote: jest.fn().mockResolvedValue(undefined),
+      openNoteAtCursor: jest.fn().mockResolvedValue(undefined),
+    },
     app: {
       workspace: {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- flexible mock
         getActiveViewOfType: jest.fn((): any => null),
         activeEditor: null as unknown,
+        on: jest.fn(() => ({ id: 'mock-event-ref' })),
       },
     },
   };
@@ -400,7 +407,7 @@ describe('UIService', () => {
   });
 
   describe('registerCommands', () => {
-    it('registers 5 commands', () => {
+    it('registers 8 commands', () => {
       const { plugin, commands } = makePlugin({
         status: LoadingStatus.Idle,
         parseErrors: [],
@@ -409,8 +416,8 @@ describe('UIService', () => {
       const service = new UIService(plugin as never);
       service.init();
 
-      expect(commands).toHaveLength(5);
-      expect(plugin.addCommand).toHaveBeenCalledTimes(5);
+      expect(commands).toHaveLength(8);
+      expect(plugin.addCommand).toHaveBeenCalledTimes(8);
     });
 
     it('open-literature-note command opens search modal with OpenNoteAction', () => {
