@@ -22,9 +22,7 @@ const ENTRY_ADAPTERS: Record<DatabaseType, (entries: EntryData[]) => Entry[]> =
       entries.map((e) => new EntryCSLAdapter(e as EntryDataCSL)),
 
     [DATABASE_FORMATS.Hayagriva]: (entries) =>
-      entries.map(
-        (e) => new HayagrivaAdapter(e as unknown as HayagrivaEntryData),
-      ),
+      entries.map((e) => new HayagrivaAdapter(e as HayagrivaEntryData)),
   };
 
 /**
