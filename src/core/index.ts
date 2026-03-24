@@ -26,6 +26,9 @@ export type { EntryData } from './adapters/biblatex-adapter';
 export { HayagrivaAdapter } from './adapters/hayagriva-adapter';
 export type { HayagrivaEntryData } from './adapters/hayagriva-adapter';
 
+// Entry adapter factory
+export { convertToEntries } from './adapters/entry-adapter-factory';
+
 // Parsing
 export { loadEntries } from './parsing/entry-parser';
 

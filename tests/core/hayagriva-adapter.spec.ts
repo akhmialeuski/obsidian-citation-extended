@@ -1,7 +1,5 @@
-import {
-  HayagrivaAdapter,
-  parseHayagrivaYaml,
-} from '../../src/core/adapters/hayagriva-adapter';
+import { HayagrivaAdapter } from '../../src/core/adapters/hayagriva-adapter';
+import { parseHayagrivaYaml } from '../../src/core/parsing/hayagriva-parser';
 
 describe('HayagrivaAdapter', () => {
   it('should create an entry with basic fields', () => {

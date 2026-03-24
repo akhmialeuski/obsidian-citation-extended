@@ -32,12 +32,10 @@ export interface HayagrivaEntryData {
 }
 
 /**
- * Parse a Hayagriva author entry into the standard Author format.
+ * Convert a Hayagriva author entry into the standard Author format.
  * Hayagriva authors can be plain strings ("John Doe") or structured objects.
  */
-function parseHayagrivaAuthor(
-  raw: string | { family?: string; given?: string },
-): Author {
+function toAuthor(raw: string | { family?: string; given?: string }): Author {
   if (typeof raw === 'string') {
     const parts = raw.split(/\s+/);
     if (parts.length === 1) {
@@ -52,10 +50,10 @@ function parseHayagrivaAuthor(
 }
 
 /**
- * Parse a Hayagriva date string into a Date object.
- * Hayagriva dates are ISO-like: "2023", "2023-06", "2023-06-15".
+ * Convert a Hayagriva date string ("2023", "2023-06", "2023-06-15")
+ * into a Date object.
  */
-function parseHayagrivaDate(dateStr: string): Date | null {
+function toDate(dateStr: string): Date | null {
   const parts = dateStr.split('-').map((p) => parseInt(p));
   if (parts.length === 0 || isNaN(parts[0])) return null;
   const year = parts[0];
@@ -64,6 +62,11 @@ function parseHayagrivaDate(dateStr: string): Date | null {
   return new Date(Date.UTC(year, month - 1, day));
 }
 
+/**
+ * Adapter that maps Hayagriva-specific fields to the standard Entry
+ * interface.  Receives already-parsed data from the Hayagriva YAML
+ * parser ({@link parseHayagrivaYaml} in `parsing/hayagriva-parser.ts`).
+ */
 export class HayagrivaAdapter extends Entry {
   private _citekey: string;
   private data: HayagrivaEntryData;
@@ -104,7 +107,7 @@ export class HayagrivaAdapter extends Entry {
   get author(): Author[] | undefined {
     const authors = this.data.author;
     if (!authors || !Array.isArray(authors)) return undefined;
-    return authors.map(parseHayagrivaAuthor);
+    return authors.map(toAuthor);
   }
 
   get authorString(): string | null {
@@ -129,7 +132,7 @@ export class HayagrivaAdapter extends Entry {
 
   get issuedDate(): Date | null {
     if (!this.data.date) return null;
-    return parseHayagrivaDate(this.data.date);
+    return toDate(this.data.date);
   }
 
   get page(): string | undefined {
@@ -183,129 +186,4 @@ export class HayagrivaAdapter extends Entry {
   get volume(): string | undefined {
     return this.data.volume || this.data.parent?.volume;
   }
-}
-
-/**
- * Parse a Hayagriva YAML string into EntryData objects.
- * Returns an array of [citekey, data] pairs suitable for adapter instantiation.
- */
-export function parseHayagrivaYaml(
-  yamlStr: string,
-): { citekey: string; data: HayagrivaEntryData }[] {
-  // Simple YAML parser — Hayagriva is a flat key-value format.
-  // We use a minimal parser to avoid adding a YAML dependency.
-  // For full compliance, a proper YAML parser would be needed.
-  const results: { citekey: string; data: HayagrivaEntryData }[] = [];
-  const lines = yamlStr.split('\n');
-  let currentKey: string | null = null;
-  let currentBlock: string[] = [];
-
-  const flushBlock = () => {
-    if (currentKey && currentBlock.length > 0) {
-      try {
-        const data = parseSimpleYamlBlock(currentBlock);
-        results.push({ citekey: currentKey, data });
-      } catch (e) {
-        console.warn(
-          `Citations plugin: Failed to parse Hayagriva entry "${currentKey}":`,
-          e,
-        );
-      }
-    }
-  };
-
-  for (const line of lines) {
-    // Top-level key (no indentation, ends with colon)
-    if (/^[\w.-]+:\s*$/.test(line)) {
-      flushBlock();
-      currentKey = line.replace(/:\s*$/, '').trim();
-      currentBlock = [];
-    } else if (currentKey !== null) {
-      currentBlock.push(line);
-    }
-  }
-  flushBlock();
-
-  return results;
-}
-
-/**
- * Parse a simple indented YAML block into a HayagrivaEntryData object.
- * This handles the most common Hayagriva fields without a full YAML parser.
- */
-/**
- * Measure the indentation level of a line (number of leading spaces).
- */
-function indentLevel(line: string): number {
-  const match = line.match(/^(\s*)/);
-  return match ? match[1].length : 0;
-}
-
-function parseSimpleYamlBlock(lines: string[]): HayagrivaEntryData {
-  const data: Record<string, unknown> = {};
-  let i = 0;
-
-  while (i < lines.length) {
-    const line = lines[i];
-    const trimmed = line.trimStart();
-    if (!trimmed || trimmed.startsWith('#')) {
-      i++;
-      continue;
-    }
-
-    // Key-value pair at the current indentation level
-    const kvMatch = trimmed.match(/^([a-zA-Z_-]+):\s*(.*)$/);
-    if (!kvMatch) {
-      i++;
-      continue;
-    }
-
-    const key = kvMatch[1];
-    const value = kvMatch[2].trim().replace(/^["']|["']$/g, '');
-    const baseIndent = indentLevel(line);
-
-    if (value) {
-      // Simple scalar value
-      data[key] = value;
-      i++;
-    } else {
-      // Empty value — collect child lines (list or nested object)
-      i++;
-      const childLines: string[] = [];
-      while (i < lines.length) {
-        const nextLine = lines[i];
-        const nextTrimmed = nextLine.trimStart();
-        if (!nextTrimmed || nextTrimmed.startsWith('#')) {
-          childLines.push(nextLine);
-          i++;
-          continue;
-        }
-        if (indentLevel(nextLine) <= baseIndent) break;
-        childLines.push(nextLine);
-        i++;
-      }
-
-      // Determine whether children are a list or a nested object
-      const firstContentLine = childLines.find(
-        (l) => l.trim() && !l.trim().startsWith('#'),
-      );
-      if (firstContentLine && firstContentLine.trim().startsWith('- ')) {
-        // List items
-        data[key] = childLines
-          .filter((l) => l.trim().startsWith('- '))
-          .map((l) =>
-            l
-              .trim()
-              .substring(2)
-              .trim()
-              .replace(/^["']|["']$/g, ''),
-          );
-      } else {
-        // Nested object — recurse
-        data[key] = parseSimpleYamlBlock(childLines);
-      }
-    }
-  }
-
-  return data as unknown as HayagrivaEntryData;
 }
