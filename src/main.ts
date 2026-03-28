@@ -12,6 +12,12 @@ import { DataSourceRegistry } from './sources/data-source-registry';
 import { DATA_SOURCE_TYPES } from './data-source';
 import { LocalFileSource } from './sources/local-file-source';
 import { VaultFileSource } from './sources/vault-file-source';
+import { SourceManager } from './infrastructure/source-manager';
+import {
+  NormalizationPipeline,
+  SourceTaggingStep,
+  DeduplicationStep,
+} from './infrastructure/normalization-pipeline';
 import {
   CitationService,
   ICitationService,
@@ -123,6 +129,12 @@ export default class CitationPlugin extends Plugin {
 
     const dataSourceFactory = new DataSourceFactory(registry);
 
+    // Infrastructure: source manager + normalization pipeline
+    const sourceManager = new SourceManager(dataSourceFactory);
+    const pipeline = new NormalizationPipeline()
+      .addStep(new SourceTaggingStep())
+      .addStep(new DeduplicationStep());
+
     // Application services
     this.contentTemplateResolver = new ContentTemplateResolver(
       platformAdapter.vault,
@@ -144,7 +156,8 @@ export default class CitationPlugin extends Plugin {
       platformAdapter,
       workerManager,
     );
-    this.libraryService.setDataSourceFactory(dataSourceFactory);
+    this.libraryService.setSourceManager(sourceManager);
+    this.libraryService.setPipeline(pipeline);
 
     this.citationService = new CitationService(
       this.libraryService,

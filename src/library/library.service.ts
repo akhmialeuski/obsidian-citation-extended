@@ -1,21 +1,21 @@
 import type { IPlatformAdapter } from '../platform/platform-adapter';
 import { CitationsPluginSettings } from '../ui/settings/settings';
-import { Entry, Library, ParseErrorInfo } from '../core';
+import { Library, ParseErrorInfo } from '../core';
 import { WorkerManager } from '../util';
 import { LoadingStatus, LibraryState } from './library-state';
-import {
-  DataSource,
-  DataSourceLoadResult,
-  DATA_SOURCE_TYPES,
-} from '../data-source';
+import { DataSource } from '../data-source';
 import { SearchService } from '../search/search.service';
 import {
   IntrospectionService,
   VariableDefinition,
 } from '../template/introspection.service';
 import { ILibraryService } from '../container';
-import { IDataSourceFactory } from '../sources/data-source-factory';
 import { LibraryStore } from './library-store';
+import type { ISourceManager } from '../infrastructure/source-manager';
+import type {
+  NormalizationPipeline,
+  SourceLoadResult,
+} from '../infrastructure/normalization-pipeline';
 
 const LOAD_TIMEOUT_MS = 10_000;
 const LOAD_DEBOUNCE_MS = 1_000;
@@ -26,7 +26,7 @@ const MAX_RETRY_DELAY_MS = 30_000;
 /**
  * Metadata collected from each source during loading.
  */
-interface SourceMetadata {
+export interface SourceMetadata {
   sourceId: string;
   databaseName: string;
   entryCount: number;
@@ -43,12 +43,17 @@ export class LibraryService implements ILibraryService {
 
   private loadWorker: WorkerManager;
   private abortController: AbortController | null = null;
-  private sources: DataSource[] = [];
   private loadDebounceTimer: number | null = null;
   private retryTimer: number | null = null;
   private retryCount = 0;
-  private dataSourceFactory: IDataSourceFactory | null = null;
-  private sourceDbNameMap = new Map<string, string>();
+  private sourceManager: ISourceManager | null = null;
+  private pipeline: NormalizationPipeline | null = null;
+
+  /**
+   * Sources injected via constructor for backward-compat / testing.
+   * When non-empty, these are used instead of SourceManager.
+   */
+  private injectedSources: DataSource[] = [];
 
   constructor(
     private settings: CitationsPluginSettings,
@@ -57,17 +62,29 @@ export class LibraryService implements ILibraryService {
     sources: DataSource[] = [],
   ) {
     this.loadWorker = workerManager;
-    this.sources = sources;
+    this.injectedSources = sources;
     this.searchService = new SearchService();
     this.introspectionService = new IntrospectionService();
     this.store = new LibraryStore();
   }
 
   /**
-   * Inject a DataSourceFactory for creating sources from settings.
+   * Inject the SourceManager and NormalizationPipeline.
+   * These replace the old DataSourceFactory + inline merge logic.
    */
-  setDataSourceFactory(factory: IDataSourceFactory): void {
-    this.dataSourceFactory = factory;
+  setSourceManager(manager: ISourceManager): void {
+    this.sourceManager = manager;
+  }
+
+  setPipeline(pipeline: NormalizationPipeline): void {
+    this.pipeline = pipeline;
+  }
+
+  /**
+   * @deprecated Use setSourceManager instead. Kept for backward compatibility.
+   */
+  setDataSourceFactory(): void {
+    // no-op — SourceManager is used instead
   }
 
   get state(): LibraryState {
@@ -75,22 +92,22 @@ export class LibraryService implements ILibraryService {
   }
 
   addSource(source: DataSource): void {
-    this.sources.push(source);
+    this.injectedSources.push(source);
     console.debug(`LibraryService: Added source ${source.id}`);
   }
 
   removeSource(sourceId: string): void {
-    const index = this.sources.findIndex((s) => s.id === sourceId);
+    const index = this.injectedSources.findIndex((s) => s.id === sourceId);
     if (index !== -1) {
-      const source = this.sources[index];
+      const source = this.injectedSources[index];
       source.dispose();
-      this.sources.splice(index, 1);
+      this.injectedSources.splice(index, 1);
       console.debug(`LibraryService: Removed source ${sourceId}`);
     }
   }
 
   getSources(): DataSource[] {
-    return [...this.sources];
+    return [...this.injectedSources];
   }
 
   getTemplateVariables(): VariableDefinition[] {
@@ -103,30 +120,6 @@ export class LibraryService implements ILibraryService {
 
   private setState(newState: Partial<LibraryState>): void {
     this.store.setState(newState);
-  }
-
-  private mergeEntries(results: Entry[][]): Library {
-    const entriesMap = new Map<string, Entry>();
-    const citekeyCounts = new Map<string, number>();
-
-    for (const entries of results) {
-      for (const entry of entries) {
-        citekeyCounts.set(entry.id, (citekeyCounts.get(entry.id) || 0) + 1);
-      }
-    }
-
-    for (const entries of results) {
-      for (const entry of entries) {
-        if (citekeyCounts.get(entry.id)! > 1) {
-          const compositeKey = `${entry.id}@${entry._sourceDatabase}`;
-          entry._compositeCitekey = compositeKey;
-          entry.id = compositeKey;
-        }
-        entriesMap.set(entry.id, entry);
-      }
-    }
-
-    return new Library(Object.fromEntries(entriesMap));
   }
 
   load = async (isRetry = false): Promise<Library | null> => {
@@ -162,110 +155,16 @@ export class LibraryService implements ILibraryService {
     console.debug('Citation plugin: Reloading library from all sources');
 
     try {
-      this.sources = this.createSources();
-
-      const loadPromises = this.sources.map(async (source, index) => {
-        try {
-          console.debug(`LibraryService: Loading from source ${source.id}`);
-          const result: DataSourceLoadResult = await source.load();
-          console.debug(
-            `LibraryService: Loaded ${result.entries.length} entries from ${source.id}`,
-          );
-          const dbName = this.settings.databases[index].name;
-          result.entries.forEach((entry) => {
-            entry._sourceDatabase = dbName;
-          });
-          return result;
-        } catch (error) {
-          console.error(
-            `LibraryService: Error loading from source ${source.id}:`,
-            error,
-          );
-          return error instanceof Error ? error : new Error(String(error));
-        }
-      });
-
-      let timeoutId: number = 0;
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutId = window.setTimeout(
-          () => reject(new Error('Timeout loading citation database')),
-          LOAD_TIMEOUT_MS,
-        );
-      });
-
-      const results = await Promise.race([
-        Promise.all(loadPromises),
-        timeoutPromise,
-      ]);
-
-      if (timeoutId) {
-        window.clearTimeout(timeoutId);
-      }
+      const results = await this.loadFromSources(signal);
       if (signal.aborted) return null;
 
-      const successfulResults = results.filter(
-        (r): r is DataSourceLoadResult => !(r instanceof Error),
-      );
-      const errors = results.filter((r): r is Error => r instanceof Error);
-
-      if (successfulResults.length === 0 && errors.length > 0) {
-        throw errors[0];
-      }
-
-      let totalParseErrors = 0;
-      const allParseErrors: ParseErrorInfo[] = [];
-
-      this.sourceMetadata = successfulResults.map((r) => {
-        const errorCount = r.parseErrors?.length ?? 0;
-        totalParseErrors += errorCount;
-        if (r.parseErrors) {
-          allParseErrors.push(...r.parseErrors);
-        }
-        return {
-          sourceId: r.sourceId,
-          databaseName: this.sourceDbNameMap.get(r.sourceId) ?? r.sourceId,
-          entryCount: r.entries.length,
-          parseErrorCount: errorCount,
-          modifiedAt: r.modifiedAt,
-        };
-      });
-
-      const entryArrays = successfulResults.map((r) => r.entries);
-      this.library = this.mergeEntries(entryArrays);
-
-      console.debug('Citation plugin: Building search index');
-      this.searchService.buildIndex(Object.values(this.library.entries));
-
-      const parseErrorMessages =
-        totalParseErrors > 0
-          ? allParseErrors.slice(0, 10).map((pe) => pe.message)
-          : [];
-
-      if (totalParseErrors > 0) {
-        console.warn(
-          `Citation plugin: ${totalParseErrors} entries skipped due to parse errors.`,
-          allParseErrors.slice(0, 5),
-        );
-      }
-
-      this.setState({
-        status: LoadingStatus.Success,
-        lastLoaded: new Date(),
-        progress: { current: this.library.size, total: this.library.size },
-        parseErrors: parseErrorMessages,
-      });
-
-      const totalEntries = entryArrays.reduce(
-        (sum, entries) => sum + entries.length,
-        0,
-      );
+      this.buildLibrary(results);
 
       console.debug(
-        `Citation plugin: successfully loaded library with ${this.library.size} unique entries from ${totalEntries} total entries across ${this.sources.length} sources.`,
+        `Citation plugin: successfully loaded library with ${this.library!.size} unique entries across ${results.length} sources.`,
       );
 
       this.retryCount = 0;
-
       this.initWatcher();
 
       return this.library;
@@ -291,25 +190,177 @@ export class LibraryService implements ILibraryService {
     }
   };
 
-  private createSources(): DataSource[] {
-    // If sources were injected via constructor, use them as-is
-    if (this.sources.length > 0) {
-      return this.sources;
+  /**
+   * Load entries from sources — either via SourceManager or injected sources.
+   */
+  private async loadFromSources(
+    signal: AbortSignal,
+  ): Promise<SourceLoadResult[]> {
+    // Use SourceManager when available (production path)
+    if (this.sourceManager && this.injectedSources.length === 0) {
+      this.sourceManager.syncSources(this.settings.databases);
+
+      let timeoutId: number = 0;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = window.setTimeout(
+          () => reject(new Error('Timeout loading citation database')),
+          LOAD_TIMEOUT_MS,
+        );
+      });
+
+      try {
+        const results = await Promise.race([
+          this.sourceManager.loadAll(),
+          timeoutPromise,
+        ]);
+        return results;
+      } finally {
+        if (timeoutId) window.clearTimeout(timeoutId);
+      }
     }
-    if (!this.dataSourceFactory) {
-      console.warn('Citations plugin: No data source factory configured.');
-      return [];
-    }
-    this.sourceDbNameMap.clear();
-    // TODO: derive DataSourceType from DatabaseConfig when vault-file sources are supported in settings
-    return this.settings.databases.map((db, index) => {
-      const id = `source-${index}`;
-      this.sourceDbNameMap.set(id, db.name);
-      return this.dataSourceFactory!.create(
-        { type: DATA_SOURCE_TYPES.LocalFile, path: db.path, format: db.type },
-        id,
+
+    // Fallback: use injected sources (testing / backward compat)
+    return this.loadFromInjectedSources(signal);
+  }
+
+  /**
+   * Legacy path: load from constructor-injected sources.
+   */
+  private async loadFromInjectedSources(
+    signal: AbortSignal,
+  ): Promise<SourceLoadResult[]> {
+    const loadPromises = this.injectedSources.map(
+      async (source, index): Promise<SourceLoadResult | Error> => {
+        try {
+          const result = await source.load();
+          const dbName = this.settings.databases[index]?.name ?? source.id;
+          result.entries.forEach((entry) => {
+            entry._sourceDatabase = dbName;
+          });
+          return {
+            sourceId: result.sourceId,
+            databaseName: dbName,
+            entries: result.entries,
+            parseErrors: result.parseErrors ?? [],
+            modifiedAt: result.modifiedAt,
+          };
+        } catch (error) {
+          console.error(
+            `LibraryService: Error loading from source ${source.id}:`,
+            error,
+          );
+          return error instanceof Error ? error : new Error(String(error));
+        }
+      },
+    );
+
+    let timeoutId: number = 0;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = window.setTimeout(
+        () => reject(new Error('Timeout loading citation database')),
+        LOAD_TIMEOUT_MS,
       );
     });
+
+    const rawResults = await Promise.race([
+      Promise.all(loadPromises),
+      timeoutPromise,
+    ]);
+
+    if (timeoutId) window.clearTimeout(timeoutId);
+    if (signal.aborted) return [];
+
+    const successful = rawResults.filter(
+      (r): r is SourceLoadResult => !(r instanceof Error),
+    );
+    const errors = rawResults.filter((r): r is Error => r instanceof Error);
+
+    if (successful.length === 0 && errors.length > 0) {
+      throw errors[0];
+    }
+
+    return successful;
+  }
+
+  /**
+   * Build the Library from load results using the normalization pipeline
+   * (or inline logic as fallback).
+   */
+  private buildLibrary(results: SourceLoadResult[]): void {
+    let totalParseErrors = 0;
+    const allParseErrors: ParseErrorInfo[] = [];
+
+    this.sourceMetadata = results.map((r) => {
+      const errorCount = r.parseErrors?.length ?? 0;
+      totalParseErrors += errorCount;
+      if (r.parseErrors) {
+        allParseErrors.push(...r.parseErrors);
+      }
+      return {
+        sourceId: r.sourceId,
+        databaseName: r.databaseName,
+        entryCount: r.entries.length,
+        parseErrorCount: errorCount,
+        modifiedAt: r.modifiedAt,
+      };
+    });
+
+    // Use pipeline when available, otherwise inline merge
+    if (this.pipeline) {
+      this.library = this.pipeline.run(results);
+    } else {
+      this.library = this.inlineMerge(results);
+    }
+
+    console.debug('Citation plugin: Building search index');
+    this.searchService.buildIndex(Object.values(this.library.entries));
+
+    const parseErrorMessages =
+      totalParseErrors > 0
+        ? allParseErrors.slice(0, 10).map((pe) => pe.message)
+        : [];
+
+    if (totalParseErrors > 0) {
+      console.warn(
+        `Citation plugin: ${totalParseErrors} entries skipped due to parse errors.`,
+        allParseErrors.slice(0, 5),
+      );
+    }
+
+    this.setState({
+      status: LoadingStatus.Success,
+      lastLoaded: new Date(),
+      progress: { current: this.library.size, total: this.library.size },
+      parseErrors: parseErrorMessages,
+    });
+  }
+
+  /**
+   * Inline merge for backward compat when no pipeline is set.
+   * Mirrors the old mergeEntries() logic.
+   */
+  private inlineMerge(results: SourceLoadResult[]): Library {
+    const entriesMap = new Map<string, import('../core').Entry>();
+    const citekeyCounts = new Map<string, number>();
+
+    for (const result of results) {
+      for (const entry of result.entries) {
+        citekeyCounts.set(entry.id, (citekeyCounts.get(entry.id) || 0) + 1);
+      }
+    }
+
+    for (const result of results) {
+      for (const entry of result.entries) {
+        if (citekeyCounts.get(entry.id)! > 1) {
+          const compositeKey = `${entry.id}@${entry._sourceDatabase}`;
+          entry._compositeCitekey = compositeKey;
+          entry.id = compositeKey;
+        }
+        entriesMap.set(entry.id, entry);
+      }
+    }
+
+    return new Library(Object.fromEntries(entriesMap));
   }
 
   private handleErrorRetry(): void {
@@ -329,19 +380,19 @@ export class LibraryService implements ILibraryService {
   }
 
   initWatcher(): void {
-    if (this.sources.length === 0) {
+    // Use SourceManager when available
+    if (this.sourceManager && this.injectedSources.length === 0) {
+      this.sourceManager.initWatchers(() => this.triggerLoadWithDebounce());
       return;
     }
 
-    for (const source of this.sources) {
+    // Fallback: injected sources
+    for (const source of this.injectedSources) {
       try {
         source.watch(() => {
           console.debug(`LibraryService: Change detected in ${source.id}`);
           this.triggerLoadWithDebounce();
         });
-        console.debug(
-          `LibraryService: Initialized watcher for source ${source.id}`,
-        );
       } catch (error) {
         console.error(
           `LibraryService: Error setting up watcher for source ${source.id}:`,
@@ -377,7 +428,13 @@ export class LibraryService implements ILibraryService {
       this.abortController = null;
     }
 
-    for (const source of this.sources) {
+    // Dispose source manager if present
+    if (this.sourceManager) {
+      this.sourceManager.dispose();
+    }
+
+    // Dispose injected sources
+    for (const source of this.injectedSources) {
       try {
         source.dispose();
       } catch (error) {
@@ -388,7 +445,7 @@ export class LibraryService implements ILibraryService {
       }
     }
 
-    this.sources = [];
+    this.injectedSources = [];
     this.loadWorker.dispose();
     this.store.dispose();
 

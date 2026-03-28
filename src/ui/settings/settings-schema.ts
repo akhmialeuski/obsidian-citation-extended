@@ -60,7 +60,7 @@ export const SettingsSchema = z.object({
       }),
     )
     .default([]),
-  mergeStrategy: z.enum(['last-wins', 'merge']).optional(),
+  mergeStrategy: z.enum(['last-wins']).optional(),
   disableAutomaticNoteCreation: z.boolean().default(false),
 });
 
