@@ -33,6 +33,7 @@ export function createMockPlatformAdapter(
     createFolder: jest.fn().mockResolvedValue(undefined),
     isFile: jest.fn().mockReturnValue(true),
     isFolder: jest.fn().mockReturnValue(false),
+    modify: jest.fn().mockResolvedValue(undefined),
     ...(overrides.vault as Partial<IVaultAccess>),
   };
 

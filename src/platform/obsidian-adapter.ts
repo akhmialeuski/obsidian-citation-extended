@@ -119,6 +119,15 @@ class ObsidianVaultAccess implements IVaultAccess {
     const abstract = this.app.vault.getAbstractFileByPath(path);
     return abstract instanceof TFolder;
   }
+
+  async modify(file: IVaultFile, content: string): Promise<void> {
+    const tFile = this.app.vault.getAbstractFileByPath(file.path);
+    if (tFile instanceof TFile) {
+      await this.app.vault.modify(tFile, content);
+    } else {
+      throw new Error(`Cannot modify file at ${file.path}`);
+    }
+  }
 }
 
 class ObsidianWorkspaceAccess implements IWorkspaceAccess {

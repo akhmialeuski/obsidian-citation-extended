@@ -15,6 +15,7 @@ import {
   InsertMultiCitationAction,
   RefreshLibraryAction,
   OpenNoteAtCursorAction,
+  BatchUpdateNotesAction,
 } from '../application/actions';
 
 export class UIService implements IUIService {
@@ -56,6 +57,13 @@ export class UIService implements IUIService {
     actionRegistry.register(new OpenNoteAtCursorAction(actionCtx));
     actionRegistry.register(new InsertSubsequentCitationAction(actionCtx));
     actionRegistry.register(new InsertMultiCitationAction(actionCtx));
+    actionRegistry.register(
+      new BatchUpdateNotesAction(
+        actionCtx,
+        this.plugin.batchOrchestrator,
+        this.plugin.contentTemplateResolver,
+      ),
+    );
 
     // Presentation adapters read from the registry
     this.commandRegistry = new CommandRegistry(

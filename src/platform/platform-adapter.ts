@@ -56,6 +56,9 @@ export interface IVaultAccess {
 
   /** Returns true when the vault path points to an existing folder. */
   isFolder(path: string): boolean;
+
+  /** Overwrite the content of an existing vault file. */
+  modify(file: IVaultFile, content: string): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------

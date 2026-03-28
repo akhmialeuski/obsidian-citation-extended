@@ -15,3 +15,4 @@ export { InsertSubsequentCitationAction } from './insert-subsequent-citation.act
 export { InsertMultiCitationAction } from './insert-multi-citation.action';
 export { RefreshLibraryAction } from './refresh-library.action';
 export { OpenNoteAtCursorAction } from './open-note-at-cursor.action';
+export { BatchUpdateNotesAction } from './batch-update.action';

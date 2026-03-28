@@ -28,6 +28,7 @@ import {
   IContentTemplateResolver,
 } from './application/content-template-resolver';
 
+import { BatchNoteOrchestrator } from './notes/batch/batch-note-orchestrator';
 import { CitationSettingTab } from './ui/settings/settings-tab';
 import { CitationsPluginSettings } from './ui/settings/settings';
 import {
@@ -47,6 +48,7 @@ export default class CitationPlugin extends Plugin {
   platform!: ObsidianPlatformAdapter;
   citationService!: ICitationService;
   contentTemplateResolver!: IContentTemplateResolver;
+  batchOrchestrator!: BatchNoteOrchestrator;
 
   private fileWatcher?: chokidar.FSWatcher;
 
@@ -183,6 +185,13 @@ export default class CitationPlugin extends Plugin {
       this.libraryService,
       this.templateService,
       this.settings,
+    );
+
+    this.batchOrchestrator = new BatchNoteOrchestrator(
+      this.libraryService,
+      this.noteService,
+      this.templateService,
+      platformAdapter.vault,
     );
 
     this.uiService = new UIService(this);
