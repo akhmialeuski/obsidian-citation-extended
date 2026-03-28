@@ -151,13 +151,24 @@ describe('Bug Reproduction: Incorrect Markdown Link Extension', () => {
 
     plugin.citationService = {
       getEntry: jest.fn().mockImplementation((citekey: string) => {
-        const entry = (plugin.libraryService.library as unknown as Record<string, unknown> & { entries: Record<string, unknown> }).entries[citekey];
+        const entry = (
+          plugin.libraryService.library as unknown as Record<
+            string,
+            unknown
+          > & { entries: Record<string, unknown> }
+        ).entries[citekey];
         if (!entry) return { ok: false, error: { message: 'Not found' } };
         return { ok: true, value: entry };
       }),
-      getTitleForCitekey: jest.fn().mockReturnValue({ ok: true, value: 'Test Note Title' }),
-      getMarkdownCitation: jest.fn().mockReturnValue({ ok: true, value: '[@test-citekey]' }),
-      getInitialContentForCitekey: jest.fn().mockResolvedValue({ ok: true, value: '' }),
+      getTitleForCitekey: jest
+        .fn()
+        .mockReturnValue({ ok: true, value: 'Test Note Title' }),
+      getMarkdownCitation: jest
+        .fn()
+        .mockReturnValue({ ok: true, value: '[@test-citekey]' }),
+      getInitialContentForCitekey: jest
+        .fn()
+        .mockResolvedValue({ ok: true, value: '' }),
     } as unknown as typeof plugin.citationService;
 
     plugin.editorActions = new EditorActions(

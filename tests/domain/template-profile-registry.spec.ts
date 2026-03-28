@@ -1,6 +1,4 @@
-import {
-  TemplateProfileRegistry,
-} from '../../src/domain/template-profile-registry';
+import { TemplateProfileRegistry } from '../../src/domain/template-profile-registry';
 import {
   TemplateProfile,
   DEFAULT_PROFILE,
@@ -9,7 +7,9 @@ import {
 
 jest.mock('obsidian', () => ({}), { virtual: true });
 
-function makeProfile(overrides: Partial<TemplateProfile> = {}): TemplateProfile {
+function makeProfile(
+  overrides: Partial<TemplateProfile> = {},
+): TemplateProfile {
   return {
     id: 'test',
     noteKind: 'literature-note',

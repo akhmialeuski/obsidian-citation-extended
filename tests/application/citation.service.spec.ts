@@ -26,12 +26,10 @@ function makeMocks(overrides: Record<string, unknown> = {}) {
     })),
     getTitle: jest.fn(() => ({ ok: true, value: 'Test Title' })),
     render: jest.fn(() => ({ ok: true, value: 'rendered content' })),
-    getMarkdownCitation: jest.fn(
-      (_vars: unknown, alternative?: boolean) => ({
-        ok: true,
-        value: alternative ? '@key1' : '[@key1]',
-      }),
-    ),
+    getMarkdownCitation: jest.fn((_vars: unknown, alternative?: boolean) => ({
+      ok: true,
+      value: alternative ? '@key1' : '[@key1]',
+    })),
     ...(overrides.templateService as Record<string, unknown>),
   };
 

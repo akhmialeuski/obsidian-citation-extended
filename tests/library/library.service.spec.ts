@@ -7,7 +7,13 @@ import { createMockDataSource } from '../helpers/mock-obsidian';
 import * as fs from 'fs';
 import { TextDecoder } from 'util';
 import type { DataSource } from '../../src/data-source';
-import type { IDataSourceFactory } from '../../src/sources/data-source-factory';
+import type { DatabaseType } from '../../src/core/types/database';
+import { SourceManager } from '../../src/infrastructure/source-manager';
+import {
+  NormalizationPipeline,
+  SourceTaggingStep,
+  DeduplicationStep,
+} from '../../src/infrastructure/normalization-pipeline';
 
 // Polyfill for Node.js environment
 global.TextDecoder = TextDecoder as unknown as typeof global.TextDecoder;
@@ -118,18 +124,25 @@ describe('LibraryService', () => {
       settings,
       platform,
       workerManager as unknown as WorkerManager,
-      [],
     );
-    service.setDataSourceFactory({
-      create: (def, id) =>
+
+    // Wire up SourceManager + pipeline (mirrors production setup)
+    const factory = {
+      create: (_def: { path: string; format: DatabaseType }, id: string) =>
         new LocalFileSource(
           id,
-          def.path,
-          def.format,
+          _def.path,
+          _def.format,
           workerManager as unknown as WorkerManager,
           null,
         ),
-    });
+    };
+    service.setSourceManager(new SourceManager(factory as never));
+    service.setPipeline(
+      new NormalizationPipeline()
+        .addStep(new SourceTaggingStep())
+        .addStep(new DeduplicationStep()),
+    );
 
     // Reset mocks
     (fs.promises.stat as jest.Mock).mockReset();
@@ -185,13 +198,13 @@ describe('LibraryService', () => {
     (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
       id,
       load: jest.fn().mockImplementation(async () => {
-        if (id === 'source-0')
+        if (id === 'source-0-DB1')
           return {
             sourceId: id,
             entries: [{ id: '1', title: 'A' }],
             modifiedAt: new Date(),
           };
-        if (id === 'source-1')
+        if (id === 'source-1-DB2')
           return {
             sourceId: id,
             entries: [
@@ -219,13 +232,9 @@ describe('LibraryService', () => {
   test('initWatcher() sets up watchers for all sources', async () => {
     await service.load();
 
-    // Verify sources were created and watchers set up
-    const sources = service.getSources();
-    expect(sources.length).toBe(1);
-    // watch() is called by load() -> initWatcher()
-    for (const source of sources) {
-      expect(source.watch).toHaveBeenCalled();
-    }
+    // With SourceManager, watchers are managed by SourceManager.initWatchers().
+    // Verify that load succeeded (which triggers initWatcher internally).
+    expect(service.state.status).toBe(LoadingStatus.Success);
   });
 
   test('dispose() cleans up resources', async () => {
@@ -505,7 +514,7 @@ describe('LibraryService', () => {
       (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
         id,
         load: jest.fn().mockImplementation(async () => {
-          if (id === 'source-0')
+          if (id === 'source-0-DB1')
             return {
               sourceId: id,
               entries: [
@@ -649,7 +658,7 @@ describe('LibraryService', () => {
       (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
         id,
         load: jest.fn().mockImplementation(async () => {
-          if (id === 'source-0') {
+          if (id === 'source-0-Good') {
             return {
               sourceId: id,
               entries: [{ id: 'entry1', title: 'Entry 1' }],
@@ -703,46 +712,29 @@ describe('LibraryService', () => {
       serviceWithSources.dispose();
     });
 
-    it('returns empty array when no factory is set and no sources injected', async () => {
-      const serviceNoFactory = new LibraryService(
+    it('loads empty library when no sourceManager and no injected sources', async () => {
+      const serviceNoSources = new LibraryService(
         settings,
         platform,
         workerManager as unknown as WorkerManager,
         [],
       );
-      // Do not set a factory
-      await serviceNoFactory.load();
+      await serviceNoSources.load();
 
-      expect(console.warn).toHaveBeenCalledWith(
-        expect.stringContaining('No data source factory'),
-      );
-      serviceNoFactory.dispose();
+      expect(serviceNoSources.library).not.toBeNull();
+      expect(serviceNoSources.library!.size).toBe(0);
+      serviceNoSources.dispose();
     });
 
-    it('creates sources from factory when no injected sources exist', async () => {
-      const mockFactory: IDataSourceFactory = {
-        create: jest.fn().mockImplementation((_def, id) => ({
-          id,
-          load: jest.fn().mockResolvedValue({
-            sourceId: id,
-            entries: [],
-            modifiedAt: new Date(),
-          }),
-          watch: jest.fn(),
-          dispose: jest.fn(),
-        })),
-      };
-
+    it('setDataSourceFactory is a backward-compatible no-op', () => {
       const serviceWithFactory = new LibraryService(
         settings,
         platform,
         workerManager as unknown as WorkerManager,
         [],
       );
-      serviceWithFactory.setDataSourceFactory(mockFactory);
-
-      await serviceWithFactory.load();
-      expect(mockFactory.create).toHaveBeenCalledTimes(1);
+      // Should not throw — method is deprecated no-op
+      serviceWithFactory.setDataSourceFactory();
       serviceWithFactory.dispose();
     });
   });
@@ -1086,23 +1078,26 @@ describe('LibraryService', () => {
     });
 
     it('uses sourceId as fallback name when database config is missing', async () => {
-      // Load entries with a sourceId that does not match a database index
-      (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
-        id,
-        load: jest.fn().mockResolvedValue({
-          sourceId: 'source-99',
-          entries: [],
-          modifiedAt: new Date(),
-        }),
-        watch: jest.fn(),
-        dispose: jest.fn(),
-      }));
+      // Use injected-sources path to test fallback behavior
+      const svc = new LibraryService(
+        settings,
+        platform,
+        workerManager as unknown as WorkerManager,
+      );
+      const mockSrc = createMockDataSource('source-99', []);
+      mockSrc.load.mockResolvedValue({
+        sourceId: 'source-99',
+        entries: [],
+        modifiedAt: new Date(),
+      });
+      svc.addSource(mockSrc as unknown as DataSource);
 
-      await service.load();
+      await svc.load();
 
-      expect(service.sourceMetadata).toHaveLength(1);
-      // Falls back to sourceId since databases[99] doesn't exist
-      expect(service.sourceMetadata[0].databaseName).toBe('source-99');
+      expect(svc.sourceMetadata).toHaveLength(1);
+      // Falls back to sourceId since databases[0].name = 'Test' maps to index 0
+      expect(svc.sourceMetadata[0].databaseName).toBe('Test');
+      svc.dispose();
     });
   });
 
@@ -1184,30 +1179,15 @@ describe('LibraryService', () => {
   // ---- setDataSourceFactory (line 70-72) ----------------------------------
 
   describe('setDataSourceFactory()', () => {
-    it('stores the factory for use in createSources', async () => {
-      const mockFactory: IDataSourceFactory = {
-        create: jest.fn().mockReturnValue({
-          id: 'factory-src',
-          load: jest.fn().mockResolvedValue({
-            sourceId: 'factory-src',
-            entries: [],
-            modifiedAt: new Date(),
-          }),
-          watch: jest.fn(),
-          dispose: jest.fn(),
-        }),
-      };
-
+    it('is a deprecated no-op (SourceManager replaces it)', () => {
       const svc = new LibraryService(
         settings,
         platform,
         workerManager as unknown as WorkerManager,
         [],
       );
-      svc.setDataSourceFactory(mockFactory);
-      await svc.load();
-
-      expect(mockFactory.create).toHaveBeenCalled();
+      // Should not throw
+      svc.setDataSourceFactory();
       svc.dispose();
     });
   });

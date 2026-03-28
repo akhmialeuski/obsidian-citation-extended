@@ -22,9 +22,9 @@ describe('extractCitekeyAtCursor', () => {
   });
 
   it('extracts citekey from [[@citekey|alias]]', () => {
-    expect(
-      extractCitekeyAtCursor(makeEditor('[[@smith2023|Smith]]', 5)),
-    ).toBe('smith2023');
+    expect(extractCitekeyAtCursor(makeEditor('[[@smith2023|Smith]]', 5))).toBe(
+      'smith2023',
+    );
   });
 
   it('extracts citekey from [@citekey]', () => {
@@ -40,7 +40,9 @@ describe('extractCitekeyAtCursor', () => {
   });
 
   it('returns null when cursor is not on a citation', () => {
-    expect(extractCitekeyAtCursor(makeEditor('no citation here', 5))).toBeNull();
+    expect(
+      extractCitekeyAtCursor(makeEditor('no citation here', 5)),
+    ).toBeNull();
   });
 
   it('returns null for empty line', () => {
@@ -48,8 +50,8 @@ describe('extractCitekeyAtCursor', () => {
   });
 
   it('handles citekey with special characters', () => {
-    expect(
-      extractCitekeyAtCursor(makeEditor('[@doe:2023-review]', 5)),
-    ).toBe('doe:2023-review');
+    expect(extractCitekeyAtCursor(makeEditor('[@doe:2023-review]', 5))).toBe(
+      'doe:2023-review',
+    );
   });
 });

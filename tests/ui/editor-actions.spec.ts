@@ -23,12 +23,10 @@ function makeDeps(overrides: Record<string, any> = {}) {
     getInitialContentForCitekey: jest.fn(() =>
       Promise.resolve({ ok: true, value: 'content' }),
     ),
-    getMarkdownCitation: jest.fn(
-      (citekey: string, alternative?: boolean) => ({
-        ok: true,
-        value: alternative ? '@key1' : '[@key1]',
-      }),
-    ),
+    getMarkdownCitation: jest.fn((citekey: string, alternative?: boolean) => ({
+      ok: true,
+      value: alternative ? '@key1' : '[@key1]',
+    })),
     ...(rest.citationService ?? {}),
   };
 
@@ -88,12 +86,12 @@ function makeDeps(overrides: Record<string, any> = {}) {
 
 function createActions(deps: ReturnType<typeof makeDeps>) {
   return new EditorActions(
-    deps.citationService as any,
-    deps.platform as any,
-    deps.noteService as any,
-    deps.libraryService as any,
-    deps.templateService as any,
-    deps.settings as any,
+    deps.citationService,
+    deps.platform,
+    deps.noteService,
+    deps.libraryService,
+    deps.templateService,
+    deps.settings,
   );
 }
 
@@ -392,9 +390,7 @@ describe('EditorActions', () => {
       const deps = makeDeps({
         settings: { disableAutomaticNoteCreation: true },
       });
-      deps.noteService.findExistingLiteratureNoteFile = jest.fn(
-        () => mockFile,
-      );
+      deps.noteService.findExistingLiteratureNoteFile = jest.fn(() => mockFile);
       deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
       deps.platform.workspace.getConfig = jest.fn(() => false);
       const actions = createActions(deps);
@@ -421,9 +417,7 @@ describe('EditorActions', () => {
 
       await actions.insertLiteratureNoteLink('key1');
 
-      expect(
-        deps.noteService.getOrCreateLiteratureNoteFile,
-      ).toHaveBeenCalled();
+      expect(deps.noteService.getOrCreateLiteratureNoteFile).toHaveBeenCalled();
       expect(editor.replaceSelection).toHaveBeenCalled();
     });
   });

@@ -48,8 +48,13 @@ function makeAction(
 function makePlugin(
   editorProxy: unknown = null,
   actions: ApplicationAction[] = [],
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): { plugin: any; actionRegistry: IActionRegistry; actionCtx: ActionContext; _getMenuCallback: () => ((menu: unknown) => void) | null } {
+): {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- partial mock
+  plugin: any;
+  actionRegistry: IActionRegistry;
+  actionCtx: ActionContext;
+  _getMenuCallback: () => ((menu: unknown) => void) | null;
+} {
   let menuCallback: ((menu: unknown) => void) | null = null;
 
   const plugin = {

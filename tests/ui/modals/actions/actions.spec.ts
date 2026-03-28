@@ -33,12 +33,10 @@ function makeCtx(): ActionContext & { _editor: any } {
     citationService: {
       getEntry: jest.fn(() => ({ ok: true, value: { id: 'test2024' } })),
       getTitleForCitekey: jest.fn(() => ({ ok: true, value: 'Title' })),
-      getMarkdownCitation: jest.fn(
-        (citekey: string, alt: boolean, _selectedText?: string) => ({
-          ok: true,
-          value: alt ? `@${citekey}` : `[@${citekey}]`,
-        }),
-      ),
+      getMarkdownCitation: jest.fn((citekey: string, alt: boolean) => ({
+        ok: true,
+        value: alt ? `@${citekey}` : `[@${citekey}]`,
+      })),
       getInitialContentForCitekey: jest.fn(() =>
         Promise.resolve({ ok: true, value: 'rendered content' }),
       ),
@@ -71,7 +69,9 @@ function makeCtx(): ActionContext & { _editor: any } {
       literatureNoteLinkDisplayTemplate: '',
     },
     _editor: editor,
-  } as unknown as ActionContext & { _editor: ReturnType<typeof makeMockEditor> };
+  } as unknown as ActionContext & {
+    _editor: ReturnType<typeof makeMockEditor>;
+  };
 }
 
 function makeEntry(overrides: Record<string, unknown> = {}) {
@@ -157,7 +157,9 @@ describe('InsertCitationAction', () => {
   });
 
   it('auto-creates note when autoCreateNoteOnCitation is enabled', () => {
-    (ctx.settings as { autoCreateNoteOnCitation: boolean }).autoCreateNoteOnCitation = true;
+    (
+      ctx.settings as { autoCreateNoteOnCitation: boolean }
+    ).autoCreateNoteOnCitation = true;
     const entry = makeEntry();
     const evt = new MouseEvent('click');
 

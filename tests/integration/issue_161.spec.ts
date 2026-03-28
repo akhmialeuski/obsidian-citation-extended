@@ -117,13 +117,24 @@ describe('Issue 161: Insert Literature Note Link', () => {
 
     plugin.citationService = {
       getEntry: jest.fn().mockImplementation((citekey: string) => {
-        const entry = (plugin.libraryService.library as unknown as Record<string, unknown> & { entries: Record<string, unknown> }).entries[citekey];
+        const entry = (
+          plugin.libraryService.library as unknown as Record<
+            string,
+            unknown
+          > & { entries: Record<string, unknown> }
+        ).entries[citekey];
         if (!entry) return { ok: false, error: { message: 'Not found' } };
         return { ok: true, value: entry };
       }),
-      getTitleForCitekey: jest.fn().mockReturnValue({ ok: true, value: 'Test Article' }),
-      getMarkdownCitation: jest.fn().mockReturnValue({ ok: true, value: '[@test_key]' }),
-      getInitialContentForCitekey: jest.fn().mockResolvedValue({ ok: true, value: '' }),
+      getTitleForCitekey: jest
+        .fn()
+        .mockReturnValue({ ok: true, value: 'Test Article' }),
+      getMarkdownCitation: jest
+        .fn()
+        .mockReturnValue({ ok: true, value: '[@test_key]' }),
+      getInitialContentForCitekey: jest
+        .fn()
+        .mockResolvedValue({ ok: true, value: '' }),
     } as unknown as typeof plugin.citationService;
 
     // Setup platform mock for EditorActions

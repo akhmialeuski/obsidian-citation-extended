@@ -1,10 +1,14 @@
 import { BatchNoteOrchestrator } from '../../../src/notes/batch/batch-note-orchestrator';
+import type { IBatchNoteOrchestrator } from '../../../src/notes/batch';
 import type {
-  BatchUpdateRequest,
-  IBatchNoteOrchestrator,
-} from '../../../src/notes/batch';
-import type { ILibraryService, INoteService, ITemplateService } from '../../../src/container';
-import type { IVaultAccess, IVaultFile } from '../../../src/platform/platform-adapter';
+  ILibraryService,
+  INoteService,
+  ITemplateService,
+} from '../../../src/container';
+import type {
+  IVaultAccess,
+  IVaultFile,
+} from '../../../src/platform/platform-adapter';
 import type { Library } from '../../../src/core';
 
 jest.mock('obsidian', () => ({}), { virtual: true });
@@ -17,9 +21,7 @@ function makeFile(path: string): IVaultFile {
   return { path, name: path.split('/').pop()! };
 }
 
-function makeLibrary(
-  entries: Record<string, object> = {},
-): Library {
+function makeLibrary(entries: Record<string, object> = {}): Library {
   return { entries } as unknown as Library;
 }
 
@@ -38,7 +40,9 @@ function makeNoteService(
 }
 
 function makeTemplateService(
-  renderFn: (templateStr: string) => { ok: true; value: string } | { ok: false; error: Error },
+  renderFn: (
+    templateStr: string,
+  ) => { ok: true; value: string } | { ok: false; error: Error },
 ): ITemplateService {
   return {
     getTemplateVariables: jest.fn().mockReturnValue({}),
@@ -51,9 +55,11 @@ function makeVault(
   modifyMock = jest.fn().mockResolvedValue(undefined),
 ): IVaultAccess {
   return {
-    read: jest.fn().mockImplementation((file: IVaultFile) =>
-      Promise.resolve(contents[file.path] ?? ''),
-    ),
+    read: jest
+      .fn()
+      .mockImplementation((file: IVaultFile) =>
+        Promise.resolve(contents[file.path] ?? ''),
+      ),
     modify: modifyMock,
   } as unknown as IVaultAccess;
 }
@@ -213,7 +219,10 @@ describe('BatchNoteOrchestrator', () => {
       });
 
       expect(modifyMock).toHaveBeenCalledTimes(1);
-      const [calledFile, calledContent] = modifyMock.mock.calls[0] as [IVaultFile, string];
+      const [calledFile, calledContent] = modifyMock.mock.calls[0] as [
+        IVaultFile,
+        string,
+      ];
       expect(calledFile.path).toBe('notes/key1.md');
       expect(calledContent).toBe('new content');
       expect(result.updated).toContain('key1');
@@ -240,9 +249,7 @@ describe('BatchNoteOrchestrator', () => {
     it('uses wildcard to expand to all library entries', async () => {
       const modifyMock = jest.fn().mockResolvedValue(undefined);
       orchestrator = new BatchNoteOrchestrator(
-        makeLibraryService(
-          makeLibrary({ k1: {}, k2: {}, k3: {} }),
-        ),
+        makeLibraryService(makeLibrary({ k1: {}, k2: {}, k3: {} })),
         makeNoteService({
           k1: makeFile('notes/k1.md'),
           k2: makeFile('notes/k2.md'),
@@ -300,10 +307,7 @@ describe('BatchNoteOrchestrator', () => {
           k2: makeFile('notes/k2.md'),
         }),
         makeTemplateService(() => ({ ok: true, value: 'new' })),
-        makeVault(
-          { 'notes/k1.md': 'old', 'notes/k2.md': 'old' },
-          modifyMock,
-        ),
+        makeVault({ 'notes/k1.md': 'old', 'notes/k2.md': 'old' }, modifyMock),
       );
 
       const result = await orchestrator.execute({

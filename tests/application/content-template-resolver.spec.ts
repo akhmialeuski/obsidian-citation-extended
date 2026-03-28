@@ -12,7 +12,10 @@ function makeMocks(overrides: Record<string, unknown> = {}) {
     isFile: jest.fn(() => true),
     read: jest.fn(() => Promise.resolve('vault template content')),
     create: jest.fn(() =>
-      Promise.resolve({ path: 'citation-content-template.md', name: 'citation-content-template.md' }),
+      Promise.resolve({
+        path: 'citation-content-template.md',
+        name: 'citation-content-template.md',
+      }),
     ),
     ...(overrides.vault as Record<string, unknown>),
   };
@@ -34,9 +37,10 @@ function makeMocks(overrides: Record<string, unknown> = {}) {
   return { vault, notifications, settings, normalizePath, saveSettings };
 }
 
-function createResolver(
-  overrides: Record<string, unknown> = {},
-): { resolver: IContentTemplateResolver; mocks: ReturnType<typeof makeMocks> } {
+function createResolver(overrides: Record<string, unknown> = {}): {
+  resolver: IContentTemplateResolver;
+  mocks: ReturnType<typeof makeMocks>;
+} {
   const mocks = makeMocks(overrides);
   const resolver = new ContentTemplateResolver(
     mocks.vault as never,
@@ -93,7 +97,10 @@ describe('ContentTemplateResolver', () => {
       const { resolver } = createResolver({
         settings: { literatureNoteContentTemplatePath: 'folder' },
         vault: {
-          getAbstractFileByPath: jest.fn(() => ({ path: 'folder', name: 'folder' })),
+          getAbstractFileByPath: jest.fn(() => ({
+            path: 'folder',
+            name: 'folder',
+          })),
           isFile: jest.fn(() => false),
         },
       });

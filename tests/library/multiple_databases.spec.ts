@@ -79,16 +79,16 @@ describe('LibraryService - Multiple Databases', () => {
       dispose: jest.fn(),
     }));
 
+    const sources = settings.databases.map(
+      (_db, i) =>
+        new LocalFileSource(`source-${i}`, '', 'csl-json', workerManager, null),
+    );
     service = new LibraryService(
       settings,
       createMockPlatformAdapter(),
       workerManager,
-      [],
+      sources,
     );
-    service.setDataSourceFactory({
-      create: (def, id) =>
-        new LocalFileSource(id, def.path, def.format, workerManager, null),
-    });
 
     await service.load();
 
@@ -123,16 +123,16 @@ describe('LibraryService - Multiple Databases', () => {
       dispose: jest.fn(),
     }));
 
+    const sources = settings.databases.map(
+      (_db, i) =>
+        new LocalFileSource(`source-${i}`, '', 'csl-json', workerManager, null),
+    );
     service = new LibraryService(
       settings,
       createMockPlatformAdapter(),
       workerManager,
-      [],
+      sources,
     );
-    service.setDataSourceFactory({
-      create: (def, id) =>
-        new LocalFileSource(id, def.path, def.format, workerManager, null),
-    });
 
     await service.load();
 

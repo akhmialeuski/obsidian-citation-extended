@@ -56,9 +56,7 @@ describe('NormalizationPipeline', () => {
       }),
     };
 
-    const pipeline = new NormalizationPipeline()
-      .addStep(step1)
-      .addStep(step2);
+    const pipeline = new NormalizationPipeline().addStep(step1).addStep(step2);
 
     pipeline.run([makeResult('db1', [makeEntry('key1')])]);
 
@@ -87,7 +85,9 @@ describe('NormalizationPipeline', () => {
     const library = pipeline.run(results);
 
     expect(library.size).toBe(1);
-    expect((library.entries['key1'] as unknown as Record<string, unknown>).title).toBe('Second');
+    expect(
+      (library.entries['key1'] as unknown as Record<string, unknown>).title,
+    ).toBe('Second');
   });
 
   it('calls prepare on steps that have it', () => {
@@ -107,10 +107,10 @@ describe('SourceTaggingStep', () => {
     const step = new SourceTaggingStep();
     const entries = [makeEntry('key1')];
 
-    const result = step.process(
-      entries as never[],
-      { sourceId: 's1', databaseName: 'Zotero' },
-    );
+    const result = step.process(entries as never[], {
+      sourceId: 's1',
+      databaseName: 'Zotero',
+    });
 
     expect(result[0]._sourceDatabase).toBe('Zotero');
   });
@@ -121,7 +121,9 @@ describe('DeduplicationStep', () => {
     const step = new DeduplicationStep();
     const results = [
       makeResult('Zotero', [makeEntry('key1', { _sourceDatabase: 'Zotero' })]),
-      makeResult('Mendeley', [makeEntry('key1', { _sourceDatabase: 'Mendeley' })]),
+      makeResult('Mendeley', [
+        makeEntry('key1', { _sourceDatabase: 'Mendeley' }),
+      ]),
     ];
 
     step.prepare(results);

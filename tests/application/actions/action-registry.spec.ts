@@ -14,7 +14,11 @@ const mockCtx = {} as ActionContext;
 
 class TestAction extends ApplicationAction {
   readonly descriptor: ActionDescriptor;
-  constructor(id: string, ctx: ActionContext, opts: Partial<ActionDescriptor> = {}) {
+  constructor(
+    id: string,
+    ctx: ActionContext,
+    opts: Partial<ActionDescriptor> = {},
+  ) {
     super(ctx);
     this.descriptor = {
       id,
@@ -25,12 +29,17 @@ class TestAction extends ApplicationAction {
       ...opts,
     };
   }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async execute(_inv: ActionInvocationContext): Promise<void> {}
 }
 
 class TestSearchModalAction extends SearchModalAction {
   readonly descriptor: ActionDescriptor;
-  constructor(id: string, ctx: ActionContext, opts: Partial<ActionDescriptor> = {}) {
+  constructor(
+    id: string,
+    ctx: ActionContext,
+    opts: Partial<ActionDescriptor> = {},
+  ) {
     super(ctx);
     this.descriptor = {
       id,
@@ -41,7 +50,9 @@ class TestSearchModalAction extends SearchModalAction {
       ...opts,
     };
   }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onChoose(_item: Entry, _evt: MouseEvent | KeyboardEvent): void {}
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async execute(_inv: ActionInvocationContext): Promise<void> {}
 }
 
@@ -72,8 +83,12 @@ describe('ActionRegistry', () => {
   });
 
   it('filters context menu actions', () => {
-    registry.register(new TestAction('no-menu', mockCtx, { showInContextMenu: false }));
-    registry.register(new TestAction('yes-menu', mockCtx, { showInContextMenu: true }));
+    registry.register(
+      new TestAction('no-menu', mockCtx, { showInContextMenu: false }),
+    );
+    registry.register(
+      new TestAction('yes-menu', mockCtx, { showInContextMenu: true }),
+    );
 
     const ctxActions = registry.getContextMenuActions();
     expect(ctxActions).toHaveLength(1);

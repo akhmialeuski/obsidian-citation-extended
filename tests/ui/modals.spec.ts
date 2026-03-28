@@ -120,7 +120,12 @@ describe('CitationSearchModal', () => {
     } as unknown as SearchModalAction;
 
     try {
-      modal = new CitationSearchModal(app, mockAction, libraryService, settings);
+      modal = new CitationSearchModal(
+        app,
+        mockAction,
+        libraryService,
+        settings,
+      );
     } catch (e) {
       console.error('Constructor failed:', e);
       throw e;

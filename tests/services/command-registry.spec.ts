@@ -4,9 +4,11 @@ import {
   SearchModalAction,
   ApplicationAction,
 } from '../../src/application/actions/action.types';
-import type { ActionDescriptor, ActionInvocationContext, ActionContext } from '../../src/application/actions/action.types';
+import type {
+  ActionDescriptor,
+  ActionContext,
+} from '../../src/application/actions/action.types';
 import type { IActionRegistry } from '../../src/application/actions/action-registry';
-import type { Entry } from '../../src/core';
 
 jest.mock(
   'obsidian',
@@ -90,7 +92,6 @@ class TestSearchModalAction extends SearchModalAction {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only mock factory
 function makeActionCtx(): ActionContext {
   return {
     platform: {
@@ -125,13 +126,33 @@ function makeLibraryService(): any {
 
 function buildTestActions(ctx: ActionContext) {
   return [
-    new TestApplicationAction('open-note-at-cursor', 'Open note at cursor', ctx),
+    new TestApplicationAction(
+      'open-note-at-cursor',
+      'Open note at cursor',
+      ctx,
+    ),
     new TestSearchModalAction('insert-citation', 'Insert citation', ctx),
-    new TestSearchModalAction('insert-subsequent-citation', 'Insert subsequent citation', ctx),
-    new TestSearchModalAction('insert-multiple-citations', 'Insert multiple citations', ctx),
-    new TestSearchModalAction('insert-literature-note', 'Insert literature note', ctx),
+    new TestSearchModalAction(
+      'insert-subsequent-citation',
+      'Insert subsequent citation',
+      ctx,
+    ),
+    new TestSearchModalAction(
+      'insert-multiple-citations',
+      'Insert multiple citations',
+      ctx,
+    ),
+    new TestSearchModalAction(
+      'insert-literature-note',
+      'Insert literature note',
+      ctx,
+    ),
     new TestApplicationAction('update-bib-data', 'Update bib data', ctx),
-    new TestSearchModalAction('open-literature-note', 'Open literature note', ctx),
+    new TestSearchModalAction(
+      'open-literature-note',
+      'Open literature note',
+      ctx,
+    ),
     new TestSearchModalAction('copy-citekey', 'Copy citekey', ctx),
   ];
 }
@@ -158,7 +179,9 @@ describe('CommandRegistry', () => {
     actionRegistry = {
       register: jest.fn(),
       getAll: jest.fn(() => actions),
-      getById: jest.fn((id: string) => actions.find((a) => a.descriptor.id === id)),
+      getById: jest.fn((id: string) =>
+        actions.find((a) => a.descriptor.id === id),
+      ),
       getContextMenuActions: jest.fn(() => []),
       getCommandPaletteActions: jest.fn(() => actions),
     };
@@ -166,7 +189,11 @@ describe('CommandRegistry', () => {
 
   it('registers 8 commands', () => {
     const registry = new CommandRegistry(
-      {} as any, mockPlugin, actionRegistry, actionCtx, libraryService,
+      {} as never,
+      mockPlugin,
+      actionRegistry,
+      actionCtx,
+      libraryService,
     );
     registry.registerAll();
 
@@ -176,7 +203,11 @@ describe('CommandRegistry', () => {
 
   it('non-modal action callback calls action.execute()', () => {
     const registry = new CommandRegistry(
-      {} as any, mockPlugin, actionRegistry, actionCtx, libraryService,
+      {} as never,
+      mockPlugin,
+      actionRegistry,
+      actionCtx,
+      libraryService,
     );
     registry.registerAll();
 
@@ -191,10 +222,16 @@ describe('CommandRegistry', () => {
   });
 
   it('SearchModalAction callback opens a search modal', () => {
-    const { CitationSearchModal } = require('../../src/ui/modals/citation-search-modal');
+    const { CitationSearchModal } = jest.requireMock(
+      '../../src/ui/modals/citation-search-modal',
+    );
 
     const registry = new CommandRegistry(
-      {} as any, mockPlugin, actionRegistry, actionCtx, libraryService,
+      {} as never,
+      mockPlugin,
+      actionRegistry,
+      actionCtx,
+      libraryService,
     );
     registry.registerAll();
 
@@ -206,7 +243,11 @@ describe('CommandRegistry', () => {
 
   it('insert-multiple-citations command opens search modal without throwing', () => {
     const registry = new CommandRegistry(
-      {} as any, mockPlugin, actionRegistry, actionCtx, libraryService,
+      {} as never,
+      mockPlugin,
+      actionRegistry,
+      actionCtx,
+      libraryService,
     );
     registry.registerAll();
 
@@ -217,7 +258,11 @@ describe('CommandRegistry', () => {
 
   it('update-bib-data command calls action.execute()', () => {
     const registry = new CommandRegistry(
-      {} as any, mockPlugin, actionRegistry, actionCtx, libraryService,
+      {} as never,
+      mockPlugin,
+      actionRegistry,
+      actionCtx,
+      libraryService,
     );
     registry.registerAll();
 
@@ -238,7 +283,11 @@ describe('CommandRegistry', () => {
     );
 
     const registry = new CommandRegistry(
-      {} as any, mockPlugin, actionRegistry, actionCtx, libraryService,
+      {} as never,
+      mockPlugin,
+      actionRegistry,
+      actionCtx,
+      libraryService,
     );
     registry.registerAll();
 

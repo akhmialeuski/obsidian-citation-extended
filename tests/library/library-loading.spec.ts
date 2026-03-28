@@ -52,10 +52,6 @@ describe('LibraryService Loading Behavior', () => {
     workerManager = new WorkerManager({} as Worker);
 
     service = new LibraryService(settings, platform, workerManager);
-    service.setDataSourceFactory({
-      create: (def, id) =>
-        new LocalFileSource(id, def.path, def.format, workerManager, null),
-    });
 
     jest.spyOn(console, 'error').mockImplementation(() => {});
     jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -80,6 +76,9 @@ describe('LibraryService Loading Behavior', () => {
       watch: jest.fn(),
       dispose: jest.fn(),
     }));
+    service.addSource(
+      new LocalFileSource('test-source', '', 'csl-json', workerManager, null),
+    );
 
     const stateChangeSpy = jest.fn();
     service.store.subscribe(stateChangeSpy);
@@ -107,6 +106,9 @@ describe('LibraryService Loading Behavior', () => {
       watch: jest.fn(),
       dispose: jest.fn(),
     }));
+    service.addSource(
+      new LocalFileSource('slow-source', '', 'csl-json', workerManager, null),
+    );
 
     const loadPromise = service.load();
 
