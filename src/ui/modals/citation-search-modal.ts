@@ -1,8 +1,9 @@
 import { App, SuggestModal } from 'obsidian';
-import CitationPlugin from '../../main';
 import { Entry } from '../../core';
 import { LibraryState, LoadingStatus } from '../../library/library-state';
-import { SearchAction } from './actions/search-action';
+import type { SearchModalAction } from '../../application/actions/action.types';
+import type { ILibraryService } from '../../container';
+import type { CitationsPluginSettings } from '../settings/settings';
 import { sortEntries } from './sort-entries';
 
 // Stub some methods we know are there..
@@ -17,8 +18,6 @@ interface SuggestModalWithUpdate<T> extends SuggestModal<T> {
 }
 
 export class CitationSearchModal extends SuggestModal<Entry> {
-  plugin: CitationPlugin;
-  action: SearchAction;
   limit = 50;
   loadingEl: HTMLElement;
   errorEl: HTMLElement;
@@ -28,11 +27,14 @@ export class CitationSearchModal extends SuggestModal<Entry> {
   /** True when the modal is closing to immediately reopen (keepOpen cycle). */
   private isReopening = false;
 
-  constructor(app: App, plugin: CitationPlugin, action: SearchAction) {
+  constructor(
+    app: App,
+    private action: SearchModalAction,
+    private libraryService: ILibraryService,
+    private settings: CitationsPluginSettings,
+  ) {
     super(app);
-    this.plugin = plugin;
-    this.action = action;
-    this.setPlaceholder(action.name);
+    this.setPlaceholder(action.descriptor.name);
     if (action.getInstructions) {
       this.setInstructions(action.getInstructions());
     }
@@ -72,8 +74,8 @@ export class CitationSearchModal extends SuggestModal<Entry> {
     }
 
     // subscribe fires immediately with current state, so no separate updateState call needed
-    this.unsubscribeStore = this.plugin.libraryService.store.subscribe(
-      (state) => {
+    this.unsubscribeStore = this.libraryService.store.subscribe(
+      (state: LibraryState) => {
         this.updateState(state);
       },
     );
@@ -134,19 +136,19 @@ export class CitationSearchModal extends SuggestModal<Entry> {
   }
 
   getSuggestions(query: string): Entry[] {
-    const library = this.plugin.libraryService.library;
-    if (this.plugin.libraryService.isLibraryLoading || !library) {
+    const library = this.libraryService.library;
+    if (this.libraryService.isLibraryLoading || !library) {
       return [];
     }
 
-    const sortOrder = this.plugin.settings.referenceListSortOrder;
+    const sortOrder = this.settings.referenceListSortOrder;
 
     if (!query) {
       const entries = Object.values(library.entries);
       return sortEntries(entries, sortOrder).slice(0, this.limit);
     }
 
-    const ids = this.plugin.libraryService.searchService.search(query);
+    const ids = this.libraryService.searchService.search(query);
     const entries = ids
       .slice(0, this.limit)
       .map((id) => library.entries[id])
@@ -179,8 +181,9 @@ export class CitationSearchModal extends SuggestModal<Entry> {
       setTimeout(() => {
         const modal = new CitationSearchModal(
           this.app,
-          this.plugin,
           this.action,
+          this.libraryService,
+          this.settings,
         );
         modal.open();
       }, 50);

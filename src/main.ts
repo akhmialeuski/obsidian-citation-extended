@@ -1,10 +1,4 @@
-import {
-  FileSystemAdapter,
-  Notice,
-  Plugin,
-  TFile,
-  normalizePath,
-} from 'obsidian';
+import { FileSystemAdapter, Notice, Plugin } from 'obsidian';
 import * as chokidar from 'chokidar';
 
 import { TemplateService } from './template/template.service';
@@ -12,30 +6,28 @@ import { NoteService } from './notes/note.service';
 import { LibraryService } from './library/library.service';
 import { UIService } from './services/ui.service';
 import { EditorActions } from './ui/editor-actions';
-import {
-  Entry,
-  Result,
-  ok,
-  err,
-  CitationError,
-  LibraryNotReadyError,
-  EntryNotFoundError,
-} from './core';
 import { DataSourceFactory } from './sources/data-source-factory';
 import { ObsidianPlatformAdapter } from './platform/obsidian-adapter';
 import { DataSourceRegistry } from './sources/data-source-registry';
 import { DATA_SOURCE_TYPES } from './data-source';
 import { LocalFileSource } from './sources/local-file-source';
 import { VaultFileSource } from './sources/vault-file-source';
+import {
+  CitationService,
+  ICitationService,
+} from './application/citation.service';
+import {
+  ContentTemplateResolver,
+  IContentTemplateResolver,
+} from './application/content-template-resolver';
 
 import { CitationSettingTab } from './ui/settings/settings-tab';
 import { CitationsPluginSettings } from './ui/settings/settings';
 import {
   DEFAULT_SETTINGS,
-  DEFAULT_CONTENT_TEMPLATE,
   validateSettings,
 } from './ui/settings/settings-schema';
-import { DISALLOWED_FILENAME_CHARACTERS_RE, WorkerManager } from './util';
+import { WorkerManager } from './util';
 import LoadWorker from 'web-worker:./worker';
 
 export default class CitationPlugin extends Plugin {
@@ -46,6 +38,8 @@ export default class CitationPlugin extends Plugin {
   uiService!: UIService;
   editorActions!: EditorActions;
   platform!: ObsidianPlatformAdapter;
+  citationService!: ICitationService;
+  contentTemplateResolver!: IContentTemplateResolver;
 
   private fileWatcher?: chokidar.FSWatcher;
 
@@ -75,19 +69,6 @@ export default class CitationPlugin extends Plugin {
         });
         void this.saveSettings();
       }
-
-      // Migrate inline content template to a vault file
-      if (
-        this.settings.literatureNoteContentTemplate &&
-        !this.settings.literatureNoteContentTemplatePath
-      ) {
-        await this.migrateInlineTemplateToFile();
-      }
-
-      // Ensure new installs get a default template file
-      if (!this.settings.literatureNoteContentTemplatePath) {
-        await this.createDefaultTemplateFile();
-      }
     } else {
       console.warn(
         'Citations plugin: Settings validation failed',
@@ -100,64 +81,6 @@ export default class CitationPlugin extends Plugin {
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
-  }
-
-  private static readonly DEFAULT_TEMPLATE_PATH =
-    'citation-content-template.md';
-
-  /**
-   * Migrate an inline content template to a vault file.
-   * Writes the template string to a file and updates the settings path.
-   */
-  private async migrateInlineTemplateToFile(): Promise<void> {
-    const templateContent = this.settings.literatureNoteContentTemplate;
-    if (!templateContent) return;
-
-    const filePath = CitationPlugin.DEFAULT_TEMPLATE_PATH;
-    const existingFile = this.app.vault.getAbstractFileByPath(
-      normalizePath(filePath),
-    );
-
-    if (!existingFile) {
-      try {
-        await this.app.vault.create(filePath, templateContent);
-        console.debug(
-          `Citations plugin: Migrated inline template to ${filePath}`,
-        );
-      } catch (e) {
-        console.warn('Citations plugin: Failed to migrate inline template:', e);
-        return;
-      }
-    }
-
-    this.settings.literatureNoteContentTemplatePath = filePath;
-    this.settings.literatureNoteContentTemplate = '';
-    await this.saveSettings();
-  }
-
-  /**
-   * Create a default template file for new installations.
-   */
-  private async createDefaultTemplateFile(): Promise<void> {
-    const filePath = CitationPlugin.DEFAULT_TEMPLATE_PATH;
-    const existingFile = this.app.vault.getAbstractFileByPath(
-      normalizePath(filePath),
-    );
-
-    if (!existingFile) {
-      try {
-        await this.app.vault.create(filePath, DEFAULT_CONTENT_TEMPLATE);
-        console.debug(
-          `Citations plugin: Created default template at ${filePath}`,
-        );
-      } catch (e) {
-        console.warn('Citations plugin: Failed to create default template:', e);
-        return;
-      }
-    }
-
-    this.settings.literatureNoteContentTemplatePath = filePath;
-    await this.saveSettings();
   }
 
   async onload(): Promise<void> {
@@ -200,12 +123,21 @@ export default class CitationPlugin extends Plugin {
 
     const dataSourceFactory = new DataSourceFactory(registry);
 
+    // Application services
+    this.contentTemplateResolver = new ContentTemplateResolver(
+      platformAdapter.vault,
+      platformAdapter.notifications,
+      this.settings,
+      (path: string) => platformAdapter.normalizePath(path),
+      () => this.saveSettings(),
+    );
+
     this.templateService = new TemplateService(this.settings);
     this.noteService = new NoteService(
       platformAdapter,
       this.settings,
       this.templateService,
-      () => this.resolveContentTemplate(),
+      () => this.contentTemplateResolver.resolve(),
     );
     this.libraryService = new LibraryService(
       this.settings,
@@ -214,8 +146,34 @@ export default class CitationPlugin extends Plugin {
     );
     this.libraryService.setDataSourceFactory(dataSourceFactory);
 
+    this.citationService = new CitationService(
+      this.libraryService,
+      this.templateService,
+      this.contentTemplateResolver,
+      this.settings,
+    );
+
+    this.editorActions = new EditorActions(
+      this.citationService,
+      platformAdapter,
+      this.noteService,
+      this.libraryService,
+      this.templateService,
+      this.settings,
+    );
+
     this.uiService = new UIService(this);
-    this.editorActions = new EditorActions(this);
+
+    // Run template migrations after services are ready
+    if (
+      this.settings.literatureNoteContentTemplate &&
+      !this.settings.literatureNoteContentTemplatePath
+    ) {
+      await this.contentTemplateResolver.migrateInlineToFile();
+    }
+    if (!this.settings.literatureNoteContentTemplatePath) {
+      await this.contentTemplateResolver.ensureDefaultTemplate();
+    }
 
     this.init();
   }
@@ -234,100 +192,5 @@ export default class CitationPlugin extends Plugin {
 
     this.uiService.init();
     this.addSettingTab(new CitationSettingTab(this.app, this));
-  }
-
-  /**
-   * Retrieves a library entry by citekey, with readiness and existence checks.
-   */
-  getEntry(citekey: string): Result<Entry, CitationError> {
-    const library = this.libraryService.library;
-    if (this.libraryService.isLibraryLoading || !library) {
-      return err(new LibraryNotReadyError());
-    }
-
-    const entry = library.entries[citekey];
-    if (!entry) {
-      return err(new EntryNotFoundError(citekey));
-    }
-
-    return ok(entry);
-  }
-
-  getTitleForCitekey(citekey: string): Result<string, CitationError> {
-    const entryResult = this.getEntry(citekey);
-    if (!entryResult.ok) return entryResult;
-
-    const variables = this.templateService.getTemplateVariables(
-      entryResult.value,
-    );
-    const titleResult = this.templateService.getTitle(variables);
-    if (!titleResult.ok) return titleResult;
-
-    return ok(
-      titleResult.value.replace(DISALLOWED_FILENAME_CHARACTERS_RE, '_'),
-    );
-  }
-
-  /**
-   * Resolves the content template string by reading from the configured
-   * vault file.  Falls back to the default template if the file is missing.
-   */
-  async resolveContentTemplate(): Promise<string> {
-    const templatePath = this.settings.literatureNoteContentTemplatePath;
-    if (templatePath) {
-      const file = this.app.vault.getAbstractFileByPath(
-        normalizePath(templatePath),
-      );
-      if (file instanceof TFile) {
-        return this.app.vault.read(file);
-      }
-      new Notice(
-        `Citations: template file not found at "${templatePath}". Please check the path in settings.`,
-      );
-    }
-    return DEFAULT_CONTENT_TEMPLATE;
-  }
-
-  async getInitialContentForCitekey(
-    citekey: string,
-    selectedText?: string,
-  ): Promise<Result<string, CitationError>> {
-    const entryResult = this.getEntry(citekey);
-    if (!entryResult.ok) return entryResult;
-
-    const variables = this.templateService.getTemplateVariables(
-      entryResult.value,
-      { selectedText },
-    );
-    const templateStr = await this.resolveContentTemplate();
-    return this.templateService.render(templateStr, variables);
-  }
-
-  getMarkdownCitationForCitekey(
-    citekey: string,
-    selectedText?: string,
-  ): Result<string, CitationError> {
-    const entryResult = this.getEntry(citekey);
-    if (!entryResult.ok) return entryResult;
-
-    const variables = this.templateService.getTemplateVariables(
-      entryResult.value,
-      { selectedText },
-    );
-    return this.templateService.getMarkdownCitation(variables);
-  }
-
-  getAlternativeMarkdownCitationForCitekey(
-    citekey: string,
-    selectedText?: string,
-  ): Result<string, CitationError> {
-    const entryResult = this.getEntry(citekey);
-    if (!entryResult.ok) return entryResult;
-
-    const variables = this.templateService.getTemplateVariables(
-      entryResult.value,
-      { selectedText },
-    );
-    return this.templateService.getMarkdownCitation(variables, true);
   }
 }

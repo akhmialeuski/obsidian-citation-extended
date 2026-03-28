@@ -1,10 +1,11 @@
 /** @jest-environment jsdom */
-import { InsertCitationAction } from '../../../../src/ui/modals/actions/insert-citation.action';
-import { InsertSubsequentCitationAction } from '../../../../src/ui/modals/actions/insert-subsequent-citation.action';
-import { InsertMultiCitationAction } from '../../../../src/ui/modals/actions/insert-multi-citation.action';
-import { InsertNoteContentAction } from '../../../../src/ui/modals/actions/insert-note-content.action';
-import { InsertNoteLinkAction } from '../../../../src/ui/modals/actions/insert-note-link.action';
-import { OpenNoteAction } from '../../../../src/ui/modals/actions/open-note.action';
+import { InsertCitationAction } from '../../../../src/application/actions/insert-citation.action';
+import { InsertSubsequentCitationAction } from '../../../../src/application/actions/insert-subsequent-citation.action';
+import { InsertMultiCitationAction } from '../../../../src/application/actions/insert-multi-citation.action';
+import { InsertNoteContentAction } from '../../../../src/application/actions/insert-note-content.action';
+import { InsertNoteLinkAction } from '../../../../src/application/actions/insert-note-link.action';
+import { OpenNoteAction } from '../../../../src/application/actions/open-note.action';
+import { ActionContext } from '../../../../src/application/actions/action.types';
 
 jest.mock(
   'obsidian',
@@ -18,32 +19,59 @@ jest.mock(
 function makeMockEditor() {
   return {
     getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
+    getLine: jest.fn(() => ''),
     replaceRange: jest.fn(),
+    replaceSelection: jest.fn(),
     setCursor: jest.fn(),
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only mock factory
-function makePlugin(): any {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeCtx(): ActionContext & { _editor: any } {
   const editor = makeMockEditor();
   return {
-    _editor: editor,
-    editorActions: {
-      insertMarkdownCitation: jest.fn(),
-      insertSubsequentCitation: jest.fn().mockResolvedValue(undefined),
-      insertLiteratureNoteContent: jest.fn().mockResolvedValue(undefined),
-      insertLiteratureNoteLink: jest.fn().mockResolvedValue(undefined),
-      openLiteratureNote: jest.fn().mockResolvedValue(undefined),
+    citationService: {
+      getEntry: jest.fn(() => ({ ok: true, value: { id: 'test2024' } })),
+      getTitleForCitekey: jest.fn(() => ({ ok: true, value: 'Title' })),
+      getMarkdownCitation: jest.fn(
+        (citekey: string, alt: boolean, _selectedText?: string) => ({
+          ok: true,
+          value: alt ? `@${citekey}` : `[@${citekey}]`,
+        }),
+      ),
+      getInitialContentForCitekey: jest.fn(() =>
+        Promise.resolve({ ok: true, value: 'rendered content' }),
+      ),
     },
     platform: {
       workspace: {
         getActiveEditor: jest.fn(() => editor),
+        getConfig: jest.fn(() => null),
+        fileToLinktext: jest.fn(() => 'link'),
       },
-      notifications: {
-        show: jest.fn(),
-      },
+      notifications: { show: jest.fn() },
     },
-  };
+    noteService: {
+      openLiteratureNote: jest.fn().mockResolvedValue(undefined),
+      getOrCreateLiteratureNoteFile: jest
+        .fn()
+        .mockResolvedValue({ path: 'note.md', name: 'note.md' }),
+      findExistingLiteratureNoteFile: jest.fn(() => null),
+    },
+    libraryService: {
+      library: { entries: { test2024: { id: 'test2024' } } },
+    },
+    templateService: {
+      getTemplateVariables: jest.fn(() => ({})),
+      render: jest.fn(() => ({ ok: true, value: '' })),
+    },
+    settings: {
+      autoCreateNoteOnCitation: false,
+      disableAutomaticNoteCreation: false,
+      literatureNoteLinkDisplayTemplate: '',
+    },
+    _editor: editor,
+  } as unknown as ActionContext & { _editor: ReturnType<typeof makeMockEditor> };
 }
 
 function makeEntry(overrides: Record<string, unknown> = {}) {
@@ -56,43 +84,51 @@ function makeEntry(overrides: Record<string, unknown> = {}) {
 }
 
 describe('InsertCitationAction', () => {
-  let plugin: ReturnType<typeof makePlugin>;
+  let ctx: ReturnType<typeof makeCtx>;
   let action: InsertCitationAction;
 
   beforeEach(() => {
-    plugin = makePlugin();
-    action = new InsertCitationAction(plugin);
+    ctx = makeCtx();
+    action = new InsertCitationAction(ctx);
   });
 
   it('has the correct name', () => {
-    expect(action.name).toBe('Insert citation');
+    expect(action.descriptor.name).toBe('Insert Markdown citation');
   });
 
-  it('calls insertMarkdownCitation with isAlternative=false on Enter', () => {
+  it('calls getMarkdownCitation with isAlternative=false on Enter', () => {
     const entry = makeEntry();
     const evt = new KeyboardEvent('keyup', { key: 'Enter' });
 
     action.selectedText = 'some text';
     action.onChoose(entry as never, evt);
 
-    expect(plugin.editorActions.insertMarkdownCitation).toHaveBeenCalledWith(
+    expect(ctx.citationService.getMarkdownCitation).toHaveBeenCalledWith(
       'test2024',
       false,
       'some text',
     );
+    expect(ctx._editor.replaceRange).toHaveBeenCalledWith('[@test2024]', {
+      line: 0,
+      ch: 0,
+    });
   });
 
-  it('calls insertMarkdownCitation with isAlternative=true on Shift+Enter', () => {
+  it('calls getMarkdownCitation with isAlternative=true on Shift+Enter', () => {
     const entry = makeEntry();
     const evt = new KeyboardEvent('keyup', { key: 'Enter', shiftKey: true });
 
     action.onChoose(entry as never, evt);
 
-    expect(plugin.editorActions.insertMarkdownCitation).toHaveBeenCalledWith(
+    expect(ctx.citationService.getMarkdownCitation).toHaveBeenCalledWith(
       'test2024',
       true,
       undefined,
     );
+    expect(ctx._editor.replaceRange).toHaveBeenCalledWith('@test2024', {
+      line: 0,
+      ch: 0,
+    });
   });
 
   it('passes isAlternative=false for MouseEvent', () => {
@@ -101,9 +137,35 @@ describe('InsertCitationAction', () => {
 
     action.onChoose(entry as never, evt);
 
-    expect(plugin.editorActions.insertMarkdownCitation).toHaveBeenCalledWith(
+    expect(ctx.citationService.getMarkdownCitation).toHaveBeenCalledWith(
       'test2024',
       false,
+      undefined,
+    );
+  });
+
+  it('shows notice when no active editor', () => {
+    (ctx.platform.workspace.getActiveEditor as jest.Mock).mockReturnValue(null);
+    const entry = makeEntry();
+    const evt = new MouseEvent('click');
+
+    action.onChoose(entry as never, evt);
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'No active editor found',
+    );
+  });
+
+  it('auto-creates note when autoCreateNoteOnCitation is enabled', () => {
+    (ctx.settings as { autoCreateNoteOnCitation: boolean }).autoCreateNoteOnCitation = true;
+    const entry = makeEntry();
+    const evt = new MouseEvent('click');
+
+    action.onChoose(entry as never, evt);
+
+    expect(ctx.noteService.getOrCreateLiteratureNoteFile).toHaveBeenCalledWith(
+      'test2024',
+      ctx.libraryService.library,
       undefined,
     );
   });
@@ -128,37 +190,54 @@ describe('InsertCitationAction', () => {
 });
 
 describe('InsertNoteContentAction', () => {
-  let plugin: ReturnType<typeof makePlugin>;
+  let ctx: ReturnType<typeof makeCtx>;
   let action: InsertNoteContentAction;
 
   beforeEach(() => {
-    plugin = makePlugin();
-    action = new InsertNoteContentAction(plugin);
+    ctx = makeCtx();
+    action = new InsertNoteContentAction(ctx);
   });
 
   it('has the correct name', () => {
-    expect(action.name).toBe('Insert literature note content');
+    expect(action.descriptor.name).toBe(
+      'Insert literature note content in the current pane',
+    );
   });
 
-  it('calls insertLiteratureNoteContent on onChoose', async () => {
+  it('calls getInitialContentForCitekey and writes to editor', async () => {
     const entry = makeEntry();
     action.selectedText = 'selected';
 
     await action.onChoose(entry as never);
 
     expect(
-      plugin.editorActions.insertLiteratureNoteContent,
+      ctx.citationService.getInitialContentForCitekey,
     ).toHaveBeenCalledWith('test2024', 'selected');
+    expect(ctx._editor.replaceRange).toHaveBeenCalledWith('rendered content', {
+      line: 0,
+      ch: 0,
+    });
   });
 
-  it('calls insertLiteratureNoteContent without selectedText', async () => {
+  it('calls getInitialContentForCitekey without selectedText', async () => {
     const entry = makeEntry();
 
     await action.onChoose(entry as never);
 
     expect(
-      plugin.editorActions.insertLiteratureNoteContent,
+      ctx.citationService.getInitialContentForCitekey,
     ).toHaveBeenCalledWith('test2024', undefined);
+  });
+
+  it('shows notice when no active editor', async () => {
+    (ctx.platform.workspace.getActiveEditor as jest.Mock).mockReturnValue(null);
+    const entry = makeEntry();
+
+    await action.onChoose(entry as never);
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'No active editor found',
+    );
   });
 
   it('returns correct instructions', () => {
@@ -177,25 +256,60 @@ describe('InsertNoteContentAction', () => {
 });
 
 describe('InsertNoteLinkAction', () => {
-  let plugin: ReturnType<typeof makePlugin>;
+  let ctx: ReturnType<typeof makeCtx>;
   let action: InsertNoteLinkAction;
 
   beforeEach(() => {
-    plugin = makePlugin();
-    action = new InsertNoteLinkAction(plugin);
+    ctx = makeCtx();
+    action = new InsertNoteLinkAction(ctx);
   });
 
   it('has the correct name', () => {
-    expect(action.name).toBe('Insert literature note link');
+    expect(action.descriptor.name).toBe('Insert literature note link');
   });
 
-  it('calls insertLiteratureNoteLink on onChoose', async () => {
+  it('calls noteService.getOrCreateLiteratureNoteFile and writes link', async () => {
     const entry = makeEntry();
 
     await action.onChoose(entry as never);
 
-    expect(plugin.editorActions.insertLiteratureNoteLink).toHaveBeenCalledWith(
+    expect(ctx.citationService.getEntry).toHaveBeenCalledWith('test2024');
+    expect(ctx.noteService.getOrCreateLiteratureNoteFile).toHaveBeenCalledWith(
       'test2024',
+      ctx.libraryService.library,
+    );
+    expect(ctx._editor.replaceSelection).toHaveBeenCalled();
+  });
+
+  it('uses wiki-link format when useMarkdownLinks is falsy', async () => {
+    const entry = makeEntry();
+
+    await action.onChoose(entry as never);
+
+    // With no display template and useMarkdownLinks=null, displays Title via wikilink
+    expect(ctx._editor.replaceSelection).toHaveBeenCalledWith('[[link]]');
+  });
+
+  it('uses markdown link format when useMarkdownLinks is true', async () => {
+    (ctx.platform.workspace.getConfig as jest.Mock).mockReturnValue(true);
+    const entry = makeEntry();
+
+    await action.onChoose(entry as never);
+
+    // With useMarkdownLinks=true and no template, displayText = citekey
+    expect(ctx._editor.replaceSelection).toHaveBeenCalledWith(
+      '[test2024](link)',
+    );
+  });
+
+  it('shows notice when no active editor', async () => {
+    (ctx.platform.workspace.getActiveEditor as jest.Mock).mockReturnValue(null);
+    const entry = makeEntry();
+
+    await action.onChoose(entry as never);
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'No active editor found',
     );
   });
 
@@ -215,14 +329,14 @@ describe('InsertNoteLinkAction', () => {
 });
 
 describe('OpenNoteAction', () => {
-  let plugin: ReturnType<typeof makePlugin>;
+  let ctx: ReturnType<typeof makeCtx>;
   let action: OpenNoteAction;
   let openSpy: jest.SpyInstance;
 
   beforeEach(() => {
-    plugin = makePlugin();
-    action = new OpenNoteAction(plugin);
-    (plugin.platform.notifications.show as jest.Mock).mockClear();
+    ctx = makeCtx();
+    action = new OpenNoteAction(ctx);
+    (ctx.platform.notifications.show as jest.Mock).mockClear();
     // Mock global open (window.open in jsdom)
     openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
   });
@@ -232,7 +346,7 @@ describe('OpenNoteAction', () => {
   });
 
   it('has the correct name', () => {
-    expect(action.name).toBe('Open literature note');
+    expect(action.descriptor.name).toBe('Open literature note');
   });
 
   it('opens literature note on Enter key', async () => {
@@ -242,8 +356,9 @@ describe('OpenNoteAction', () => {
     action.selectedText = 'selected';
     await action.onChoose(entry as never, evt);
 
-    expect(plugin.editorActions.openLiteratureNote).toHaveBeenCalledWith(
+    expect(ctx.noteService.openLiteratureNote).toHaveBeenCalledWith(
       'test2024',
+      ctx.libraryService.library,
       false,
       'selected',
     );
@@ -255,8 +370,9 @@ describe('OpenNoteAction', () => {
 
     await action.onChoose(entry as never, evt);
 
-    expect(plugin.editorActions.openLiteratureNote).toHaveBeenCalledWith(
+    expect(ctx.noteService.openLiteratureNote).toHaveBeenCalledWith(
       'test2024',
+      ctx.libraryService.library,
       true,
       undefined,
     );
@@ -268,8 +384,9 @@ describe('OpenNoteAction', () => {
 
     await action.onChoose(entry as never, evt);
 
-    expect(plugin.editorActions.openLiteratureNote).toHaveBeenCalledWith(
+    expect(ctx.noteService.openLiteratureNote).toHaveBeenCalledWith(
       'test2024',
+      ctx.libraryService.library,
       false,
       undefined,
     );
@@ -282,7 +399,7 @@ describe('OpenNoteAction', () => {
     await action.onChoose(entry as never, evt);
 
     expect(openSpy).toHaveBeenCalledWith('zotero://select/items/@test2024');
-    expect(plugin.editorActions.openLiteratureNote).not.toHaveBeenCalled();
+    expect(ctx.noteService.openLiteratureNote).not.toHaveBeenCalled();
   });
 
   it('opens PDF on Shift+Tab when files available', async () => {
@@ -292,7 +409,7 @@ describe('OpenNoteAction', () => {
     await action.onChoose(entry as never, evt);
 
     expect(openSpy).toHaveBeenCalledWith('file:///path/to/paper.pdf');
-    expect(plugin.platform.notifications.show).not.toHaveBeenCalled();
+    expect(ctx.platform.notifications.show).not.toHaveBeenCalled();
   });
 
   it('shows Notice on Shift+Tab when no files available', async () => {
@@ -301,7 +418,7 @@ describe('OpenNoteAction', () => {
 
     await action.onChoose(entry as never, evt);
 
-    expect(plugin.platform.notifications.show).toHaveBeenCalledWith(
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
       'This reference has no associated PDF files.',
     );
     expect(openSpy).not.toHaveBeenCalled();
@@ -313,7 +430,7 @@ describe('OpenNoteAction', () => {
 
     await action.onChoose(entry as never, evt);
 
-    expect(plugin.platform.notifications.show).toHaveBeenCalledWith(
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
       'This reference has no associated PDF files.',
     );
   });
@@ -337,7 +454,7 @@ describe('OpenNoteAction', () => {
 
     await action.onChoose(entry as never, evt);
 
-    expect(plugin.platform.notifications.show).toHaveBeenCalledWith(
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
       'This reference has no associated PDF files.',
     );
   });
@@ -348,9 +465,9 @@ describe('OpenNoteAction', () => {
 
     await action.onChoose(entry as never, evt);
 
-    expect(plugin.editorActions.openLiteratureNote).not.toHaveBeenCalled();
+    expect(ctx.noteService.openLiteratureNote).not.toHaveBeenCalled();
     expect(openSpy).not.toHaveBeenCalled();
-    expect(plugin.platform.notifications.show).not.toHaveBeenCalled();
+    expect(ctx.platform.notifications.show).not.toHaveBeenCalled();
   });
 
   it('returns correct instructions', () => {
@@ -381,24 +498,54 @@ describe('OpenNoteAction', () => {
 });
 
 describe('InsertSubsequentCitationAction', () => {
-  let plugin: ReturnType<typeof makePlugin>;
+  let ctx: ReturnType<typeof makeCtx>;
   let action: InsertSubsequentCitationAction;
 
   beforeEach(() => {
-    plugin = makePlugin();
-    action = new InsertSubsequentCitationAction(plugin);
+    ctx = makeCtx();
+    action = new InsertSubsequentCitationAction(ctx);
   });
 
   it('has the correct name', () => {
-    expect(action.name).toBe('Insert subsequent citation');
+    expect(action.descriptor.name).toBe('Insert subsequent citation');
   });
 
-  it('calls insertSubsequentCitation on onChoose', () => {
+  it('inserts citation via citationService when cursor is not inside citation block', () => {
     const entry = makeEntry();
     action.onChoose(entry as never);
 
-    expect(plugin.editorActions.insertSubsequentCitation).toHaveBeenCalledWith(
+    expect(ctx.citationService.getMarkdownCitation).toHaveBeenCalledWith(
       'test2024',
+      false,
+    );
+    expect(ctx._editor.replaceRange).toHaveBeenCalledWith('[@test2024]', {
+      line: 0,
+      ch: 0,
+    });
+  });
+
+  it('appends to existing citation block when cursor is inside one', () => {
+    ctx._editor.getCursor.mockReturnValue({ line: 0, ch: 5 });
+    ctx._editor.getLine.mockReturnValue('Some [@existing] text');
+
+    const entry = makeEntry({ id: 'newkey' });
+    action.onChoose(entry as never);
+
+    // Should insert "; @newkey" before the closing bracket
+    expect(ctx._editor.replaceRange).toHaveBeenCalledWith('; @newkey', {
+      line: 0,
+      ch: 15,
+    });
+  });
+
+  it('shows notice when no active editor', () => {
+    (ctx.platform.workspace.getActiveEditor as jest.Mock).mockReturnValue(null);
+    const entry = makeEntry();
+
+    action.onChoose(entry as never);
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'No active editor found',
     );
   });
 
@@ -414,18 +561,16 @@ describe('InsertSubsequentCitationAction', () => {
 });
 
 describe('InsertMultiCitationAction', () => {
-  let plugin: ReturnType<typeof makePlugin>;
+  let ctx: ReturnType<typeof makeCtx>;
   let action: InsertMultiCitationAction;
 
   beforeEach(() => {
-    plugin = makePlugin();
-    action = new InsertMultiCitationAction(plugin);
+    ctx = makeCtx();
+    action = new InsertMultiCitationAction(ctx);
   });
 
   it('has the correct name', () => {
-    expect(action.name).toBe(
-      'Insert multiple citations (Enter = add, Esc = insert)',
-    );
+    expect(action.descriptor.name).toBe('Insert multiple citations');
   });
 
   it('has keepOpen=true by default', () => {
@@ -440,10 +585,10 @@ describe('InsertMultiCitationAction', () => {
     action.onChoose(entry1 as never, evt);
     action.onChoose(entry2 as never, evt);
 
-    // Keys are collected but not yet inserted — trigger onClose
+    // Keys are collected but not yet inserted -- trigger onClose
     action.onClose();
 
-    expect(plugin._editor.replaceRange).toHaveBeenCalledWith('[@key1; @key2]', {
+    expect(ctx._editor.replaceRange).toHaveBeenCalledWith('[@key1; @key2]', {
       line: 0,
       ch: 0,
     });
@@ -458,7 +603,7 @@ describe('InsertMultiCitationAction', () => {
 
     action.onClose();
 
-    expect(plugin._editor.replaceRange).toHaveBeenCalledWith('[@key1]', {
+    expect(ctx._editor.replaceRange).toHaveBeenCalledWith('[@key1]', {
       line: 0,
       ch: 0,
     });
@@ -474,7 +619,7 @@ describe('InsertMultiCitationAction', () => {
     action.onChoose(entry1 as never, evt);
 
     expect(action.keepOpen).toBe(false);
-    expect(plugin._editor.replaceRange).toHaveBeenCalledWith('[@key1]', {
+    expect(ctx._editor.replaceRange).toHaveBeenCalledWith('[@key1]', {
       line: 0,
       ch: 0,
     });
@@ -483,18 +628,18 @@ describe('InsertMultiCitationAction', () => {
   it('onClose is a no-op when no keys collected', () => {
     action.onClose();
 
-    expect(plugin._editor.replaceRange).not.toHaveBeenCalled();
+    expect(ctx._editor.replaceRange).not.toHaveBeenCalled();
   });
 
   it('shows notice when no active editor on insert', () => {
-    plugin.platform.workspace.getActiveEditor = jest.fn(() => null);
+    (ctx.platform.workspace.getActiveEditor as jest.Mock).mockReturnValue(null);
     const entry1 = makeEntry({ id: 'key1' });
     const evt = new KeyboardEvent('keyup', { key: 'Enter' });
 
     action.onChoose(entry1 as never, evt);
     action.onClose();
 
-    expect(plugin.platform.notifications.show).toHaveBeenCalledWith(
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
       'No active editor found',
     );
   });

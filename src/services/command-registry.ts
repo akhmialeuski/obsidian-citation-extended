@@ -1,112 +1,58 @@
+import { App, Plugin } from 'obsidian';
 import { CitationSearchModal } from '../ui/modals/citation-search-modal';
-import { InsertCitationAction } from '../ui/modals/actions/insert-citation.action';
-import { InsertSubsequentCitationAction } from '../ui/modals/actions/insert-subsequent-citation.action';
-import { InsertMultiCitationAction } from '../ui/modals/actions/insert-multi-citation.action';
-import { InsertNoteLinkAction } from '../ui/modals/actions/insert-note-link.action';
-import { InsertNoteContentAction } from '../ui/modals/actions/insert-note-content.action';
-import { OpenNoteAction } from '../ui/modals/actions/open-note.action';
-import { SearchAction } from '../ui/modals/actions/search-action';
-import CitationPlugin from '../main';
+import type { IActionRegistry } from '../application/actions/action-registry';
+import {
+  SearchModalAction,
+  ActionContext,
+} from '../application/actions/action.types';
+import type { ILibraryService } from '../container';
 
 /**
- * Encapsulates all Obsidian command registrations for the citation plugin.
- * Extracted from UIService to keep command definitions in a dedicated module.
+ * Registers Obsidian commands from the ActionRegistry.
+ *
+ * This is a thin presentation adapter: it reads actions from the registry
+ * and maps them to Obsidian's addCommand API. No business logic lives here.
  */
 export class CommandRegistry {
-  constructor(private plugin: CitationPlugin) {}
+  constructor(
+    private app: App,
+    private plugin: Plugin,
+    private actionRegistry: IActionRegistry,
+    private actionCtx: ActionContext,
+    private libraryService: ILibraryService,
+  ) {}
 
-  /**
-   * Register all plugin commands with Obsidian.
-   */
   registerAll(): void {
-    this.plugin.addCommand({
-      id: 'open-literature-note',
-      name: 'Open literature note',
-
-      callback: () => {
-        this.openSearchModal(new OpenNoteAction(this.plugin));
-      },
-    });
-
-    this.plugin.addCommand({
-      id: 'update-bib-data',
-      name: 'Refresh citation database',
-
-      callback: () => {
-        void this.plugin.libraryService.load();
-      },
-    });
-
-    // Use `callback` instead of `editorCallback` so that insert commands
-    // are available in Canvas text nodes, Lineage views, and other
-    // non-standard editor contexts.  The plugin methods already null-guard
-    // the editor and show a Notice when none is found.
-    this.plugin.addCommand({
-      id: 'insert-citation',
-      name: 'Insert literature note link',
-
-      callback: () => {
-        this.openSearchModal(new InsertNoteLinkAction(this.plugin));
-      },
-    });
-
-    this.plugin.addCommand({
-      id: 'insert-literature-note-content',
-      name: 'Insert literature note content in the current pane',
-      callback: () => {
-        this.openSearchModal(new InsertNoteContentAction(this.plugin));
-      },
-    });
-
-    this.plugin.addCommand({
-      id: 'insert-markdown-citation',
-      name: 'Insert Markdown citation',
-      callback: () => {
-        this.openSearchModal(new InsertCitationAction(this.plugin));
-      },
-    });
-
-    this.plugin.addCommand({
-      id: 'open-note-at-cursor',
-      name: 'Open literature note for citation at cursor',
-      callback: () => {
-        void this.plugin.editorActions.openNoteAtCursor();
-      },
-    });
-
-    this.plugin.addCommand({
-      id: 'insert-subsequent-citation',
-      name: 'Insert subsequent citation',
-      callback: () => {
-        this.openSearchModal(new InsertSubsequentCitationAction(this.plugin));
-      },
-    });
-
-    this.plugin.addCommand({
-      id: 'insert-multiple-citations',
-      name: 'Insert multiple citations',
-      callback: () => {
-        this.openSearchModal(new InsertMultiCitationAction(this.plugin));
-      },
-    });
+    for (const action of this.actionRegistry.getCommandPaletteActions()) {
+      this.plugin.addCommand({
+        id: action.descriptor.id,
+        name: action.descriptor.name,
+        callback: () => {
+          if (action instanceof SearchModalAction) {
+            this.openSearchModal(action);
+          } else {
+            void action.execute({
+              selectedText: this.getSelectedText(),
+            });
+          }
+        },
+      });
+    }
   }
 
-  /**
-   * Returns the currently selected text from the active editor, if any.
-   */
   private getSelectedText(): string {
-    const editor = this.plugin.platform.workspace.getActiveEditor();
+    const editor = this.actionCtx.platform.workspace.getActiveEditor();
     return editor?.getSelection() ?? '';
   }
 
-  /**
-   * Opens a citation search modal, injecting the current editor selection
-   * into the action so templates can use {{selectedText}} and the search
-   * input is pre-filled.
-   */
-  private openSearchModal(action: SearchAction): void {
+  private openSearchModal(action: SearchModalAction): void {
     action.selectedText = this.getSelectedText();
-    const modal = new CitationSearchModal(this.plugin.app, this.plugin, action);
+    const modal = new CitationSearchModal(
+      this.app,
+      action,
+      this.libraryService,
+      this.actionCtx.settings,
+    );
     modal.open();
   }
 }

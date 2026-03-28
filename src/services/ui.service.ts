@@ -4,19 +4,28 @@ import { IUIService } from '../container';
 import { IStatusBarItem } from '../platform/platform-adapter';
 import { CommandRegistry } from './command-registry';
 import { ContextMenuHandler } from './context-menu-handler';
+import {
+  ActionRegistry,
+  ActionContext,
+  OpenNoteAction,
+  InsertCitationAction,
+  InsertNoteLinkAction,
+  InsertNoteContentAction,
+  InsertSubsequentCitationAction,
+  InsertMultiCitationAction,
+  RefreshLibraryAction,
+  OpenNoteAtCursorAction,
+} from '../application/actions';
 
 export class UIService implements IUIService {
   private statusBarItem!: IStatusBarItem;
   private unsubscribe: (() => void) | null = null;
   private lastNotifiedStatus?: LoadingStatus;
 
-  private commandRegistry: CommandRegistry;
-  private contextMenuHandler: ContextMenuHandler;
+  private commandRegistry!: CommandRegistry;
+  private contextMenuHandler!: ContextMenuHandler;
 
-  constructor(private plugin: CitationPlugin) {
-    this.commandRegistry = new CommandRegistry(plugin);
-    this.contextMenuHandler = new ContextMenuHandler(plugin);
-  }
+  constructor(private plugin: CitationPlugin) {}
 
   init(): void {
     this.statusBarItem = this.plugin.platform.addStatusBarItem();
@@ -25,6 +34,41 @@ export class UIService implements IUIService {
         this.updateStatusBar(state);
         this.showStateNotices(state);
       },
+    );
+
+    // Build the action context from explicit dependencies
+    const actionCtx: ActionContext = {
+      citationService: this.plugin.citationService,
+      platform: this.plugin.platform,
+      noteService: this.plugin.noteService,
+      libraryService: this.plugin.libraryService,
+      templateService: this.plugin.templateService,
+      settings: this.plugin.settings,
+    };
+
+    // Register all actions
+    const actionRegistry = new ActionRegistry();
+    actionRegistry.register(new OpenNoteAction(actionCtx));
+    actionRegistry.register(new RefreshLibraryAction(actionCtx));
+    actionRegistry.register(new InsertNoteLinkAction(actionCtx));
+    actionRegistry.register(new InsertNoteContentAction(actionCtx));
+    actionRegistry.register(new InsertCitationAction(actionCtx));
+    actionRegistry.register(new OpenNoteAtCursorAction(actionCtx));
+    actionRegistry.register(new InsertSubsequentCitationAction(actionCtx));
+    actionRegistry.register(new InsertMultiCitationAction(actionCtx));
+
+    // Presentation adapters read from the registry
+    this.commandRegistry = new CommandRegistry(
+      this.plugin.app,
+      this.plugin,
+      actionRegistry,
+      actionCtx,
+      this.plugin.libraryService,
+    );
+    this.contextMenuHandler = new ContextMenuHandler(
+      this.plugin,
+      actionRegistry,
+      actionCtx,
     );
 
     this.commandRegistry.registerAll();

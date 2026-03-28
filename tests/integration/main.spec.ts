@@ -302,7 +302,7 @@ describe('CitationPlugin', () => {
         plugin.libraryService as unknown as Record<string, unknown>
       ).isLibraryLoading = true;
 
-      const result = plugin.getEntry('key1');
+      const result = plugin.citationService.getEntry('key1');
       expect(result.ok).toBe(false);
     });
 
@@ -314,7 +314,7 @@ describe('CitationPlugin', () => {
       (plugin.libraryService as unknown as Record<string, unknown>).library =
         null;
 
-      const result = plugin.getEntry('key1');
+      const result = plugin.citationService.getEntry('key1');
       expect(result.ok).toBe(false);
     });
 
@@ -327,7 +327,7 @@ describe('CitationPlugin', () => {
         plugin.libraryService as unknown as Record<string, unknown>
       ).isLibraryLoading = false;
 
-      const result = plugin.getEntry('nonexistent');
+      const result = plugin.citationService.getEntry('nonexistent');
       expect(result.ok).toBe(false);
     });
 
@@ -344,7 +344,7 @@ describe('CitationPlugin', () => {
         entries: { key1: mockEntry },
       };
 
-      const result = plugin.getEntry('key1');
+      const result = plugin.citationService.getEntry('key1');
       expect(result.ok).toBe(true);
     });
   });
@@ -368,7 +368,7 @@ describe('CitationPlugin', () => {
         read: jest.fn().mockResolvedValue('# Content'),
       } as unknown as typeof plugin.app.vault;
 
-      const result = await plugin.resolveContentTemplate();
+      const result = await plugin.contentTemplateResolver.resolve();
       expect(result).toBe('# Content');
     });
 
@@ -379,14 +379,14 @@ describe('CitationPlugin', () => {
         getAbstractFileByPath: jest.fn().mockReturnValue(null),
       } as unknown as typeof plugin.app.vault;
 
-      const result = await plugin.resolveContentTemplate();
+      const result = await plugin.contentTemplateResolver.resolve();
       expect(result).toBe('---\ntitle: {{title}}\n---');
     });
 
     it('returns default when no path configured', async () => {
       await setupPlugin();
       plugin.settings.literatureNoteContentTemplatePath = '';
-      const result = await plugin.resolveContentTemplate();
+      const result = await plugin.contentTemplateResolver.resolve();
       expect(result).toBe('---\ntitle: {{title}}\n---');
     });
   });
@@ -417,7 +417,7 @@ describe('CitationPlugin', () => {
 
     it('returns citation when library is ready', async () => {
       await setupWithEntry();
-      const result = plugin.getMarkdownCitationForCitekey('key1');
+      const result = plugin.citationService.getMarkdownCitation('key1', false);
       expect(result.ok).toBe(true);
     });
 
@@ -426,7 +426,7 @@ describe('CitationPlugin', () => {
       (
         plugin.libraryService as unknown as Record<string, unknown>
       ).isLibraryLoading = true;
-      const result = plugin.getMarkdownCitationForCitekey('key1');
+      const result = plugin.citationService.getMarkdownCitation('key1', false);
       expect(result.ok).toBe(false);
     });
   });
@@ -450,7 +450,7 @@ describe('CitationPlugin', () => {
         entries: { key1: { id: 'key1', toJSON: () => ({}) } },
       };
 
-      const result = plugin.getAlternativeMarkdownCitationForCitekey('key1');
+      const result = plugin.citationService.getMarkdownCitation('key1', true);
       expect(result.ok).toBe(true);
     });
   });
@@ -468,7 +468,7 @@ describe('CitationPlugin', () => {
         entries: {},
       };
 
-      const result = plugin.getTitleForCitekey('nonexistent');
+      const result = plugin.citationService.getTitleForCitekey('nonexistent');
       expect(result.ok).toBe(false);
     });
 
@@ -488,7 +488,7 @@ describe('CitationPlugin', () => {
         entries: { key1: { id: 'key1', toJSON: () => ({}) } },
       };
 
-      const result = plugin.getTitleForCitekey('key1');
+      const result = plugin.citationService.getTitleForCitekey('key1');
       expect(result.ok).toBe(true);
       if (result.ok) {
         // Colon should be replaced with _
@@ -515,7 +515,7 @@ describe('CitationPlugin', () => {
         entries: { key1: { id: 'key1', toJSON: () => ({}) } },
       };
 
-      const result = await plugin.getInitialContentForCitekey(
+      const result = await plugin.citationService.getInitialContentForCitekey(
         'key1',
         'selected',
       );
@@ -535,7 +535,7 @@ describe('CitationPlugin', () => {
         entries: {},
       };
 
-      const result = await plugin.getInitialContentForCitekey('nonexistent');
+      const result = await plugin.citationService.getInitialContentForCitekey('nonexistent');
       expect(result.ok).toBe(false);
     });
   });

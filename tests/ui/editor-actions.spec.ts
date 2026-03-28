@@ -14,70 +14,87 @@ jest.mock(
 );
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only mock factory
-function makePlugin(overrides: Record<string, any> = {}): any {
+function makeDeps(overrides: Record<string, any> = {}) {
   const { settings: settingsOverrides, ...rest } = overrides;
-  return {
-    platform: {
-      workspace: {
-        getActiveEditor: jest.fn(() => null),
-        openFile: jest.fn().mockResolvedValue(undefined),
-        getConfig: jest.fn(() => null),
-        fileToLinktext: jest.fn(() => 'link'),
-      },
-      notifications: {
-        show: mockNotificationsShow,
-      },
-    },
-    app: {
-      workspace: {
-        getActiveViewOfType: jest.fn(() => null),
-        activeEditor: null,
-      },
-      vault: {},
-      metadataCache: {
-        fileToLinktext: jest.fn(() => 'link'),
-      },
-    },
-    settings: {
-      autoCreateNoteOnCitation: false,
-      disableAutomaticNoteCreation: false,
-      ...(settingsOverrides as Record<string, unknown>),
-    },
-    libraryService: {
-      library: {
-        entries: {
-          key1: { id: 'key1' },
-        },
-      },
-    },
-    noteService: {
-      openLiteratureNote: jest.fn().mockResolvedValue(undefined),
-      getOrCreateLiteratureNoteFile: jest
-        .fn()
-        .mockResolvedValue({ path: 'note.md', name: 'note.md' }),
-      findExistingLiteratureNoteFile: jest.fn(() => null),
-    },
-    templateService: {
-      getTemplateVariables: jest.fn(() => ({})),
-    },
+
+  const citationService = {
     getEntry: jest.fn(() => ({ ok: true, value: { id: 'key1' } })),
     getTitleForCitekey: jest.fn(() => ({ ok: true, value: 'Title' })),
     getInitialContentForCitekey: jest.fn(() =>
-      Promise.resolve({
+      Promise.resolve({ ok: true, value: 'content' }),
+    ),
+    getMarkdownCitation: jest.fn(
+      (citekey: string, alternative?: boolean) => ({
         ok: true,
-        value: 'content',
+        value: alternative ? '@key1' : '[@key1]',
       }),
     ),
-    getMarkdownCitationForCitekey: jest.fn(() => ({
-      ok: true,
-      value: '[@key1]',
-    })),
-    getAlternativeMarkdownCitationForCitekey: jest.fn(() => ({
-      ok: true,
-      value: '@key1',
-    })),
-    ...rest,
+    ...(rest.citationService ?? {}),
   };
+
+  const platform = {
+    workspace: {
+      getActiveEditor: jest.fn(() => null),
+      openFile: jest.fn().mockResolvedValue(undefined),
+      getConfig: jest.fn(() => null),
+      fileToLinktext: jest.fn(() => 'link'),
+    },
+    notifications: {
+      show: mockNotificationsShow,
+    },
+    ...(rest.platform ?? {}),
+  };
+
+  const noteService = {
+    openLiteratureNote: jest.fn().mockResolvedValue(undefined),
+    getOrCreateLiteratureNoteFile: jest
+      .fn()
+      .mockResolvedValue({ path: 'note.md', name: 'note.md' }),
+    findExistingLiteratureNoteFile: jest.fn(() => null),
+    ...(rest.noteService ?? {}),
+  };
+
+  const libraryService = {
+    library: {
+      entries: {
+        key1: { id: 'key1' },
+      },
+    },
+    ...(rest.libraryService ?? {}),
+  };
+
+  const templateService = {
+    getTemplateVariables: jest.fn(() => ({})),
+    render: jest.fn(() => ({ ok: true, value: '' })),
+    ...(rest.templateService ?? {}),
+  };
+
+  const settings = {
+    autoCreateNoteOnCitation: false,
+    disableAutomaticNoteCreation: false,
+    literatureNoteLinkDisplayTemplate: '',
+    ...(settingsOverrides ?? {}),
+  };
+
+  return {
+    citationService,
+    platform,
+    noteService,
+    libraryService,
+    templateService,
+    settings,
+  };
+}
+
+function createActions(deps: ReturnType<typeof makeDeps>) {
+  return new EditorActions(
+    deps.citationService as any,
+    deps.platform as any,
+    deps.noteService as any,
+    deps.libraryService as any,
+    deps.templateService as any,
+    deps.settings as any,
+  );
 }
 
 describe('EditorActions', () => {
@@ -87,10 +104,10 @@ describe('EditorActions', () => {
 
   describe('openLiteratureNote', () => {
     it('shows notice when library is null', async () => {
-      const plugin = makePlugin({
+      const deps = makeDeps({
         libraryService: { library: null },
       });
-      const actions = new EditorActions(plugin);
+      const actions = createActions(deps);
 
       await actions.openLiteratureNote('key1', false);
 
@@ -100,12 +117,12 @@ describe('EditorActions', () => {
     });
 
     it('shows notice when entry is not found', async () => {
-      const plugin = makePlugin();
-      plugin.getEntry = jest.fn(() => ({
+      const deps = makeDeps();
+      deps.citationService.getEntry = jest.fn(() => ({
         ok: false,
         error: { message: 'Entry not found: key2' },
       }));
-      const actions = new EditorActions(plugin);
+      const actions = createActions(deps);
 
       await actions.openLiteratureNote('key2', false);
 
@@ -115,14 +132,14 @@ describe('EditorActions', () => {
     });
 
     it('calls noteService.openLiteratureNote on success', async () => {
-      const plugin = makePlugin();
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      const actions = createActions(deps);
 
       await actions.openLiteratureNote('key1', true);
 
-      expect(plugin.noteService.openLiteratureNote).toHaveBeenCalledWith(
+      expect(deps.noteService.openLiteratureNote).toHaveBeenCalledWith(
         'key1',
-        plugin.libraryService.library,
+        deps.libraryService.library,
         true,
         undefined,
       );
@@ -130,11 +147,11 @@ describe('EditorActions', () => {
     });
 
     it('shows notice when noteService throws', async () => {
-      const plugin = makePlugin();
-      plugin.noteService.openLiteratureNote = jest
+      const deps = makeDeps();
+      deps.noteService.openLiteratureNote = jest
         .fn()
         .mockRejectedValue(new Error('Folder not found'));
-      const actions = new EditorActions(plugin);
+      const actions = createActions(deps);
 
       const errorSpy = jest
         .spyOn(console, 'error')
@@ -150,11 +167,11 @@ describe('EditorActions', () => {
     });
 
     it('shows user-friendly notice for LiteratureNoteNotFoundError', async () => {
-      const plugin = makePlugin();
-      plugin.noteService.openLiteratureNote = jest
+      const deps = makeDeps();
+      deps.noteService.openLiteratureNote = jest
         .fn()
         .mockRejectedValue(new LiteratureNoteNotFoundError('key1'));
-      const actions = new EditorActions(plugin);
+      const actions = createActions(deps);
 
       await actions.openLiteratureNote('key1', false);
 
@@ -171,18 +188,18 @@ describe('EditorActions', () => {
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
         setCursor: jest.fn(),
       };
-      const plugin = makePlugin();
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.insertLiteratureNoteContent('key1');
       expect(mockNotificationsShow).not.toHaveBeenCalled();
     });
 
     it('shows notice when no editor is available', async () => {
-      const plugin = makePlugin();
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => null);
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      deps.platform.workspace.getActiveEditor = jest.fn(() => null);
+      const actions = createActions(deps);
 
       await actions.insertLiteratureNoteContent('key1');
 
@@ -197,9 +214,9 @@ describe('EditorActions', () => {
         getCursor: jest.fn(() => ({ line: 1, ch: 3 })),
         setCursor: jest.fn(),
       };
-      const plugin = makePlugin();
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.insertLiteratureNoteContent('key1');
 
@@ -210,9 +227,9 @@ describe('EditorActions', () => {
 
   describe('insertLiteratureNoteLink', () => {
     it('shows notice when no active editor is found', async () => {
-      const plugin = makePlugin();
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => null);
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      deps.platform.workspace.getActiveEditor = jest.fn(() => null);
+      const actions = createActions(deps);
 
       await actions.insertLiteratureNoteLink('key1');
 
@@ -223,11 +240,11 @@ describe('EditorActions', () => {
 
     it('shows notice when library is null', async () => {
       const editor = { replaceSelection: jest.fn() };
-      const plugin = makePlugin({
+      const deps = makeDeps({
         libraryService: { library: null },
       });
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.insertLiteratureNoteLink('key1');
 
@@ -239,13 +256,13 @@ describe('EditorActions', () => {
 
     it('shows notice when entry is not found', async () => {
       const editor = { replaceSelection: jest.fn() };
-      const plugin = makePlugin();
-      plugin.getEntry = jest.fn(() => ({
+      const deps = makeDeps();
+      deps.citationService.getEntry = jest.fn(() => ({
         ok: false,
         error: { message: 'Entry not found: key2' },
       }));
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.insertLiteratureNoteLink('key2');
 
@@ -257,14 +274,14 @@ describe('EditorActions', () => {
 
     it('shows notice when getTitleForCitekey fails', async () => {
       const editor = { replaceSelection: jest.fn() };
-      const plugin = makePlugin();
-      plugin.getTitleForCitekey = jest.fn(() => ({
+      const deps = makeDeps();
+      deps.citationService.getTitleForCitekey = jest.fn(() => ({
         ok: false,
         error: { message: 'Template render failed' },
       }));
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      plugin.platform.workspace.getConfig = jest.fn(() => false);
-      const actions = new EditorActions(plugin);
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      deps.platform.workspace.getConfig = jest.fn(() => false);
+      const actions = createActions(deps);
 
       await actions.insertLiteratureNoteLink('key1');
 
@@ -276,11 +293,11 @@ describe('EditorActions', () => {
 
     it('inserts markdown link when useMarkdownLinks is true', async () => {
       const editor = { replaceSelection: jest.fn() };
-      const plugin = makePlugin();
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      plugin.platform.workspace.getConfig = jest.fn(() => true);
-      plugin.platform.workspace.fileToLinktext = jest.fn(() => 'notes/key1');
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      deps.platform.workspace.getConfig = jest.fn(() => true);
+      deps.platform.workspace.fileToLinktext = jest.fn(() => 'notes/key1');
+      const actions = createActions(deps);
 
       await actions.insertLiteratureNoteLink('key1');
 
@@ -292,11 +309,11 @@ describe('EditorActions', () => {
 
     it('inserts wikilink when useMarkdownLinks is false', async () => {
       const editor = { replaceSelection: jest.fn() };
-      const plugin = makePlugin();
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      plugin.platform.workspace.getConfig = jest.fn(() => false);
-      plugin.platform.workspace.fileToLinktext = jest.fn(() => 'link');
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      deps.platform.workspace.getConfig = jest.fn(() => false);
+      deps.platform.workspace.fileToLinktext = jest.fn(() => 'link');
+      const actions = createActions(deps);
 
       await actions.insertLiteratureNoteLink('key1');
 
@@ -305,12 +322,12 @@ describe('EditorActions', () => {
 
     it('shows notice when getOrCreateLiteratureNoteFile throws LiteratureNoteNotFoundError', async () => {
       const editor = { replaceSelection: jest.fn() };
-      const plugin = makePlugin();
-      plugin.noteService.getOrCreateLiteratureNoteFile = jest
+      const deps = makeDeps();
+      deps.noteService.getOrCreateLiteratureNoteFile = jest
         .fn()
         .mockRejectedValue(new LiteratureNoteNotFoundError('key1'));
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.insertLiteratureNoteLink('key1');
 
@@ -322,16 +339,16 @@ describe('EditorActions', () => {
 
     it('shows generic notice when getOrCreateLiteratureNoteFile throws unknown error', async () => {
       const editor = { replaceSelection: jest.fn() };
-      const plugin = makePlugin();
-      plugin.noteService.getOrCreateLiteratureNoteFile = jest
+      const deps = makeDeps();
+      deps.noteService.getOrCreateLiteratureNoteFile = jest
         .fn()
         .mockRejectedValue(new Error('Disk full'));
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
 
       const errorSpy = jest
         .spyOn(console, 'error')
         .mockImplementation(() => {});
-      const actions = new EditorActions(plugin);
+      const actions = createActions(deps);
 
       await actions.insertLiteratureNoteLink('key1');
 
@@ -351,11 +368,12 @@ describe('EditorActions', () => {
         replaceSelection: jest.fn(),
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
       };
-      const plugin = makePlugin();
-      plugin.settings.disableAutomaticNoteCreation = true;
-      plugin.noteService.findExistingLiteratureNoteFile = jest.fn(() => null);
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps({
+        settings: { disableAutomaticNoteCreation: true },
+      });
+      deps.noteService.findExistingLiteratureNoteFile = jest.fn(() => null);
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.insertLiteratureNoteLink('key1');
 
@@ -371,19 +389,20 @@ describe('EditorActions', () => {
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
       };
       const mockFile = { path: 'notes/key1.md', name: 'key1.md' };
-      const plugin = makePlugin();
-      plugin.settings.disableAutomaticNoteCreation = true;
-      plugin.noteService.findExistingLiteratureNoteFile = jest.fn(
+      const deps = makeDeps({
+        settings: { disableAutomaticNoteCreation: true },
+      });
+      deps.noteService.findExistingLiteratureNoteFile = jest.fn(
         () => mockFile,
       );
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      plugin.platform.workspace.getConfig = jest.fn(() => false);
-      const actions = new EditorActions(plugin);
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      deps.platform.workspace.getConfig = jest.fn(() => false);
+      const actions = createActions(deps);
 
       await actions.insertLiteratureNoteLink('key1');
 
       expect(
-        plugin.noteService.getOrCreateLiteratureNoteFile,
+        deps.noteService.getOrCreateLiteratureNoteFile,
       ).not.toHaveBeenCalled();
       expect(editor.replaceSelection).toHaveBeenCalled();
     });
@@ -393,16 +412,17 @@ describe('EditorActions', () => {
         replaceSelection: jest.fn(),
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
       };
-      const plugin = makePlugin();
-      plugin.settings.disableAutomaticNoteCreation = false;
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      plugin.platform.workspace.getConfig = jest.fn(() => false);
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps({
+        settings: { disableAutomaticNoteCreation: false },
+      });
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      deps.platform.workspace.getConfig = jest.fn(() => false);
+      const actions = createActions(deps);
 
       await actions.insertLiteratureNoteLink('key1');
 
       expect(
-        plugin.noteService.getOrCreateLiteratureNoteFile,
+        deps.noteService.getOrCreateLiteratureNoteFile,
       ).toHaveBeenCalled();
       expect(editor.replaceSelection).toHaveBeenCalled();
     });
@@ -417,43 +437,43 @@ describe('EditorActions', () => {
     }
 
     it('extracts citekey from [@key] when cursor is inside', () => {
-      const plugin = makePlugin();
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      const actions = createActions(deps);
       const editor = makeEditor('See [@smith2023] for details', 8);
       expect(actions.extractCitekeyAtCursor(editor as never)).toBe('smith2023');
     });
 
     it('extracts citekey from standalone @key', () => {
-      const plugin = makePlugin();
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      const actions = createActions(deps);
       const editor = makeEditor('As shown by @smith2023 recently', 15);
       expect(actions.extractCitekeyAtCursor(editor as never)).toBe('smith2023');
     });
 
     it('extracts citekey from [[@key]]', () => {
-      const plugin = makePlugin();
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      const actions = createActions(deps);
       const editor = makeEditor('Link to [[@smith2023]] here', 14);
       expect(actions.extractCitekeyAtCursor(editor as never)).toBe('smith2023');
     });
 
     it('extracts citekey from [[@key|alias]]', () => {
-      const plugin = makePlugin();
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      const actions = createActions(deps);
       const editor = makeEditor('Link to [[@smith2023|Smith]] here', 14);
       expect(actions.extractCitekeyAtCursor(editor as never)).toBe('smith2023');
     });
 
     it('returns null when cursor is not on a citation', () => {
-      const plugin = makePlugin();
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      const actions = createActions(deps);
       const editor = makeEditor('No citations here at all', 10);
       expect(actions.extractCitekeyAtCursor(editor as never)).toBeNull();
     });
 
     it('handles multiple citations on the same line', () => {
-      const plugin = makePlugin();
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      const actions = createActions(deps);
       // Cursor at position 25 — inside second citation
       const editor = makeEditor('See [@smith2023] and [@jones2022] here', 25);
       expect(actions.extractCitekeyAtCursor(editor as never)).toBe('jones2022');
@@ -467,15 +487,15 @@ describe('EditorActions', () => {
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
         setCursor: jest.fn(),
       };
-      const plugin = makePlugin();
-      plugin.getInitialContentForCitekey = jest.fn(() =>
+      const deps = makeDeps();
+      deps.citationService.getInitialContentForCitekey = jest.fn(() =>
         Promise.resolve({
           ok: false,
           error: { message: 'Template render failed' },
         }),
       );
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.insertLiteratureNoteContent('key1');
 
@@ -491,15 +511,15 @@ describe('EditorActions', () => {
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
         setCursor: jest.fn(),
       };
-      const plugin = makePlugin();
-      plugin.getInitialContentForCitekey = jest.fn(() =>
+      const deps = makeDeps();
+      deps.citationService.getInitialContentForCitekey = jest.fn(() =>
         Promise.resolve({
           ok: true,
           value: 'line1\nline2\nline3',
         }),
       );
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.insertLiteratureNoteContent('key1');
 
@@ -514,24 +534,23 @@ describe('EditorActions', () => {
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
         setCursor: jest.fn(),
       };
-      const plugin = makePlugin();
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.insertLiteratureNoteContent('key1', 'selected text');
 
-      expect(plugin.getInitialContentForCitekey).toHaveBeenCalledWith(
-        'key1',
-        'selected text',
-      );
+      expect(
+        deps.citationService.getInitialContentForCitekey,
+      ).toHaveBeenCalledWith('key1', 'selected text');
     });
   });
 
   describe('insertMarkdownCitation', () => {
     it('shows notice when no active editor is found', async () => {
-      const plugin = makePlugin();
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => null);
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      deps.platform.workspace.getActiveEditor = jest.fn(() => null);
+      const actions = createActions(deps);
 
       await actions.insertMarkdownCitation('key1', false);
 
@@ -546,13 +565,13 @@ describe('EditorActions', () => {
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
         setCursor: jest.fn(),
       };
-      const plugin = makePlugin();
-      plugin.getMarkdownCitationForCitekey = jest.fn(() => ({
+      const deps = makeDeps();
+      deps.citationService.getMarkdownCitation = jest.fn(() => ({
         ok: false,
         error: { message: 'Template render failed' },
       }));
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.insertMarkdownCitation('key1', false);
 
@@ -568,13 +587,13 @@ describe('EditorActions', () => {
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
         setCursor: jest.fn(),
       };
-      const plugin = makePlugin();
-      plugin.getAlternativeMarkdownCitationForCitekey = jest.fn(() => ({
+      const deps = makeDeps();
+      deps.citationService.getMarkdownCitation = jest.fn(() => ({
         ok: false,
         error: { message: 'Alternative template failed' },
       }));
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.insertMarkdownCitation('key1', true);
 
@@ -590,14 +609,15 @@ describe('EditorActions', () => {
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
         setCursor: jest.fn(),
       };
-      const plugin = makePlugin();
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.insertMarkdownCitation('key1', false, 'my selection');
 
-      expect(plugin.getMarkdownCitationForCitekey).toHaveBeenCalledWith(
+      expect(deps.citationService.getMarkdownCitation).toHaveBeenCalledWith(
         'key1',
+        false,
         'my selection',
       );
     });
@@ -609,13 +629,13 @@ describe('EditorActions', () => {
         setCursor: jest.fn(),
         getLine: jest.fn(() => ''),
       };
-      const plugin = makePlugin();
-      plugin.getMarkdownCitationForCitekey = jest.fn(() => ({
+      const deps = makeDeps();
+      deps.citationService.getMarkdownCitation = jest.fn(() => ({
         ok: true,
         value: 'line1\nline2',
       }));
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.insertMarkdownCitation('key1', false);
 
@@ -629,17 +649,17 @@ describe('EditorActions', () => {
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
         setCursor: jest.fn(),
       };
-      const plugin = makePlugin({
+      const deps = makeDeps({
         settings: { autoCreateNoteOnCitation: true },
         libraryService: { library: null },
       });
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.insertMarkdownCitation('key1', false);
 
       expect(
-        plugin.noteService.getOrCreateLiteratureNoteFile,
+        deps.noteService.getOrCreateLiteratureNoteFile,
       ).not.toHaveBeenCalled();
     });
 
@@ -649,14 +669,15 @@ describe('EditorActions', () => {
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
         setCursor: jest.fn(),
       };
-      const plugin = makePlugin();
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.insertMarkdownCitation('key1', false);
 
-      expect(plugin.getMarkdownCitationForCitekey).toHaveBeenCalledWith(
+      expect(deps.citationService.getMarkdownCitation).toHaveBeenCalledWith(
         'key1',
+        false,
         undefined,
       );
       expect(editor.replaceRange).toHaveBeenCalledWith('[@key1]', {
@@ -671,15 +692,17 @@ describe('EditorActions', () => {
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
         setCursor: jest.fn(),
       };
-      const plugin = makePlugin();
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.insertMarkdownCitation('key1', true);
 
-      expect(
-        plugin.getAlternativeMarkdownCitationForCitekey,
-      ).toHaveBeenCalledWith('key1', undefined);
+      expect(deps.citationService.getMarkdownCitation).toHaveBeenCalledWith(
+        'key1',
+        true,
+        undefined,
+      );
       expect(editor.replaceRange).toHaveBeenCalledWith('@key1', {
         line: 0,
         ch: 0,
@@ -692,9 +715,9 @@ describe('EditorActions', () => {
         getCursor: jest.fn(() => ({ line: 2, ch: 5 })),
         setCursor: jest.fn(),
       };
-      const plugin = makePlugin();
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.insertMarkdownCitation('key1', false);
 
@@ -708,11 +731,11 @@ describe('EditorActions', () => {
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
         setCursor: jest.fn(),
       };
-      const plugin = makePlugin({
+      const deps = makeDeps({
         settings: { autoCreateNoteOnCitation: true },
       });
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.insertMarkdownCitation('key1', false);
 
@@ -721,8 +744,8 @@ describe('EditorActions', () => {
         ch: 0,
       });
       expect(
-        plugin.noteService.getOrCreateLiteratureNoteFile,
-      ).toHaveBeenCalledWith('key1', plugin.libraryService.library, undefined);
+        deps.noteService.getOrCreateLiteratureNoteFile,
+      ).toHaveBeenCalledWith('key1', deps.libraryService.library, undefined);
     });
 
     it('does not create literature note when autoCreateNoteOnCitation is disabled', async () => {
@@ -731,11 +754,11 @@ describe('EditorActions', () => {
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
         setCursor: jest.fn(),
       };
-      const plugin = makePlugin({
+      const deps = makeDeps({
         settings: { autoCreateNoteOnCitation: false },
       });
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.insertMarkdownCitation('key1', false);
 
@@ -744,7 +767,7 @@ describe('EditorActions', () => {
         ch: 0,
       });
       expect(
-        plugin.noteService.getOrCreateLiteratureNoteFile,
+        deps.noteService.getOrCreateLiteratureNoteFile,
       ).not.toHaveBeenCalled();
     });
 
@@ -754,16 +777,16 @@ describe('EditorActions', () => {
         getCursor: jest.fn(() => ({ line: 0, ch: 0 })),
         setCursor: jest.fn(),
       };
-      const plugin = makePlugin({
+      const deps = makeDeps({
         settings: { autoCreateNoteOnCitation: true },
       });
-      plugin.noteService.getOrCreateLiteratureNoteFile = jest
+      deps.noteService.getOrCreateLiteratureNoteFile = jest
         .fn()
         .mockRejectedValue(new Error('Folder missing'));
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
 
       const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-      const actions = new EditorActions(plugin);
+      const actions = createActions(deps);
 
       await actions.insertMarkdownCitation('key1', false);
 
@@ -781,9 +804,9 @@ describe('EditorActions', () => {
 
   describe('insertSubsequentCitation', () => {
     it('shows notice when no active editor', async () => {
-      const plugin = makePlugin();
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => null);
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      deps.platform.workspace.getActiveEditor = jest.fn(() => null);
+      const actions = createActions(deps);
 
       await actions.insertSubsequentCitation('key2');
 
@@ -799,9 +822,9 @@ describe('EditorActions', () => {
         replaceRange: jest.fn(),
         setCursor: jest.fn(),
       };
-      const plugin = makePlugin();
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.insertSubsequentCitation('key2');
 
@@ -823,13 +846,13 @@ describe('EditorActions', () => {
         replaceRange: jest.fn(),
         setCursor: jest.fn(),
       };
-      const plugin = makePlugin();
-      plugin.getMarkdownCitationForCitekey = jest.fn(() => ({
+      const deps = makeDeps();
+      deps.citationService.getMarkdownCitation = jest.fn(() => ({
         ok: true,
         value: '[@key2]',
       }));
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.insertSubsequentCitation('key2');
 
@@ -843,9 +866,9 @@ describe('EditorActions', () => {
 
   describe('openNoteAtCursor', () => {
     it('shows notice when no active editor', async () => {
-      const plugin = makePlugin();
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => null);
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      deps.platform.workspace.getActiveEditor = jest.fn(() => null);
+      const actions = createActions(deps);
 
       await actions.openNoteAtCursor();
 
@@ -859,9 +882,9 @@ describe('EditorActions', () => {
         getCursor: jest.fn(() => ({ line: 0, ch: 5 })),
         getLine: jest.fn(() => 'No citation here'),
       };
-      const plugin = makePlugin();
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.openNoteAtCursor();
 
@@ -875,14 +898,14 @@ describe('EditorActions', () => {
         getCursor: jest.fn(() => ({ line: 0, ch: 8 })),
         getLine: jest.fn(() => 'See [@smith2023] for details'),
       };
-      const plugin = makePlugin();
-      plugin.platform.workspace.getActiveEditor = jest.fn(() => editor);
-      const actions = new EditorActions(plugin);
+      const deps = makeDeps();
+      deps.platform.workspace.getActiveEditor = jest.fn(() => editor);
+      const actions = createActions(deps);
 
       await actions.openNoteAtCursor();
 
       // Should call openLiteratureNote -> noteService.openLiteratureNote
-      expect(plugin.noteService.openLiteratureNote).toHaveBeenCalledWith(
+      expect(deps.noteService.openLiteratureNote).toHaveBeenCalledWith(
         'smith2023',
         expect.anything(),
         false,

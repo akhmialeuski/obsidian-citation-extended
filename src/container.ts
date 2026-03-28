@@ -104,6 +104,13 @@ export type {
 } from './platform/platform-adapter';
 
 // ---------------------------------------------------------------------------
+// Application services re-export
+// ---------------------------------------------------------------------------
+
+export type { ICitationService } from './application/citation.service';
+export type { IContentTemplateResolver } from './application/content-template-resolver';
+
+// ---------------------------------------------------------------------------
 // Data source registry re-export
 // ---------------------------------------------------------------------------
 

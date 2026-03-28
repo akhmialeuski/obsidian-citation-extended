@@ -1,9 +1,10 @@
 /** @jest-environment jsdom */
 import { CitationSearchModal } from '../../../src/ui/modals/citation-search-modal';
-import type CitationPlugin from '../../../src/main';
 import type { Entry } from '../../../src/core';
 import { LoadingStatus } from '../../../src/library/library-state';
-import type { SearchAction } from '../../../src/ui/modals/actions/search-action';
+import type { SearchModalAction } from '../../../src/application/actions/action.types';
+import type { ILibraryService } from '../../../src/container';
+import type { CitationsPluginSettings } from '../../../src/ui/settings/settings';
 
 // ---------------------------------------------------------------------------
 // Polyfill Obsidian-specific HTMLElement methods for jsdom
@@ -136,16 +137,15 @@ function createMockEntry(overrides: Record<string, unknown> = {}): Entry {
   } as unknown as Entry;
 }
 
-function createMockPlugin(
+function createMockLibraryService(
   overrides: Partial<{
     isLibraryLoading: boolean;
     library: unknown;
-    sortOrder: string;
     storeSubscribe: jest.Mock;
     searchResults: string[];
     storeState: Record<string, unknown>;
   }> = {},
-): CitationPlugin {
+): ILibraryService {
   const defaultState = overrides.storeState ?? {
     status: LoadingStatus.Idle,
     parseErrors: [],
@@ -160,40 +160,61 @@ function createMockPlugin(
     });
 
   return {
-    libraryService: {
-      isLibraryLoading: overrides.isLibraryLoading ?? false,
-      library: overrides.library ?? { entries: {} },
-      store: {
-        subscribe: storeSubscribe,
-      },
-      searchService: {
-        search: jest.fn().mockReturnValue(overrides.searchResults ?? []),
-      },
+    isLibraryLoading: overrides.isLibraryLoading ?? false,
+    library: overrides.library ?? { entries: {} },
+    store: {
+      subscribe: storeSubscribe,
     },
-    settings: {
-      referenceListSortOrder: overrides.sortOrder ?? 'default',
+    searchService: {
+      search: jest.fn().mockReturnValue(overrides.searchResults ?? []),
     },
-  } as unknown as CitationPlugin;
+  } as unknown as ILibraryService;
 }
 
-function createMockAction(overrides: Partial<SearchAction> = {}): SearchAction {
+function createMockSettings(
+  overrides: Partial<{ sortOrder: string }> = {},
+): CitationsPluginSettings {
   return {
-    name: 'Test Action',
+    referenceListSortOrder: overrides.sortOrder ?? 'default',
+  } as unknown as CitationsPluginSettings;
+}
+
+function createMockAction(
+  overrides: Partial<SearchModalAction> = {},
+): SearchModalAction {
+  return {
+    descriptor: {
+      id: 'test-action',
+      name: overrides.descriptor?.name ?? 'Test Action',
+      showInCommandPalette: true,
+      showInContextMenu: false,
+      requiresEditor: false,
+    },
     onChoose: jest.fn(),
+    isVisible: jest.fn().mockReturnValue(true),
+    isEnabled: jest.fn().mockReturnValue(true),
+    execute: jest.fn().mockResolvedValue(undefined),
     ...overrides,
-  };
+  } as unknown as SearchModalAction;
 }
 
 describe('CitationSearchModal', () => {
   let modal: CitationSearchModal;
-  let plugin: CitationPlugin;
-  let action: SearchAction;
+  let libraryService: ILibraryService;
+  let settings: CitationsPluginSettings;
+  let action: SearchModalAction;
 
   beforeEach(() => {
     jest.useFakeTimers();
-    plugin = createMockPlugin();
+    libraryService = createMockLibraryService();
+    settings = createMockSettings();
     action = createMockAction();
-    modal = new CitationSearchModal({} as never, plugin, action);
+    modal = new CitationSearchModal(
+      {} as never,
+      action,
+      libraryService,
+      settings,
+    );
   });
 
   afterEach(() => {
@@ -205,10 +226,9 @@ describe('CitationSearchModal', () => {
   // -----------------------------------------------------------------------
 
   describe('constructor', () => {
-    it('sets placeholder from action name', () => {
+    it('sets placeholder from action descriptor name', () => {
       // setPlaceholder is called in constructor — just verify no throw
-      expect(modal.plugin).toBe(plugin);
-      expect(modal.action).toBe(action);
+      expect(modal).toBeDefined();
     });
 
     it('sets instructions when action provides them', () => {
@@ -219,8 +239,9 @@ describe('CitationSearchModal', () => {
       });
       const m = new CitationSearchModal(
         {} as never,
-        plugin,
         actionWithInstructions,
+        libraryService,
+        settings,
       );
       expect(actionWithInstructions.getInstructions).toHaveBeenCalled();
       expect(m).toBeDefined();
@@ -268,13 +289,18 @@ describe('CitationSearchModal', () => {
       modal.onOpen();
       jest.runAllTimers();
 
-      const storeSub = plugin.libraryService.store.subscribe as jest.Mock;
+      const storeSub = libraryService.store.subscribe as jest.Mock;
       expect(storeSub).toHaveBeenCalledWith(expect.any(Function));
     });
 
     it('seeds input with selected text', () => {
       action.selectedText = 'search term';
-      modal = new CitationSearchModal({} as never, plugin, action);
+      modal = new CitationSearchModal(
+        {} as never,
+        action,
+        libraryService,
+        settings,
+      );
 
       modal.onOpen();
       jest.runAllTimers();
@@ -401,16 +427,26 @@ describe('CitationSearchModal', () => {
 
   describe('getSuggestions()', () => {
     it('returns empty array when library is loading', () => {
-      plugin = createMockPlugin({ isLibraryLoading: true });
-      modal = new CitationSearchModal({} as never, plugin, action);
+      libraryService = createMockLibraryService({ isLibraryLoading: true });
+      modal = new CitationSearchModal(
+        {} as never,
+        action,
+        libraryService,
+        settings,
+      );
 
       const results = modal.getSuggestions('test');
       expect(results).toEqual([]);
     });
 
     it('returns empty array when library is null', () => {
-      plugin = createMockPlugin({ library: null });
-      modal = new CitationSearchModal({} as never, plugin, action);
+      libraryService = createMockLibraryService({ library: null });
+      modal = new CitationSearchModal(
+        {} as never,
+        action,
+        libraryService,
+        settings,
+      );
 
       const results = modal.getSuggestions('test');
       expect(results).toEqual([]);
@@ -425,8 +461,15 @@ describe('CitationSearchModal', () => {
         });
       }
 
-      plugin = createMockPlugin({ library: { entries } });
-      modal = new CitationSearchModal({} as never, plugin, action);
+      libraryService = createMockLibraryService({
+        library: { entries },
+      });
+      modal = new CitationSearchModal(
+        {} as never,
+        action,
+        libraryService,
+        settings,
+      );
 
       const results = modal.getSuggestions('');
       expect(results).toHaveLength(5);
@@ -441,8 +484,15 @@ describe('CitationSearchModal', () => {
         });
       }
 
-      plugin = createMockPlugin({ library: { entries } });
-      modal = new CitationSearchModal({} as never, plugin, action);
+      libraryService = createMockLibraryService({
+        library: { entries },
+      });
+      modal = new CitationSearchModal(
+        {} as never,
+        action,
+        libraryService,
+        settings,
+      );
       modal.limit = 10;
 
       const results = modal.getSuggestions('');
@@ -451,11 +501,16 @@ describe('CitationSearchModal', () => {
 
     it('searches via searchService and maps results from library', () => {
       const entry = createMockEntry({ id: 'found1', title: 'Found Entry' });
-      plugin = createMockPlugin({
+      libraryService = createMockLibraryService({
         library: { entries: { found1: entry } },
         searchResults: ['found1'],
       });
-      modal = new CitationSearchModal({} as never, plugin, action);
+      modal = new CitationSearchModal(
+        {} as never,
+        action,
+        libraryService,
+        settings,
+      );
 
       const results = modal.getSuggestions('found');
       expect(results).toHaveLength(1);
@@ -463,11 +518,16 @@ describe('CitationSearchModal', () => {
     });
 
     it('filters out undefined entries from search results', () => {
-      plugin = createMockPlugin({
+      libraryService = createMockLibraryService({
         library: { entries: {} },
         searchResults: ['nonexistent'],
       });
-      modal = new CitationSearchModal({} as never, plugin, action);
+      modal = new CitationSearchModal(
+        {} as never,
+        action,
+        libraryService,
+        settings,
+      );
 
       const results = modal.getSuggestions('query');
       expect(results).toHaveLength(0);
@@ -479,11 +539,16 @@ describe('CitationSearchModal', () => {
         b: createMockEntry({ id: 'b', title: 'Entry B', year: 2024 }),
       };
 
-      plugin = createMockPlugin({
+      libraryService = createMockLibraryService({
         library: { entries },
-        sortOrder: 'year-desc',
       });
-      modal = new CitationSearchModal({} as never, plugin, action);
+      settings = createMockSettings({ sortOrder: 'year-desc' });
+      modal = new CitationSearchModal(
+        {} as never,
+        action,
+        libraryService,
+        settings,
+      );
 
       const results = modal.getSuggestions('');
       expect(results[0].year).toBe(2024);
@@ -498,7 +563,12 @@ describe('CitationSearchModal', () => {
     it('delegates to action.renderItem when provided', () => {
       const customRender = jest.fn();
       action = createMockAction({ renderItem: customRender });
-      modal = new CitationSearchModal({} as never, plugin, action);
+      modal = new CitationSearchModal(
+        {} as never,
+        action,
+        libraryService,
+        settings,
+      );
 
       const el = document.createElement('div');
       const entry = createMockEntry();
@@ -758,7 +828,7 @@ describe('CitationSearchModal', () => {
   describe('onClose()', () => {
     it('unsubscribes from store', () => {
       const unsubscribe = jest.fn();
-      (plugin.libraryService.store.subscribe as jest.Mock).mockImplementation(
+      (libraryService.store.subscribe as jest.Mock).mockImplementation(
         (cb: (state: unknown) => void) => {
           cb({ status: LoadingStatus.Idle, parseErrors: [] });
           return unsubscribe;

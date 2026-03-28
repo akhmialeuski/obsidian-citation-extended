@@ -1,23 +1,26 @@
-import CitationPlugin from '../main';
+import type { ICitationService } from '../application/citation.service';
+import type {
+  IPlatformAdapter,
+  IEditorProxy,
+} from '../platform/platform-adapter';
+import type {
+  INoteService,
+  ILibraryService,
+  ITemplateService,
+} from '../container';
+import type { CitationsPluginSettings } from './settings/settings';
 import { LibraryNotReadyError, LiteratureNoteNotFoundError } from '../core';
-import { IEditorProxy } from '../platform/platform-adapter';
-
-/**
- * Regex patterns to detect a citation citekey at the cursor position.
- * Matches: [@citekey], @citekey, [[@citekey]], [[citekey]]
- */
-const CITEKEY_PATTERNS = [
-  /\[\[@([^\]|]+)(?:\|[^\]]+)?\]\]/g, // [[@citekey]] or [[@citekey|alias]] — must be before [@...] to avoid partial match
-  /\[@([^\]]+)\]/g, // [@citekey]
-  /(?:^|[^[])@([\w:.#$%&\-+?<>~/]+)/g, // standalone @citekey
-];
+import { extractCitekeyAtCursor as extractCitekey } from '../application/citekey-extractor';
 
 export class EditorActions {
-  constructor(private plugin: CitationPlugin) {}
-
-  private get platform() {
-    return this.plugin.platform;
-  }
+  constructor(
+    private citationService: ICitationService,
+    private platform: IPlatformAdapter,
+    private noteService: INoteService,
+    private libraryService: ILibraryService,
+    private templateService: ITemplateService,
+    private settings: CitationsPluginSettings,
+  ) {}
 
   private getActiveEditor(): IEditorProxy | null {
     return this.platform.workspace.getActiveEditor();
@@ -28,20 +31,20 @@ export class EditorActions {
     newPane: boolean,
     selectedText?: string,
   ): Promise<void> {
-    const library = this.plugin.libraryService.library;
+    const library = this.libraryService.library;
     if (!library) {
       this.platform.notifications.show(new LibraryNotReadyError().message);
       return;
     }
 
-    const entryResult = this.plugin.getEntry(citekey);
+    const entryResult = this.citationService.getEntry(citekey);
     if (!entryResult.ok) {
       this.platform.notifications.show(entryResult.error.message);
       return;
     }
 
     try {
-      await this.plugin.noteService.openLiteratureNote(
+      await this.noteService.openLiteratureNote(
         citekey,
         library,
         newPane,
@@ -66,13 +69,13 @@ export class EditorActions {
       return;
     }
 
-    const library = this.plugin.libraryService.library;
+    const library = this.libraryService.library;
     if (!library) {
       this.platform.notifications.show(new LibraryNotReadyError().message);
       return;
     }
 
-    const entryResult = this.plugin.getEntry(citekey);
+    const entryResult = this.citationService.getEntry(citekey);
     if (!entryResult.ok) {
       this.platform.notifications.show(entryResult.error.message);
       return;
@@ -80,8 +83,8 @@ export class EditorActions {
 
     try {
       let file;
-      if (this.plugin.settings.disableAutomaticNoteCreation) {
-        const existing = this.plugin.noteService.findExistingLiteratureNoteFile(
+      if (this.settings.disableAutomaticNoteCreation) {
+        const existing = this.noteService.findExistingLiteratureNoteFile(
           citekey,
           library,
         );
@@ -93,13 +96,13 @@ export class EditorActions {
         }
         file = existing;
       } else {
-        file = await this.plugin.noteService.getOrCreateLiteratureNoteFile(
+        file = await this.noteService.getOrCreateLiteratureNoteFile(
           citekey,
           library,
         );
       }
 
-      const titleResult = this.plugin.getTitleForCitekey(citekey);
+      const titleResult = this.citationService.getTitleForCitekey(citekey);
       if (!titleResult.ok) {
         this.platform.notifications.show(titleResult.error.message);
         return;
@@ -109,17 +112,13 @@ export class EditorActions {
 
       // Resolve the display text for the link.  When a custom template is set
       // it overrides the default (citekey for Markdown, title for Wiki).
-      const displayTemplate =
-        this.plugin.settings.literatureNoteLinkDisplayTemplate;
+      const displayTemplate = this.settings.literatureNoteLinkDisplayTemplate;
       let displayText: string;
       if (displayTemplate) {
-        const vars = this.plugin.templateService.getTemplateVariables(
+        const vars = this.templateService.getTemplateVariables(
           entryResult.value,
         );
-        const renderResult = this.plugin.templateService.render(
-          displayTemplate,
-          vars,
-        );
+        const renderResult = this.templateService.render(displayTemplate, vars);
         displayText = renderResult.ok ? renderResult.value : citekey;
       } else {
         // Default: citekey for Markdown links (#271), title for Wiki links
@@ -167,10 +166,11 @@ export class EditorActions {
       return;
     }
 
-    const contentResult = await this.plugin.getInitialContentForCitekey(
-      citekey,
-      selectedText,
-    );
+    const contentResult =
+      await this.citationService.getInitialContentForCitekey(
+        citekey,
+        selectedText,
+      );
     if (!contentResult.ok) {
       this.platform.notifications.show(contentResult.error.message);
       return;
@@ -199,12 +199,11 @@ export class EditorActions {
       return;
     }
 
-    const citationResult = alternative
-      ? this.plugin.getAlternativeMarkdownCitationForCitekey(
-          citekey,
-          selectedText,
-        )
-      : this.plugin.getMarkdownCitationForCitekey(citekey, selectedText);
+    const citationResult = this.citationService.getMarkdownCitation(
+      citekey,
+      alternative,
+      selectedText,
+    );
 
     if (!citationResult.ok) {
       this.platform.notifications.show(citationResult.error.message);
@@ -223,11 +222,11 @@ export class EditorActions {
     editor.setCursor({ line: newLine, ch: newCh });
 
     // Silently create the literature note if the setting is enabled
-    if (this.plugin.settings.autoCreateNoteOnCitation) {
-      const library = this.plugin.libraryService.library;
+    if (this.settings.autoCreateNoteOnCitation) {
+      const library = this.libraryService.library;
       if (library) {
         try {
-          await this.plugin.noteService.getOrCreateLiteratureNoteFile(
+          await this.noteService.getOrCreateLiteratureNoteFile(
             citekey,
             library,
             selectedText,
@@ -241,26 +240,10 @@ export class EditorActions {
 
   /**
    * Extract a citekey from the text surrounding the cursor position.
-   * Scans the current line for known citation patterns.
+   * Delegates to the shared citekey-extractor module.
    */
   extractCitekeyAtCursor(editor: IEditorProxy): string | null {
-    const cursor = editor.getCursor();
-    const line = editor.getLine(cursor.line);
-    const ch = cursor.ch;
-
-    for (const pattern of CITEKEY_PATTERNS) {
-      // Reset lastIndex for global regex
-      pattern.lastIndex = 0;
-      let match;
-      while ((match = pattern.exec(line)) !== null) {
-        const start = match.index;
-        const end = start + match[0].length;
-        if (ch >= start && ch <= end) {
-          return match[1];
-        }
-      }
-    }
-    return null;
+    return extractCitekey(editor);
   }
 
   /**

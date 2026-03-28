@@ -115,6 +115,17 @@ describe('Issue 161: Insert Literature Note Link', () => {
       getTitle: jest.fn().mockReturnValue({ ok: true, value: 'Test Article' }),
     } as unknown as CitationPlugin['templateService'];
 
+    plugin.citationService = {
+      getEntry: jest.fn().mockImplementation((citekey: string) => {
+        const entry = (plugin.libraryService.library as unknown as Record<string, unknown> & { entries: Record<string, unknown> }).entries[citekey];
+        if (!entry) return { ok: false, error: { message: 'Not found' } };
+        return { ok: true, value: entry };
+      }),
+      getTitleForCitekey: jest.fn().mockReturnValue({ ok: true, value: 'Test Article' }),
+      getMarkdownCitation: jest.fn().mockReturnValue({ ok: true, value: '[@test_key]' }),
+      getInitialContentForCitekey: jest.fn().mockResolvedValue({ ok: true, value: '' }),
+    } as unknown as typeof plugin.citationService;
+
     // Setup platform mock for EditorActions
     plugin.platform = {
       workspace: {
@@ -128,7 +139,14 @@ describe('Issue 161: Insert Literature Note Link', () => {
       },
     } as unknown as typeof plugin.platform;
 
-    plugin.editorActions = new EditorActions(plugin);
+    plugin.editorActions = new EditorActions(
+      plugin.citationService,
+      plugin.platform,
+      plugin.noteService,
+      plugin.libraryService,
+      plugin.templateService,
+      plugin.settings,
+    );
   });
 
   test('should use fileToLinktext for WikiLinks to ensure correct path resolution', async () => {
