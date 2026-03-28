@@ -125,11 +125,6 @@ function makePlugin(initialState: LibraryState) {
       resolve: jest.fn().mockResolvedValue(''),
     },
     registerEvent: jest.fn(),
-    editorActions: {
-      extractCitekeyAtCursor: jest.fn(() => null),
-      openLiteratureNote: jest.fn().mockResolvedValue(undefined),
-      openNoteAtCursor: jest.fn().mockResolvedValue(undefined),
-    },
     app: {
       workspace: {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- flexible mock

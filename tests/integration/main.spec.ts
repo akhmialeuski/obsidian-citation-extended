@@ -120,11 +120,7 @@ describe('CitationPlugin', () => {
       load: jest.fn(),
       resolveLibraryPath: jest.fn().mockReturnValue('/path/to/lib'),
       dispose: jest.fn(),
-      getSources: jest.fn().mockImplementation(() => {
-        return ['source'];
-      }),
       initWatcher: jest.fn(),
-      setDataSourceFactory: jest.fn(),
       setSourceManager: jest.fn(),
       setPipeline: jest.fn(),
       library: { entries: {} },

@@ -3,6 +3,13 @@ import { CitationsPluginSettings } from '../../src/ui/settings/settings';
 import { WorkerManager } from '../../src/util';
 import { LoadingStatus } from '../../src/library/library-state';
 import { createMockPlatformAdapter } from '../helpers/mock-platform';
+import { SourceManager } from '../../src/infrastructure/source-manager';
+import {
+  NormalizationPipeline,
+  SourceTaggingStep,
+  DeduplicationStep,
+} from '../../src/infrastructure/normalization-pipeline';
+import type { DatabaseType } from '../../src/core/types/database';
 
 import { LocalFileSource } from '../../src/sources/local-file-source';
 
@@ -53,6 +60,18 @@ describe('LibraryService Loading Behavior', () => {
 
     service = new LibraryService(settings, platform, workerManager);
 
+    // Wire up SourceManager + pipeline (mirrors production setup)
+    const factory = {
+      create: (_def: { path: string; format: DatabaseType }, id: string) =>
+        new LocalFileSource(id, _def.path, _def.format, workerManager, null),
+    };
+    service.setSourceManager(new SourceManager(factory as never));
+    service.setPipeline(
+      new NormalizationPipeline()
+        .addStep(new SourceTaggingStep())
+        .addStep(new DeduplicationStep()),
+    );
+
     jest.spyOn(console, 'error').mockImplementation(() => {});
     jest.spyOn(console, 'warn').mockImplementation(() => {});
     jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -76,9 +95,6 @@ describe('LibraryService Loading Behavior', () => {
       watch: jest.fn(),
       dispose: jest.fn(),
     }));
-    service.addSource(
-      new LocalFileSource('test-source', '', 'csl-json', workerManager, null),
-    );
 
     const stateChangeSpy = jest.fn();
     service.store.subscribe(stateChangeSpy);
@@ -106,9 +122,6 @@ describe('LibraryService Loading Behavior', () => {
       watch: jest.fn(),
       dispose: jest.fn(),
     }));
-    service.addSource(
-      new LocalFileSource('slow-source', '', 'csl-json', workerManager, null),
-    );
 
     const loadPromise = service.load();
 

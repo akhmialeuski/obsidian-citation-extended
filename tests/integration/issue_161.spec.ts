@@ -3,7 +3,8 @@ import { CitationsPluginSettings } from '../../src/ui/settings/settings';
 import { App, PluginManifest } from 'obsidian';
 import { NoteService } from '../../src/notes/note.service';
 import { LibraryService } from '../../src/library/library.service';
-import { EditorActions } from '../../src/ui/editor-actions';
+import { InsertNoteLinkAction } from '../../src/application/actions';
+import type { ActionContext } from '../../src/application/actions/action.types';
 
 // Mock Obsidian types
 jest.mock(
@@ -57,6 +58,7 @@ jest.mock(
 
 describe('Issue 161: Insert Literature Note Link', () => {
   let plugin: CitationPlugin;
+  let action: InsertNoteLinkAction;
   let app: App;
   let mockEditor: {
     replaceSelection: jest.Mock;
@@ -137,7 +139,7 @@ describe('Issue 161: Insert Literature Note Link', () => {
         .mockResolvedValue({ ok: true, value: '' }),
     } as unknown as typeof plugin.citationService;
 
-    // Setup platform mock for EditorActions
+    // Setup platform mock
     plugin.platform = {
       workspace: {
         getActiveEditor: jest.fn().mockReturnValue(mockEditor),
@@ -150,14 +152,15 @@ describe('Issue 161: Insert Literature Note Link', () => {
       },
     } as unknown as typeof plugin.platform;
 
-    plugin.editorActions = new EditorActions(
-      plugin.citationService,
-      plugin.platform,
-      plugin.noteService,
-      plugin.libraryService,
-      plugin.templateService,
-      plugin.settings,
-    );
+    const actionCtx = {
+      citationService: plugin.citationService,
+      platform: plugin.platform,
+      noteService: plugin.noteService,
+      libraryService: plugin.libraryService,
+      templateService: plugin.templateService,
+      settings: plugin.settings,
+    } as unknown as ActionContext;
+    action = new InsertNoteLinkAction(actionCtx);
   });
 
   test('should use fileToLinktext for WikiLinks to ensure correct path resolution', async () => {
@@ -175,7 +178,7 @@ describe('Issue 161: Insert Literature Note Link', () => {
     );
 
     // Act
-    await plugin.editorActions.insertLiteratureNoteLink('test_key');
+    await action.execute({ citekey: 'test_key' });
 
     // Assert
     expect(
@@ -208,7 +211,7 @@ describe('Issue 161: Insert Literature Note Link', () => {
     );
 
     // Act
-    await plugin.editorActions.insertLiteratureNoteLink('test_key');
+    await action.execute({ citekey: 'test_key' });
 
     // Assert
     expect(plugin.platform.workspace.fileToLinktext).toHaveBeenCalledWith(

@@ -329,25 +329,6 @@ describe('LocalFileSource', () => {
       );
     });
 
-    it('handles backward-compatible array response from worker', async () => {
-      // Legacy workers may return a raw array instead of WorkerResponse
-      const legacyWorker = createMockWorkerManager([sampleBibLaTeXEntry]);
-
-      const source = new LocalFileSource(
-        defaultId,
-        defaultPath,
-        DATABASE_FORMATS.BibLaTeX,
-        legacyWorker,
-        vaultAdapter,
-      );
-
-      const result = await source.load();
-
-      expect(result.entries).toHaveLength(1);
-      expect(result.entries[0]).toBeInstanceOf(EntryBibLaTeXAdapter);
-      expect(result.parseErrors).toEqual([]);
-    });
-
     it('propagates parse errors from worker', async () => {
       const errorWorker = createMockWorkerManager({
         entries: [sampleBibLaTeXEntry],

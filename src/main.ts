@@ -5,7 +5,7 @@ import { TemplateService } from './template/template.service';
 import { NoteService } from './notes/note.service';
 import { LibraryService } from './library/library.service';
 import { UIService } from './services/ui.service';
-import { EditorActions } from './ui/editor-actions';
+
 import { DataSourceFactory } from './sources/data-source-factory';
 import { ObsidianPlatformAdapter } from './platform/obsidian-adapter';
 import { DataSourceRegistry } from './sources/data-source-registry';
@@ -44,7 +44,7 @@ export default class CitationPlugin extends Plugin {
   noteService!: NoteService;
   libraryService!: LibraryService;
   uiService!: UIService;
-  editorActions!: EditorActions;
+
   platform!: ObsidianPlatformAdapter;
   citationService!: ICitationService;
   contentTemplateResolver!: IContentTemplateResolver;
@@ -175,15 +175,6 @@ export default class CitationPlugin extends Plugin {
       this.libraryService,
       this.templateService,
       this.contentTemplateResolver,
-      this.settings,
-    );
-
-    this.editorActions = new EditorActions(
-      this.citationService,
-      platformAdapter,
-      this.noteService,
-      this.libraryService,
-      this.templateService,
       this.settings,
     );
 
