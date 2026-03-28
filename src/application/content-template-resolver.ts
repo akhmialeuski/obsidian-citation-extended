@@ -3,22 +3,24 @@ import type {
   INotificationService,
 } from '../platform/platform-adapter';
 import type { CitationsPluginSettings } from '../ui/settings/settings';
+import type { ITemplateProfileRegistry } from '../domain/template-profile-registry';
 import { DEFAULT_CONTENT_TEMPLATE } from '../ui/settings/settings-schema';
 
 /**
- * Resolves the content template string for literature note creation.
+ * Resolves the content template string for note creation.
  *
- * Reads from a vault file configured in settings, handles migration of
- * legacy inline templates, and ensures a default template exists for
- * new installations.
+ * Supports type-based resolution via TemplateProfileRegistry:
+ * when a (noteKind, entryType) pair matches a registered profile,
+ * the profile's contentTemplatePath is used instead of the global default.
  */
 export interface IContentTemplateResolver {
   /**
    * Resolve the content template string.
-   * Reads from the configured vault file, falling back to the default
-   * template if the file is missing.
+   *
+   * @param noteKind  - e.g. 'literature-note' (optional, defaults to global)
+   * @param entryType - e.g. 'article', 'book' (optional, defaults to global)
    */
-  resolve(): Promise<string>;
+  resolve(noteKind?: string, entryType?: string): Promise<string>;
 
   /** Migrate a legacy inline content template to a vault file. */
   migrateInlineToFile(): Promise<void>;
@@ -30,6 +32,8 @@ export interface IContentTemplateResolver {
 const DEFAULT_TEMPLATE_PATH = 'citation-content-template.md';
 
 export class ContentTemplateResolver implements IContentTemplateResolver {
+  private profileRegistry: ITemplateProfileRegistry | null = null;
+
   constructor(
     private vault: IVaultAccess,
     private notifications: INotificationService,
@@ -38,8 +42,31 @@ export class ContentTemplateResolver implements IContentTemplateResolver {
     private saveSettings: () => Promise<void>,
   ) {}
 
-  async resolve(): Promise<string> {
-    const templatePath = this.settings.literatureNoteContentTemplatePath;
+  /**
+   * Set the template profile registry for type-based resolution.
+   * When set, resolve() will consult it before falling back to global settings.
+   */
+  setProfileRegistry(registry: ITemplateProfileRegistry): void {
+    this.profileRegistry = registry;
+  }
+
+  async resolve(noteKind?: string, entryType?: string): Promise<string> {
+    // Try profile-based resolution first
+    if (this.profileRegistry && noteKind && entryType) {
+      const profile = this.profileRegistry.resolve(noteKind, entryType);
+      // Only use profile if it's not the default (which falls through to global settings)
+      if (profile.id !== 'default' && profile.contentTemplatePath) {
+        return this.readTemplateFile(profile.contentTemplatePath);
+      }
+    }
+
+    // Fall back to global settings
+    return this.readTemplateFile(
+      this.settings.literatureNoteContentTemplatePath,
+    );
+  }
+
+  private async readTemplateFile(templatePath: string): Promise<string> {
     if (templatePath) {
       const file = this.vault.getAbstractFileByPath(
         this.normalizePath(templatePath),

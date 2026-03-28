@@ -13,6 +13,7 @@ import { DATA_SOURCE_TYPES } from './data-source';
 import { LocalFileSource } from './sources/local-file-source';
 import { VaultFileSource } from './sources/vault-file-source';
 import { SourceManager } from './infrastructure/source-manager';
+import { TemplateProfileRegistry } from './domain/template-profile-registry';
 import {
   NormalizationPipeline,
   SourceTaggingStep,
@@ -135,6 +136,12 @@ export default class CitationPlugin extends Plugin {
       .addStep(new SourceTaggingStep())
       .addStep(new DeduplicationStep());
 
+    // Template profile registry
+    const profileRegistry = new TemplateProfileRegistry();
+    for (const profile of this.settings.templateProfiles) {
+      profileRegistry.register(profile);
+    }
+
     // Application services
     this.contentTemplateResolver = new ContentTemplateResolver(
       platformAdapter.vault,
@@ -143,6 +150,9 @@ export default class CitationPlugin extends Plugin {
       (path: string) => platformAdapter.normalizePath(path),
       () => this.saveSettings(),
     );
+    (
+      this.contentTemplateResolver as ContentTemplateResolver
+    ).setProfileRegistry(profileRegistry);
 
     this.templateService = new TemplateService(this.settings);
     this.noteService = new NoteService(
