@@ -60,7 +60,6 @@ export const SettingsSchema = z.object({
       }),
     )
     .default([]),
-  mergeStrategy: z.enum(['last-wins']).optional(),
   disableAutomaticNoteCreation: z.boolean().default(false),
   // Template profiles for type-specific note templates
   templateProfiles: z
@@ -99,7 +98,6 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   referenceListSortOrder: 'default',
   autoCreateNoteOnCitation: false,
   literatureNoteLinkDisplayTemplate: '',
-  mergeStrategy: 'last-wins',
   databases: [],
   disableAutomaticNoteCreation: false,
   templateProfiles: [],

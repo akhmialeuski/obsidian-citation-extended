@@ -1,5 +1,4 @@
 import { FileSystemAdapter, Notice, Plugin } from 'obsidian';
-import * as chokidar from 'chokidar';
 
 import { TemplateService } from './template/template.service';
 import { NoteService } from './notes/note.service';
@@ -49,8 +48,6 @@ export default class CitationPlugin extends Plugin {
   citationService!: ICitationService;
   contentTemplateResolver!: IContentTemplateResolver;
   batchOrchestrator!: BatchNoteOrchestrator;
-
-  private fileWatcher?: chokidar.FSWatcher;
 
   async loadSettings(): Promise<void> {
     this.settings = new CitationsPluginSettings();
