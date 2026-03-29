@@ -32,23 +32,14 @@ export interface IContentTemplateResolver {
 const DEFAULT_TEMPLATE_PATH = 'citation-content-template.md';
 
 export class ContentTemplateResolver implements IContentTemplateResolver {
-  private profileRegistry: ITemplateProfileRegistry | null = null;
-
   constructor(
     private vault: IVaultAccess,
     private notifications: INotificationService,
     private settings: CitationsPluginSettings,
     private normalizePath: (path: string) => string,
     private saveSettings: () => Promise<void>,
+    private profileRegistry: ITemplateProfileRegistry | null = null,
   ) {}
-
-  /**
-   * Set the template profile registry for type-based resolution.
-   * When set, resolve() will consult it before falling back to global settings.
-   */
-  setProfileRegistry(registry: ITemplateProfileRegistry): void {
-    this.profileRegistry = registry;
-  }
 
   async resolve(noteKind?: string, entryType?: string): Promise<string> {
     // Try profile-based resolution first

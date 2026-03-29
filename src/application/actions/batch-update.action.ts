@@ -42,20 +42,7 @@ export class BatchUpdateNotesAction extends ApplicationAction {
     const templateStr = await this.contentTemplateResolver.resolve();
     const request = { citekeys: ['*'], templateStr, dryRun: false };
 
-    // Preview first to show the user what will change
-    const preview = await this.orchestrator.preview(request);
-    const changeCount = preview.updated.length;
-
-    if (changeCount === 0) {
-      platform.notifications.show(
-        'Citations: All notes are already up to date.',
-      );
-      return;
-    }
-
-    platform.notifications.show(
-      `Citations: Updating ${changeCount} note${changeCount === 1 ? '' : 's'}…`,
-    );
+    platform.notifications.show('Citations: Updating notes…');
 
     const result = await this.orchestrator.execute(request, (progress) => {
       if (progress.current % 10 === 0 || progress.current === progress.total) {

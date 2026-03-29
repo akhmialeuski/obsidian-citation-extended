@@ -118,12 +118,6 @@ describe('LibraryService', () => {
       dispose: jest.fn(),
     }));
 
-    service = new LibraryService(
-      settings,
-      platform,
-      workerManager as unknown as WorkerManager,
-    );
-
     // Wire up SourceManager + pipeline (mirrors production setup)
     const factory = {
       create: (_def: { path: string; format: DatabaseType }, id: string) =>
@@ -135,8 +129,12 @@ describe('LibraryService', () => {
           null,
         ),
     };
-    service.setSourceManager(new SourceManager(factory as never));
-    service.setPipeline(
+
+    service = new LibraryService(
+      settings,
+      platform,
+      workerManager as unknown as WorkerManager,
+      new SourceManager(factory as never),
       new NormalizationPipeline()
         .addStep(new SourceTaggingStep())
         .addStep(new DeduplicationStep()),
@@ -196,13 +194,13 @@ describe('LibraryService', () => {
     (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
       id,
       load: jest.fn().mockImplementation(async () => {
-        if (id === 'source-0-DB1')
+        if (id === 'local-file:DB1:db1.json')
           return {
             sourceId: id,
             entries: [{ id: '1', title: 'A' }],
             modifiedAt: new Date(),
           };
-        if (id === 'source-1-DB2')
+        if (id === 'local-file:DB2:db2.json')
           return {
             sourceId: id,
             entries: [
@@ -375,11 +373,6 @@ describe('LibraryService', () => {
         dispose: jest.fn(),
       }));
 
-      const svc = new LibraryService(
-        settings,
-        platform,
-        workerManager as unknown as WorkerManager,
-      );
       const factory = {
         create: (_def: { path: string; format: DatabaseType }, id: string) =>
           new LocalFileSource(
@@ -390,8 +383,11 @@ describe('LibraryService', () => {
             null,
           ),
       };
-      svc.setSourceManager(new SourceManager(factory as never));
-      svc.setPipeline(
+      const svc = new LibraryService(
+        settings,
+        platform,
+        workerManager as unknown as WorkerManager,
+        new SourceManager(factory as never),
         new NormalizationPipeline()
           .addStep(new SourceTaggingStep())
           .addStep(new DeduplicationStep()),
@@ -461,7 +457,7 @@ describe('LibraryService', () => {
       (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
         id,
         load: jest.fn().mockImplementation(async () => {
-          if (id === 'source-0-DB1')
+          if (id === 'local-file:DB1:db1.json')
             return {
               sourceId: id,
               entries: [
@@ -605,7 +601,7 @@ describe('LibraryService', () => {
       (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
         id,
         load: jest.fn().mockImplementation(async () => {
-          if (id === 'source-0-Good') {
+          if (id === 'local-file:Good:good.json') {
             return {
               sourceId: id,
               entries: [{ id: 'entry1', title: 'Entry 1' }],
@@ -731,11 +727,6 @@ describe('LibraryService', () => {
     });
 
     it('does nothing when sources list is empty', () => {
-      const emptyService = new LibraryService(
-        settings,
-        platform,
-        workerManager as unknown as WorkerManager,
-      );
       const factory = {
         create: (_def: { path: string; format: DatabaseType }, id: string) =>
           new LocalFileSource(
@@ -746,8 +737,11 @@ describe('LibraryService', () => {
             null,
           ),
       };
-      emptyService.setSourceManager(new SourceManager(factory as never));
-      emptyService.setPipeline(
+      const emptyService = new LibraryService(
+        settings,
+        platform,
+        workerManager as unknown as WorkerManager,
+        new SourceManager(factory as never),
         new NormalizationPipeline()
           .addStep(new SourceTaggingStep())
           .addStep(new DeduplicationStep()),
@@ -850,11 +844,6 @@ describe('LibraryService', () => {
         dispose: jest.fn(),
       }));
 
-      const svc = new LibraryService(
-        settings,
-        platform,
-        workerManager as unknown as WorkerManager,
-      );
       const factory = {
         create: (_def: { path: string; format: DatabaseType }, id: string) =>
           new LocalFileSource(
@@ -865,8 +854,11 @@ describe('LibraryService', () => {
             null,
           ),
       };
-      svc.setSourceManager(new SourceManager(factory as never));
-      svc.setPipeline(
+      const svc = new LibraryService(
+        settings,
+        platform,
+        workerManager as unknown as WorkerManager,
+        new SourceManager(factory as never),
         new NormalizationPipeline()
           .addStep(new SourceTaggingStep())
           .addStep(new DeduplicationStep()),

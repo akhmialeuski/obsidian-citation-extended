@@ -45,26 +45,18 @@ export class LibraryService implements ILibraryService {
   private loadDebounceTimer: number | null = null;
   private retryTimer: number | null = null;
   private retryCount = 0;
-  private sourceManager!: ISourceManager;
-  private pipeline!: NormalizationPipeline;
 
   constructor(
     private settings: CitationsPluginSettings,
     private platform: IPlatformAdapter,
     workerManager: WorkerManager,
+    private sourceManager: ISourceManager,
+    private pipeline: NormalizationPipeline,
   ) {
     this.loadWorker = workerManager;
     this.searchService = new SearchService();
     this.introspectionService = new IntrospectionService();
     this.store = new LibraryStore();
-  }
-
-  setSourceManager(manager: ISourceManager): void {
-    this.sourceManager = manager;
-  }
-
-  setPipeline(pipeline: NormalizationPipeline): void {
-    this.pipeline = pipeline;
   }
 
   get state(): LibraryState {

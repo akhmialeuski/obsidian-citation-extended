@@ -47,7 +47,7 @@ export class SourceManager implements ISourceManager {
       newKeys.add(key);
 
       if (!this.sources.has(key)) {
-        const sourceId = `source-${i}-${db.name}`;
+        const sourceId = key;
         const source = this.factory.create(
           {
             type: db.sourceType ?? DATA_SOURCE_TYPES.LocalFile,
@@ -162,6 +162,7 @@ export class SourceManager implements ISourceManager {
   }
 
   private makeKey(db: DatabaseConfig): string {
-    return `${db.name}:${db.path}`;
+    const type = db.sourceType ?? DATA_SOURCE_TYPES.LocalFile;
+    return `${type}:${db.name}:${db.path}`;
   }
 }

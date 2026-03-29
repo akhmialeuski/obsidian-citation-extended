@@ -76,9 +76,9 @@ describe('LibraryService - Multiple Databases', () => {
     (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
       id,
       load: jest.fn().mockImplementation(async () => {
-        if (id === 'source-0-DB1')
+        if (id === 'local-file:DB1:/path/to/db1.json')
           return { sourceId: id, entries: [entry1], modifiedAt: new Date() };
-        if (id === 'source-1-DB2')
+        if (id === 'local-file:DB2:/path/to/db2.json')
           return { sourceId: id, entries: [entry2], modifiedAt: new Date() };
         return { sourceId: id, entries: [], modifiedAt: new Date() };
       }),
@@ -94,9 +94,7 @@ describe('LibraryService - Multiple Databases', () => {
       settings,
       createMockPlatformAdapter(),
       workerManager,
-    );
-    service.setSourceManager(new SourceManager(factory as never));
-    service.setPipeline(
+      new SourceManager(factory as never),
       new NormalizationPipeline()
         .addStep(new SourceTaggingStep())
         .addStep(new DeduplicationStep()),
@@ -125,9 +123,9 @@ describe('LibraryService - Multiple Databases', () => {
     (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
       id,
       load: jest.fn().mockImplementation(async () => {
-        if (id === 'source-0-DB1')
+        if (id === 'local-file:DB1:/path/to/db1.json')
           return { sourceId: id, entries: [entry1], modifiedAt: new Date() };
-        if (id === 'source-1-DB2')
+        if (id === 'local-file:DB2:/path/to/db2.json')
           return { sourceId: id, entries: [entry2], modifiedAt: new Date() };
         return { sourceId: id, entries: [], modifiedAt: new Date() };
       }),
@@ -143,9 +141,7 @@ describe('LibraryService - Multiple Databases', () => {
       settings,
       createMockPlatformAdapter(),
       workerManager,
-    );
-    service.setSourceManager(new SourceManager(factory as never));
-    service.setPipeline(
+      new SourceManager(factory as never),
       new NormalizationPipeline()
         .addStep(new SourceTaggingStep())
         .addStep(new DeduplicationStep()),

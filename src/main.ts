@@ -148,10 +148,8 @@ export default class CitationPlugin extends Plugin {
       this.settings,
       (path: string) => platformAdapter.normalizePath(path),
       () => this.saveSettings(),
+      profileRegistry,
     );
-    (
-      this.contentTemplateResolver as ContentTemplateResolver
-    ).setProfileRegistry(profileRegistry);
 
     this.templateService = new TemplateService(this.settings);
     this.noteService = new NoteService(
@@ -164,9 +162,9 @@ export default class CitationPlugin extends Plugin {
       this.settings,
       platformAdapter,
       workerManager,
+      sourceManager,
+      pipeline,
     );
-    this.libraryService.setSourceManager(sourceManager);
-    this.libraryService.setPipeline(pipeline);
 
     this.citationService = new CitationService(
       this.libraryService,

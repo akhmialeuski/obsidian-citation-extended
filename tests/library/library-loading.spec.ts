@@ -58,15 +58,17 @@ describe('LibraryService Loading Behavior', () => {
     const platform = createMockPlatformAdapter();
     workerManager = new WorkerManager({} as Worker);
 
-    service = new LibraryService(settings, platform, workerManager);
-
     // Wire up SourceManager + pipeline (mirrors production setup)
     const factory = {
       create: (_def: { path: string; format: DatabaseType }, id: string) =>
         new LocalFileSource(id, _def.path, _def.format, workerManager, null),
     };
-    service.setSourceManager(new SourceManager(factory as never));
-    service.setPipeline(
+
+    service = new LibraryService(
+      settings,
+      platform,
+      workerManager,
+      new SourceManager(factory as never),
       new NormalizationPipeline()
         .addStep(new SourceTaggingStep())
         .addStep(new DeduplicationStep()),

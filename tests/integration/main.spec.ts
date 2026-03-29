@@ -121,8 +121,6 @@ describe('CitationPlugin', () => {
       resolveLibraryPath: jest.fn().mockReturnValue('/path/to/lib'),
       dispose: jest.fn(),
       initWatcher: jest.fn(),
-      setSourceManager: jest.fn(),
-      setPipeline: jest.fn(),
       library: { entries: {} },
       store: {
         subscribe: jest.fn().mockReturnValue(jest.fn()),
