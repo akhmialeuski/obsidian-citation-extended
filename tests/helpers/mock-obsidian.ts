@@ -8,6 +8,8 @@
  * propagate to all tests automatically.
  */
 
+import { Entry, Author } from '../../src/core/types/entry';
+
 /** Reusable obsidian mock factory for jest.mock() */
 export const OBSIDIAN_MOCK = {
   App: class {},
@@ -76,50 +78,96 @@ export const OBSIDIAN_MOCK = {
 };
 
 /**
- * Helper to create a mock Entry for tests.
- * Provides sensible defaults that can be overridden.
+ * Concrete Entry subclass for tests. Provides sensible defaults that can
+ * be overridden via the constructor. All domain methods defined on the
+ * Entry base class (toTemplateContext, displayKey, displayAuthors, etc.)
+ * are inherited and work correctly.
  */
-export function createMockEntry(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 'test2024',
-    type: 'article-journal',
-    title: 'Test Article',
-    titleShort: 'Test',
-    authorString: 'John Doe, Jane Smith',
-    author: [
+export class TestEntry extends Entry {
+  id: string;
+  type: string;
+  abstract?: string;
+  author?: Author[];
+  authorString?: string | null;
+  containerTitle?: string;
+  DOI?: string;
+  files?: string[] | null;
+  issuedDate?: Date | null;
+  page?: string;
+  title?: string;
+  titleShort?: string;
+  URL?: string;
+  zoteroId?: string;
+  keywords?: string[];
+  eventPlace?: string;
+  language?: string;
+  source?: string;
+  publisher?: string;
+  publisherPlace?: string;
+  ISBN?: string;
+  series?: string;
+  volume?: string;
+  _sourceDatabase?: string;
+  _compositeCitekey?: string;
+  eprint?: string | null;
+  eprinttype?: string | null;
+
+  constructor(overrides: Record<string, unknown> = {}) {
+    super();
+    this.id = 'test2024';
+    this.type = 'article-journal';
+    this.title = 'Test Article';
+    this.titleShort = 'Test';
+    this.authorString = 'John Doe, Jane Smith';
+    this.author = [
       { given: 'John', family: 'Doe' },
       { given: 'Jane', family: 'Smith' },
-    ],
-    year: 2024,
-    containerTitle: 'Test Journal',
-    DOI: '10.1234/test',
-    URL: 'https://example.com',
-    abstract: 'Test abstract text.',
-    page: '1-10',
-    publisher: 'Test Publisher',
-    publisherPlace: 'Test City',
-    issuedDate: new Date('2024-01-15'),
-    zoteroSelectURI: 'zotero://select/items/@test2024',
-    language: 'en',
-    source: 'Test Source',
-    note: '',
-    keywords: ['testing', 'mock'],
-    eprint: null,
-    eprinttype: null,
-    eventPlace: null,
-    series: null,
-    volume: '1',
-    ISBN: null,
-    _sourceDatabase: undefined,
-    _compositeCitekey: undefined,
-    get citekey(): string {
-      return String(this.id);
-    },
-    toJSON() {
-      return { ...this };
-    },
-    ...overrides,
-  };
+    ];
+    this.containerTitle = 'Test Journal';
+    this.DOI = '10.1234/test';
+    this.URL = 'https://example.com';
+    this.abstract = 'Test abstract text.';
+    this.page = '1-10';
+    this.publisher = 'Test Publisher';
+    this.publisherPlace = 'Test City';
+    this.issuedDate = new Date('2024-01-15');
+    this.language = 'en';
+    this.source = 'Test Source';
+    this.keywords = ['testing', 'mock'];
+    this.eprint = null;
+    this.eprinttype = null;
+    this.eventPlace = undefined;
+    this.series = undefined;
+    this.volume = '1';
+    this.ISBN = undefined;
+    this.zoteroId = undefined;
+    this.files = null;
+    this._sourceDatabase = undefined;
+    this._compositeCitekey = undefined;
+
+    // Apply overrides (must be after defaults for proper order)
+    Object.assign(this, overrides);
+  }
+
+  get citekey(): string {
+    return this.id;
+  }
+
+  get year(): number | undefined {
+    if (this._year) return parseInt(this._year);
+    return this.issuedDate?.getUTCFullYear();
+  }
+}
+
+/**
+ * Helper to create a mock Entry for tests.
+ * Returns a proper Entry subclass instance so all domain methods
+ * (toTemplateContext, displayKey, displayAuthors, etc.) work correctly.
+ */
+export function createMockEntry(
+  overrides: Record<string, unknown> = {},
+): TestEntry {
+  return new TestEntry(overrides);
 }
 
 /**

@@ -26,41 +26,7 @@ export class TemplateService implements ITemplateService {
     entry: Entry,
     extras?: { selectedText?: string },
   ): TemplateContext {
-    const shortcuts = {
-      citekey: entry.id,
-
-      abstract: entry.abstract,
-      authorString: entry.authorString,
-      containerTitle: entry.containerTitle,
-      DOI: entry.DOI,
-      eprint: entry.eprint,
-      eprinttype: entry.eprinttype,
-      eventPlace: entry.eventPlace,
-      ISBN: entry.ISBN,
-      keywords: entry.keywords,
-      lastname: entry.author?.[0]?.family ?? entry.author?.[0]?.literal,
-      language: entry.language,
-      note: entry.note,
-      page: entry.page,
-      publisher: entry.publisher,
-      publisherPlace: entry.publisherPlace,
-      series: entry.series,
-      volume: entry.volume,
-      source: entry.source,
-      title: entry.title,
-      titleShort: entry.titleShort,
-      type: entry.type,
-      URL: entry.URL,
-      year: entry.year?.toString(),
-      zoteroSelectURI: entry.zoteroSelectURI,
-      zoteroId: entry.zoteroId,
-      date: entry.issuedDate
-        ? entry.issuedDate.toISOString().split('T')[0]
-        : null,
-      selectedText: extras?.selectedText,
-    };
-
-    return { entry: entry.toJSON(), ...shortcuts };
+    return entry.toTemplateContext(extras);
   }
 
   private compile(templateStr: string): Handlebars.TemplateDelegate {

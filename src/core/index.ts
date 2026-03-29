@@ -1,5 +1,6 @@
 // Types
 export { Author, Entry } from './types/entry';
+export type { SearchDocument } from './types/entry';
 export { Library } from './types/library';
 export {
   type DatabaseType,

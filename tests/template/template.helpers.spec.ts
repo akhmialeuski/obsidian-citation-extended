@@ -1,8 +1,9 @@
 import { TemplateService } from '../../src/template/template.service';
 import { CitationsPluginSettings } from '../../src/ui/settings/settings';
-import { Entry, TemplateContext } from '../../src/core';
+import { TemplateContext } from '../../src/core';
 import { Result } from '../../src/core/result';
 import { formatDate } from '../../src/template/helpers/date-helpers';
+import { TestEntry } from '../helpers/mock-obsidian';
 
 function expectOk<T>(result: Result<T>, expected: T) {
   expect(result).toEqual({ ok: true, value: expected });
@@ -302,98 +303,86 @@ describe('TemplateService', () => {
 
   describe('Template Variables', () => {
     it('should export series and volume shortcuts', () => {
-      const entryMock = {
+      const entry = new TestEntry({
         id: 'citekey',
         title: 'Title',
         series: 'My Series',
         volume: '123',
-        toJSON: () => ({}),
-      } as unknown as Entry;
+      });
 
-      const vars = service.getTemplateVariables(entryMock);
+      const vars = service.getTemplateVariables(entry);
       expect(vars.series).toBe('My Series');
       expect(vars.volume).toBe('123');
     });
 
     it('should export date shortcut in YYYY-MM-DD format', () => {
-      const entryMock = {
+      const entry = new TestEntry({
         id: 'citekey',
         title: 'Title',
         issuedDate: new Date('2023-01-01T12:00:00Z'),
-        toJSON: () => ({}),
-      } as unknown as Entry;
+      });
 
-      const vars = service.getTemplateVariables(entryMock);
+      const vars = service.getTemplateVariables(entry);
       expect(vars.date).toBe('2023-01-01');
     });
 
     it('should handle missing issuedDate for date shortcut', () => {
-      const entryMock = {
+      const entry = new TestEntry({
         id: 'citekey',
         title: 'Title',
         issuedDate: null,
-        toJSON: () => ({}),
-      } as unknown as Entry;
+      });
 
-      const vars = service.getTemplateVariables(entryMock);
+      const vars = service.getTemplateVariables(entry);
       expect(vars.date).toBeNull();
     });
 
     it('should export ISBN shortcut', () => {
-      const entryMock = {
+      const entry = new TestEntry({
         id: 'citekey',
         ISBN: '978-3-16-148410-0',
-        toJSON: () => ({}),
-      } as unknown as Entry;
+      });
 
-      const vars = service.getTemplateVariables(entryMock);
+      const vars = service.getTemplateVariables(entry);
       expect(vars.ISBN).toBe('978-3-16-148410-0');
     });
 
     it('should export lastname as first author family name', () => {
-      const entryMock = {
+      const entry = new TestEntry({
         id: 'citekey',
         author: [
           { given: 'John', family: 'Doe' },
           { given: 'Jane', family: 'Smith' },
         ],
-        toJSON: () => ({}),
-      } as unknown as Entry;
+      });
 
-      const vars = service.getTemplateVariables(entryMock);
+      const vars = service.getTemplateVariables(entry);
       expect(vars.lastname).toBe('Doe');
     });
 
     it('should handle missing author for lastname shortcut', () => {
-      const entryMock = {
+      const entry = new TestEntry({
         id: 'citekey',
         author: undefined,
-        toJSON: () => ({}),
-      } as unknown as Entry;
+      });
 
-      const vars = service.getTemplateVariables(entryMock);
+      const vars = service.getTemplateVariables(entry);
       expect(vars.lastname).toBeUndefined();
     });
 
     it('should export selectedText when provided via extras', () => {
-      const entryMock = {
-        id: 'citekey',
-        toJSON: () => ({}),
-      } as unknown as Entry;
+      const entry = new TestEntry({ id: 'citekey' });
 
-      const vars = service.getTemplateVariables(entryMock, {
+      const vars = service.getTemplateVariables(entry, {
         selectedText: 'highlighted passage',
       });
       expect(vars.selectedText).toBe('highlighted passage');
     });
 
     it('should leave selectedText undefined when extras not provided', () => {
-      const entryMock = {
-        id: 'citekey',
-        toJSON: () => ({}),
-      } as unknown as Entry;
+      const entry = new TestEntry({ id: 'citekey' });
 
-      const vars = service.getTemplateVariables(entryMock);
+      const vars = service.getTemplateVariables(entry);
       expect(vars.selectedText).toBeUndefined();
     });
 
