@@ -6,6 +6,7 @@ import { Library, Entry, TemplateContext } from '../../src/core';
 import {
   TemplateRenderError,
   LiteratureNoteNotFoundError,
+  EntryNotFoundError,
 } from '../../src/core/errors';
 import {
   createMockPlatformAdapter,
@@ -87,6 +88,12 @@ describe('NoteService', () => {
     expect(result).not.toContain('*');
     expect(result).not.toContain('<');
     expect(result).not.toContain('>');
+  });
+
+  test('getPathForCitekey throws EntryNotFoundError for unknown citekey', () => {
+    expect(() => noteService.getPathForCitekey('nonexistent', library)).toThrow(
+      EntryNotFoundError,
+    );
   });
 
   test('getPathForCitekey throws TemplateRenderError on bad template', () => {

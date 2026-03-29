@@ -3,6 +3,13 @@ import { CitationsPluginSettings } from '../../src/ui/settings/settings';
 import { WorkerManager } from '../../src/util';
 import { LoadingStatus } from '../../src/library/library-state';
 import { createMockPlatformAdapter } from '../helpers/mock-platform';
+import { SourceManager } from '../../src/infrastructure/source-manager';
+import {
+  NormalizationPipeline,
+  SourceTaggingStep,
+  DeduplicationStep,
+} from '../../src/infrastructure/normalization-pipeline';
+import type { DatabaseType } from '../../src/core/types/database';
 
 import { LocalFileSource } from '../../src/sources/local-file-source';
 
@@ -51,11 +58,21 @@ describe('LibraryService Loading Behavior', () => {
     const platform = createMockPlatformAdapter();
     workerManager = new WorkerManager({} as Worker);
 
-    service = new LibraryService(settings, platform, workerManager);
-    service.setDataSourceFactory({
-      create: (def, id) =>
-        new LocalFileSource(id, def.path, def.format, workerManager, null),
-    });
+    // Wire up SourceManager + pipeline (mirrors production setup)
+    const factory = {
+      create: (_def: { path: string; format: DatabaseType }, id: string) =>
+        new LocalFileSource(id, _def.path, _def.format, workerManager, null),
+    };
+
+    service = new LibraryService(
+      settings,
+      platform,
+      workerManager,
+      new SourceManager(factory as never),
+      new NormalizationPipeline()
+        .addStep(new SourceTaggingStep())
+        .addStep(new DeduplicationStep()),
+    );
 
     jest.spyOn(console, 'error').mockImplementation(() => {});
     jest.spyOn(console, 'warn').mockImplementation(() => {});

@@ -2,7 +2,6 @@ import { Entry, TemplateContext, Result, TemplateRenderError } from './core';
 import { Library } from './core';
 import { LibraryState } from './library/library-state';
 import type { IVaultFile } from './platform/platform-adapter';
-import { DataSource } from './data-source';
 import { SearchService } from './search/search.service';
 import {
   IntrospectionService,
@@ -73,9 +72,6 @@ export interface ILibraryService {
 
   load(isRetry?: boolean): Promise<Library | null>;
   dispose(): void;
-  getSources(): DataSource[];
-  addSource(source: DataSource): void;
-  removeSource(sourceId: string): void;
   resolveLibraryPath(rawPath: string): string;
   getTemplateVariables(): VariableDefinition[];
   initWatcher(): void;
@@ -102,6 +98,13 @@ export type {
   INotificationService,
   IStatusBarItem,
 } from './platform/platform-adapter';
+
+// ---------------------------------------------------------------------------
+// Application services re-export
+// ---------------------------------------------------------------------------
+
+export type { ICitationService } from './application/citation.service';
+export type { IContentTemplateResolver } from './application/content-template-resolver';
 
 // ---------------------------------------------------------------------------
 // Data source registry re-export

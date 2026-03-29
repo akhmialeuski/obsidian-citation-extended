@@ -102,12 +102,29 @@ function makePlugin(initialState: LibraryState) {
         removeClass: jest.fn(),
       })),
     },
-    registerEvent: jest.fn(),
-    editorActions: {
-      extractCitekeyAtCursor: jest.fn(() => null),
-      openLiteratureNote: jest.fn().mockResolvedValue(undefined),
-      openNoteAtCursor: jest.fn().mockResolvedValue(undefined),
+    citationService: {
+      getEntry: jest.fn(),
+      getMarkdownCitation: jest.fn(),
     },
+    noteService: {
+      getOrCreateLiteratureNoteFile: jest.fn(),
+      openLiteratureNote: jest.fn(),
+    },
+    templateService: {
+      render: jest.fn(),
+      getTemplateVariables: jest.fn(),
+    },
+    settings: {
+      literatureNoteTitleTemplate: '{{citekey}}',
+    },
+    batchOrchestrator: {
+      preview: jest.fn(),
+      execute: jest.fn(),
+    },
+    contentTemplateResolver: {
+      resolve: jest.fn().mockResolvedValue(''),
+    },
+    registerEvent: jest.fn(),
     app: {
       workspace: {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- flexible mock
@@ -376,7 +393,7 @@ describe('UIService', () => {
         CitationSearchModal.mock.calls[
           CitationSearchModal.mock.calls.length - 1
         ];
-      const passedAction = lastCall[2];
+      const passedAction = lastCall[1];
       expect(passedAction.selectedText).toBe('selected text');
     });
 
@@ -401,7 +418,7 @@ describe('UIService', () => {
         CitationSearchModal.mock.calls[
           CitationSearchModal.mock.calls.length - 1
         ];
-      const passedAction = lastCall[2];
+      const passedAction = lastCall[1];
       expect(passedAction.selectedText).toBe('');
     });
   });
@@ -416,8 +433,8 @@ describe('UIService', () => {
       const service = new UIService(plugin as never);
       service.init();
 
-      expect(commands).toHaveLength(8);
-      expect(plugin.addCommand).toHaveBeenCalledTimes(8);
+      expect(commands).toHaveLength(9);
+      expect(plugin.addCommand).toHaveBeenCalledTimes(9);
     });
 
     it('open-literature-note command opens search modal with OpenNoteAction', () => {
@@ -556,7 +573,7 @@ describe('UIService', () => {
         CitationSearchModal.mock.calls[
           CitationSearchModal.mock.calls.length - 1
         ];
-      const action = lastCall[2];
+      const action = lastCall[1];
       expect(action.selectedText).toBe('injected text');
     });
   });

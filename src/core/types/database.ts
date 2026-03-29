@@ -26,4 +26,6 @@ export interface DatabaseConfig {
   name: string;
   path: string;
   type: DatabaseType;
+  /** Transport type — auto-derived from path if omitted. */
+  sourceType?: string;
 }

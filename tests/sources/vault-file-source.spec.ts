@@ -218,24 +218,6 @@ describe('VaultFileSource', () => {
       );
     });
 
-    it('handles backward-compatible array response from worker', async () => {
-      const legacyWorker = createMockWorkerManager([sampleBibLaTeXEntry]);
-
-      const source = new VaultFileSource(
-        defaultId,
-        defaultPath,
-        DATABASE_FORMATS.BibLaTeX,
-        legacyWorker,
-        vault as any,
-      );
-
-      const result = await source.load();
-
-      expect(result.entries).toHaveLength(1);
-      expect(result.entries[0]).toBeInstanceOf(EntryBibLaTeXAdapter);
-      expect(result.parseErrors).toEqual([]);
-    });
-
     it('propagates parse errors from worker', async () => {
       const errorWorker = createMockWorkerManager({
         entries: [],

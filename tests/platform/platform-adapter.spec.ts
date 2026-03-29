@@ -33,6 +33,7 @@ export function createMockPlatformAdapter(
     createFolder: jest.fn().mockResolvedValue(undefined),
     isFile: jest.fn().mockReturnValue(true),
     isFolder: jest.fn().mockReturnValue(false),
+    modify: jest.fn().mockResolvedValue(undefined),
     ...(overrides.vault as Partial<IVaultAccess>),
   };
 
@@ -41,6 +42,7 @@ export function createMockPlatformAdapter(
     openFile: jest.fn().mockResolvedValue(undefined),
     getConfig: jest.fn().mockReturnValue(null),
     fileToLinktext: jest.fn().mockReturnValue('link'),
+    openUrl: jest.fn(),
     ...(overrides.workspace as Partial<IWorkspaceAccess>),
   };
 
@@ -117,6 +119,7 @@ describe('IPlatformAdapter mock factory', () => {
         openFile: jest.fn().mockResolvedValue(undefined),
         getConfig: jest.fn(),
         fileToLinktext: jest.fn().mockReturnValue('link'),
+        openUrl: jest.fn(),
       },
     });
 
@@ -171,6 +174,7 @@ describe('IPlatformAdapter mock factory', () => {
         createFolder: jest.fn().mockResolvedValue(undefined),
         isFile: jest.fn().mockReturnValue(true),
         isFolder: jest.fn().mockReturnValue(false),
+        modify: jest.fn().mockResolvedValue(undefined),
       },
     });
 

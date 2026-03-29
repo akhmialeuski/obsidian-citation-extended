@@ -3,7 +3,9 @@
  */
 import { App } from 'obsidian';
 import { CitationSearchModal } from '../../src/ui/modals/citation-search-modal';
-import CitationPlugin from '../../src/main';
+import type { SearchModalAction } from '../../src/application/actions/action.types';
+import type { ILibraryService } from '../../src/container';
+import type { CitationsPluginSettings } from '../../src/ui/settings/settings';
 
 // Mock Obsidian
 jest.mock(
@@ -78,41 +80,52 @@ jest.mock(
 describe('CitationSearchModal', () => {
   let modal: CitationSearchModal;
   let app: App;
-  let plugin: CitationPlugin;
+  let libraryService: ILibraryService;
+  let settings: CitationsPluginSettings;
 
   beforeAll(() => {});
 
   beforeEach(() => {
     app = new App();
-    plugin = {
-      libraryService: {
-        isLibraryLoading: false,
-        state: { status: 'idle' },
-        store: {
-          subscribe: jest.fn().mockReturnValue(jest.fn()),
-        },
-        searchService: {
-          search: jest.fn().mockReturnValue([]),
-        },
-        library: {
-          entries: {},
-        },
+    libraryService = {
+      isLibraryLoading: false,
+      state: { status: 'idle' },
+      store: {
+        subscribe: jest.fn().mockReturnValue(jest.fn()),
       },
-      settings: {
-        referenceListSortOrder: 'default',
+      searchService: {
+        search: jest.fn().mockReturnValue([]),
       },
-      openLiteratureNote: jest.fn(),
-      insertLiteratureNoteLink: jest.fn(),
-      insertLiteratureNoteContent: jest.fn(),
-      insertMarkdownCitation: jest.fn(),
-    } as unknown as CitationPlugin;
+      library: {
+        entries: {},
+      },
+    } as unknown as ILibraryService;
+
+    settings = {
+      referenceListSortOrder: 'default',
+    } as unknown as CitationsPluginSettings;
 
     const mockAction = {
-      name: 'Mock Action',
+      descriptor: {
+        id: 'mock-action',
+        name: 'Mock Action',
+        showInCommandPalette: true,
+        showInContextMenu: false,
+        requiresEditor: false,
+      },
       onChoose: jest.fn(),
-    };
+      isVisible: jest.fn().mockReturnValue(true),
+      isEnabled: jest.fn().mockReturnValue(true),
+      execute: jest.fn().mockResolvedValue(undefined),
+    } as unknown as SearchModalAction;
+
     try {
-      modal = new CitationSearchModal(app, plugin, mockAction);
+      modal = new CitationSearchModal(
+        app,
+        mockAction,
+        libraryService,
+        settings,
+      );
     } catch (e) {
       console.error('Constructor failed:', e);
       throw e;

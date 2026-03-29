@@ -1,6 +1,5 @@
 import { DatabaseConfig } from '../../core';
-import { DataSourceDefinition } from '../../data-source';
-import { MergeStrategy } from '../../library/merge-strategy';
+import type { TemplateProfile } from '../../domain/template-profile';
 import {
   DEFAULT_SETTINGS,
   CitationStylePreset,
@@ -37,10 +36,10 @@ export class CitationsPluginSettings {
     DEFAULT_SETTINGS.referenceListSortOrder;
 
   public databases: DatabaseConfig[] = DEFAULT_SETTINGS.databases;
-  public dataSources?: DataSourceDefinition[];
-  public mergeStrategy?: MergeStrategy;
   public disableAutomaticNoteCreation: boolean =
     DEFAULT_SETTINGS.disableAutomaticNoteCreation;
+  public templateProfiles: TemplateProfile[] =
+    DEFAULT_SETTINGS.templateProfiles as TemplateProfile[];
 
   /**
    * Returns the effective primary citation template, taking the active

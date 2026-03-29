@@ -1,37 +1,44 @@
-import CitationPlugin from '../main';
+import { Plugin } from 'obsidian';
+import type { IActionRegistry } from '../application/actions/action-registry';
+import type { ActionContext } from '../application/actions/action.types';
+import { extractCitekeyAtCursor } from '../application/citekey-extractor';
 
 /**
- * Handles editor context menu registration for the citation plugin.
- * Adds a "Open note for @citekey" item when the cursor is on a citation.
+ * Registers context menu items from the ActionRegistry.
+ *
+ * Iterates over actions with `showInContextMenu: true` and adds a menu
+ * item for each when the cursor is positioned on a citation citekey.
+ * Adding a new context menu action = creating an action class with
+ * `showInContextMenu: true` — no changes to this file needed.
  */
 export class ContextMenuHandler {
-  constructor(private plugin: CitationPlugin) {}
+  constructor(
+    private plugin: Plugin,
+    private actionRegistry: IActionRegistry,
+    private actionCtx: ActionContext,
+  ) {}
 
-  /**
-   * Register a context menu item that appears on right-click in the editor
-   * when the cursor is positioned on a citation. Uses the Obsidian
-   * `editor-menu` workspace event.
-   */
   register(): void {
     this.plugin.registerEvent(
       this.plugin.app.workspace.on('editor-menu', (menu) => {
-        // Use the platform adapter to get the active editor proxy
-        // instead of casting the event's editor parameter directly
-        const proxyEditor = this.plugin.platform.workspace.getActiveEditor();
+        const proxyEditor = this.actionCtx.platform.workspace.getActiveEditor();
         if (!proxyEditor) return;
 
-        const citekey =
-          this.plugin.editorActions.extractCitekeyAtCursor(proxyEditor);
+        const citekey = extractCitekeyAtCursor(proxyEditor);
         if (!citekey) return;
 
-        menu.addItem((item) => {
-          item
-            .setTitle(`Open note for @${citekey}`)
-            .setIcon('book-open')
-            .onClick(() => {
-              void this.plugin.editorActions.openLiteratureNote(citekey, false);
+        const invocation = { citekey };
+
+        for (const action of this.actionRegistry.getContextMenuActions()) {
+          if (action.isVisible(invocation) && action.isEnabled(invocation)) {
+            menu.addItem((item) => {
+              item
+                .setTitle(`${action.descriptor.name} @${citekey}`)
+                .setIcon(action.descriptor.icon ?? 'book-open')
+                .onClick(() => void action.execute(invocation));
             });
-        });
+          }
+        }
       }),
     );
   }

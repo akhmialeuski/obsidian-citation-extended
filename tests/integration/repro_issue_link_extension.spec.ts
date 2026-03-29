@@ -4,7 +4,8 @@ import { App, PluginManifest } from 'obsidian';
 import { LibraryService } from '../../src/library/library.service';
 import { NoteService } from '../../src/notes/note.service';
 import { TemplateService } from '../../src/template/template.service';
-import { EditorActions } from '../../src/ui/editor-actions';
+import { InsertNoteLinkAction } from '../../src/application/actions';
+import type { ActionContext } from '../../src/application/actions/action.types';
 
 /** @jest-environment jsdom */
 
@@ -76,6 +77,7 @@ jest.mock('web-worker:./worker', () => class {}, { virtual: true });
 
 describe('Bug Reproduction: Incorrect Markdown Link Extension', () => {
   let plugin: CitationPlugin;
+  let action: InsertNoteLinkAction;
   let app: App;
 
   beforeEach(() => {
@@ -149,7 +151,37 @@ describe('Bug Reproduction: Incorrect Markdown Link Extension', () => {
       library: { entries: { 'test-citekey': { id: 'test-citekey' } } },
     } as unknown as LibraryService;
 
-    plugin.editorActions = new EditorActions(plugin);
+    plugin.citationService = {
+      getEntry: jest.fn().mockImplementation((citekey: string) => {
+        const entry = (
+          plugin.libraryService.library as unknown as Record<
+            string,
+            unknown
+          > & { entries: Record<string, unknown> }
+        ).entries[citekey];
+        if (!entry) return { ok: false, error: { message: 'Not found' } };
+        return { ok: true, value: entry };
+      }),
+      getTitleForCitekey: jest
+        .fn()
+        .mockReturnValue({ ok: true, value: 'Test Note Title' }),
+      getMarkdownCitation: jest
+        .fn()
+        .mockReturnValue({ ok: true, value: '[@test-citekey]' }),
+      getInitialContentForCitekey: jest
+        .fn()
+        .mockResolvedValue({ ok: true, value: '' }),
+    } as unknown as typeof plugin.citationService;
+
+    const actionCtx = {
+      citationService: plugin.citationService,
+      platform: plugin.platform,
+      noteService: plugin.noteService,
+      libraryService: plugin.libraryService,
+      templateService: plugin.templateService,
+      settings: plugin.settings,
+    } as unknown as ActionContext;
+    action = new InsertNoteLinkAction(actionCtx);
   });
 
   it('should generate WikiLink WITHOUT .md extension when useMarkdownLinks is false', async () => {
@@ -166,7 +198,7 @@ describe('Bug Reproduction: Incorrect Markdown Link Extension', () => {
       },
     );
 
-    await plugin.editorActions.insertLiteratureNoteLink('test-citekey');
+    await action.execute({ citekey: 'test-citekey' });
 
     expect(plugin.platform.workspace.fileToLinktext).toHaveBeenCalledWith(
       expect.anything(),

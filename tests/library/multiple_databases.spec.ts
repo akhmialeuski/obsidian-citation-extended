@@ -7,6 +7,13 @@ import { Entry } from '../../src/core';
 import { WorkerManager } from '../../src/util';
 import { LocalFileSource } from '../../src/sources/local-file-source';
 import { createMockPlatformAdapter } from '../helpers/mock-platform';
+import { SourceManager } from '../../src/infrastructure/source-manager';
+import {
+  NormalizationPipeline,
+  SourceTaggingStep,
+  DeduplicationStep,
+} from '../../src/infrastructure/normalization-pipeline';
+import type { DatabaseType } from '../../src/core/types/database';
 
 jest.mock('../../src/sources/local-file-source');
 jest.mock('../../src/util');
@@ -69,9 +76,9 @@ describe('LibraryService - Multiple Databases', () => {
     (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
       id,
       load: jest.fn().mockImplementation(async () => {
-        if (id === 'source-0')
+        if (id === 'local-file:DB1:/path/to/db1.json')
           return { sourceId: id, entries: [entry1], modifiedAt: new Date() };
-        if (id === 'source-1')
+        if (id === 'local-file:DB2:/path/to/db2.json')
           return { sourceId: id, entries: [entry2], modifiedAt: new Date() };
         return { sourceId: id, entries: [], modifiedAt: new Date() };
       }),
@@ -79,16 +86,19 @@ describe('LibraryService - Multiple Databases', () => {
       dispose: jest.fn(),
     }));
 
+    const factory = {
+      create: (_def: { path: string; format: DatabaseType }, id: string) =>
+        new LocalFileSource(id, _def.path, _def.format, workerManager, null),
+    };
     service = new LibraryService(
       settings,
       createMockPlatformAdapter(),
       workerManager,
-      [],
+      new SourceManager(factory as never),
+      new NormalizationPipeline()
+        .addStep(new SourceTaggingStep())
+        .addStep(new DeduplicationStep()),
     );
-    service.setDataSourceFactory({
-      create: (def, id) =>
-        new LocalFileSource(id, def.path, def.format, workerManager, null),
-    });
 
     await service.load();
 
@@ -113,9 +123,9 @@ describe('LibraryService - Multiple Databases', () => {
     (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
       id,
       load: jest.fn().mockImplementation(async () => {
-        if (id === 'source-0')
+        if (id === 'local-file:DB1:/path/to/db1.json')
           return { sourceId: id, entries: [entry1], modifiedAt: new Date() };
-        if (id === 'source-1')
+        if (id === 'local-file:DB2:/path/to/db2.json')
           return { sourceId: id, entries: [entry2], modifiedAt: new Date() };
         return { sourceId: id, entries: [], modifiedAt: new Date() };
       }),
@@ -123,16 +133,19 @@ describe('LibraryService - Multiple Databases', () => {
       dispose: jest.fn(),
     }));
 
+    const factory = {
+      create: (_def: { path: string; format: DatabaseType }, id: string) =>
+        new LocalFileSource(id, _def.path, _def.format, workerManager, null),
+    };
     service = new LibraryService(
       settings,
       createMockPlatformAdapter(),
       workerManager,
-      [],
+      new SourceManager(factory as never),
+      new NormalizationPipeline()
+        .addStep(new SourceTaggingStep())
+        .addStep(new DeduplicationStep()),
     );
-    service.setDataSourceFactory({
-      create: (def, id) =>
-        new LocalFileSource(id, def.path, def.format, workerManager, null),
-    });
 
     await service.load();
 

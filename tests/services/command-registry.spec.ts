@@ -1,10 +1,20 @@
 /** @jest-environment jsdom */
 import { CommandRegistry } from '../../src/services/command-registry';
+import {
+  SearchModalAction,
+  ApplicationAction,
+} from '../../src/application/actions/action.types';
+import type {
+  ActionDescriptor,
+  ActionContext,
+} from '../../src/application/actions/action.types';
+import type { IActionRegistry } from '../../src/application/actions/action-registry';
 
 jest.mock(
   'obsidian',
   () => ({
     App: class {},
+    Plugin: class {},
     SuggestModal: class {
       resultContainerEl = {
         addClass: jest.fn(),
@@ -35,109 +45,258 @@ jest.mock(
   { virtual: true },
 );
 
+jest.mock('../../src/ui/modals/citation-search-modal', () => ({
+  CitationSearchModal: jest.fn().mockImplementation(() => ({
+    open: jest.fn(),
+  })),
+}));
+
 interface CommandDef {
   id: string;
   name: string;
   callback: () => void;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only mock factory
-function makePlugin(): any {
-  const commands: CommandDef[] = [];
+/** Create a concrete ApplicationAction subclass for testing. */
+class TestApplicationAction extends ApplicationAction {
+  descriptor: ActionDescriptor;
+  execute = jest.fn().mockResolvedValue(undefined);
+
+  constructor(id: string, name: string, ctx: ActionContext) {
+    super(ctx);
+    this.descriptor = {
+      id,
+      name,
+      showInCommandPalette: true,
+      showInContextMenu: false,
+      requiresEditor: false,
+    };
+  }
+}
+
+/** Create a concrete SearchModalAction subclass for testing. */
+class TestSearchModalAction extends SearchModalAction {
+  descriptor: ActionDescriptor;
+  execute = jest.fn().mockResolvedValue(undefined);
+  onChoose = jest.fn();
+
+  constructor(id: string, name: string, ctx: ActionContext) {
+    super(ctx);
+    this.descriptor = {
+      id,
+      name,
+      showInCommandPalette: true,
+      showInContextMenu: false,
+      requiresEditor: false,
+    };
+  }
+}
+
+function makeActionCtx(): ActionContext {
   return {
-    _commands: commands,
-    addCommand: jest.fn((cmd: CommandDef) => {
-      commands.push(cmd);
-    }),
-    app: {
-      workspace: {
-        getActiveViewOfType: jest.fn(() => null),
-        activeEditor: null,
-      },
-    },
     platform: {
       workspace: {
         getActiveEditor: jest.fn(() => null),
       },
       notifications: { show: jest.fn() },
     },
-    libraryService: {
-      library: null,
-      isLibraryLoading: false,
-      load: jest.fn().mockResolvedValue(null),
-      searchService: { search: jest.fn(() => []) },
-      store: {
-        subscribe: jest.fn(() => jest.fn()),
-        getState: jest.fn(() => ({ status: 'idle', parseErrors: [] })),
-      },
-    },
-    editorActions: {
-      openNoteAtCursor: jest.fn().mockResolvedValue(undefined),
-      insertSubsequentCitation: jest.fn().mockResolvedValue(undefined),
-    },
     settings: {
       referenceListSortOrder: 'default',
+    },
+    citationService: {},
+    noteService: {},
+    libraryService: {},
+    templateService: {},
+  } as unknown as ActionContext;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only mock factory
+function makeLibraryService(): any {
+  return {
+    library: null,
+    isLibraryLoading: false,
+    load: jest.fn().mockResolvedValue(null),
+    searchService: { search: jest.fn(() => []) },
+    store: {
+      subscribe: jest.fn(() => jest.fn()),
+      getState: jest.fn(() => ({ status: 'idle', parseErrors: [] })),
     },
   };
 }
 
+function buildTestActions(ctx: ActionContext) {
+  return [
+    new TestApplicationAction(
+      'open-note-at-cursor',
+      'Open note at cursor',
+      ctx,
+    ),
+    new TestSearchModalAction('insert-citation', 'Insert citation', ctx),
+    new TestSearchModalAction(
+      'insert-subsequent-citation',
+      'Insert subsequent citation',
+      ctx,
+    ),
+    new TestSearchModalAction(
+      'insert-multiple-citations',
+      'Insert multiple citations',
+      ctx,
+    ),
+    new TestSearchModalAction(
+      'insert-literature-note',
+      'Insert literature note',
+      ctx,
+    ),
+    new TestApplicationAction('update-bib-data', 'Update bib data', ctx),
+    new TestSearchModalAction(
+      'open-literature-note',
+      'Open literature note',
+      ctx,
+    ),
+    new TestSearchModalAction('copy-citekey', 'Copy citekey', ctx),
+  ];
+}
+
 describe('CommandRegistry', () => {
+  let commands: CommandDef[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only
+  let mockPlugin: any;
+  let actionCtx: ActionContext;
+  let libraryService: ReturnType<typeof makeLibraryService>;
+  let actionRegistry: IActionRegistry;
+  let actions: (TestApplicationAction | TestSearchModalAction)[];
+
+  beforeEach(() => {
+    commands = [];
+    mockPlugin = {
+      addCommand: jest.fn((cmd: CommandDef) => {
+        commands.push(cmd);
+      }),
+    };
+    actionCtx = makeActionCtx();
+    libraryService = makeLibraryService();
+    actions = buildTestActions(actionCtx);
+    actionRegistry = {
+      register: jest.fn(),
+      getAll: jest.fn(() => actions),
+      getById: jest.fn((id: string) =>
+        actions.find((a) => a.descriptor.id === id),
+      ),
+      getContextMenuActions: jest.fn(() => []),
+      getCommandPaletteActions: jest.fn(() => actions),
+    };
+  });
+
   it('registers 8 commands', () => {
-    const plugin = makePlugin();
-    const registry = new CommandRegistry(plugin);
+    const registry = new CommandRegistry(
+      {} as never,
+      mockPlugin,
+      actionRegistry,
+      actionCtx,
+      libraryService,
+    );
     registry.registerAll();
 
-    expect(plugin._commands).toHaveLength(8);
-    expect(plugin.addCommand).toHaveBeenCalledTimes(8);
+    expect(commands).toHaveLength(8);
+    expect(mockPlugin.addCommand).toHaveBeenCalledTimes(8);
   });
 
-  it('open-note-at-cursor command calls editorActions.openNoteAtCursor', () => {
-    const plugin = makePlugin();
-    const registry = new CommandRegistry(plugin);
+  it('non-modal action callback calls action.execute()', () => {
+    const registry = new CommandRegistry(
+      {} as never,
+      mockPlugin,
+      actionRegistry,
+      actionCtx,
+      libraryService,
+    );
     registry.registerAll();
 
-    const cmd = plugin._commands.find(
-      (c: CommandDef) => c.id === 'open-note-at-cursor',
-    );
+    const cmd = commands.find((c) => c.id === 'open-note-at-cursor');
     expect(cmd).toBeDefined();
     cmd!.callback();
-    expect(plugin.editorActions.openNoteAtCursor).toHaveBeenCalled();
+
+    const action = actions.find(
+      (a) => a.descriptor.id === 'open-note-at-cursor',
+    ) as TestApplicationAction;
+    expect(action.execute).toHaveBeenCalledWith({ selectedText: '' });
   });
 
-  it('insert-subsequent-citation command opens search modal', () => {
-    const plugin = makePlugin();
-    const registry = new CommandRegistry(plugin);
+  it('SearchModalAction callback opens a search modal', () => {
+    const { CitationSearchModal } = jest.requireMock(
+      '../../src/ui/modals/citation-search-modal',
+    );
+
+    const registry = new CommandRegistry(
+      {} as never,
+      mockPlugin,
+      actionRegistry,
+      actionCtx,
+      libraryService,
+    );
     registry.registerAll();
 
-    const cmd = plugin._commands.find(
-      (c: CommandDef) => c.id === 'insert-subsequent-citation',
-    );
+    const cmd = commands.find((c) => c.id === 'insert-subsequent-citation');
     expect(cmd).toBeDefined();
-    // callback should not throw even with null editor
+    expect(() => cmd!.callback()).not.toThrow();
+    expect(CitationSearchModal).toHaveBeenCalled();
+  });
+
+  it('insert-multiple-citations command opens search modal without throwing', () => {
+    const registry = new CommandRegistry(
+      {} as never,
+      mockPlugin,
+      actionRegistry,
+      actionCtx,
+      libraryService,
+    );
+    registry.registerAll();
+
+    const cmd = commands.find((c) => c.id === 'insert-multiple-citations');
+    expect(cmd).toBeDefined();
     expect(() => cmd!.callback()).not.toThrow();
   });
 
-  it('insert-multiple-citations command opens search modal', () => {
-    const plugin = makePlugin();
-    const registry = new CommandRegistry(plugin);
+  it('update-bib-data command calls action.execute()', () => {
+    const registry = new CommandRegistry(
+      {} as never,
+      mockPlugin,
+      actionRegistry,
+      actionCtx,
+      libraryService,
+    );
     registry.registerAll();
 
-    const cmd = plugin._commands.find(
-      (c: CommandDef) => c.id === 'insert-multiple-citations',
-    );
+    const cmd = commands.find((c) => c.id === 'update-bib-data');
     expect(cmd).toBeDefined();
-    expect(() => cmd!.callback()).not.toThrow();
+    cmd!.callback();
+
+    const action = actions.find(
+      (a) => a.descriptor.id === 'update-bib-data',
+    ) as TestApplicationAction;
+    expect(action.execute).toHaveBeenCalled();
   });
 
-  it('update-bib-data command calls libraryService.load', () => {
-    const plugin = makePlugin();
-    const registry = new CommandRegistry(plugin);
+  it('passes selected text to modal action', () => {
+    const mockEditor = { getSelection: jest.fn(() => 'some selected text') };
+    (actionCtx.platform.workspace.getActiveEditor as jest.Mock).mockReturnValue(
+      mockEditor,
+    );
+
+    const registry = new CommandRegistry(
+      {} as never,
+      mockPlugin,
+      actionRegistry,
+      actionCtx,
+      libraryService,
+    );
     registry.registerAll();
 
-    const cmd = plugin._commands.find(
-      (c: CommandDef) => c.id === 'update-bib-data',
-    );
+    const cmd = commands.find((c) => c.id === 'insert-citation');
     cmd!.callback();
-    expect(plugin.libraryService.load).toHaveBeenCalled();
+
+    const action = actions.find(
+      (a) => a.descriptor.id === 'insert-citation',
+    ) as TestSearchModalAction;
+    expect(action.selectedText).toBe('some selected text');
   });
 });

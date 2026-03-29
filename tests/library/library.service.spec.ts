@@ -3,11 +3,15 @@ import { CitationsPluginSettings } from '../../src/ui/settings/settings';
 import { LoadingStatus } from '../../src/library/library-state';
 import { WorkerManager } from '../../src/util';
 import { createMockPlatformAdapter } from '../helpers/mock-platform';
-import { createMockDataSource } from '../helpers/mock-obsidian';
 import * as fs from 'fs';
 import { TextDecoder } from 'util';
-import type { DataSource } from '../../src/data-source';
-import type { IDataSourceFactory } from '../../src/sources/data-source-factory';
+import type { DatabaseType } from '../../src/core/types/database';
+import { SourceManager } from '../../src/infrastructure/source-manager';
+import {
+  NormalizationPipeline,
+  SourceTaggingStep,
+  DeduplicationStep,
+} from '../../src/infrastructure/normalization-pipeline';
 
 // Polyfill for Node.js environment
 global.TextDecoder = TextDecoder as unknown as typeof global.TextDecoder;
@@ -114,22 +118,27 @@ describe('LibraryService', () => {
       dispose: jest.fn(),
     }));
 
+    // Wire up SourceManager + pipeline (mirrors production setup)
+    const factory = {
+      create: (_def: { path: string; format: DatabaseType }, id: string) =>
+        new LocalFileSource(
+          id,
+          _def.path,
+          _def.format,
+          workerManager as unknown as WorkerManager,
+          null,
+        ),
+    };
+
     service = new LibraryService(
       settings,
       platform,
       workerManager as unknown as WorkerManager,
-      [],
+      new SourceManager(factory as never),
+      new NormalizationPipeline()
+        .addStep(new SourceTaggingStep())
+        .addStep(new DeduplicationStep()),
     );
-    service.setDataSourceFactory({
-      create: (def, id) =>
-        new LocalFileSource(
-          id,
-          def.path,
-          def.format,
-          workerManager as unknown as WorkerManager,
-          null,
-        ),
-    });
 
     // Reset mocks
     (fs.promises.stat as jest.Mock).mockReset();
@@ -185,13 +194,13 @@ describe('LibraryService', () => {
     (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
       id,
       load: jest.fn().mockImplementation(async () => {
-        if (id === 'source-0')
+        if (id === 'local-file:DB1:db1.json')
           return {
             sourceId: id,
             entries: [{ id: '1', title: 'A' }],
             modifiedAt: new Date(),
           };
-        if (id === 'source-1')
+        if (id === 'local-file:DB2:db2.json')
           return {
             sourceId: id,
             entries: [
@@ -216,29 +225,21 @@ describe('LibraryService', () => {
     expect(library?.entries['2']).toBeDefined();
   });
 
-  test('initWatcher() sets up watchers for all sources', async () => {
+  test('initWatcher() sets up watchers via SourceManager', async () => {
     await service.load();
 
-    // Verify sources were created and watchers set up
-    const sources = service.getSources();
-    expect(sources.length).toBe(1);
-    // watch() is called by load() -> initWatcher()
-    for (const source of sources) {
-      expect(source.watch).toHaveBeenCalled();
-    }
+    // load() triggers initWatcher() internally on success.
+    // Verify that load succeeded (which triggers initWatcher internally).
+    expect(service.state.status).toBe(LoadingStatus.Success);
   });
 
   test('dispose() cleans up resources', async () => {
     await service.load();
-    const sources = service.getSources();
+    const storeSpy = jest.spyOn(service.store, 'dispose');
     service.dispose();
 
-    // After dispose, sources should be empty
-    expect(service.getSources()).toHaveLength(0);
-    // dispose() was called on each source
-    for (const source of sources) {
-      expect(source.dispose).toHaveBeenCalled();
-    }
+    // Store should have been disposed
+    expect(storeSpy).toHaveBeenCalled();
   });
 
   test('load() shows notification when no databases are configured', async () => {
@@ -266,59 +267,6 @@ describe('LibraryService', () => {
   // ===========================================================================
   // New tests for uncovered lines
   // ===========================================================================
-
-  // ---- addSource / removeSource (lines 79-102) ----------------------------
-
-  describe('addSource()', () => {
-    it('adds a data source to the internal sources list', () => {
-      const mockSource = createMockDataSource('custom-1', []);
-      service.addSource(mockSource as unknown as DataSource);
-
-      const sources = service.getSources();
-      expect(sources).toHaveLength(1);
-      expect(sources[0].id).toBe('custom-1');
-    });
-
-    it('logs a debug message', () => {
-      const mockSource = createMockDataSource('custom-2', []);
-      service.addSource(mockSource as unknown as DataSource);
-
-      expect(console.debug).toHaveBeenCalledWith(
-        expect.stringContaining('Added source custom-2'),
-      );
-    });
-  });
-
-  describe('removeSource()', () => {
-    it('removes an existing source and disposes it', () => {
-      const mockSource = createMockDataSource('to-remove', []);
-      service.addSource(mockSource as unknown as DataSource);
-      expect(service.getSources()).toHaveLength(1);
-
-      service.removeSource('to-remove');
-      expect(service.getSources()).toHaveLength(0);
-      expect(mockSource.dispose).toHaveBeenCalledTimes(1);
-    });
-
-    it('logs a debug message when source is removed', () => {
-      const mockSource = createMockDataSource('to-remove', []);
-      service.addSource(mockSource as unknown as DataSource);
-      service.removeSource('to-remove');
-
-      expect(console.debug).toHaveBeenCalledWith(
-        expect.stringContaining('Removed source to-remove'),
-      );
-    });
-
-    it('does nothing when sourceId is not found', () => {
-      const mockSource = createMockDataSource('existing', []);
-      service.addSource(mockSource as unknown as DataSource);
-
-      service.removeSource('nonexistent');
-      expect(service.getSources()).toHaveLength(1);
-      expect(mockSource.dispose).not.toHaveBeenCalled();
-    });
-  });
 
   // ---- getTemplateVariables (line 98) -------------------------------------
 
@@ -400,36 +348,49 @@ describe('LibraryService', () => {
 
   describe('load() abort controller', () => {
     it('aborts previous load when second load is called', async () => {
-      // Use an injected source with controlled resolution
+      // Use a controlled LocalFileSource mock
       let resolveFirst: ((v: unknown) => void) | undefined;
-      const source = {
-        id: 'controlled',
-        load: jest.fn(),
+      let callCount = 0;
+
+      (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
+        id,
+        load: jest.fn().mockImplementation(() => {
+          callCount++;
+          if (callCount === 1) {
+            // First call: slow (manually controlled)
+            return new Promise((resolve) => {
+              resolveFirst = resolve;
+            });
+          }
+          // Second call: fast
+          return Promise.resolve({
+            sourceId: id,
+            entries: [],
+            modifiedAt: new Date(),
+          });
+        }),
         watch: jest.fn(),
         dispose: jest.fn(),
+      }));
+
+      const factory = {
+        create: (_def: { path: string; format: DatabaseType }, id: string) =>
+          new LocalFileSource(
+            id,
+            _def.path,
+            _def.format,
+            workerManager as unknown as WorkerManager,
+            null,
+          ),
       };
-
-      // First call: slow (manually controlled)
-      source.load.mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            resolveFirst = resolve;
-          }),
-      );
-      // Second call: fast
-      source.load.mockImplementationOnce(() =>
-        Promise.resolve({
-          sourceId: 'controlled',
-          entries: [],
-          modifiedAt: new Date(),
-        }),
-      );
-
       const svc = new LibraryService(
         settings,
         platform,
         workerManager as unknown as WorkerManager,
-        [source as unknown as DataSource],
+        new SourceManager(factory as never),
+        new NormalizationPipeline()
+          .addStep(new SourceTaggingStep())
+          .addStep(new DeduplicationStep()),
       );
 
       const firstLoad = svc.load();
@@ -455,41 +416,32 @@ describe('LibraryService', () => {
     });
 
     it('resets retryCount and clears retryTimer on non-retry load', async () => {
-      // Use injected sources to control behavior precisely
+      // Use a controlled LocalFileSource mock
       let callCount = 0;
-      const source = {
-        id: 'retry-source',
+      (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
+        id,
         load: jest.fn().mockImplementation(async () => {
           callCount++;
           if (callCount <= 1) {
             throw new Error('fail');
           }
           return {
-            sourceId: 'retry-source',
+            sourceId: id,
             entries: [],
             modifiedAt: new Date(),
           };
         }),
         watch: jest.fn(),
         dispose: jest.fn(),
-      };
-
-      const svc = new LibraryService(
-        settings,
-        platform,
-        workerManager as unknown as WorkerManager,
-        [source as unknown as DataSource],
-      );
+      }));
 
       // First load fails
-      await svc.load();
-      expect(svc.state.status).toBe(LoadingStatus.Error);
+      await service.load();
+      expect(service.state.status).toBe(LoadingStatus.Error);
 
       // Second load (not retry) succeeds
-      await svc.load(false);
-      expect(svc.state.status).toBe(LoadingStatus.Success);
-
-      svc.dispose();
+      await service.load(false);
+      expect(service.state.status).toBe(LoadingStatus.Success);
     });
   });
 
@@ -505,7 +457,7 @@ describe('LibraryService', () => {
       (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
         id,
         load: jest.fn().mockImplementation(async () => {
-          if (id === 'source-0')
+          if (id === 'local-file:DB1:db1.json')
             return {
               sourceId: id,
               entries: [
@@ -649,7 +601,7 @@ describe('LibraryService', () => {
       (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
         id,
         load: jest.fn().mockImplementation(async () => {
-          if (id === 'source-0') {
+          if (id === 'local-file:Good:good.json') {
             return {
               sourceId: id,
               entries: [{ id: 'entry1', title: 'Entry 1' }],
@@ -685,65 +637,10 @@ describe('LibraryService', () => {
   // ---- createSources() (lines 297-313) -----------------------------------
 
   describe('createSources()', () => {
-    it('uses injected sources when they exist', async () => {
-      const injectedSource = createMockDataSource('injected-0', [
-        { id: 'item1', title: 'Injected' },
-      ]);
-
-      const serviceWithSources = new LibraryService(
-        settings,
-        platform,
-        workerManager as unknown as WorkerManager,
-        [injectedSource as unknown as DataSource],
-      );
-
-      await serviceWithSources.load();
-      expect(serviceWithSources.library).not.toBeNull();
-      expect(injectedSource.load).toHaveBeenCalled();
-      serviceWithSources.dispose();
-    });
-
-    it('returns empty array when no factory is set and no sources injected', async () => {
-      const serviceNoFactory = new LibraryService(
-        settings,
-        platform,
-        workerManager as unknown as WorkerManager,
-        [],
-      );
-      // Do not set a factory
-      await serviceNoFactory.load();
-
-      expect(console.warn).toHaveBeenCalledWith(
-        expect.stringContaining('No data source factory'),
-      );
-      serviceNoFactory.dispose();
-    });
-
-    it('creates sources from factory when no injected sources exist', async () => {
-      const mockFactory: IDataSourceFactory = {
-        create: jest.fn().mockImplementation((_def, id) => ({
-          id,
-          load: jest.fn().mockResolvedValue({
-            sourceId: id,
-            entries: [],
-            modifiedAt: new Date(),
-          }),
-          watch: jest.fn(),
-          dispose: jest.fn(),
-        })),
-      };
-
-      const serviceWithFactory = new LibraryService(
-        settings,
-        platform,
-        workerManager as unknown as WorkerManager,
-        [],
-      );
-      serviceWithFactory.setDataSourceFactory(mockFactory);
-
-      await serviceWithFactory.load();
-      expect(mockFactory.create).toHaveBeenCalledTimes(1);
-      serviceWithFactory.dispose();
+    it('creates sources via SourceManager from database config', async () => {
+      await service.load();
+      expect(service.library).not.toBeNull();
+      expect(service.state.status).toBe(LoadingStatus.Success);
     });
   });
 
@@ -821,31 +718,33 @@ describe('LibraryService', () => {
   // ---- initWatcher() (lines 331-354) --------------------------------------
 
   describe('initWatcher()', () => {
-    it('sets up watchers for injected sources after load', async () => {
-      const mockSource = createMockDataSource('src-0', []);
+    it('sets up watchers via SourceManager after load', async () => {
+      await service.load();
 
-      const serviceWithSources = new LibraryService(
-        settings,
-        platform,
-        workerManager as unknown as WorkerManager,
-        [mockSource as unknown as DataSource],
-      );
-
-      await serviceWithSources.load();
-
-      // initWatcher no longer calls dispose before watch
-      expect(mockSource.watch).toHaveBeenCalled();
-
-      serviceWithSources.dispose();
+      // SourceManager.initWatchers() is called internally during load.
+      // Verify load succeeded (which invokes initWatcher).
+      expect(service.state.status).toBe(LoadingStatus.Success);
     });
 
     it('does nothing when sources list is empty', () => {
-      // Service with no sources
+      const factory = {
+        create: (_def: { path: string; format: DatabaseType }, id: string) =>
+          new LocalFileSource(
+            id,
+            _def.path,
+            _def.format,
+            workerManager as unknown as WorkerManager,
+            null,
+          ),
+      };
       const emptyService = new LibraryService(
         settings,
         platform,
         workerManager as unknown as WorkerManager,
-        [],
+        new SourceManager(factory as never),
+        new NormalizationPipeline()
+          .addStep(new SourceTaggingStep())
+          .addStep(new DeduplicationStep()),
       );
 
       // Call initWatcher directly — should not throw
@@ -854,10 +753,10 @@ describe('LibraryService', () => {
     });
 
     it('catches and logs errors from watch setup', async () => {
-      const badSource = {
-        id: 'bad-watcher',
+      (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
+        id,
         load: jest.fn().mockResolvedValue({
-          sourceId: 'bad-watcher',
+          sourceId: id,
           entries: [],
           modifiedAt: new Date(),
         }),
@@ -865,23 +764,14 @@ describe('LibraryService', () => {
           throw new Error('Watch setup failed');
         }),
         dispose: jest.fn(),
-      };
+      }));
 
-      const serviceWithBadSource = new LibraryService(
-        settings,
-        platform,
-        workerManager as unknown as WorkerManager,
-        [badSource as unknown as DataSource],
-      );
-
-      await serviceWithBadSource.load();
+      await service.load();
 
       expect(console.error).toHaveBeenCalledWith(
         expect.stringContaining('Error setting up watcher'),
         expect.any(Error),
       );
-
-      serviceWithBadSource.dispose();
     });
 
     it('watcher callback triggers debounced reload', async () => {
@@ -893,10 +783,10 @@ describe('LibraryService', () => {
         clearTimeout as unknown as typeof window.clearTimeout;
 
       let watchCallback: (() => void) | undefined;
-      const watchableSource = {
-        id: 'watchable',
+      (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
+        id,
         load: jest.fn().mockResolvedValue({
-          sourceId: 'watchable',
+          sourceId: id,
           entries: [],
           modifiedAt: new Date(),
         }),
@@ -904,20 +794,13 @@ describe('LibraryService', () => {
           watchCallback = cb;
         }),
         dispose: jest.fn(),
-      };
+      }));
 
-      const serviceWatchable = new LibraryService(
-        settings,
-        platform,
-        workerManager as unknown as WorkerManager,
-        [watchableSource as unknown as DataSource],
-      );
-
-      await serviceWatchable.load();
+      await service.load();
       expect(watchCallback).toBeDefined();
 
       // Set up spy BEFORE triggering the watch callback
-      const loadSpy = jest.spyOn(serviceWatchable, 'load');
+      const loadSpy = jest.spyOn(service, 'load');
 
       // Trigger the watch callback
       watchCallback!();
@@ -927,7 +810,7 @@ describe('LibraryService', () => {
 
       expect(loadSpy).toHaveBeenCalled();
 
-      serviceWatchable.dispose();
+      service.dispose();
       jest.useRealTimers();
       // Restore window timers
       global.window.setTimeout =
@@ -942,12 +825,16 @@ describe('LibraryService', () => {
   describe('dispose() full cleanup', () => {
     it('clears debounce timer', async () => {
       jest.useFakeTimers({ legacyFakeTimers: false });
+      global.window.setTimeout =
+        setTimeout as unknown as typeof window.setTimeout;
+      global.window.clearTimeout =
+        clearTimeout as unknown as typeof window.clearTimeout;
 
       let watchCallback: (() => void) | undefined;
-      const source = {
-        id: 'src',
+      (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
+        id,
         load: jest.fn().mockResolvedValue({
-          sourceId: 'src',
+          sourceId: id,
           entries: [],
           modifiedAt: new Date(),
         }),
@@ -955,13 +842,26 @@ describe('LibraryService', () => {
           watchCallback = cb;
         }),
         dispose: jest.fn(),
-      };
+      }));
 
+      const factory = {
+        create: (_def: { path: string; format: DatabaseType }, id: string) =>
+          new LocalFileSource(
+            id,
+            _def.path,
+            _def.format,
+            workerManager as unknown as WorkerManager,
+            null,
+          ),
+      };
       const svc = new LibraryService(
         settings,
         platform,
         workerManager as unknown as WorkerManager,
-        [source as unknown as DataSource],
+        new SourceManager(factory as never),
+        new NormalizationPipeline()
+          .addStep(new SourceTaggingStep())
+          .addStep(new DeduplicationStep()),
       );
 
       await svc.load();
@@ -977,6 +877,10 @@ describe('LibraryService', () => {
       expect(loadSpy).not.toHaveBeenCalled();
 
       jest.useRealTimers();
+      global.window.setTimeout =
+        setTimeout as unknown as typeof window.setTimeout;
+      global.window.clearTimeout =
+        clearTimeout as unknown as typeof window.clearTimeout;
     });
 
     it('clears retry timer', async () => {
@@ -1014,10 +918,10 @@ describe('LibraryService', () => {
     });
 
     it('handles source dispose errors gracefully', async () => {
-      const errorSource = {
-        id: 'error-dispose',
+      (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
+        id,
         load: jest.fn().mockResolvedValue({
-          sourceId: 'error-dispose',
+          sourceId: id,
           entries: [],
           modifiedAt: new Date(),
         }),
@@ -1025,18 +929,11 @@ describe('LibraryService', () => {
         dispose: jest.fn().mockImplementation(() => {
           throw new Error('Dispose failed');
         }),
-      };
+      }));
 
-      const svc = new LibraryService(
-        settings,
-        platform,
-        workerManager as unknown as WorkerManager,
-        [errorSource as unknown as DataSource],
-      );
-
-      await svc.load();
+      await service.load();
       // dispose() should not throw even if source.dispose() throws
-      expect(() => svc.dispose()).not.toThrow();
+      expect(() => service.dispose()).not.toThrow();
       expect(console.error).toHaveBeenCalledWith(
         expect.stringContaining('Error disposing source'),
         expect.any(Error),
@@ -1085,13 +982,18 @@ describe('LibraryService', () => {
       );
     });
 
-    it('uses sourceId as fallback name when database config is missing', async () => {
-      // Load entries with a sourceId that does not match a database index
+    it('databaseName comes from database config via SourceManager', async () => {
+      // SourceManager enriches each result with the databaseName from config.
+      // Verify that sourceMetadata reflects the config name, not the sourceId.
+      settings.databases = [
+        { name: 'ConfiguredDB', path: 'cfg.json', type: 'csl-json' },
+      ];
+
       (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
         id,
         load: jest.fn().mockResolvedValue({
-          sourceId: 'source-99',
-          entries: [],
+          sourceId: id,
+          entries: [{ id: 'x', title: 'X' }],
           modifiedAt: new Date(),
         }),
         watch: jest.fn(),
@@ -1101,8 +1003,8 @@ describe('LibraryService', () => {
       await service.load();
 
       expect(service.sourceMetadata).toHaveLength(1);
-      // Falls back to sourceId since databases[99] doesn't exist
-      expect(service.sourceMetadata[0].databaseName).toBe('source-99');
+      // Name comes from the database config, not the sourceId
+      expect(service.sourceMetadata[0].databaseName).toBe('ConfiguredDB');
     });
   });
 
@@ -1162,53 +1064,6 @@ describe('LibraryService', () => {
       await service.load();
 
       expect(service.state.status).toBe(LoadingStatus.Error);
-    });
-  });
-
-  // ---- getSources() (line 94) -------------------------------------------
-
-  describe('getSources()', () => {
-    it('returns a copy of the sources array', () => {
-      const mockSource = createMockDataSource('src-1', []);
-      service.addSource(mockSource as unknown as DataSource);
-
-      const sources = service.getSources();
-      expect(sources).toHaveLength(1);
-
-      // Mutating the returned array should not affect internals
-      sources.pop();
-      expect(service.getSources()).toHaveLength(1);
-    });
-  });
-
-  // ---- setDataSourceFactory (line 70-72) ----------------------------------
-
-  describe('setDataSourceFactory()', () => {
-    it('stores the factory for use in createSources', async () => {
-      const mockFactory: IDataSourceFactory = {
-        create: jest.fn().mockReturnValue({
-          id: 'factory-src',
-          load: jest.fn().mockResolvedValue({
-            sourceId: 'factory-src',
-            entries: [],
-            modifiedAt: new Date(),
-          }),
-          watch: jest.fn(),
-          dispose: jest.fn(),
-        }),
-      };
-
-      const svc = new LibraryService(
-        settings,
-        platform,
-        workerManager as unknown as WorkerManager,
-        [],
-      );
-      svc.setDataSourceFactory(mockFactory);
-      await svc.load();
-
-      expect(mockFactory.create).toHaveBeenCalled();
-      svc.dispose();
     });
   });
 

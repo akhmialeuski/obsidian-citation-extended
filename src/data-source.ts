@@ -1,5 +1,4 @@
 import { Entry, DatabaseType, ParseErrorInfo } from './core';
-import { MergeStrategy } from './library/merge-strategy';
 
 /**
  * Known built-in data source transport types.
@@ -44,21 +43,6 @@ export interface DataSource {
    * Should be called when the data source is no longer needed
    */
   dispose(): void;
-}
-
-/**
- * Configuration for the data source system
- */
-export interface DataSourceConfig {
-  /**
-   * List of data sources to load from
-   */
-  sources: DataSourceDefinition[];
-
-  /**
-   * Strategy to use when merging entries with duplicate citekeys
-   */
-  mergeStrategy: MergeStrategy;
 }
 
 /**

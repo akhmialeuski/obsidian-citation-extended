@@ -1,11 +1,6 @@
 import { Vault, EventRef, TFile } from 'obsidian';
 import { DataSource, DataSourceLoadResult } from '../data-source';
-import {
-  EntryData,
-  DatabaseType,
-  WorkerResponse,
-  convertToEntries,
-} from '../core';
+import { DatabaseType, convertToEntries } from '../core';
 import { WorkerManager } from '../util';
 
 /**
@@ -42,15 +37,10 @@ export class VaultFileSource implements DataSource {
         throw new Error(`File is empty: ${this.filePath}`);
       }
 
-      const raw = await this.loadWorker.post({
+      const result = await this.loadWorker.post({
         databaseRaw: content,
         databaseType: this.format,
       });
-
-      // TODO(v0.5.0): Remove backward compatibility shim once all workers return WorkerResponse
-      const result: WorkerResponse = Array.isArray(raw)
-        ? { entries: raw as EntryData[], parseErrors: [] }
-        : raw;
 
       return {
         sourceId: this.id,

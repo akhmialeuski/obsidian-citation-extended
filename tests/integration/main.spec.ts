@@ -81,8 +81,20 @@ describe('CitationPlugin', () => {
 
   beforeEach(() => {
     app = new App();
-    (app as unknown as { vault: { adapter: FileSystemAdapter } }).vault = {
+    (
+      app as unknown as {
+        vault: {
+          adapter: FileSystemAdapter;
+          getAbstractFileByPath: jest.Mock;
+          create: jest.Mock;
+          read: jest.Mock;
+        };
+      }
+    ).vault = {
       adapter: new FileSystemAdapter(),
+      getAbstractFileByPath: jest.fn().mockReturnValue(null),
+      create: jest.fn().mockResolvedValue(undefined),
+      read: jest.fn().mockResolvedValue(''),
     };
     (
       app as unknown as { workspace: { activeLeaf: { view: unknown } } }
@@ -108,11 +120,7 @@ describe('CitationPlugin', () => {
       load: jest.fn(),
       resolveLibraryPath: jest.fn().mockReturnValue('/path/to/lib'),
       dispose: jest.fn(),
-      getSources: jest.fn().mockImplementation(() => {
-        return ['source'];
-      }),
       initWatcher: jest.fn(),
-      setDataSourceFactory: jest.fn(),
       library: { entries: {} },
       store: {
         subscribe: jest.fn().mockReturnValue(jest.fn()),
@@ -126,7 +134,8 @@ describe('CitationPlugin', () => {
     plugin.settings = {
       citationExportPath: 'test.bib',
       databases: [{ name: 'Test', path: 'test.bib', type: 'biblatex' }],
-    } as CitationsPluginSettings;
+      templateProfiles: [],
+    } as unknown as CitationsPluginSettings;
     await plugin.onload();
 
     expect(plugin.libraryService).toBeDefined();
@@ -137,7 +146,8 @@ describe('CitationPlugin', () => {
     plugin.settings = {
       citationExportPath: 'test.bib',
       databases: [{ name: 'Test', path: 'test.bib', type: 'biblatex' }],
-    } as CitationsPluginSettings;
+      templateProfiles: [],
+    } as unknown as CitationsPluginSettings;
     await plugin.onload();
 
     const uiDisposeSpy = jest.spyOn(plugin.uiService, 'dispose');
@@ -153,6 +163,7 @@ describe('CitationPlugin', () => {
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
     plugin.settings = {
       databases: [],
+      templateProfiles: [],
     } as unknown as CitationsPluginSettings;
     await plugin.onload();
 
@@ -212,38 +223,6 @@ describe('CitationPlugin', () => {
       expect(plugin.settings.databases.length).toBe(1);
     });
 
-    it('migrates inline template to file', async () => {
-      mockedValidateSettings.mockReturnValue({
-        success: true,
-        data: {
-          databases: [],
-          literatureNoteContentTemplate: 'tpl',
-          literatureNoteContentTemplatePath: '',
-        },
-      });
-      plugin.loadData = jest.fn().mockResolvedValue({});
-      await plugin.loadSettings();
-      expect(
-        (app.vault as unknown as Record<string, jest.Mock>).create,
-      ).toHaveBeenCalled();
-    });
-
-    it('creates default template for new installs', async () => {
-      mockedValidateSettings.mockReturnValue({
-        success: true,
-        data: {
-          databases: [],
-          literatureNoteContentTemplate: '',
-          literatureNoteContentTemplatePath: '',
-        },
-      });
-      plugin.loadData = jest.fn().mockResolvedValue({});
-      await plugin.loadSettings();
-      expect(plugin.settings.literatureNoteContentTemplatePath).toBe(
-        'citation-content-template.md',
-      );
-    });
-
     it('handles validation failure', async () => {
       mockedValidateSettings.mockReturnValue({ success: false, error: {} });
       const spy = jest.spyOn(console, 'warn').mockImplementation();
@@ -252,89 +231,55 @@ describe('CitationPlugin', () => {
       expect(spy).toHaveBeenCalled();
       spy.mockRestore();
     });
-
-    it('handles template creation error', async () => {
-      mockedValidateSettings.mockReturnValue({
-        success: true,
-        data: {
-          databases: [],
-          literatureNoteContentTemplate: 'tpl',
-          literatureNoteContentTemplatePath: '',
-        },
-      });
-      (
-        app.vault as unknown as Record<string, jest.Mock>
-      ).create.mockRejectedValue(new Error('fail'));
-      const spy = jest.spyOn(console, 'warn').mockImplementation();
-      plugin.loadData = jest.fn().mockResolvedValue({});
-      await plugin.loadSettings();
-      expect(spy).toHaveBeenCalled();
-      spy.mockRestore();
-    });
-
-    it('skips migration when file exists', async () => {
-      mockedValidateSettings.mockReturnValue({
-        success: true,
-        data: {
-          databases: [],
-          literatureNoteContentTemplate: 'tpl',
-          literatureNoteContentTemplatePath: '',
-        },
-      });
-      (
-        app.vault as unknown as Record<string, jest.Mock>
-      ).getAbstractFileByPath.mockReturnValue({});
-      plugin.loadData = jest.fn().mockResolvedValue({});
-      await plugin.loadSettings();
-      expect(
-        (app.vault as unknown as Record<string, jest.Mock>).create,
-      ).not.toHaveBeenCalled();
-    });
   });
 
   describe('getEntry', () => {
     it('returns error when library is loading', async () => {
       plugin.settings = {
         databases: [{ name: 'Test', path: 'test.bib', type: 'biblatex' }],
-      } as CitationsPluginSettings;
+        templateProfiles: [],
+      } as unknown as CitationsPluginSettings;
       await plugin.onload();
       (
         plugin.libraryService as unknown as Record<string, unknown>
       ).isLibraryLoading = true;
 
-      const result = plugin.getEntry('key1');
+      const result = plugin.citationService.getEntry('key1');
       expect(result.ok).toBe(false);
     });
 
     it('returns error when library is null', async () => {
       plugin.settings = {
         databases: [{ name: 'Test', path: 'test.bib', type: 'biblatex' }],
-      } as CitationsPluginSettings;
+        templateProfiles: [],
+      } as unknown as CitationsPluginSettings;
       await plugin.onload();
       (plugin.libraryService as unknown as Record<string, unknown>).library =
         null;
 
-      const result = plugin.getEntry('key1');
+      const result = plugin.citationService.getEntry('key1');
       expect(result.ok).toBe(false);
     });
 
     it('returns error when entry not found', async () => {
       plugin.settings = {
         databases: [{ name: 'Test', path: 'test.bib', type: 'biblatex' }],
-      } as CitationsPluginSettings;
+        templateProfiles: [],
+      } as unknown as CitationsPluginSettings;
       await plugin.onload();
       (
         plugin.libraryService as unknown as Record<string, unknown>
       ).isLibraryLoading = false;
 
-      const result = plugin.getEntry('nonexistent');
+      const result = plugin.citationService.getEntry('nonexistent');
       expect(result.ok).toBe(false);
     });
 
     it('returns entry when found', async () => {
       plugin.settings = {
         databases: [{ name: 'Test', path: 'test.bib', type: 'biblatex' }],
-      } as CitationsPluginSettings;
+        templateProfiles: [],
+      } as unknown as CitationsPluginSettings;
       await plugin.onload();
       (
         plugin.libraryService as unknown as Record<string, unknown>
@@ -344,7 +289,7 @@ describe('CitationPlugin', () => {
         entries: { key1: mockEntry },
       };
 
-      const result = plugin.getEntry('key1');
+      const result = plugin.citationService.getEntry('key1');
       expect(result.ok).toBe(true);
     });
   });
@@ -353,7 +298,8 @@ describe('CitationPlugin', () => {
     async function setupPlugin() {
       plugin.settings = {
         databases: [{ name: 'Test', path: 'test.bib', type: 'biblatex' }],
-      } as CitationsPluginSettings;
+        templateProfiles: [],
+      } as unknown as CitationsPluginSettings;
       await plugin.onload();
     }
 
@@ -368,7 +314,7 @@ describe('CitationPlugin', () => {
         read: jest.fn().mockResolvedValue('# Content'),
       } as unknown as typeof plugin.app.vault;
 
-      const result = await plugin.resolveContentTemplate();
+      const result = await plugin.contentTemplateResolver.resolve();
       expect(result).toBe('# Content');
     });
 
@@ -379,14 +325,14 @@ describe('CitationPlugin', () => {
         getAbstractFileByPath: jest.fn().mockReturnValue(null),
       } as unknown as typeof plugin.app.vault;
 
-      const result = await plugin.resolveContentTemplate();
+      const result = await plugin.contentTemplateResolver.resolve();
       expect(result).toBe('---\ntitle: {{title}}\n---');
     });
 
     it('returns default when no path configured', async () => {
       await setupPlugin();
       plugin.settings.literatureNoteContentTemplatePath = '';
-      const result = await plugin.resolveContentTemplate();
+      const result = await plugin.contentTemplateResolver.resolve();
       expect(result).toBe('---\ntitle: {{title}}\n---');
     });
   });
@@ -395,18 +341,24 @@ describe('CitationPlugin', () => {
     async function setupWithEntry() {
       plugin.settings = {
         databases: [{ name: 'Test', path: 'test.bib', type: 'biblatex' }],
-      } as CitationsPluginSettings;
+        templateProfiles: [],
+      } as unknown as CitationsPluginSettings;
       await plugin.onload();
-      // Setup templateService mock methods
-      plugin.templateService = {
-        getTemplateVariables: jest.fn().mockReturnValue({}),
-        getMarkdownCitation: jest
-          .fn()
-          .mockReturnValue({ ok: true, value: '[@key1]' }),
-        getTitle: jest.fn().mockReturnValue({ ok: true, value: 'Title' }),
-        render: jest.fn().mockReturnValue({ ok: true, value: 'content' }),
-        validate: jest.fn().mockReturnValue({ ok: true }),
-      } as unknown as typeof plugin.templateService;
+      // Configure auto-mocked templateService (same instance held by citationService)
+      (
+        plugin.templateService.getTemplateVariables as jest.Mock
+      ).mockReturnValue({});
+      (plugin.templateService.getMarkdownCitation as jest.Mock).mockReturnValue(
+        { ok: true, value: '[@key1]' },
+      );
+      (plugin.templateService.getTitle as jest.Mock).mockReturnValue({
+        ok: true,
+        value: 'Title',
+      });
+      (plugin.templateService.render as jest.Mock).mockReturnValue({
+        ok: true,
+        value: 'content',
+      });
       (
         plugin.libraryService as unknown as Record<string, unknown>
       ).isLibraryLoading = false;
@@ -417,7 +369,7 @@ describe('CitationPlugin', () => {
 
     it('returns citation when library is ready', async () => {
       await setupWithEntry();
-      const result = plugin.getMarkdownCitationForCitekey('key1');
+      const result = plugin.citationService.getMarkdownCitation('key1', false);
       expect(result.ok).toBe(true);
     });
 
@@ -426,7 +378,7 @@ describe('CitationPlugin', () => {
       (
         plugin.libraryService as unknown as Record<string, unknown>
       ).isLibraryLoading = true;
-      const result = plugin.getMarkdownCitationForCitekey('key1');
+      const result = plugin.citationService.getMarkdownCitation('key1', false);
       expect(result.ok).toBe(false);
     });
   });
@@ -435,14 +387,15 @@ describe('CitationPlugin', () => {
     it('returns alternative citation', async () => {
       plugin.settings = {
         databases: [{ name: 'Test', path: 'test.bib', type: 'biblatex' }],
-      } as CitationsPluginSettings;
+        templateProfiles: [],
+      } as unknown as CitationsPluginSettings;
       await plugin.onload();
-      plugin.templateService = {
-        getTemplateVariables: jest.fn().mockReturnValue({}),
-        getMarkdownCitation: jest
-          .fn()
-          .mockReturnValue({ ok: true, value: '@key1' }),
-      } as unknown as typeof plugin.templateService;
+      (
+        plugin.templateService.getTemplateVariables as jest.Mock
+      ).mockReturnValue({});
+      (plugin.templateService.getMarkdownCitation as jest.Mock).mockReturnValue(
+        { ok: true, value: '@key1' },
+      );
       (
         plugin.libraryService as unknown as Record<string, unknown>
       ).isLibraryLoading = false;
@@ -450,7 +403,7 @@ describe('CitationPlugin', () => {
         entries: { key1: { id: 'key1', toJSON: () => ({}) } },
       };
 
-      const result = plugin.getAlternativeMarkdownCitationForCitekey('key1');
+      const result = plugin.citationService.getMarkdownCitation('key1', true);
       expect(result.ok).toBe(true);
     });
   });
@@ -459,7 +412,8 @@ describe('CitationPlugin', () => {
     it('returns error when entry not found', async () => {
       plugin.settings = {
         databases: [{ name: 'Test', path: 'test.bib', type: 'biblatex' }],
-      } as CitationsPluginSettings;
+        templateProfiles: [],
+      } as unknown as CitationsPluginSettings;
       await plugin.onload();
       (
         plugin.libraryService as unknown as Record<string, unknown>
@@ -468,19 +422,23 @@ describe('CitationPlugin', () => {
         entries: {},
       };
 
-      const result = plugin.getTitleForCitekey('nonexistent');
+      const result = plugin.citationService.getTitleForCitekey('nonexistent');
       expect(result.ok).toBe(false);
     });
 
     it('returns sanitized title', async () => {
       plugin.settings = {
         databases: [{ name: 'Test', path: 'test.bib', type: 'biblatex' }],
-      } as CitationsPluginSettings;
+        templateProfiles: [],
+      } as unknown as CitationsPluginSettings;
       await plugin.onload();
-      plugin.templateService = {
-        getTemplateVariables: jest.fn().mockReturnValue({}),
-        getTitle: jest.fn().mockReturnValue({ ok: true, value: 'Title: Test' }),
-      } as unknown as typeof plugin.templateService;
+      (
+        plugin.templateService.getTemplateVariables as jest.Mock
+      ).mockReturnValue({});
+      (plugin.templateService.getTitle as jest.Mock).mockReturnValue({
+        ok: true,
+        value: 'Title: Test',
+      });
       (
         plugin.libraryService as unknown as Record<string, unknown>
       ).isLibraryLoading = false;
@@ -488,7 +446,7 @@ describe('CitationPlugin', () => {
         entries: { key1: { id: 'key1', toJSON: () => ({}) } },
       };
 
-      const result = plugin.getTitleForCitekey('key1');
+      const result = plugin.citationService.getTitleForCitekey('key1');
       expect(result.ok).toBe(true);
       if (result.ok) {
         // Colon should be replaced with _
@@ -502,12 +460,16 @@ describe('CitationPlugin', () => {
       plugin.settings = {
         databases: [{ name: 'Test', path: 'test.bib', type: 'biblatex' }],
         literatureNoteContentTemplatePath: '',
-      } as CitationsPluginSettings;
+        templateProfiles: [],
+      } as unknown as CitationsPluginSettings;
       await plugin.onload();
-      plugin.templateService = {
-        getTemplateVariables: jest.fn().mockReturnValue({}),
-        render: jest.fn().mockReturnValue({ ok: true, value: 'rendered' }),
-      } as unknown as typeof plugin.templateService;
+      (
+        plugin.templateService.getTemplateVariables as jest.Mock
+      ).mockReturnValue({});
+      (plugin.templateService.render as jest.Mock).mockReturnValue({
+        ok: true,
+        value: 'rendered',
+      });
       (
         plugin.libraryService as unknown as Record<string, unknown>
       ).isLibraryLoading = false;
@@ -515,7 +477,7 @@ describe('CitationPlugin', () => {
         entries: { key1: { id: 'key1', toJSON: () => ({}) } },
       };
 
-      const result = await plugin.getInitialContentForCitekey(
+      const result = await plugin.citationService.getInitialContentForCitekey(
         'key1',
         'selected',
       );
@@ -526,7 +488,8 @@ describe('CitationPlugin', () => {
     it('returns error when entry not found', async () => {
       plugin.settings = {
         databases: [{ name: 'Test', path: 'test.bib', type: 'biblatex' }],
-      } as CitationsPluginSettings;
+        templateProfiles: [],
+      } as unknown as CitationsPluginSettings;
       await plugin.onload();
       (
         plugin.libraryService as unknown as Record<string, unknown>
@@ -535,7 +498,8 @@ describe('CitationPlugin', () => {
         entries: {},
       };
 
-      const result = await plugin.getInitialContentForCitekey('nonexistent');
+      const result =
+        await plugin.citationService.getInitialContentForCitekey('nonexistent');
       expect(result.ok).toBe(false);
     });
   });

@@ -3,12 +3,7 @@ import * as chokidar from 'chokidar';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DataSource, DataSourceLoadResult } from '../data-source';
-import {
-  EntryData,
-  DatabaseType,
-  WorkerResponse,
-  convertToEntries,
-} from '../core';
+import { DatabaseType, convertToEntries } from '../core';
 import { WorkerManager } from '../util';
 
 /**
@@ -58,15 +53,10 @@ export class LocalFileSource implements DataSource {
       const decoder = new TextDecoder('utf8');
       const value = decoder.decode(dataView);
 
-      const raw = await this.loadWorker.post({
+      const result = await this.loadWorker.post({
         databaseRaw: value,
         databaseType: this.format,
       });
-
-      // TODO(v0.5.0): Remove backward compatibility shim once all workers return WorkerResponse
-      const result: WorkerResponse = Array.isArray(raw)
-        ? { entries: raw as EntryData[], parseErrors: [] }
-        : raw;
 
       return {
         sourceId: this.id,

@@ -4,19 +4,38 @@ import { IUIService } from '../container';
 import { IStatusBarItem } from '../platform/platform-adapter';
 import { CommandRegistry } from './command-registry';
 import { ContextMenuHandler } from './context-menu-handler';
+import {
+  ActionRegistry,
+  ActionContext,
+  OpenNoteAction,
+  InsertCitationAction,
+  InsertNoteLinkAction,
+  InsertNoteContentAction,
+  InsertSubsequentCitationAction,
+  InsertMultiCitationAction,
+  RefreshLibraryAction,
+  OpenNoteAtCursorAction,
+  BatchUpdateNotesAction,
+} from '../application/actions';
 
+/**
+ * Initializes all user-facing UI surfaces: command palette, context menu,
+ * and status bar.
+ *
+ * Wires all {@link ApplicationAction} instances into the {@link ActionRegistry},
+ * then hands the registry to {@link CommandRegistry} and {@link ContextMenuHandler}
+ * so they can build their respective surfaces. Subscribes to library state
+ * changes to keep the status bar and user notifications up to date.
+ */
 export class UIService implements IUIService {
   private statusBarItem!: IStatusBarItem;
   private unsubscribe: (() => void) | null = null;
   private lastNotifiedStatus?: LoadingStatus;
 
-  private commandRegistry: CommandRegistry;
-  private contextMenuHandler: ContextMenuHandler;
+  private commandRegistry!: CommandRegistry;
+  private contextMenuHandler!: ContextMenuHandler;
 
-  constructor(private plugin: CitationPlugin) {
-    this.commandRegistry = new CommandRegistry(plugin);
-    this.contextMenuHandler = new ContextMenuHandler(plugin);
-  }
+  constructor(private plugin: CitationPlugin) {}
 
   init(): void {
     this.statusBarItem = this.plugin.platform.addStatusBarItem();
@@ -27,10 +46,53 @@ export class UIService implements IUIService {
       },
     );
 
+    // Build the action context from explicit dependencies
+    const actionCtx: ActionContext = {
+      citationService: this.plugin.citationService,
+      platform: this.plugin.platform,
+      noteService: this.plugin.noteService,
+      libraryService: this.plugin.libraryService,
+      templateService: this.plugin.templateService,
+      settings: this.plugin.settings,
+    };
+
+    // Register all actions
+    const actionRegistry = new ActionRegistry();
+    actionRegistry.register(new OpenNoteAction(actionCtx));
+    actionRegistry.register(new RefreshLibraryAction(actionCtx));
+    actionRegistry.register(new InsertNoteLinkAction(actionCtx));
+    actionRegistry.register(new InsertNoteContentAction(actionCtx));
+    actionRegistry.register(new InsertCitationAction(actionCtx));
+    actionRegistry.register(new OpenNoteAtCursorAction(actionCtx));
+    actionRegistry.register(new InsertSubsequentCitationAction(actionCtx));
+    actionRegistry.register(new InsertMultiCitationAction(actionCtx));
+    actionRegistry.register(
+      new BatchUpdateNotesAction(
+        actionCtx,
+        this.plugin.batchOrchestrator,
+        this.plugin.contentTemplateResolver,
+      ),
+    );
+
+    // Presentation adapters read from the registry
+    this.commandRegistry = new CommandRegistry(
+      this.plugin.app,
+      this.plugin,
+      actionRegistry,
+      actionCtx,
+      this.plugin.libraryService,
+    );
+    this.contextMenuHandler = new ContextMenuHandler(
+      this.plugin,
+      actionRegistry,
+      actionCtx,
+    );
+
     this.commandRegistry.registerAll();
     this.contextMenuHandler.register();
   }
 
+  /** Updates the status bar text and CSS class to reflect current library loading state. */
   private updateStatusBar(state: LibraryState): void {
     let text = '';
     let cls = '';
@@ -59,6 +121,7 @@ export class UIService implements IUIService {
     }
   }
 
+  /** Shows user-facing notices on state transitions (errors, partial loads). Deduplicates by status. */
   private showStateNotices(state: LibraryState): void {
     if (state.status === this.lastNotifiedStatus) return;
     this.lastNotifiedStatus = state.status;

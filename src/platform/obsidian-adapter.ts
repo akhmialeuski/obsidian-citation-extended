@@ -119,6 +119,15 @@ class ObsidianVaultAccess implements IVaultAccess {
     const abstract = this.app.vault.getAbstractFileByPath(path);
     return abstract instanceof TFolder;
   }
+
+  async modify(file: IVaultFile, content: string): Promise<void> {
+    const tFile = this.app.vault.getAbstractFileByPath(file.path);
+    if (tFile instanceof TFile) {
+      await this.app.vault.modify(tFile, content);
+    } else {
+      throw new Error(`Cannot modify file at ${file.path}`);
+    }
+  }
 }
 
 class ObsidianWorkspaceAccess implements IWorkspaceAccess {
@@ -139,6 +148,24 @@ class ObsidianWorkspaceAccess implements IWorkspaceAccess {
     if (tFile instanceof TFile) {
       await this.app.workspace.getLeaf(newPane).openFile(tFile);
     }
+  }
+
+  openUrl(url: string): void {
+    // Electron shell opens URLs in the system default handler (browser, Zotero, etc.)
+    // Fallback to window.open for mobile Obsidian where Electron is unavailable
+    const w = window as unknown as Record<string, unknown>;
+    if (typeof w.require === 'function') {
+      const electron = (
+        w.require as (id: string) => {
+          shell?: { openExternal(url: string): void };
+        }
+      )('electron');
+      if (electron?.shell) {
+        electron.shell.openExternal(url);
+        return;
+      }
+    }
+    window.open(url);
   }
 
   getConfig(key: string): unknown {

@@ -28,3 +28,4 @@ coverage/
 # Claude Code
 .claude/
 CLAUDE.md
+docs/architecture.md
