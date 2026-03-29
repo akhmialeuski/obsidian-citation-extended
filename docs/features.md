@@ -2,6 +2,8 @@
 
 The plugin provides eight commands, accessible via the Command Palette (`Ctrl+P`) or custom hotkeys. No hotkeys are assigned by default — configure them in **Settings** > **Hotkeys** > search for "Citations". See [Configuration: Hotkeys](configuration.md#hotkeys) for recommended bindings.
 
+Commands that require an active editor (Insert citation, Insert note link, Insert note content, Insert subsequent citation, Insert multiple citations, Open note for citation at cursor) are automatically greyed out in the Command Palette when no editor pane is open.
+
 ![All plugin commands in the Command Palette](images/command-palette-all-commands.png)
 
 ## Open Literature Note
@@ -98,6 +100,7 @@ Re-renders every existing literature note using the current content template.
 - **Command**: `Citations: Update all literature notes`
 - Only notes whose rendered content differs from their current content are written
 - Runs a dry-run preview first to count changes, then executes with progress notifications
+- If the library has not finished loading, the command shows "Library is not loaded yet" instead of running
 - Errors are logged to the console; a summary notification is shown when the batch completes
 
 **When to use:** After changing your content template and you want all existing notes to match the new template. The command skips notes that are already up to date, so it is safe to run repeatedly.
