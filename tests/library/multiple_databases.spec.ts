@@ -76,9 +76,9 @@ describe('LibraryService - Multiple Databases', () => {
     (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
       id,
       load: jest.fn().mockImplementation(async () => {
-        if (id === 'local-file:DB1:/path/to/db1.json')
+        if (id === 'local-file:csl-json:DB1:/path/to/db1.json')
           return { sourceId: id, entries: [entry1], modifiedAt: new Date() };
-        if (id === 'local-file:DB2:/path/to/db2.json')
+        if (id === 'local-file:csl-json:DB2:/path/to/db2.json')
           return { sourceId: id, entries: [entry2], modifiedAt: new Date() };
         return { sourceId: id, entries: [], modifiedAt: new Date() };
       }),
@@ -123,9 +123,9 @@ describe('LibraryService - Multiple Databases', () => {
     (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
       id,
       load: jest.fn().mockImplementation(async () => {
-        if (id === 'local-file:DB1:/path/to/db1.json')
+        if (id === 'local-file:csl-json:DB1:/path/to/db1.json')
           return { sourceId: id, entries: [entry1], modifiedAt: new Date() };
-        if (id === 'local-file:DB2:/path/to/db2.json')
+        if (id === 'local-file:csl-json:DB2:/path/to/db2.json')
           return { sourceId: id, entries: [entry2], modifiedAt: new Date() };
         return { sourceId: id, entries: [], modifiedAt: new Date() };
       }),

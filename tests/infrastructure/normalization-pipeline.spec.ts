@@ -19,9 +19,11 @@ function makeEntry(id: string, overrides: Record<string, unknown> = {}) {
 function makeResult(
   databaseName: string,
   entries: ReturnType<typeof makeEntry>[],
+  databaseId?: string,
 ): SourceLoadResult {
   return {
     sourceId: `source-${databaseName}`,
+    databaseId: databaseId ?? `id-${databaseName}`,
     databaseName,
     entries: entries as never[],
     parseErrors: [],
@@ -100,46 +102,120 @@ describe('NormalizationPipeline', () => {
 
     expect(prepareSpy).toHaveBeenCalledWith(results);
   });
+
+  it('passes databaseId in SourceMetadata', () => {
+    const processedMetadata: Array<{
+      databaseId: string;
+      databaseName: string;
+    }> = [];
+    const step = {
+      name: 'capture-metadata',
+      process: jest.fn((entries, metadata) => {
+        processedMetadata.push({
+          databaseId: metadata.databaseId,
+          databaseName: metadata.databaseName,
+        });
+        return entries;
+      }),
+    };
+
+    const pipeline = new NormalizationPipeline().addStep(step);
+    pipeline.run([makeResult('Zotero', [makeEntry('key1')], 'db-123-abc')]);
+
+    expect(processedMetadata).toHaveLength(1);
+    expect(processedMetadata[0].databaseId).toBe('db-123-abc');
+    expect(processedMetadata[0].databaseName).toBe('Zotero');
+  });
 });
 
 describe('SourceTaggingStep', () => {
-  it('tags entries with source database name', () => {
+  it('tags entries with source database name (not id)', () => {
     const step = new SourceTaggingStep();
     const entries = [makeEntry('key1')];
 
     const result = step.process(entries as never[], {
       sourceId: 's1',
+      databaseId: 'db-123-abc',
       databaseName: 'Zotero',
     });
 
     expect(result[0]._sourceDatabase).toBe('Zotero');
   });
+
+  it('uses databaseName, not databaseId, for _sourceDatabase', () => {
+    const step = new SourceTaggingStep();
+    const entries = [makeEntry('key1')];
+
+    const result = step.process(entries as never[], {
+      sourceId: 's1',
+      databaseId: 'db-stable-id',
+      databaseName: 'My Library',
+    });
+
+    expect(result[0]._sourceDatabase).toBe('My Library');
+  });
 });
 
 describe('DeduplicationStep', () => {
-  it('creates composite citekeys for duplicates', () => {
+  it('creates composite citekeys using databaseId', () => {
     const step = new DeduplicationStep();
     const results = [
-      makeResult('Zotero', [makeEntry('key1', { _sourceDatabase: 'Zotero' })]),
-      makeResult('Mendeley', [
-        makeEntry('key1', { _sourceDatabase: 'Mendeley' }),
-      ]),
+      makeResult(
+        'Zotero',
+        [makeEntry('key1', { _sourceDatabase: 'Zotero' })],
+        'db-zotero-1',
+      ),
+      makeResult(
+        'Mendeley',
+        [makeEntry('key1', { _sourceDatabase: 'Mendeley' })],
+        'db-mendeley-2',
+      ),
     ];
 
     step.prepare(results);
 
     const r1 = step.process(results[0].entries as never[], {
       sourceId: 's1',
+      databaseId: 'db-zotero-1',
       databaseName: 'Zotero',
     });
     const r2 = step.process(results[1].entries as never[], {
       sourceId: 's2',
+      databaseId: 'db-mendeley-2',
       databaseName: 'Mendeley',
     });
 
-    expect(r1[0].id).toBe('key1@Zotero');
-    expect(r2[0].id).toBe('key1@Mendeley');
-    expect(r1[0]._compositeCitekey).toBe('key1@Zotero');
+    expect(r1[0].id).toBe('key1@db-zotero-1');
+    expect(r2[0].id).toBe('key1@db-mendeley-2');
+    expect(r1[0]._compositeCitekey).toBe('key1@db-zotero-1');
+  });
+
+  it('renaming databaseName does not change composite key', () => {
+    const step = new DeduplicationStep();
+    const stableId = 'db-stable-123';
+    const results = [
+      makeResult('Old Name', [makeEntry('key1')], stableId),
+      makeResult('Other DB', [makeEntry('key1')], 'db-other-456'),
+    ];
+
+    step.prepare(results);
+
+    const r1 = step.process(results[0].entries as never[], {
+      sourceId: 's1',
+      databaseId: stableId,
+      databaseName: 'Old Name',
+    });
+
+    // Now simulate renamed database — same databaseId, different databaseName
+    const r1Renamed = step.process(results[0].entries as never[], {
+      sourceId: 's1',
+      databaseId: stableId,
+      databaseName: 'New Name',
+    });
+
+    // Composite key should be the same regardless of databaseName
+    expect(r1[0].id).toBe(`key1@${stableId}`);
+    expect(r1Renamed[0].id).toBe(`key1@${stableId}`);
   });
 
   it('does not modify unique citekeys', () => {
@@ -153,6 +229,7 @@ describe('DeduplicationStep', () => {
 
     const r1 = step.process(results[0].entries as never[], {
       sourceId: 's1',
+      databaseId: 'db-1',
       databaseName: 'Zotero',
     });
 
@@ -166,6 +243,7 @@ describe('DeduplicationStep', () => {
 
     const result = step.process(entries as never[], {
       sourceId: 's1',
+      databaseId: 'db-1',
       databaseName: 'db1',
     });
 
@@ -180,15 +258,19 @@ describe('Full pipeline: SourceTagging + Deduplication', () => {
       .addStep(new DeduplicationStep());
 
     const results = [
-      makeResult('Zotero', [makeEntry('key1'), makeEntry('key2')]),
-      makeResult('Mendeley', [makeEntry('key1'), makeEntry('key3')]),
+      makeResult('Zotero', [makeEntry('key1'), makeEntry('key2')], 'db-zotero'),
+      makeResult(
+        'Mendeley',
+        [makeEntry('key1'), makeEntry('key3')],
+        'db-mendeley',
+      ),
     ];
 
     const library = pipeline.run(results);
 
-    expect(library.size).toBe(4); // key1@Zotero, key1@Mendeley, key2, key3
-    expect(library.entries['key1@Zotero']).toBeDefined();
-    expect(library.entries['key1@Mendeley']).toBeDefined();
+    expect(library.size).toBe(4); // key1@db-zotero, key1@db-mendeley, key2, key3
+    expect(library.entries['key1@db-zotero']).toBeDefined();
+    expect(library.entries['key1@db-mendeley']).toBeDefined();
     expect(library.entries['key2']).toBeDefined();
     expect(library.entries['key3']).toBeDefined();
   });

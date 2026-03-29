@@ -6,6 +6,9 @@ import { Entry, Library } from '../core';
  */
 export interface SourceMetadata {
   sourceId: string;
+  /** Stable internal database identifier for composite citekeys. */
+  databaseId: string;
+  /** User-facing display name for UI, logs, and _sourceDatabase tag. */
   databaseName: string;
 }
 
@@ -21,10 +24,13 @@ export interface NormalizationStep {
 }
 
 /**
- * Result from a single source load, enriched with database name.
+ * Result from a single source load, enriched with database name and id.
  */
 export interface SourceLoadResult {
   sourceId: string;
+  /** Stable internal database identifier. */
+  databaseId: string;
+  /** User-facing display name. */
   databaseName: string;
   entries: Entry[];
   parseErrors: Array<{ message: string }>;
@@ -56,6 +62,7 @@ export class NormalizationPipeline {
     for (const result of results) {
       const metadata: SourceMetadata = {
         sourceId: result.sourceId,
+        databaseId: result.databaseId,
         databaseName: result.databaseName,
       };
 
@@ -98,7 +105,9 @@ export class SourceTaggingStep implements NormalizationStep {
  * Returns new Entry objects — never mutates the originals.
  *
  * When the same citekey exists in more than one source, each gets
- * renamed to `citekey@databaseName` so both coexist in the Library.
+ * renamed to `citekey@databaseId` so both coexist in the Library.
+ * Uses the stable internal database id (not the user-facing display name)
+ * to prevent breakage when the user renames a database.
  */
 export class DeduplicationStep implements NormalizationStep {
   readonly name = 'deduplication';
@@ -120,7 +129,7 @@ export class DeduplicationStep implements NormalizationStep {
   process(entries: Entry[], metadata: SourceMetadata): Entry[] {
     return entries.map((entry) => {
       if ((this.citekeyCounts.get(entry.id) ?? 0) > 1) {
-        const compositeKey = `${entry.id}@${metadata.databaseName}`;
+        const compositeKey = `${entry.id}@${metadata.databaseId}`;
         const cloned = Object.create(
           Object.getPrototypeOf(entry) as object,
         ) as Entry;

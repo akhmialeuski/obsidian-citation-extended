@@ -13,6 +13,7 @@ import {
   DatabaseConfig,
   DATABASE_TYPE_LABELS,
   DATABASE_FORMATS,
+  generateDatabaseId,
 } from '../../core';
 import {
   SettingsSchema,
@@ -89,6 +90,7 @@ export class CitationSettingTab extends PluginSettingTab {
               return;
             }
             this.plugin.settings.databases.push({
+              id: generateDatabaseId(),
               name: `Database ${this.plugin.settings.databases.length + 1}`,
               type: DATABASE_FORMATS.CslJson,
               path: '',
@@ -150,6 +152,9 @@ export class CitationSettingTab extends PluginSettingTab {
       dropdown.onChange(async (value) => {
         this.plugin.settings.databases[index].type = value as DatabaseType;
         await this.plugin.saveSettings();
+        new Notice(
+          'Database format changed. The library will reload automatically.',
+        );
       });
     });
 

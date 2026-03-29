@@ -54,9 +54,11 @@ export const SettingsSchema = z.object({
   databases: z
     .array(
       z.object({
+        id: z.string().optional(),
         name: z.string(),
         type: z.enum(['csl-json', 'biblatex', 'hayagriva']),
         path: z.string(),
+        sourceType: z.string().optional(),
       }),
     )
     .default([]),

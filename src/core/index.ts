@@ -6,6 +6,7 @@ export {
   type DatabaseConfig,
   DATABASE_FORMATS,
   DATABASE_TYPE_LABELS,
+  generateDatabaseId,
 } from './types/database';
 export type { TemplateContext } from './types/template-context';
 export type {

@@ -43,6 +43,12 @@ export class BatchUpdateNotesAction extends ApplicationAction {
 
     // Dry-run preview to count changes before writing anything
     const preview = await this.orchestrator.preview(request);
+
+    if (preview.libraryNotReady) {
+      platform.notifications.show('Citations: Library is not loaded yet.');
+      return;
+    }
+
     const changeCount = preview.updated.length;
 
     if (changeCount === 0) {

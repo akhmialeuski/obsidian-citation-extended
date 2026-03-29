@@ -379,7 +379,7 @@ describe('VaultFileSource', () => {
       expect(vault.on).toHaveBeenCalledTimes(2);
     });
 
-    it('does not register again if watcher already exists', () => {
+    it('is silently idempotent — does not register again if watcher already exists', () => {
       const source = new VaultFileSource(
         defaultId,
         defaultPath,
@@ -388,18 +388,11 @@ describe('VaultFileSource', () => {
         vault as any,
       );
 
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
-
       source.watch(jest.fn());
-      source.watch(jest.fn());
+      source.watch(jest.fn()); // Second call should be silently ignored
 
       // vault.on should only have been called twice (modify + create) from first watch
       expect(vault.on).toHaveBeenCalledTimes(2);
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Watcher already exists'),
-      );
-
-      warnSpy.mockRestore();
     });
 
     it('triggers callback with debounce on modify event for matching file', () => {

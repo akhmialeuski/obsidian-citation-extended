@@ -73,13 +73,11 @@ export class LocalFileSource implements DataSource {
   }
 
   /**
-   * Watch for file changes using chokidar
+   * Watch for file changes using chokidar.
+   * Silently idempotent — calling watch() when a watcher already exists is a no-op.
    */
   watch(callback: () => void): void {
-    if (this.watcher) {
-      console.warn(`LocalFileSource: Watcher already exists for ${this.id}`);
-      return;
-    }
+    if (this.watcher) return;
 
     this.watchCallback = callback;
     const resolvedPath = this.resolveFilePath();

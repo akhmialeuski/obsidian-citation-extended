@@ -506,7 +506,7 @@ describe('LocalFileSource', () => {
       );
     });
 
-    it('does not create a second watcher if already watching', () => {
+    it('is silently idempotent — does not create a second watcher', () => {
       const source = new LocalFileSource(
         defaultId,
         defaultPath,
@@ -515,17 +515,10 @@ describe('LocalFileSource', () => {
         vaultAdapter,
       );
 
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
-
       source.watch(jest.fn());
-      source.watch(jest.fn()); // Second call should warn
+      source.watch(jest.fn()); // Second call should be silently ignored
 
       expect(chokidar.watch).toHaveBeenCalledTimes(1);
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Watcher already exists'),
-      );
-
-      warnSpy.mockRestore();
     });
 
     it('throws when chokidar.watch throws', () => {

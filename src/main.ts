@@ -35,6 +35,7 @@ import {
   validateSettings,
 } from './ui/settings/settings-schema';
 import { WorkerManager } from './util';
+import { generateDatabaseId } from './core';
 import LoadWorker from 'web-worker:./worker';
 
 export default class CitationPlugin extends Plugin {
@@ -61,6 +62,9 @@ export default class CitationPlugin extends Plugin {
     if (validationResult.success) {
       Object.assign(this.settings, validationResult.data);
 
+      let needsSave = false;
+
+      // Migrate legacy single-database setting to databases array
       if (
         this.settings.databases.length === 0 &&
         this.settings.citationExportPath
@@ -69,10 +73,24 @@ export default class CitationPlugin extends Plugin {
           'Citations plugin: Migrating legacy settings to databases',
         );
         this.settings.databases.push({
+          id: generateDatabaseId(),
           name: 'Default',
           path: this.settings.citationExportPath,
           type: this.settings.citationExportFormat,
         });
+        needsSave = true;
+      }
+
+      // Migrate databases that lack a stable id (pre-v2.1 installs)
+      for (const db of this.settings.databases) {
+        if (!db.id) {
+          db.id = generateDatabaseId();
+          needsSave = true;
+        }
+      }
+
+      if (needsSave) {
+        console.debug('Citations plugin: Settings migrated, saving');
         void this.saveSettings();
       }
     } else {

@@ -8,7 +8,7 @@ import type { SourceLoadResult } from './normalization-pipeline';
  * Manages the lifecycle of DataSource instances.
  *
  * Key improvement over the old `LibraryService.createSources()`:
- * - Stable identity: sources are keyed by `name:path`, so unchanged
+ * - Stable identity: sources are keyed by `transport:type:id:path`, so unchanged
  *   sources survive across settings reloads.
  * - Settings always reflected: `syncSources()` compares the new config
  *   with the current set and creates/disposes as needed.
@@ -23,6 +23,9 @@ export interface ISourceManager {
 
 interface ManagedSource {
   source: DataSource;
+  /** Stable internal database identifier for SourceLoadResult propagation. */
+  databaseId: string;
+  /** User-facing display name. */
   databaseName: string;
 }
 
@@ -56,7 +59,18 @@ export class SourceManager implements ISourceManager {
           },
           sourceId,
         );
-        this.sources.set(key, { source, databaseName: db.name });
+        const databaseId = db.id ?? db.name;
+        if (!db.id) {
+          console.warn(
+            'Citations: database missing stable id, falling back to name:',
+            db.name,
+          );
+        }
+        this.sources.set(key, {
+          source,
+          databaseId,
+          databaseName: db.name,
+        });
         console.debug(`SourceManager: Created source "${db.name}" (${key})`);
       }
     }
@@ -82,14 +96,18 @@ export class SourceManager implements ISourceManager {
 
   /**
    * Load from all managed sources in parallel.
-   * Returns successful results enriched with databaseName.
+   * Returns successful results enriched with databaseName and databaseId.
    * Failed sources are logged but don't block others.
    */
   async loadAll(): Promise<SourceLoadResult[]> {
     const entries = [...this.sources.values()];
 
     const promises = entries.map(
-      async ({ source, databaseName }): Promise<SourceLoadResult | Error> => {
+      async ({
+        source,
+        databaseId,
+        databaseName,
+      }): Promise<SourceLoadResult | Error> => {
         try {
           console.debug(`SourceManager: Loading from "${databaseName}"`);
           const result: DataSourceLoadResult = await source.load();
@@ -98,6 +116,7 @@ export class SourceManager implements ISourceManager {
           );
           return {
             sourceId: result.sourceId,
+            databaseId,
             databaseName,
             entries: result.entries,
             parseErrors: result.parseErrors ?? [],
@@ -162,7 +181,14 @@ export class SourceManager implements ISourceManager {
   }
 
   private makeKey(db: DatabaseConfig): string {
-    const type = db.sourceType ?? DATA_SOURCE_TYPES.LocalFile;
-    return `${type}:${db.name}:${db.path}`;
+    const transport = db.sourceType ?? DATA_SOURCE_TYPES.LocalFile;
+    if (!db.id) {
+      console.warn(
+        'Citations: database missing stable id in makeKey, falling back to name:',
+        db.name,
+      );
+    }
+    const id = db.id ?? db.name;
+    return `${transport}:${db.type}:${id}:${db.path}`;
   }
 }
