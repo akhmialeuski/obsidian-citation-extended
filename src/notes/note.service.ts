@@ -2,7 +2,11 @@ import * as path from 'path';
 import { CitationsPluginSettings } from '../ui/settings/settings';
 import { INoteService, ITemplateService, IPlatformAdapter } from '../container';
 import { IVaultFile } from '../platform/platform-adapter';
-import { Library, LiteratureNoteNotFoundError } from '../core';
+import {
+  Library,
+  LiteratureNoteNotFoundError,
+  EntryNotFoundError,
+} from '../core';
 import { DISALLOWED_SEGMENT_CHARACTERS_RE } from '../util';
 
 type ContentTemplateResolver = () => Promise<string>;
@@ -52,6 +56,9 @@ export class NoteService implements INoteService {
    */
   getPathForCitekey(citekey: string, library: Library): string {
     const entry = library.entries[citekey];
+    if (!entry) {
+      throw new EntryNotFoundError(citekey);
+    }
     const variables = this.templateService.getTemplateVariables(entry);
     const titleResult = this.templateService.getTitle(variables);
     if (!titleResult.ok) {

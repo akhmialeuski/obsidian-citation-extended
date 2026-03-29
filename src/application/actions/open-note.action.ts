@@ -42,10 +42,10 @@ export class OpenNoteAction extends SearchModalAction {
             'This reference has no associated PDF files.',
           );
         } else {
-          open(`file://${pdfPaths[0]}`);
+          this.ctx.platform.workspace.openUrl(`file://${pdfPaths[0]}`);
         }
       } else {
-        open(item.zoteroSelectURI);
+        this.ctx.platform.workspace.openUrl(item.zoteroSelectURI);
       }
     }
   };

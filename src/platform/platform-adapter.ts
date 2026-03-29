@@ -94,6 +94,9 @@ export interface IWorkspaceAccess {
   /** Read a workspace configuration value (e.g. `useMarkdownLinks`). */
   getConfig(key: string): unknown;
 
+  /** Open an external URL (file://, http://, zotero://, etc.). */
+  openUrl(url: string): void;
+
   /** Convert a vault file to a display-ready link text. */
   fileToLinktext(
     file: IVaultFile,

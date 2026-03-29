@@ -42,6 +42,7 @@ export function createMockPlatformAdapter(
     openFile: jest.fn().mockResolvedValue(undefined),
     getConfig: jest.fn().mockReturnValue(null),
     fileToLinktext: jest.fn().mockReturnValue('link'),
+    openUrl: jest.fn(),
     ...(overrides.workspace as Partial<IWorkspaceAccess>),
   };
 
@@ -118,6 +119,7 @@ describe('IPlatformAdapter mock factory', () => {
         openFile: jest.fn().mockResolvedValue(undefined),
         getConfig: jest.fn(),
         fileToLinktext: jest.fn().mockReturnValue('link'),
+        openUrl: jest.fn(),
       },
     });
 

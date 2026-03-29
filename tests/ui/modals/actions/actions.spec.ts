@@ -46,6 +46,7 @@ function makeCtx(): ActionContext & { _editor: any } {
         getActiveEditor: jest.fn(() => editor),
         getConfig: jest.fn(() => null),
         fileToLinktext: jest.fn(() => 'link'),
+        openUrl: jest.fn(),
       },
       notifications: { show: jest.fn() },
     },
@@ -333,18 +334,11 @@ describe('InsertNoteLinkAction', () => {
 describe('OpenNoteAction', () => {
   let ctx: ReturnType<typeof makeCtx>;
   let action: OpenNoteAction;
-  let openSpy: jest.SpyInstance;
-
   beforeEach(() => {
     ctx = makeCtx();
     action = new OpenNoteAction(ctx);
     (ctx.platform.notifications.show as jest.Mock).mockClear();
-    // Mock global open (window.open in jsdom)
-    openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
-  });
-
-  afterEach(() => {
-    openSpy.mockRestore();
+    (ctx.platform.workspace.openUrl as jest.Mock).mockClear();
   });
 
   it('has the correct name', () => {
@@ -400,7 +394,9 @@ describe('OpenNoteAction', () => {
 
     await action.onChoose(entry as never, evt);
 
-    expect(openSpy).toHaveBeenCalledWith('zotero://select/items/@test2024');
+    expect(ctx.platform.workspace.openUrl).toHaveBeenCalledWith(
+      'zotero://select/items/@test2024',
+    );
     expect(ctx.noteService.openLiteratureNote).not.toHaveBeenCalled();
   });
 
@@ -410,7 +406,9 @@ describe('OpenNoteAction', () => {
 
     await action.onChoose(entry as never, evt);
 
-    expect(openSpy).toHaveBeenCalledWith('file:///path/to/paper.pdf');
+    expect(ctx.platform.workspace.openUrl).toHaveBeenCalledWith(
+      'file:///path/to/paper.pdf',
+    );
     expect(ctx.platform.notifications.show).not.toHaveBeenCalled();
   });
 
@@ -423,7 +421,7 @@ describe('OpenNoteAction', () => {
     expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
       'This reference has no associated PDF files.',
     );
-    expect(openSpy).not.toHaveBeenCalled();
+    expect(ctx.platform.workspace.openUrl).not.toHaveBeenCalled();
   });
 
   it('shows Notice on Shift+Tab when files is undefined', async () => {
@@ -445,7 +443,9 @@ describe('OpenNoteAction', () => {
 
     await action.onChoose(entry as never, evt);
 
-    expect(openSpy).toHaveBeenCalledWith('file:///path/to/paper.PDF');
+    expect(ctx.platform.workspace.openUrl).toHaveBeenCalledWith(
+      'file:///path/to/paper.PDF',
+    );
   });
 
   it('shows Notice when only non-PDF files exist', async () => {
@@ -468,7 +468,7 @@ describe('OpenNoteAction', () => {
     await action.onChoose(entry as never, evt);
 
     expect(ctx.noteService.openLiteratureNote).not.toHaveBeenCalled();
-    expect(openSpy).not.toHaveBeenCalled();
+    expect(ctx.platform.workspace.openUrl).not.toHaveBeenCalled();
     expect(ctx.platform.notifications.show).not.toHaveBeenCalled();
   });
 

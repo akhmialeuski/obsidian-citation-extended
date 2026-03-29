@@ -106,7 +106,7 @@ export class DeduplicationStep implements NormalizationStep {
   private citekeyCounts = new Map<string, number>();
 
   prepare(results: SourceLoadResult[]): void {
-    this.citekeyCounts.clear();
+    this.citekeyCounts = new Map<string, number>();
     for (const result of results) {
       for (const entry of result.entries) {
         this.citekeyCounts.set(

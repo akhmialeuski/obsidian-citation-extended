@@ -10,10 +10,10 @@ import type { IBatchNoteOrchestrator } from '../../notes/batch/batch-update.type
 /**
  * Batch-updates all existing literature notes using the current content template.
  *
- * Resolution order:
+ * Flow:
  * 1. Resolves the template string via {@link IContentTemplateResolver}.
- * 2. Calls {@link IBatchNoteOrchestrator.preview} to count what would change.
- * 3. Shows a notification, then executes the update.
+ * 2. Runs a dry-run preview to count what would change.
+ * 3. If changes exist, executes the actual update with progress notifications.
  *
  * Only notes whose rendered content differs from their current content are written.
  */
@@ -35,14 +35,27 @@ export class BatchUpdateNotesAction extends ApplicationAction {
     super(ctx);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- invocation unused for batch actions
   async execute(_invocation: ActionInvocationContext): Promise<void> {
     const { platform } = this.ctx;
 
     const templateStr = await this.contentTemplateResolver.resolve();
     const request = { citekeys: ['*'], templateStr, dryRun: false };
 
-    platform.notifications.show('Citations: Updating notes…');
+    // Dry-run preview to count changes before writing anything
+    const preview = await this.orchestrator.preview(request);
+    const changeCount = preview.updated.length;
+
+    if (changeCount === 0) {
+      platform.notifications.show(
+        'Citations: All notes are already up to date.',
+      );
+      return;
+    }
+
+    platform.notifications.show(
+      `Citations: Updating ${changeCount} note${changeCount === 1 ? '' : 's'}…`,
+    );
 
     const result = await this.orchestrator.execute(request, (progress) => {
       if (progress.current % 10 === 0 || progress.current === progress.total) {

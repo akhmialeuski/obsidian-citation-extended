@@ -4,6 +4,7 @@ import type {
 } from '../platform/platform-adapter';
 import type { CitationsPluginSettings } from '../ui/settings/settings';
 import type { ITemplateProfileRegistry } from '../domain/template-profile-registry';
+import { DEFAULT_PROFILE } from '../domain/template-profile';
 import { DEFAULT_CONTENT_TEMPLATE } from '../ui/settings/settings-schema';
 
 /**
@@ -45,8 +46,8 @@ export class ContentTemplateResolver implements IContentTemplateResolver {
     // Try profile-based resolution first
     if (this.profileRegistry && noteKind && entryType) {
       const profile = this.profileRegistry.resolve(noteKind, entryType);
-      // Only use profile if it's not the default (which falls through to global settings)
-      if (profile.id !== 'default' && profile.contentTemplatePath) {
+      // Only use profile if it's not the built-in default (which falls through to global settings)
+      if (profile !== DEFAULT_PROFILE && profile.contentTemplatePath) {
         return this.readTemplateFile(profile.contentTemplatePath);
       }
     }

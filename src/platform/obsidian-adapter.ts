@@ -150,6 +150,10 @@ class ObsidianWorkspaceAccess implements IWorkspaceAccess {
     }
   }
 
+  openUrl(url: string): void {
+    window.open(url);
+  }
+
   getConfig(key: string): unknown {
     return (this.app.vault as unknown as VaultExt).getConfig(key);
   }
