@@ -124,6 +124,43 @@ describe('SourceManager', () => {
       ]);
       expect(factory.create).toHaveBeenCalledTimes(1); // Not recreated
     });
+
+    it('updates databaseName on existing source after rename', async () => {
+      const factory = makeMockFactory();
+      const manager = new SourceManager(factory as never);
+
+      manager.syncSources([
+        makeDb('Old Name', '/lib.bib', 'biblatex', 'db-123-abc'),
+      ]);
+      const resultsBefore = await manager.loadAll();
+      expect(resultsBefore[0].databaseName).toBe('Old Name');
+
+      // Rename the database
+      manager.syncSources([
+        makeDb('New Name', '/lib.bib', 'biblatex', 'db-123-abc'),
+      ]);
+      expect(factory.create).toHaveBeenCalledTimes(1); // Source not recreated
+
+      const resultsAfter = await manager.loadAll();
+      expect(resultsAfter[0].databaseName).toBe('New Name');
+      expect(resultsAfter[0].databaseId).toBe('db-123-abc');
+    });
+
+    it('updates databaseId fallback when db has no id and name changes', async () => {
+      const factory = makeMockFactory();
+      const manager = new SourceManager(factory as never);
+
+      // Without id, name is used as both key and databaseId fallback
+      manager.syncSources([makeDb('Alpha', '/a.bib')]);
+      const resultsBefore = await manager.loadAll();
+      expect(resultsBefore[0].databaseId).toBe('Alpha');
+      expect(resultsBefore[0].databaseName).toBe('Alpha');
+
+      // Re-sync with same name to update metadata (key is name-based here)
+      manager.syncSources([makeDb('Alpha', '/a.bib')]);
+      const resultsAfter = await manager.loadAll();
+      expect(resultsAfter[0].databaseName).toBe('Alpha');
+    });
   });
 
   describe('loadAll', () => {

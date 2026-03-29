@@ -43,6 +43,9 @@ const DOCS_BASE =
 
 export class CitationSettingTab extends PluginSettingTab {
   private plugin: CitationPlugin;
+  private debouncedReload = debounce(() => {
+    void this.plugin.libraryService.load();
+  }, 2000);
 
   constructor(app: App, plugin: CitationPlugin) {
     super(app, plugin);
@@ -142,6 +145,7 @@ export class CitationSettingTab extends PluginSettingTab {
               this.plugin.settings.databases.splice(index, 1);
               await this.plugin.saveSettings();
               this.display();
+              void this.plugin.libraryService.load();
             })();
           });
       });
@@ -152,9 +156,8 @@ export class CitationSettingTab extends PluginSettingTab {
       dropdown.onChange(async (value) => {
         this.plugin.settings.databases[index].type = value as DatabaseType;
         await this.plugin.saveSettings();
-        new Notice(
-          'Database format changed. The library will reload automatically.',
-        );
+        new Notice('Database format changed. Reloading library…');
+        void this.plugin.libraryService.load();
       });
     });
 
@@ -168,7 +171,10 @@ export class CitationSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.databases[index].path = value;
             await this.plugin.saveSettings();
-            void this.checkDatabasePath(value, pathStatusEl);
+            const valid = await this.checkDatabasePath(value, pathStatusEl);
+            if (valid) {
+              this.debouncedReload();
+            }
           });
       });
 

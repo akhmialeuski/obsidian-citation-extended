@@ -39,7 +39,8 @@ export class SourceManager implements ISourceManager {
    *
    * - New configs get a new DataSource created via the factory.
    * - Removed configs get their DataSource disposed.
-   * - Unchanged configs keep their existing DataSource (preserving watchers).
+   * - Unchanged configs keep their existing DataSource (preserving watchers),
+   *   but mutable metadata (databaseName, databaseId) is refreshed from config.
    */
   syncSources(databases: DatabaseConfig[]): void {
     const newKeys = new Set<string>();
@@ -72,6 +73,11 @@ export class SourceManager implements ISourceManager {
           databaseName: db.name,
         });
         console.debug(`SourceManager: Created source "${db.name}" (${key})`);
+      } else {
+        // Update mutable metadata on existing source (e.g. after user renames a database)
+        const managed = this.sources.get(key)!;
+        managed.databaseName = db.name;
+        managed.databaseId = db.id ?? db.name;
       }
     }
 
