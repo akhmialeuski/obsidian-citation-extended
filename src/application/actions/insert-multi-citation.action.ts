@@ -40,9 +40,11 @@ export class InsertMultiCitationAction extends SearchModalAction {
     if (this.collectedKeys.length > 0) {
       this.insertCollected();
     }
+    // Reset for next invocation — action instance is reused across modal sessions
+    this.keepOpen = true;
+    this.collectedKeys = [];
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async execute(_invocation: ActionInvocationContext): Promise<void> {
     // Modal-based — execute is a no-op
   }

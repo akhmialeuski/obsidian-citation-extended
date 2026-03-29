@@ -29,7 +29,6 @@ class TestAction extends ApplicationAction {
       ...opts,
     };
   }
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async execute(_inv: ActionInvocationContext): Promise<void> {}
 }
 
@@ -50,9 +49,7 @@ class TestSearchModalAction extends SearchModalAction {
       ...opts,
     };
   }
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onChoose(_item: Entry, _evt: MouseEvent | KeyboardEvent): void {}
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async execute(_inv: ActionInvocationContext): Promise<void> {}
 }
 

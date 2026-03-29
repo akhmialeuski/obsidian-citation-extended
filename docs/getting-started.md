@@ -66,6 +66,7 @@ If you use [Typst](https://typst.app) for typesetting, you can use your Hayagriv
 | Insert subsequent citation | Appends to an existing citation: `[@a]` → `[@a; @b]` |
 | Insert multiple citations | Multi-select mode: pick several, insert `[@a; @b; @c]` |
 | Open literature note for citation at cursor | Jumps to the note for `[@citekey]` under cursor — no modal |
+| Update all literature notes | Re-renders all literature notes with the current content template |
 | Refresh citation database | Reloads all configured bibliography files |
 
 See [Features](features.md) for detailed descriptions and [Configuration: Hotkeys](configuration.md#hotkeys) for recommended key bindings.

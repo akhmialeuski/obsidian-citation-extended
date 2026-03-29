@@ -21,7 +21,6 @@ export class OpenNoteAtCursorAction extends ApplicationAction {
     requiresEditor: true,
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async execute(_invocation: ActionInvocationContext): Promise<void> {
     const editor = this.ctx.platform.workspace.getActiveEditor();
     if (!editor) {

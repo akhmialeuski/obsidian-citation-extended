@@ -35,7 +35,6 @@ export class BatchUpdateNotesAction extends ApplicationAction {
     super(ctx);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- invocation unused for batch actions
   async execute(_invocation: ActionInvocationContext): Promise<void> {
     const { platform } = this.ctx;
 

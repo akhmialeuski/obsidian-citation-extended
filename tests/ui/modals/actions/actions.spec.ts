@@ -646,6 +646,28 @@ describe('InsertMultiCitationAction', () => {
     );
   });
 
+  it('resets keepOpen and collectedKeys after onClose (reuse across modal sessions)', () => {
+    const entry1 = makeEntry({ id: 'key1' });
+    const shiftEnter = new KeyboardEvent('keyup', {
+      key: 'Enter',
+      shiftKey: true,
+    });
+
+    // First session: Shift+Enter sets keepOpen=false
+    action.onChoose(entry1 as never, shiftEnter);
+    expect(action.keepOpen).toBe(false);
+
+    // onClose resets state for next session
+    action.onClose();
+    expect(action.keepOpen).toBe(true);
+
+    // Second session: keepOpen should be true again
+    const entry2 = makeEntry({ id: 'key2' });
+    const enter = new KeyboardEvent('keyup', { key: 'Enter' });
+    action.onChoose(entry2 as never, enter);
+    expect(action.keepOpen).toBe(true);
+  });
+
   it('returns correct instructions', () => {
     const instructions = action.getInstructions();
     expect(instructions).toHaveLength(4);

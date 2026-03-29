@@ -58,14 +58,12 @@ export abstract class ApplicationAction {
   constructor(protected ctx: ActionContext) {}
 
   /** Whether this action should appear in the given context. */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  isVisible(invocation: ActionInvocationContext): boolean {
+  isVisible(_invocation: ActionInvocationContext): boolean {
     return true;
   }
 
   /** Whether this action is currently executable. */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  isEnabled(invocation: ActionInvocationContext): boolean {
+  isEnabled(_invocation: ActionInvocationContext): boolean {
     return true;
   }
 

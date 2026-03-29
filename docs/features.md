@@ -91,6 +91,17 @@ Insert several citations at once in a combined `[@key1; @key2; @key3]` format.
 
 ![Multi-citation search modal](images/multi-citation-modal.png)
 
+## Update All Literature Notes
+
+Re-renders every existing literature note using the current content template.
+
+- **Command**: `Citations: Update all literature notes`
+- Only notes whose rendered content differs from their current content are written
+- Runs a dry-run preview first to count changes, then executes with progress notifications
+- Errors are logged to the console; a summary notification is shown when the batch completes
+
+**When to use:** After changing your content template and you want all existing notes to match the new template. The command skips notes that are already up to date, so it is safe to run repeatedly.
+
 ## Refresh Citation Database
 
 Manually reloads all configured citation databases.

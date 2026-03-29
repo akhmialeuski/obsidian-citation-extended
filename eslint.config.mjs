@@ -30,6 +30,9 @@ export default tseslint.config(
             // Prettier integration
             'prettier/prettier': 'error',
 
+            // Unused variables: allow _-prefixed params (abstract method implementations)
+            '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+
             // Strict Type Safety
             '@typescript-eslint/no-explicit-any': 'error',
             '@typescript-eslint/no-floating-promises': 'error',

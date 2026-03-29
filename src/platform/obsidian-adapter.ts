@@ -151,6 +151,20 @@ class ObsidianWorkspaceAccess implements IWorkspaceAccess {
   }
 
   openUrl(url: string): void {
+    // Electron shell opens URLs in the system default handler (browser, Zotero, etc.)
+    // Fallback to window.open for mobile Obsidian where Electron is unavailable
+    const w = window as unknown as Record<string, unknown>;
+    if (typeof w.require === 'function') {
+      const electron = (
+        w.require as (id: string) => {
+          shell?: { openExternal(url: string): void };
+        }
+      )('electron');
+      if (electron?.shell) {
+        electron.shell.openExternal(url);
+        return;
+      }
+    }
     window.open(url);
   }
 

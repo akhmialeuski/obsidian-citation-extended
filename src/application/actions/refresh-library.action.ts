@@ -19,7 +19,6 @@ export class RefreshLibraryAction extends ApplicationAction {
     requiresEditor: false,
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async execute(_invocation: ActionInvocationContext): Promise<void> {
     await this.ctx.libraryService.load();
   }

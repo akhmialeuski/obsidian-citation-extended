@@ -64,7 +64,6 @@ export class InsertCitationAction extends SearchModalAction {
     }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async execute(_invocation: ActionInvocationContext): Promise<void> {
     // Modal-based — execute is a no-op; real work happens in onChoose
   }
