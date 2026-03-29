@@ -54,7 +54,9 @@ jest.mock('../../src/ui/modals/citation-search-modal', () => ({
 interface CommandDef {
   id: string;
   name: string;
-  callback: () => void;
+  callback?: () => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only mock type
+  editorCallback?: (editor: any) => void;
 }
 
 /** Create a concrete ApplicationAction subclass for testing. */
@@ -62,14 +64,19 @@ class TestApplicationAction extends ApplicationAction {
   descriptor: ActionDescriptor;
   execute = jest.fn().mockResolvedValue(undefined);
 
-  constructor(id: string, name: string, ctx: ActionContext) {
+  constructor(
+    id: string,
+    name: string,
+    ctx: ActionContext,
+    requiresEditor = false,
+  ) {
     super(ctx);
     this.descriptor = {
       id,
       name,
       showInCommandPalette: true,
       showInContextMenu: false,
-      requiresEditor: false,
+      requiresEditor,
     };
   }
 }
@@ -80,14 +87,19 @@ class TestSearchModalAction extends SearchModalAction {
   execute = jest.fn().mockResolvedValue(undefined);
   onChoose = jest.fn();
 
-  constructor(id: string, name: string, ctx: ActionContext) {
+  constructor(
+    id: string,
+    name: string,
+    ctx: ActionContext,
+    requiresEditor = false,
+  ) {
     super(ctx);
     this.descriptor = {
       id,
       name,
       showInCommandPalette: true,
       showInContextMenu: false,
-      requiresEditor: false,
+      requiresEditor,
     };
   }
 }
@@ -130,24 +142,28 @@ function buildTestActions(ctx: ActionContext) {
       'open-note-at-cursor',
       'Open note at cursor',
       ctx,
+      true, // requiresEditor
     ),
-    new TestSearchModalAction('insert-citation', 'Insert citation', ctx),
+    new TestSearchModalAction('insert-citation', 'Insert citation', ctx, true),
     new TestSearchModalAction(
       'insert-subsequent-citation',
       'Insert subsequent citation',
       ctx,
+      true,
     ),
     new TestSearchModalAction(
       'insert-multiple-citations',
       'Insert multiple citations',
       ctx,
+      true,
     ),
     new TestSearchModalAction(
       'insert-literature-note',
       'Insert literature note',
       ctx,
+      true,
     ),
-    new TestApplicationAction('update-bib-data', 'Update bib data', ctx),
+    new TestApplicationAction('update-bib-data', 'Update bib data', ctx, false),
     new TestSearchModalAction(
       'open-literature-note',
       'Open literature note',
@@ -201,7 +217,7 @@ describe('CommandRegistry', () => {
     expect(mockPlugin.addCommand).toHaveBeenCalledTimes(8);
   });
 
-  it('non-modal action callback calls action.execute()', () => {
+  it('non-modal action with requiresEditor: true uses editorCallback', () => {
     const registry = new CommandRegistry(
       {} as never,
       mockPlugin,
@@ -213,10 +229,83 @@ describe('CommandRegistry', () => {
 
     const cmd = commands.find((c) => c.id === 'open-note-at-cursor');
     expect(cmd).toBeDefined();
-    cmd!.callback();
+    expect(cmd!.editorCallback).toBeDefined();
+    expect(cmd!.callback).toBeUndefined();
+  });
+
+  it('non-modal action with requiresEditor: false uses callback', () => {
+    const registry = new CommandRegistry(
+      {} as never,
+      mockPlugin,
+      actionRegistry,
+      actionCtx,
+      libraryService,
+    );
+    registry.registerAll();
+
+    const cmd = commands.find((c) => c.id === 'update-bib-data');
+    expect(cmd).toBeDefined();
+    expect(cmd!.callback).toBeDefined();
+    expect(cmd!.editorCallback).toBeUndefined();
+  });
+
+  it('SearchModalAction always uses callback regardless of requiresEditor', () => {
+    const registry = new CommandRegistry(
+      {} as never,
+      mockPlugin,
+      actionRegistry,
+      actionCtx,
+      libraryService,
+    );
+    registry.registerAll();
+
+    // insert-citation has requiresEditor: true but is a SearchModalAction
+    const cmd = commands.find((c) => c.id === 'insert-citation');
+    expect(cmd).toBeDefined();
+    expect(cmd!.callback).toBeDefined();
+    expect(cmd!.editorCallback).toBeUndefined();
+  });
+
+  it('non-modal action editorCallback calls action.execute()', () => {
+    const registry = new CommandRegistry(
+      {} as never,
+      mockPlugin,
+      actionRegistry,
+      actionCtx,
+      libraryService,
+    );
+    registry.registerAll();
+
+    const cmd = commands.find((c) => c.id === 'open-note-at-cursor');
+    expect(cmd).toBeDefined();
+
+    const mockEditor = { getSelection: jest.fn(() => 'cursor selection') };
+    cmd!.editorCallback!(mockEditor);
 
     const action = actions.find(
       (a) => a.descriptor.id === 'open-note-at-cursor',
+    ) as TestApplicationAction;
+    expect(action.execute).toHaveBeenCalledWith({
+      selectedText: 'cursor selection',
+    });
+  });
+
+  it('non-modal callback action calls action.execute()', () => {
+    const registry = new CommandRegistry(
+      {} as never,
+      mockPlugin,
+      actionRegistry,
+      actionCtx,
+      libraryService,
+    );
+    registry.registerAll();
+
+    const cmd = commands.find((c) => c.id === 'update-bib-data');
+    expect(cmd).toBeDefined();
+    cmd!.callback!();
+
+    const action = actions.find(
+      (a) => a.descriptor.id === 'update-bib-data',
     ) as TestApplicationAction;
     expect(action.execute).toHaveBeenCalledWith({ selectedText: '' });
   });
@@ -237,7 +326,7 @@ describe('CommandRegistry', () => {
 
     const cmd = commands.find((c) => c.id === 'insert-subsequent-citation');
     expect(cmd).toBeDefined();
-    expect(() => cmd!.callback()).not.toThrow();
+    expect(() => cmd!.callback!()).not.toThrow();
     expect(CitationSearchModal).toHaveBeenCalled();
   });
 
@@ -253,27 +342,7 @@ describe('CommandRegistry', () => {
 
     const cmd = commands.find((c) => c.id === 'insert-multiple-citations');
     expect(cmd).toBeDefined();
-    expect(() => cmd!.callback()).not.toThrow();
-  });
-
-  it('update-bib-data command calls action.execute()', () => {
-    const registry = new CommandRegistry(
-      {} as never,
-      mockPlugin,
-      actionRegistry,
-      actionCtx,
-      libraryService,
-    );
-    registry.registerAll();
-
-    const cmd = commands.find((c) => c.id === 'update-bib-data');
-    expect(cmd).toBeDefined();
-    cmd!.callback();
-
-    const action = actions.find(
-      (a) => a.descriptor.id === 'update-bib-data',
-    ) as TestApplicationAction;
-    expect(action.execute).toHaveBeenCalled();
+    expect(() => cmd!.callback!()).not.toThrow();
   });
 
   it('passes selected text to modal action', () => {
@@ -292,7 +361,7 @@ describe('CommandRegistry', () => {
     registry.registerAll();
 
     const cmd = commands.find((c) => c.id === 'insert-citation');
-    cmd!.callback();
+    cmd!.callback!();
 
     const action = actions.find(
       (a) => a.descriptor.id === 'insert-citation',

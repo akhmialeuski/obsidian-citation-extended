@@ -52,8 +52,12 @@ You can configure up to 20 databases in settings. All entries are loaded and mer
 When the same citekey appears in multiple databases:
 
 - Both entries are preserved in the library
-- In the search modal, duplicates show a prefix: `DatabaseName:citekey`
+- In the search modal, duplicates show a display prefix: `DatabaseName:citekey` (e.g. `Personal Library:smith2023`)
+- Internally, each duplicate receives a **composite citekey** in the format `citekey@<database-id>`, where `<database-id>` is a stable auto-generated identifier (e.g. `smith2023@db-1711234567-a1b2`). This composite citekey is used for literature note filenames and wiki-links
+- Because the composite citekey uses the internal database id (not the display name), **renaming a database does not break existing literature notes or links**
 - The merge strategy determines which entry takes precedence for note creation
+
+> **Upgrading from an earlier version:** If you previously used multiple databases with overlapping citekeys, the composite citekey format has changed from `citekey@DatabaseName` to `citekey@<database-id>`. Literature note filenames and wiki-links that used the old format need to be updated manually. **Single-database setups are not affected.** Multi-database setups without overlapping citekeys are also not affected.
 
 ### Merge Strategies
 

@@ -29,6 +29,9 @@ export interface BatchUpdateResult {
 
   /** Citekeys that encountered errors during update. */
   errors: Array<{ citekey: string; error: string }>;
+
+  /** True when the library was not loaded at the time of the request. */
+  libraryNotReady?: boolean;
 }
 
 /** Progress callback payload emitted during execution. */

@@ -72,7 +72,7 @@ describe('BatchNoteOrchestrator', () => {
   let orchestrator: IBatchNoteOrchestrator;
 
   describe('preview()', () => {
-    it('returns empty result when library is null', async () => {
+    it('returns libraryNotReady: true when library is null', async () => {
       orchestrator = new BatchNoteOrchestrator(
         makeLibraryService(null),
         makeNoteService({}),
@@ -86,7 +86,30 @@ describe('BatchNoteOrchestrator', () => {
         dryRun: true,
       });
 
-      expect(result).toEqual({ updated: [], skipped: [], errors: [] });
+      expect(result).toEqual({
+        updated: [],
+        skipped: [],
+        errors: [],
+        libraryNotReady: true,
+      });
+    });
+
+    it('does not set libraryNotReady when library is loaded', async () => {
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(makeLibrary({ key1: {} })),
+        makeNoteService({ key1: makeFile('notes/key1.md') }),
+        makeTemplateService(() => ({ ok: true, value: 'same content' })),
+        makeVault({ 'notes/key1.md': 'same content' }),
+      );
+
+      const result = await orchestrator.preview({
+        citekeys: ['key1'],
+        templateStr: '{{title}}',
+        dryRun: true,
+      });
+
+      expect(result.libraryNotReady).toBeUndefined();
+      expect(result.skipped).toContain('key1');
     });
 
     it('skips citekeys not in library', async () => {
@@ -319,6 +342,24 @@ describe('BatchNoteOrchestrator', () => {
       expect(result.errors).toHaveLength(1);
       expect(result.errors[0].citekey).toBe('k1');
       expect(result.updated).toContain('k2');
+    });
+
+    it('returns libraryNotReady: true when library is null', async () => {
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(null),
+        makeNoteService({}),
+        makeTemplateService(() => ({ ok: true, value: '' })),
+        makeVault({}),
+      );
+
+      const result = await orchestrator.execute({
+        citekeys: ['*'],
+        templateStr: '{{title}}',
+        dryRun: false,
+      });
+
+      expect(result.libraryNotReady).toBe(true);
+      expect(result.updated).toHaveLength(0);
     });
   });
 });

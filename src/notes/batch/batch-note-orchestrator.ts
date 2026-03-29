@@ -47,7 +47,7 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
   ): Promise<BatchUpdateResult> {
     const library = this.libraryService.library;
     if (!library) {
-      return { updated: [], skipped: [], errors: [] };
+      return { updated: [], skipped: [], errors: [], libraryNotReady: true };
     }
 
     const allCitekeys = Object.keys(library.entries);

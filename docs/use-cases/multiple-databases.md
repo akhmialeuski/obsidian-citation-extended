@@ -72,6 +72,19 @@ The plugin supports up to 20 databases loaded simultaneously. All entries are me
 
 4. Select the entry you want. The prefix helps you identify which database each result comes from.
 
+### Understanding Composite Citekeys
+
+When the same citekey exists in multiple databases, each duplicate receives a **composite citekey** that includes the database's stable internal identifier. For example, if `smith2023` exists in two databases, the composite citekeys look like:
+
+```
+smith2023@db-1711234567-a1b2
+smith2023@db-1711234890-c3d4
+```
+
+This composite citekey is used for literature note filenames and wiki-links. Because it is based on the database's internal id (not the display name), **you can freely rename databases** in settings without breaking any existing notes or links.
+
+> **Note:** Single-database setups and multi-database setups without overlapping citekeys are not affected — citekeys remain unchanged (e.g. `smith2023`).
+
 ### Understanding the Merge Strategy
 
 When the same citekey appears in multiple databases, the plugin needs to decide which entry to use for note creation. The current merge strategy is **Last wins**:
@@ -189,6 +202,7 @@ This is especially useful on mobile (iOS/Android) where absolute filesystem path
 ## Tips
 
 - **Naming matters.** Give each database a clear, descriptive name. These names appear as prefixes in the search modal when duplicates are found — `Team Library:smith2023` is much more helpful than `Database 2:smith2023`.
+- **Renaming is safe.** You can rename a database at any time in settings. The plugin uses a stable internal identifier for composite citekeys, so renaming does not break existing literature notes or wiki-links.
 - **Keep the total count reasonable.** The plugin handles large libraries well (5000+ entries), but loading 20 large BibLaTeX files simultaneously will increase load time. CSL-JSON is significantly faster to parse than BibLaTeX.
 - **The file watcher works per-database.** Each database file is watched independently. If you update `personal-library.bib`, only that database is reloaded — the others stay cached.
 - **Use "Refresh citation database" if something looks wrong.** If an entry from one database is not appearing, try running the refresh command from the Command Palette. This reloads all databases from disk.

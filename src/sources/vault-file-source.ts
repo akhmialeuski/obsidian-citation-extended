@@ -60,13 +60,11 @@ export class VaultFileSource implements DataSource {
   }
 
   /**
-   * Watch for file changes using Vault events
+   * Watch for file changes using Vault events.
+   * Silently idempotent — calling watch() when watchers already exist is a no-op.
    */
   watch(callback: () => void): void {
-    if (this.eventRefs.length > 0) {
-      console.warn(`VaultFileSource: Watcher already exists for ${this.id}`);
-      return;
-    }
+    if (this.eventRefs.length > 0) return;
 
     this.watchCallback = callback;
 

@@ -15,12 +15,13 @@ This section controls where the plugin reads your bibliography data from.
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| Database name | Friendly label shown in search modal when the same citekey exists in multiple databases | `Database 1` |
-| Database type | Format of the bibliography file (see [Database Formats](#database-formats) below) | `CSL-JSON` |
+| Database name | Friendly label shown in search modal when the same citekey exists in multiple databases. You can rename a database at any time without breaking existing literature notes or wiki-links | `Database 1` |
+| Database type | Format of the bibliography file (see [Database Formats](#database-formats) below). Changing the format triggers an automatic library reload and shows a confirmation notice | `CSL-JSON` |
 | Database path | Absolute or vault-relative path to the exported bibliography file | (empty) |
 
 - Up to 20 databases supported
-- When the same citekey appears in multiple databases, both entries are kept with a `database:citekey` display prefix
+- Each database receives a stable internal identifier on creation. This identifier is invisible to the user but ensures that renaming a database does not break composite citekeys or literature note links
+- When the same citekey appears in multiple databases, both entries are kept with a `database:citekey` display prefix in the search modal
 - Path validation runs automatically and shows "Path verified" or "File not found"
 
 ### Database Formats

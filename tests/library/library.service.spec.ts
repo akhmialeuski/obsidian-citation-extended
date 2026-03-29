@@ -194,13 +194,13 @@ describe('LibraryService', () => {
     (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
       id,
       load: jest.fn().mockImplementation(async () => {
-        if (id === 'local-file:DB1:db1.json')
+        if (id === 'local-file:biblatex:DB1:db1.json')
           return {
             sourceId: id,
             entries: [{ id: '1', title: 'A' }],
             modifiedAt: new Date(),
           };
-        if (id === 'local-file:DB2:db2.json')
+        if (id === 'local-file:biblatex:DB2:db2.json')
           return {
             sourceId: id,
             entries: [
@@ -457,7 +457,7 @@ describe('LibraryService', () => {
       (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
         id,
         load: jest.fn().mockImplementation(async () => {
-          if (id === 'local-file:DB1:db1.json')
+          if (id === 'local-file:biblatex:DB1:db1.json')
             return {
               sourceId: id,
               entries: [
@@ -601,7 +601,7 @@ describe('LibraryService', () => {
       (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
         id,
         load: jest.fn().mockImplementation(async () => {
-          if (id === 'local-file:Good:good.json') {
+          if (id === 'local-file:csl-json:Good:good.json') {
             return {
               sourceId: id,
               entries: [{ id: 'entry1', title: 'Entry 1' }],
