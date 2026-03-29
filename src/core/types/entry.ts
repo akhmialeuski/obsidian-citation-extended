@@ -1,13 +1,28 @@
+import type { TemplateContext } from './template-context';
+
 export interface Author {
   given?: string;
   family?: string;
   literal?: string;
 }
 
+/** Fields extracted from an entry for full-text search indexing. */
+export interface SearchDocument {
+  id: string;
+  title: string;
+  authorString: string;
+  year: string;
+  zoteroId: string;
+}
+
 /**
  * An `Entry` represents a single reference in a reference database.
  * Each entry has a unique identifier, known in most reference managers as its
  * "citekey."
+ *
+ * Subclasses (adapters) implement raw field access for each bibliography format.
+ * This base class provides derived domain methods that encapsulate presentation
+ * and transformation logic, keeping callers decoupled from field-level details.
  */
 export abstract class Entry {
   /**
@@ -142,6 +157,124 @@ export abstract class Entry {
    */
   public get zoteroSelectURI(): string {
     return `zotero://select/items/@${this.citekey}`;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Domain convenience methods — encapsulate presentation logic so callers
+  // remain decoupled from raw field details.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Publication year as a string, or empty string when unavailable.
+   */
+  public yearString(): string {
+    return this.year?.toString() ?? '';
+  }
+
+  /**
+   * Publication date as an ISO 8601 date string (YYYY-MM-DD), or null
+   * when the issued date is not set.
+   */
+  public dateString(): string | null {
+    return this.issuedDate ? this.issuedDate.toISOString().split('T')[0] : null;
+  }
+
+  /**
+   * Family (or literal) name of the first author, used as a shorthand
+   * in templates (e.g. `{{lastname}}`).
+   */
+  public lastname(): string | undefined {
+    return this.author?.[0]?.family ?? this.author?.[0]?.literal;
+  }
+
+  /**
+   * Display-ready author string, optionally truncated to `maxCount`
+   * authors with an "et al." suffix.
+   *
+   * @param maxCount  Maximum number of authors to include before
+   *                  truncating. When omitted or 0, returns the full
+   *                  `authorString`.
+   */
+  public displayAuthors(maxCount?: number): string {
+    if (!maxCount || !this.author || this.author.length <= maxCount) {
+      return this.authorString || '';
+    }
+    const names = this.author
+      .slice(0, maxCount)
+      .map((a) => [a.given, a.family].filter(Boolean).join(' '));
+    return names.join(', ') + ' et al.';
+  }
+
+  /**
+   * UI display key: prefixed with the source database name when the
+   * entry was loaded from a multi-database configuration.
+   */
+  public displayKey(): string {
+    const key = this.citekey || this.id;
+    return this._sourceDatabase ? `${this._sourceDatabase}:${key}` : key;
+  }
+
+  /**
+   * Build a flat document suitable for full-text search indexing.
+   * Contains only string fields that the search engine needs.
+   */
+  public toSearchDocument(): SearchDocument {
+    return {
+      id: this.id,
+      title: this.title || '',
+      authorString: this.authorString || '',
+      year: this.yearString(),
+      zoteroId: this.zoteroId || '',
+    };
+  }
+
+  /**
+   * Build the template context used by Handlebars when rendering
+   * literature notes, citations, and titles.
+   *
+   * Top-level shortcuts provide convenient `{{field}}` access in templates.
+   * The nested `entry` object exposes the full serialized entry for advanced
+   * templates that need arbitrary fields via `{{entry.someField}}`.
+   *
+   * @param extras  Optional additional context (e.g. selected editor text).
+   */
+  public toTemplateContext(extras?: {
+    selectedText?: string;
+  }): TemplateContext {
+    return {
+      citekey: this.id,
+
+      abstract: this.abstract,
+      authorString: this.authorString,
+      containerTitle: this.containerTitle,
+      DOI: this.DOI,
+      eprint: this.eprint,
+      eprinttype: this.eprinttype,
+      eventPlace: this.eventPlace,
+      ISBN: this.ISBN,
+      keywords: this.keywords,
+      lastname: this.lastname(),
+      language: this.language,
+      note: this.note,
+      page: this.page,
+      publisher: this.publisher,
+      publisherPlace: this.publisherPlace,
+      series: this.series,
+      volume: this.volume,
+      source: this.source,
+      title: this.title,
+      titleShort: this.titleShort,
+      type: this.type,
+      URL: this.URL,
+      year: this.yearString() || undefined,
+      zoteroSelectURI: this.zoteroSelectURI,
+      zoteroId: this.zoteroId,
+      date: this.dateString(),
+
+      selectedText: extras?.selectedText,
+
+      entry: this.toJSON(),
+    };
   }
 
   toJSON(): Record<string, unknown> {

@@ -5,6 +5,7 @@ import { LoadingStatus } from '../../../src/library/library-state';
 import type { SearchModalAction } from '../../../src/application/actions/action.types';
 import type { ILibraryService } from '../../../src/container';
 import type { CitationsPluginSettings } from '../../../src/ui/settings/settings';
+import { TestEntry } from '../../helpers/mock-obsidian';
 
 // ---------------------------------------------------------------------------
 // Polyfill Obsidian-specific HTMLElement methods for jsdom
@@ -113,28 +114,8 @@ jest.mock(
 // Helpers
 // ---------------------------------------------------------------------------
 
-function createMockEntry(overrides: Record<string, unknown> = {}): Entry {
-  return {
-    id: 'test2024',
-    type: 'article-journal',
-    title: 'Test Article',
-    titleShort: 'Test',
-    authorString: 'John Doe, Jane Smith',
-    author: [
-      { given: 'John', family: 'Doe' },
-      { given: 'Jane', family: 'Smith' },
-    ],
-    year: 2024,
-    containerTitle: 'Test Journal',
-    DOI: '10.1234/test',
-    URL: 'https://example.com',
-    citekey: 'test2024',
-    _sourceDatabase: undefined,
-    toJSON() {
-      return { ...this };
-    },
-    ...overrides,
-  } as unknown as Entry;
+function createMockEntry(overrides: Record<string, unknown> = {}): TestEntry {
+  return new TestEntry(overrides);
 }
 
 function createMockLibraryService(
@@ -535,8 +516,16 @@ describe('CitationSearchModal', () => {
 
     it('sorts results by configured sort order', () => {
       const entries: Record<string, Entry> = {
-        a: createMockEntry({ id: 'a', title: 'Entry A', year: 2020 }),
-        b: createMockEntry({ id: 'b', title: 'Entry B', year: 2024 }),
+        a: createMockEntry({
+          id: 'a',
+          title: 'Entry A',
+          issuedDate: new Date('2020-01-01'),
+        }),
+        b: createMockEntry({
+          id: 'b',
+          title: 'Entry B',
+          issuedDate: new Date('2024-01-01'),
+        }),
       };
 
       libraryService = createMockLibraryService({
@@ -580,7 +569,7 @@ describe('CitationSearchModal', () => {
     it('renders default layout with title, citekey, year, authors', () => {
       const entry = createMockEntry({
         title: 'My Paper',
-        year: 2024,
+        issuedDate: new Date('2024-01-01'),
         authorString: 'Doe, Smith',
         author: [
           { given: 'John', family: 'Doe' },
@@ -627,7 +616,7 @@ describe('CitationSearchModal', () => {
     });
 
     it('does not render year span when year is undefined', () => {
-      const entry = createMockEntry({ year: undefined });
+      const entry = createMockEntry({ issuedDate: null });
       const el = document.createElement('div');
 
       modal.renderSuggestion(entry, el);
@@ -649,7 +638,6 @@ describe('CitationSearchModal', () => {
     it('shows composite citekey with source database prefix', () => {
       const entry = createMockEntry({
         _sourceDatabase: 'MyLib',
-        citekey: 'test2024',
       });
       const el = document.createElement('div');
 

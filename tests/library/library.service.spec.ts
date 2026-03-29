@@ -1,3 +1,4 @@
+import { TestEntry } from '../helpers/mock-obsidian';
 import { LibraryService } from '../../src/library/library.service';
 import { CitationsPluginSettings } from '../../src/ui/settings/settings';
 import { LoadingStatus } from '../../src/library/library-state';
@@ -197,7 +198,7 @@ describe('LibraryService', () => {
         if (id === 'local-file:biblatex:DB1:db1.json')
           return {
             sourceId: id,
-            entries: [{ id: '1', title: 'A' }],
+            entries: [new TestEntry({ id: '1', title: 'A' })],
             modifiedAt: new Date(),
           };
         if (id === 'local-file:biblatex:DB2:db2.json')
@@ -501,7 +502,7 @@ describe('LibraryService', () => {
         id,
         load: jest.fn().mockResolvedValue({
           sourceId: id,
-          entries: [{ id: 'shared', title: `From ${id}` }],
+          entries: [new TestEntry({ id: 'shared', title: `From ${id}` })],
           modifiedAt: new Date(),
         }),
         watch: jest.fn(),
@@ -524,7 +525,7 @@ describe('LibraryService', () => {
         id,
         load: jest.fn().mockResolvedValue({
           sourceId: id,
-          entries: [{ id: 'ok', title: 'Good Entry' }],
+          entries: [new TestEntry({ id: 'ok', title: 'Good Entry' })],
           parseErrors: [
             { message: 'Bad entry 1', citekey: 'bad1' },
             { message: 'Bad entry 2', citekey: 'bad2' },
@@ -556,7 +557,7 @@ describe('LibraryService', () => {
         id,
         load: jest.fn().mockResolvedValue({
           sourceId: id,
-          entries: [{ id: 'ok', title: 'Good' }],
+          entries: [new TestEntry({ id: 'ok', title: 'Good' })],
           parseErrors: manyErrors,
           modifiedAt: new Date(),
         }),
@@ -573,7 +574,7 @@ describe('LibraryService', () => {
         id,
         load: jest.fn().mockResolvedValue({
           sourceId: id,
-          entries: [{ id: 'ok', title: 'Good' }],
+          entries: [new TestEntry({ id: 'ok', title: 'Good' })],
           parseErrors: [{ message: 'Bad entry', citekey: 'bad' }],
           modifiedAt: new Date(),
         }),
@@ -604,7 +605,7 @@ describe('LibraryService', () => {
           if (id === 'local-file:csl-json:Good:good.json') {
             return {
               sourceId: id,
-              entries: [{ id: 'entry1', title: 'Entry 1' }],
+              entries: [new TestEntry({ id: 'entry1', title: 'Entry 1' })],
               modifiedAt: new Date(),
             };
           }
@@ -993,7 +994,7 @@ describe('LibraryService', () => {
         id,
         load: jest.fn().mockResolvedValue({
           sourceId: id,
-          entries: [{ id: 'x', title: 'X' }],
+          entries: [new TestEntry({ id: 'x', title: 'X' })],
           modifiedAt: new Date(),
         }),
         watch: jest.fn(),
@@ -1017,8 +1018,8 @@ describe('LibraryService', () => {
         load: jest.fn().mockResolvedValue({
           sourceId: id,
           entries: [
-            { id: 'x', title: 'X' },
-            { id: 'y', title: 'Y' },
+            new TestEntry({ id: 'x', title: 'X' }),
+            new TestEntry({ id: 'y', title: 'Y' }),
           ],
           modifiedAt: new Date(),
         }),
@@ -1090,7 +1091,7 @@ describe('LibraryService', () => {
         id,
         load: jest.fn().mockResolvedValue({
           sourceId: id,
-          entries: [{ id: 'ok', title: 'Fine' }],
+          entries: [new TestEntry({ id: 'ok', title: 'Fine' })],
           modifiedAt: new Date(),
         }),
         watch: jest.fn(),

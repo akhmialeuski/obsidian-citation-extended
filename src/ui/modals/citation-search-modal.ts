@@ -17,6 +17,9 @@ interface SuggestModalWithUpdate<T> extends SuggestModal<T> {
   updateSuggestions(): void;
 }
 
+/** Maximum number of authors shown before truncation with "et al." */
+const AUTHOR_DISPLAY_LIMIT = 3;
+
 export class CitationSearchModal extends SuggestModal<Entry> {
   limit = 50;
   loadingEl: HTMLElement;
@@ -196,33 +199,21 @@ export class CitationSearchModal extends SuggestModal<Entry> {
       return;
     }
 
-    // Default rendering logic
+    // Default rendering logic — uses Entry domain methods for encapsulation
     el.empty();
     const entryTitle = entry.title || '';
-
-    const authorString = entry.authorString || '';
-    let displayedAuthorString = authorString;
-
-    if (entry.author && entry.author.length > 3) {
-      const firstAuthors = entry.author
-        .slice(0, 3)
-        .map((a) => [a.given, a.family].filter(Boolean).join(' '));
-      displayedAuthorString = firstAuthors.join(', ') + ' et al.';
-    }
-
-    const yearString = entry.year?.toString() || '';
+    const displayedAuthorString = entry.displayAuthors(AUTHOR_DISPLAY_LIMIT);
+    const yearString = entry.yearString();
 
     const container = el.createEl('div', { cls: 'zoteroResult' });
     container.createEl('span', {
       cls: 'zoteroTitle',
       text: entryTitle,
     });
-    const citekey = entry.citekey || entry.id;
-    const displayKey = entry._sourceDatabase
-      ? `${entry._sourceDatabase}:${citekey}`
-      : citekey;
-
-    container.createEl('span', { cls: 'zoteroCitekey', text: displayKey });
+    container.createEl('span', {
+      cls: 'zoteroCitekey',
+      text: entry.displayKey(),
+    });
 
     if (yearString) {
       container.createEl('span', {

@@ -42,22 +42,10 @@ export class SearchService {
 
   public buildIndex(entries: Entry[]): void {
     this.isIndexing = true;
-    // Run in next tick to avoid blocking immediately, though heavy work will still block main thread
-    // unless we use a worker. For now, we do it synchronously but we can optimize later.
-    // Actually, MiniSearch.addAll is synchronous.
 
     this.index.removeAll();
 
-    // Prepare documents for MiniSearch
-    // We need to ensure properties are strings or accessible
-    const docs = entries.map((entry) => ({
-      id: entry.id,
-      title: entry.title || '',
-      authorString: entry.authorString || '',
-      year: entry.year?.toString() || '',
-      zoteroId: entry.zoteroId || '',
-    }));
-
+    const docs = entries.map((entry) => entry.toSearchDocument());
     this.index.addAll(docs);
     this.isIndexing = false;
   }

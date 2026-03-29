@@ -15,7 +15,7 @@ jest.mock(
 import { TemplateService } from '../../src/template/template.service';
 import { CitationsPluginSettings } from '../../src/ui/settings/settings';
 import { DEFAULT_CONTENT_TEMPLATE } from '../../src/ui/settings/settings-schema';
-import { Entry } from '../../src/core';
+import { TestEntry } from '../helpers/mock-obsidian';
 
 describe('YAML Colon Handling', () => {
   let templateService: TemplateService;
@@ -26,14 +26,13 @@ describe('YAML Colon Handling', () => {
     templateService = new TemplateService(settings);
   });
 
-  const mockEntry: Entry = {
+  const mockEntry = new TestEntry({
     id: 'test-id',
     type: 'article-journal',
     title: 'My Title: A Subtitle',
     authorString: 'John Doe',
-    year: 2021,
-    toJSON: () => mockEntry,
-  } as unknown as Entry;
+    issuedDate: new Date('2021-01-01'),
+  });
 
   test('should generate valid YAML with default template when title has colon', () => {
     const variables = templateService.getTemplateVariables(mockEntry);
@@ -56,11 +55,13 @@ describe('YAML Colon Handling', () => {
   });
 
   test('should generate valid YAML when authorString contains colon', () => {
-    const entryWithColonAuthor = {
-      ...mockEntry,
+    const entryWithColonAuthor = new TestEntry({
+      id: 'test-id',
+      type: 'article-journal',
+      title: 'My Title: A Subtitle',
       authorString: 'Doe, J.: Editor',
-      toJSON: () => entryWithColonAuthor,
-    } as unknown as Entry;
+      issuedDate: new Date('2021-01-01'),
+    });
 
     const variables =
       templateService.getTemplateVariables(entryWithColonAuthor);
@@ -76,11 +77,13 @@ describe('YAML Colon Handling', () => {
   });
 
   test('should quote title correctly if it contains quotes', () => {
-    const entryWithQuotes = {
-      ...mockEntry,
+    const entryWithQuotes = new TestEntry({
+      id: 'test-id',
+      type: 'article-journal',
       title: 'My "Quoted" Title',
-      toJSON: () => entryWithQuotes,
-    } as unknown as Entry;
+      authorString: 'John Doe',
+      issuedDate: new Date('2021-01-01'),
+    });
 
     const variables = templateService.getTemplateVariables(entryWithQuotes);
     const contentResult = templateService.render(
