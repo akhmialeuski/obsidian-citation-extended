@@ -6,17 +6,34 @@ on:
   pull_request:
     branches: [master]
 
+permissions:
+  contents: read
+
 jobs:
   ci:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+
       - run: npm ci
-      - run: npm run lint
-      - run: npm test -- --coverage --coverageReporters=text-summary
-      - run: npm run build
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests with coverage
+        run: npm test -- --coverage --coverageReporters=text-summary --coverageReporters=json-summary
+
+      - name: Check coverage threshold
+        run: |
+          COVERAGE=$(node -e "const c = require('./coverage/coverage-summary.json'); console.log(c.total.statements.pct)")
+          echo "Statement coverage: ${COVERAGE}%"
+          node -e "if ($COVERAGE < 95) { console.error('Coverage ${COVERAGE}% is below 95% threshold'); process.exit(1); }"
+
+      - name: Build
+        run: npm run build
