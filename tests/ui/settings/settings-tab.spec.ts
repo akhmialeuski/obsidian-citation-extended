@@ -404,6 +404,7 @@ function createMockPlugin(
         .fn()
         .mockReturnValue([] as VariableDefinition[]),
       resolveLibraryPath: jest.fn((p: string) => `/vault/${p}`),
+      load: jest.fn().mockResolvedValue(null),
     },
     saveSettings: jest.fn().mockResolvedValue(undefined),
   } as unknown as CitationPlugin;
@@ -596,6 +597,21 @@ describe('CitationSettingTab', () => {
       await Promise.resolve();
       expect(plugin.settings.databases[0].type).toBe('biblatex');
       expect(plugin.saveSettings).toHaveBeenCalled();
+    });
+
+    it('type dropdown triggers library reload after saving', async () => {
+      tab.display();
+      const allSettings = getSettings();
+      const typeSetting = allSettings[2]; // Database type setting
+      const dropdowns = typeSetting.getDropdownComponents();
+
+      dropdowns[0].triggerChange('biblatex');
+      await Promise.resolve();
+
+      expect(plugin.libraryService.load).toHaveBeenCalled();
+      expect(mockNotice).toHaveBeenCalledWith(
+        'Database format changed. Reloading library\u2026',
+      );
     });
 
     it('path text input saves on change and triggers path check', async () => {

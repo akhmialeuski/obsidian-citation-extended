@@ -1,10 +1,9 @@
 /**
  * Type definitions for batch literature note update operations.
  *
- * These interfaces prepare the extension point for a future feature
- * that allows updating all existing literature notes when the content
- * template changes.  No runtime implementation exists yet — see
- * {@link BatchNoteOrchestrator} for the stub.
+ * These interfaces define the contract for updating all existing
+ * literature notes when the content template changes.
+ * See {@link BatchNoteOrchestrator} for the runtime implementation.
  */
 
 /** Describes which notes to update and how. */
