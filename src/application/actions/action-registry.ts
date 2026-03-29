@@ -1,5 +1,12 @@
 import type { ApplicationAction } from './action.types';
 
+/**
+ * Central registry of all plugin actions.
+ *
+ * Serves as the single source of truth that both {@link CommandRegistry}
+ * and {@link ContextMenuHandler} read from to build their UI surfaces.
+ * Actions are registered once during plugin init and queried by surface type.
+ */
 export interface IActionRegistry {
   register(action: ApplicationAction): void;
   getAll(): ApplicationAction[];

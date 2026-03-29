@@ -18,6 +18,15 @@ import {
   BatchUpdateNotesAction,
 } from '../application/actions';
 
+/**
+ * Initializes all user-facing UI surfaces: command palette, context menu,
+ * and status bar.
+ *
+ * Wires all {@link ApplicationAction} instances into the {@link ActionRegistry},
+ * then hands the registry to {@link CommandRegistry} and {@link ContextMenuHandler}
+ * so they can build their respective surfaces. Subscribes to library state
+ * changes to keep the status bar and user notifications up to date.
+ */
 export class UIService implements IUIService {
   private statusBarItem!: IStatusBarItem;
   private unsubscribe: (() => void) | null = null;
@@ -83,6 +92,7 @@ export class UIService implements IUIService {
     this.contextMenuHandler.register();
   }
 
+  /** Updates the status bar text and CSS class to reflect current library loading state. */
   private updateStatusBar(state: LibraryState): void {
     let text = '';
     let cls = '';
@@ -111,6 +121,7 @@ export class UIService implements IUIService {
     }
   }
 
+  /** Shows user-facing notices on state transitions (errors, partial loads). Deduplicates by status. */
   private showStateNotices(state: LibraryState): void {
     if (state.status === this.lastNotifiedStatus) return;
     this.lastNotifiedStatus = state.status;

@@ -5,6 +5,13 @@ import {
   ActionInvocationContext,
 } from './action.types';
 
+/**
+ * Inserts a Markdown citation (e.g. `[@citekey]`) at the current cursor position.
+ *
+ * Handles multi-line content by recalculating cursor position after insertion.
+ * Shift+Enter inserts the secondary/alternative citation format.
+ * Optionally auto-creates a literature note on citation insertion.
+ */
 export class InsertCitationAction extends SearchModalAction {
   readonly descriptor: ActionDescriptor = {
     id: 'insert-markdown-citation',
@@ -36,6 +43,8 @@ export class InsertCitationAction extends SearchModalAction {
     const cursor = editor.getCursor();
     editor.replaceRange(citationResult.value, cursor);
 
+    // Move cursor to the end of the inserted text, accounting for multi-line content:
+    // single-line → offset from original cursor; multi-line → start of last line.
     const lines = citationResult.value.split('\n');
     const lastLineLength = lines[lines.length - 1].length;
     const newLine = cursor.line + lines.length - 1;

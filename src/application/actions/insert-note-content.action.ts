@@ -5,6 +5,12 @@ import {
   ActionInvocationContext,
 } from './action.types';
 
+/**
+ * Inserts rendered literature note content into the active editor at the cursor.
+ *
+ * The content is generated from the literature note template for the selected
+ * entry, allowing users to inline note content without creating a separate file.
+ */
 export class InsertNoteContentAction extends SearchModalAction {
   readonly descriptor: ActionDescriptor = {
     id: 'insert-literature-note-content',

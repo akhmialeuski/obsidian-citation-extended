@@ -6,6 +6,12 @@ import {
 import { extractCitekeyAtCursor } from '../citekey-extractor';
 import { LibraryNotReadyError, LiteratureNoteNotFoundError } from '../../core';
 
+/**
+ * Opens the literature note corresponding to the citation under the cursor.
+ *
+ * Extracts the citekey from the current cursor position using
+ * {@link extractCitekeyAtCursor}, then navigates to the matching note.
+ */
 export class OpenNoteAtCursorAction extends ApplicationAction {
   readonly descriptor: ActionDescriptor = {
     id: 'open-note-at-cursor',

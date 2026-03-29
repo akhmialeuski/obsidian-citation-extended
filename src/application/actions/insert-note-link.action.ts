@@ -9,6 +9,13 @@ import {
   ActionInvocationContext,
 } from './action.types';
 
+/**
+ * Creates or locates the literature note for a selected entry, then inserts
+ * a Wiki-link (`[[...]]`) or Markdown link (`[...](...)`) into the editor.
+ *
+ * Link format follows the user's Obsidian config (`useMarkdownLinks`).
+ * Display text can be customized via `literatureNoteLinkDisplayTemplate`.
+ */
 export class InsertNoteLinkAction extends SearchModalAction {
   readonly descriptor: ActionDescriptor = {
     id: 'insert-citation',
@@ -84,6 +91,8 @@ export class InsertNoteLinkAction extends SearchModalAction {
       const useMarkdown =
         this.ctx.platform.workspace.getConfig('useMarkdownLinks');
 
+      // Resolve display text: user template takes priority, then format-specific
+      // defaults (citekey for Markdown links, title for Wiki links).
       const displayTemplate =
         this.ctx.settings.literatureNoteLinkDisplayTemplate;
       let displayText: string;
@@ -100,6 +109,8 @@ export class InsertNoteLinkAction extends SearchModalAction {
         displayText = useMarkdown ? citekey : titleResult.value;
       }
 
+      // Build link in the format matching user's Obsidian config.
+      // Wiki links use the pipe alias only when display text differs from title.
       let linkText: string;
       if (useMarkdown) {
         const uri = encodeURI(

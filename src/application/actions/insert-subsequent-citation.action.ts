@@ -5,6 +5,13 @@ import {
   ActionInvocationContext,
 } from './action.types';
 
+/**
+ * Appends a citation to an existing Pandoc-style citation block (e.g. `[@a; @b]`).
+ *
+ * When the cursor is inside a `[@...]` block, the new citekey is appended
+ * with a semicolon separator. If no block is found at the cursor, falls back
+ * to inserting a standalone citation.
+ */
 export class InsertSubsequentCitationAction extends SearchModalAction {
   readonly descriptor: ActionDescriptor = {
     id: 'insert-subsequent-citation',
@@ -24,7 +31,8 @@ export class InsertSubsequentCitationAction extends SearchModalAction {
     const cursor = editor.getCursor();
     const line = editor.getLine(cursor.line);
 
-    // Find the [@...] citation block that contains the cursor
+    // Match Pandoc citation blocks: [@key] or [@key1; @key2; ...].
+    // Uses global flag to iterate all blocks on the line and find the one containing the cursor.
     const citationPattern = /\[(@[^\]]+)\]/g;
     let match;
     while ((match = citationPattern.exec(line)) !== null) {

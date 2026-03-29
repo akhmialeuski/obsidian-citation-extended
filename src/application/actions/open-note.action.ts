@@ -9,6 +9,14 @@ import {
   ActionInvocationContext,
 } from './action.types';
 
+/**
+ * Opens or creates a literature note via the search modal.
+ *
+ * Supports keyboard shortcuts for alternative workflows:
+ * - Enter: open/create literature note (Ctrl+Enter opens in a new pane)
+ * - Tab: open the entry in Zotero via its select URI
+ * - Shift+Tab: open the associated PDF file
+ */
 export class OpenNoteAction extends SearchModalAction {
   readonly descriptor: ActionDescriptor = {
     id: 'open-literature-note',
@@ -59,6 +67,10 @@ export class OpenNoteAction extends SearchModalAction {
     ];
   }
 
+  /**
+   * Resolves the literature note for a citekey and opens it in the vault.
+   * Creates the note if it does not exist and auto-creation is enabled.
+   */
   private async openNote(
     citekey: string,
     newPane: boolean,
