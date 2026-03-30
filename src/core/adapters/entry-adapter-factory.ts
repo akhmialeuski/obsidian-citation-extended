@@ -7,23 +7,24 @@ import { HayagrivaAdapter, HayagrivaEntryData } from './hayagriva-adapter';
 import { UnsupportedFormatError } from '../errors';
 
 /**
- * A registry mapping each DatabaseType to a function that wraps raw
+ * A registry mapping file-based DatabaseTypes to functions that wrap raw
  * EntryData objects in the appropriate typed adapter.
  *
- * Every format follows the same pattern: cast the raw object to the
- * format-specific interface and pass it to the adapter constructor.
+ * API-based formats (Readwise) are not included here — their entries are
+ * created directly by the corresponding DataSource implementation.
  */
-const ENTRY_ADAPTERS: Record<DatabaseType, (entries: EntryData[]) => Entry[]> =
-  {
-    [DATABASE_FORMATS.BibLaTeX]: (entries) =>
-      entries.map((e) => new EntryBibLaTeXAdapter(e as EntryDataBibLaTeX)),
+const ENTRY_ADAPTERS: Partial<
+  Record<DatabaseType, (entries: EntryData[]) => Entry[]>
+> = {
+  [DATABASE_FORMATS.BibLaTeX]: (entries) =>
+    entries.map((e) => new EntryBibLaTeXAdapter(e as EntryDataBibLaTeX)),
 
-    [DATABASE_FORMATS.CslJson]: (entries) =>
-      entries.map((e) => new EntryCSLAdapter(e as EntryDataCSL)),
+  [DATABASE_FORMATS.CslJson]: (entries) =>
+    entries.map((e) => new EntryCSLAdapter(e as EntryDataCSL)),
 
-    [DATABASE_FORMATS.Hayagriva]: (entries) =>
-      entries.map((e) => new HayagrivaAdapter(e as HayagrivaEntryData)),
-  };
+  [DATABASE_FORMATS.Hayagriva]: (entries) =>
+    entries.map((e) => new HayagrivaAdapter(e as HayagrivaEntryData)),
+};
 
 /**
  * Convert raw EntryData to typed Entry objects using the adapter for the

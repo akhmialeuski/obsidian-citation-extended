@@ -14,12 +14,15 @@ import {
   DATABASE_TYPE_LABELS,
   DATABASE_FORMATS,
   generateDatabaseId,
+  ReadwiseApiClient,
 } from '../../core';
 import {
   SettingsSchema,
   CitationsPluginSettingsType,
   CitationStylePreset,
   CITATION_STYLE_PRESETS,
+  ReadwiseModeSetting,
+  READWISE_MODE_LABELS,
 } from './settings-schema';
 import { ReferenceListSortOrder } from '../modals/sort-entries';
 import { VariableListModal } from '../modals/variable-list-modal';
@@ -58,6 +61,7 @@ export class CitationSettingTab extends PluginSettingTab {
     containerEl.setAttr('id', 'zoteroSettingTab');
 
     this.renderDatabaseSection(containerEl);
+    this.renderReadwiseSection(containerEl);
     this.renderLiteratureNotesSection(containerEl);
     this.renderCitationsSection(containerEl);
     this.renderDisplaySection(containerEl);
@@ -206,6 +210,153 @@ export class CitationSettingTab extends PluginSettingTab {
       statusEl.setCssProps({ color: 'var(--text-error)' });
       return false;
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Section 1b: Readwise integration
+  // ---------------------------------------------------------------------------
+
+  private renderReadwiseSection(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName('Readwise integration').setHeading();
+    containerEl.createEl('p', {
+      text: 'Connect to Readwise to import highlights and documents as citation entries.',
+      cls: 'setting-item-description',
+    });
+
+    // Enable toggle
+    new Setting(containerEl)
+      .setName('Enable Readwise sync')
+      .setDesc(
+        'When enabled, Readwise data will be loaded as an additional citation database.',
+      )
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.readwiseSyncEnabled)
+          .onChange(async (value) => {
+            this.plugin.settings.readwiseSyncEnabled = value;
+            await this.plugin.saveSettings();
+            this.plugin.syncReadwiseDatabaseConfig();
+            this.display();
+            if (value && this.plugin.settings.readwiseApiToken) {
+              void this.plugin.libraryService.load();
+            }
+          });
+      });
+
+    // Only show remaining settings when sync is enabled
+    if (!this.plugin.settings.readwiseSyncEnabled) return;
+
+    // Mode selector
+    new Setting(containerEl)
+      .setName('Readwise mode')
+      .setDesc(
+        'Choose which Readwise data to import: highlights from books/articles (v2) or Reader documents (v3).',
+      )
+      .addDropdown((dropdown) => {
+        dropdown.addOptions(READWISE_MODE_LABELS);
+        dropdown.setValue(this.plugin.settings.readwiseMode);
+        dropdown.onChange(async (value) => {
+          this.plugin.settings.readwiseMode = value as ReadwiseModeSetting;
+          await this.plugin.saveSettings();
+          this.plugin.syncReadwiseDatabaseConfig();
+          void this.plugin.libraryService.load();
+        });
+      });
+
+    // API token (password field)
+    new Setting(containerEl)
+      .setName('API token')
+      .setDesc(
+        'Your Readwise access token. Get it from readwise.io/access_token.',
+      )
+      .addText((text) => {
+        text.inputEl.type = 'password';
+        text.inputEl.autocomplete = 'off';
+        text
+          .setPlaceholder('Enter your Readwise API token')
+          .setValue(this.plugin.settings.readwiseApiToken)
+          .onChange(
+            debounce(async (value: string) => {
+              this.plugin.settings.readwiseApiToken = value;
+              await this.plugin.saveSettings();
+              this.plugin.syncReadwiseDatabaseConfig();
+            }, 500),
+          );
+      });
+
+    // Token validation and sync status row
+    const statusEl = containerEl.createDiv('readwise-status');
+    statusEl.setCssProps({ fontSize: '0.8em', marginTop: '5px' });
+
+    if (this.plugin.settings.readwiseLastSyncDate) {
+      statusEl.setText(
+        `Last sync: ${this.plugin.settings.readwiseLastSyncDate}`,
+      );
+      statusEl.setCssProps({ color: 'var(--text-muted)' });
+    }
+
+    // Validate token button
+    new Setting(containerEl)
+      .setName('Token validation')
+      .addButton((button) => {
+        button.setButtonText('Validate token').onClick(() => {
+          void (async () => {
+            if (!this.plugin.settings.readwiseApiToken) {
+              new Notice('Please enter an API token first.');
+              return;
+            }
+            statusEl.setText('Validating...');
+            statusEl.setCssProps({ color: 'var(--text-muted)' });
+            try {
+              const client = new ReadwiseApiClient(
+                this.plugin.settings.readwiseApiToken,
+              );
+              const valid = await client.validateToken();
+              if (valid) {
+                statusEl.setText('Token is valid.');
+                statusEl.setCssProps({ color: 'var(--text-success)' });
+                new Notice('Readwise token validated successfully.');
+              } else {
+                statusEl.setText('Token is invalid.');
+                statusEl.setCssProps({ color: 'var(--text-error)' });
+                new Notice(
+                  'Readwise token is invalid. Please check and retry.',
+                );
+              }
+            } catch {
+              statusEl.setText('Validation failed — network error.');
+              statusEl.setCssProps({ color: 'var(--text-error)' });
+              new Notice(
+                'Could not reach Readwise API. Check your connection.',
+              );
+            }
+          })();
+        });
+      })
+      .addButton((button) => {
+        button
+          .setButtonText('Sync now')
+          .setCta()
+          .onClick(() => {
+            void (async () => {
+              if (!this.plugin.settings.readwiseApiToken) {
+                new Notice('Please enter an API token first.');
+                return;
+              }
+              this.plugin.syncReadwiseDatabaseConfig();
+              new Notice('Syncing Readwise data...');
+              await this.plugin.libraryService.load();
+              this.plugin.settings.readwiseLastSyncDate =
+                new Date().toISOString();
+              await this.plugin.saveSettings();
+              statusEl.setText(
+                `Last sync: ${this.plugin.settings.readwiseLastSyncDate}`,
+              );
+              statusEl.setCssProps({ color: 'var(--text-muted)' });
+              new Notice('Readwise sync complete.');
+            })();
+          });
+      });
   }
 
   // ---------------------------------------------------------------------------

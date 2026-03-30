@@ -7,6 +7,7 @@ import { Entry, DatabaseType, ParseErrorInfo } from './core';
 export const DATA_SOURCE_TYPES = {
   LocalFile: 'local-file',
   VaultFile: 'vault-file',
+  Readwise: 'readwise',
 } as const;
 
 /**

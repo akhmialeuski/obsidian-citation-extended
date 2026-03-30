@@ -54,6 +54,36 @@ To use more than one bibliography source (e.g. personal library + shared team li
 
 ---
 
+## Readwise Integration
+
+Connect the plugin to your Readwise account to import highlights and documents as citable entries.
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| Enable Readwise sync | When enabled, Readwise data is loaded as an additional citation database | `false` |
+| Readwise mode | Choose which data to import: **Readwise Highlights** (v2 Export — books, articles with highlights) or **Readwise Reader Documents** (v3 — saved documents in Reader) | `Readwise Highlights` |
+| API token | Your Readwise access token. Get it from [readwise.io/access_token](https://readwise.io/access_token). The token is stored in plugin settings and displayed as a password field | (empty) |
+
+### Buttons
+
+| Button | Action |
+|--------|--------|
+| **Validate token** | Tests the API token against Readwise. Shows "Token is valid" or "Token is invalid" |
+| **Sync now** | Immediately fetches data from Readwise and reloads the library. Updates the "Last sync" timestamp |
+
+### How It Works
+
+When Readwise sync is enabled and a valid API token is provided, the plugin automatically creates a virtual "Readwise" database entry in your databases list. This entry:
+
+- Uses the `readwise` source type (API-based, not file-based)
+- Appears alongside your other databases in the library
+- Is automatically removed when you disable Readwise sync
+- Updates its format when you change the Readwise mode
+
+Readwise entries appear in search with citekeys like `rw-12345` (highlights mode) or `rd-abc123` (reader mode). They support all standard plugin features: citation insertion, literature note creation, templates, and batch operations.
+
+---
+
 ## Hotkeys
 
 The plugin registers eight commands but does **not** assign default hotkeys — you choose bindings that fit your workflow. To configure:

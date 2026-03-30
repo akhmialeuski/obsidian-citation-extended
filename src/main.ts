@@ -11,6 +11,7 @@ import { DataSourceRegistry } from './sources/data-source-registry';
 import { DATA_SOURCE_TYPES } from './data-source';
 import { LocalFileSource } from './sources/local-file-source';
 import { VaultFileSource } from './sources/vault-file-source';
+import { ReadwiseSource } from './sources/readwise-source';
 import { SourceManager } from './infrastructure/source-manager';
 import { TemplateProfileRegistry } from './domain/template-profile-registry';
 import {
@@ -35,7 +36,7 @@ import {
   validateSettings,
 } from './ui/settings/settings-schema';
 import { WorkerManager } from './util';
-import { generateDatabaseId } from './core';
+import { generateDatabaseId, ReadwiseApiClient } from './core';
 import LoadWorker from 'web-worker:./worker';
 
 export default class CitationPlugin extends Plugin {
@@ -145,6 +146,21 @@ export default class CitationPlugin extends Plugin {
         ),
     );
 
+    // Register Readwise source type — uses the API token from settings
+    const settingsRef = this.settings;
+    registry.register(
+      DATA_SOURCE_TYPES.Readwise,
+      (def, id) =>
+        new ReadwiseSource(
+          id,
+          new ReadwiseApiClient(settingsRef.readwiseApiToken),
+          def.format as 'readwise-highlights' | 'reader-documents',
+          {
+            updatedAfter: settingsRef.readwiseLastSyncDate || undefined,
+          },
+        ),
+    );
+
     const dataSourceFactory = new DataSourceFactory(registry);
 
     // Infrastructure: source manager + normalization pipeline
@@ -220,6 +236,9 @@ export default class CitationPlugin extends Plugin {
   }
 
   init(): void {
+    // Ensure Readwise database config exists when sync is enabled
+    this.syncReadwiseDatabaseConfig();
+
     if (this.settings.databases.length > 0) {
       void this.libraryService.load();
     } else {
@@ -228,5 +247,40 @@ export default class CitationPlugin extends Plugin {
 
     this.uiService.init();
     this.addSettingTab(new CitationSettingTab(this.app, this));
+  }
+
+  /**
+   * Ensure a database entry exists for Readwise when sync is enabled,
+   * or remove it when sync is disabled.
+   */
+  syncReadwiseDatabaseConfig(): void {
+    const readwiseDbIndex = this.settings.databases.findIndex(
+      (db) => db.sourceType === DATA_SOURCE_TYPES.Readwise,
+    );
+
+    if (this.settings.readwiseSyncEnabled && this.settings.readwiseApiToken) {
+      if (readwiseDbIndex === -1) {
+        // Create a new Readwise database entry
+        this.settings.databases.push({
+          id: generateDatabaseId(),
+          name: 'Readwise',
+          path: 'readwise-api',
+          type: this.settings.readwiseMode,
+          sourceType: DATA_SOURCE_TYPES.Readwise,
+        });
+        void this.saveSettings();
+      } else {
+        // Update existing entry if mode changed
+        const existingDb = this.settings.databases[readwiseDbIndex];
+        if (existingDb.type !== this.settings.readwiseMode) {
+          existingDb.type = this.settings.readwiseMode;
+          void this.saveSettings();
+        }
+      }
+    } else if (readwiseDbIndex !== -1) {
+      // Remove the Readwise database entry when sync is disabled
+      this.settings.databases.splice(readwiseDbIndex, 1);
+      void this.saveSettings();
+    }
   }
 }

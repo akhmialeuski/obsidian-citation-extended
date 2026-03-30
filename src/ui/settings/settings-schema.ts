@@ -31,11 +31,31 @@ export const CITATION_STYLE_PRESETS: Record<
   },
 };
 
+// ---- Readwise mode options -------------------------------------------------
+
+export const READWISE_MODE_OPTIONS = [
+  'readwise-highlights',
+  'reader-documents',
+] as const;
+
+export type ReadwiseModeSetting = (typeof READWISE_MODE_OPTIONS)[number];
+
+export const READWISE_MODE_LABELS: Record<ReadwiseModeSetting, string> = {
+  'readwise-highlights': 'Readwise Highlights (v2 Export)',
+  'reader-documents': 'Readwise Reader Documents (v3)',
+};
+
 // ---- Zod schema ------------------------------------------------------------
 
 export const SettingsSchema = z.object({
   citationExportPath: z.string(),
-  citationExportFormat: z.enum(['csl-json', 'biblatex', 'hayagriva']),
+  citationExportFormat: z.enum([
+    'csl-json',
+    'biblatex',
+    'hayagriva',
+    'readwise-highlights',
+    'reader-documents',
+  ]),
   literatureNoteTitleTemplate: z.string().min(1),
   literatureNoteFolder: z.string(),
   // Legacy: kept for migration. New installs use only the path field.
@@ -56,7 +76,13 @@ export const SettingsSchema = z.object({
       z.object({
         id: z.string().optional(),
         name: z.string(),
-        type: z.enum(['csl-json', 'biblatex', 'hayagriva']),
+        type: z.enum([
+          'csl-json',
+          'biblatex',
+          'hayagriva',
+          'readwise-highlights',
+          'reader-documents',
+        ]),
         path: z.string(),
         sourceType: z.string().optional(),
       }),
@@ -75,6 +101,11 @@ export const SettingsSchema = z.object({
       }),
     )
     .default([]),
+  // ---- Readwise integration ------------------------------------------------
+  readwiseApiToken: z.string().default(''),
+  readwiseSyncEnabled: z.boolean().default(false),
+  readwiseMode: z.enum(READWISE_MODE_OPTIONS).default('readwise-highlights'),
+  readwiseLastSyncDate: z.string().default(''),
 });
 
 export type CitationsPluginSettingsType = z.infer<typeof SettingsSchema>;
@@ -103,6 +134,11 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   databases: [],
   disableAutomaticNoteCreation: false,
   templateProfiles: [],
+  // Readwise defaults
+  readwiseApiToken: '',
+  readwiseSyncEnabled: false,
+  readwiseMode: 'readwise-highlights',
+  readwiseLastSyncDate: '',
 };
 
 export function validateSettings(settings: unknown) {

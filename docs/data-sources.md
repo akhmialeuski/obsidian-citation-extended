@@ -9,6 +9,8 @@ The plugin supports loading bibliography data from multiple sources and formats.
 | **CSL-JSON** | `.json` | Standard citation format, fast loading |
 | **BibLaTeX** | `.bib` | Rich format with PDF paths, keywords, notes. Slower to parse but more data available |
 | **Hayagriva** | `.yml` / `.yaml` | YAML-based bibliography format used by [Typst](https://typst.app). Supports basic fields: title, author, date, DOI, URL, parent (container) |
+| **Readwise Highlights** | API | Highlights and annotations from Readwise (v2 Export API) |
+| **Readwise Reader** | API | Documents and articles from Readwise Reader (v3 API) |
 
 ### Choosing a Format
 
@@ -42,6 +44,48 @@ Reads from the filesystem using an absolute path or a path relative to the vault
 Reads from a file inside the Obsidian vault using the Vault API. Uses Obsidian's vault events for change detection.
 
 **When to use:** Mobile (iOS/Android) or when your bibliography file is synced into the vault (e.g. via Obsidian Sync, iCloud, or Dropbox). Also useful if you don't want to rely on filesystem paths.
+
+### Readwise API
+
+Loads highlights and documents directly from the Readwise API. No file export needed — the plugin fetches data over the network.
+
+**When to use:** If you use Readwise to collect highlights from books, articles, podcasts, or other sources, and want those highlights available as citable entries in Obsidian.
+
+**Two modes:**
+
+| Mode | API Version | What it loads | Citekey format |
+|------|------------|---------------|----------------|
+| **Readwise Highlights** | v2 Export | Books with nested highlights from Kindle, Instapaper, etc. | `rw-{id}` |
+| **Readwise Reader** | v3 List | Documents, articles, PDFs saved in Readwise Reader | `rd-{id}` |
+
+**Setup:**
+1. Go to **Settings** > **Citation plugin** > **Readwise integration**
+2. Enable "Readwise sync"
+3. Choose a mode (Highlights or Reader Documents)
+4. Enter your API token (get it from [readwise.io/access_token](https://readwise.io/access_token))
+5. Click "Validate token" to confirm it works
+6. Click "Sync now" to load data
+
+**How it works:**
+- The plugin creates a virtual "Readwise" database entry automatically when sync is enabled
+- Data is fetched on each sync (manual "Sync now" or plugin reload)
+- No file watching — Readwise data loads on demand, not in real-time
+- Readwise entries appear in the search modal alongside your other databases
+- All standard features work: citation insertion, literature note creation, templates
+
+**Field mapping:**
+
+| Readwise field | Entry field | Notes |
+|---------------|-------------|-------|
+| `title` | `title` | |
+| `author` | `authorString`, `author[]` | Parsed into structured authors |
+| `category` | `type` | Mapped: books→book, articles→article, tweets→webpage, etc. |
+| `source_url` | `URL` | Original source URL |
+| `readwise_url` | `zoteroSelectURI` | Opens in Readwise web app |
+| `summary` | `abstract` | |
+| `book_tags` / `tags` | `keywords[]` | |
+| `highlights[].text` | `note` | Aggregated with `---` separator |
+| `published_date` | `issuedDate` | Reader mode only |
 
 ## Multiple Databases
 
@@ -98,5 +142,4 @@ jones2022:
 
 ## Coming Soon
 
-- **Readwise API** — load highlights and annotations from Readwise
 - **HTTP/Network sources** — fetch bibliography from a URL

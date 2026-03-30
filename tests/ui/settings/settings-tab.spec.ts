@@ -407,6 +407,7 @@ function createMockPlugin(
       load: jest.fn().mockResolvedValue(null),
     },
     saveSettings: jest.fn().mockResolvedValue(undefined),
+    syncReadwiseDatabaseConfig: jest.fn(),
   } as unknown as CitationPlugin;
 }
 

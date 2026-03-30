@@ -4,6 +4,7 @@ import {
   DEFAULT_SETTINGS,
   CitationStylePreset,
   CITATION_STYLE_PRESETS,
+  ReadwiseModeSetting,
 } from './settings-schema';
 import { DatabaseType } from '../../core';
 import { ReferenceListSortOrder } from '../modals/sort-entries';
@@ -40,6 +41,12 @@ export class CitationsPluginSettings {
     DEFAULT_SETTINGS.disableAutomaticNoteCreation;
   public templateProfiles: TemplateProfile[] =
     DEFAULT_SETTINGS.templateProfiles as TemplateProfile[];
+
+  // Readwise integration
+  public readwiseApiToken: string = DEFAULT_SETTINGS.readwiseApiToken;
+  public readwiseSyncEnabled: boolean = DEFAULT_SETTINGS.readwiseSyncEnabled;
+  public readwiseMode: ReadwiseModeSetting = DEFAULT_SETTINGS.readwiseMode;
+  public readwiseLastSyncDate: string = DEFAULT_SETTINGS.readwiseLastSyncDate;
 
   /**
    * Returns the effective primary citation template, taking the active

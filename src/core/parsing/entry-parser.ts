@@ -55,8 +55,15 @@ function parseHayagriva(raw: string): ParseResult {
   return { entries, parseErrors: [] };
 }
 
-/** Maps each supported format to its parser function. */
-const FORMAT_PARSERS: Record<DatabaseType, (raw: string) => ParseResult> = {
+/**
+ * Maps file-based formats to their parser functions.
+ *
+ * API-based formats (Readwise) do not have file parsers — they are loaded
+ * directly from the network by their DataSource implementation.
+ */
+const FORMAT_PARSERS: Partial<
+  Record<DatabaseType, (raw: string) => ParseResult>
+> = {
   [DATABASE_FORMATS.CslJson]: parseCslJson,
   [DATABASE_FORMATS.BibLaTeX]: parseBibLaTeX,
   [DATABASE_FORMATS.Hayagriva]: parseHayagriva,
