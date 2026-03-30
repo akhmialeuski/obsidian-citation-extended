@@ -2,6 +2,7 @@ import type { DatabaseConfig } from '../core';
 import type { DataSource, DataSourceLoadResult } from '../data-source';
 import type { IDataSourceFactory } from '../sources/data-source-factory';
 import { DATA_SOURCE_TYPES } from '../data-source';
+import { DATABASE_FORMATS } from '../core';
 import type { SourceLoadResult } from './normalization-pipeline';
 
 /**
@@ -50,14 +51,20 @@ export class SourceManager implements ISourceManager {
       const key = this.makeKey(db);
       newKeys.add(key);
 
+      const transport = this.resolveTransport(db);
+
+      // API-based sources (Readwise) must be recreated on every sync
+      // because credentials live in db.path and may have changed.
+      // File-based sources are preserved to keep their watchers alive.
+      if (this.sources.has(key) && this.isApiSource(transport)) {
+        this.sources.get(key)!.source.dispose();
+        this.sources.delete(key);
+      }
+
       if (!this.sources.has(key)) {
         const sourceId = key;
         const source = this.factory.create(
-          {
-            type: db.sourceType ?? DATA_SOURCE_TYPES.LocalFile,
-            path: db.path,
-            format: db.type,
-          },
+          { type: transport, path: db.path, format: db.type },
           sourceId,
         );
         const databaseId = db.id ?? db.name;
@@ -186,8 +193,25 @@ export class SourceManager implements ISourceManager {
     console.debug('SourceManager: Disposed all sources');
   }
 
+  /** Returns true for API-based transports that need recreation on every sync. */
+  private isApiSource(transport: string): boolean {
+    return transport === DATA_SOURCE_TYPES.Readwise;
+  }
+
+  /**
+   * Derive the transport type from a database config.
+   * API-based formats (Readwise) use their own transport; file-based
+   * formats fall back to the explicit sourceType or LocalFile.
+   */
+  private resolveTransport(db: DatabaseConfig): string {
+    if (db.type === DATABASE_FORMATS.Readwise) {
+      return DATA_SOURCE_TYPES.Readwise;
+    }
+    return db.sourceType ?? DATA_SOURCE_TYPES.LocalFile;
+  }
+
   private makeKey(db: DatabaseConfig): string {
-    const transport = db.sourceType ?? DATA_SOURCE_TYPES.LocalFile;
+    const transport = this.resolveTransport(db);
     if (!db.id) {
       console.warn(
         'Citations: database missing stable id in makeKey, falling back to name:',
@@ -195,6 +219,9 @@ export class SourceManager implements ISourceManager {
       );
     }
     const id = db.id ?? db.name;
-    return `${transport}:${db.type}:${id}:${db.path}`;
+    // For API-based sources, omit path from key to avoid leaking tokens
+    // into debug logs and to keep the key stable across token changes.
+    const path = transport === DATA_SOURCE_TYPES.Readwise ? '' : db.path;
+    return `${transport}:${db.type}:${id}:${path}`;
   }
 }

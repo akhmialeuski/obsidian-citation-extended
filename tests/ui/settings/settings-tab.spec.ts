@@ -119,6 +119,20 @@ jest.mock('../../../src/ui/modals/variable-list-modal', () => ({
   })),
 }));
 
+// Mock ReadwiseApiClient — intercept the real module re-exported via core/index
+const mockValidateToken = jest.fn();
+jest.mock('../../../src/core/readwise/readwise-api-client', () => {
+  const actual = jest.requireActual(
+    '../../../src/core/readwise/readwise-api-client',
+  );
+  return {
+    ...actual,
+    ReadwiseApiClient: jest.fn().mockImplementation(() => ({
+      validateToken: mockValidateToken,
+    })),
+  };
+});
+
 // ---------------------------------------------------------------------------
 // Mock: obsidian — factory must be self-contained (hoisted by Jest)
 // ---------------------------------------------------------------------------
@@ -407,7 +421,6 @@ function createMockPlugin(
       load: jest.fn().mockResolvedValue(null),
     },
     saveSettings: jest.fn().mockResolvedValue(undefined),
-    syncReadwiseDatabaseConfig: jest.fn(),
   } as unknown as CitationPlugin;
 }
 
@@ -424,6 +437,7 @@ describe('CitationSettingTab', () => {
     mockReadLocalFile.mockReset();
     mockNotice.mockReset();
     mockModalOpen.mockReset();
+    mockValidateToken.mockReset();
 
     plugin = createMockPlugin({
       databases: [
@@ -792,6 +806,298 @@ describe('CitationSettingTab', () => {
       await Promise.resolve();
       expect(plugin.saveSettings).toHaveBeenCalled();
       expect(plugin.settings.referenceListSortOrder).toBe('year-desc');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Readwise database card fields (renderReadwiseFields)
+  // -----------------------------------------------------------------------
+
+  describe('Readwise database card', () => {
+    beforeEach(() => {
+      plugin = createMockPlugin({
+        databases: [
+          {
+            id: 'db-rw',
+            name: 'My Readwise',
+            path: 'test-token-123',
+            type: 'readwise',
+            sourceType: 'readwise',
+          },
+        ],
+        readwiseLastSyncDate: '',
+      });
+      tab = new CitationSettingTab({} as never, plugin);
+    });
+
+    it('renders Readwise-specific fields (token, buttons) instead of path', () => {
+      tab.display();
+      const container = (tab as unknown as { containerEl: HTMLElement })
+        .containerEl;
+
+      // A Readwise card should have a readwise-status div, not a citation-path-status div
+      expect(container.querySelector('.readwise-status')).not.toBeNull();
+      expect(container.querySelector('.citation-path-status')).toBeNull();
+    });
+
+    it('renders path field for non-readwise database, not readwise fields', () => {
+      plugin.settings.databases = [
+        { id: 'db-1', name: 'CSL DB', path: '/a.json', type: 'csl-json' },
+      ];
+      tab.display();
+      const container = (tab as unknown as { containerEl: HTMLElement })
+        .containerEl;
+
+      expect(container.querySelector('.citation-path-status')).not.toBeNull();
+      expect(container.querySelector('.readwise-status')).toBeNull();
+    });
+
+    it('readwise card renders more settings than a file-based card', () => {
+      // Readwise card: header + type + token + buttons = 4 card settings
+      tab.display();
+      const countReadwise = getSettings().length;
+
+      settingInstances.length = 0;
+      plugin.settings.databases = [
+        { id: 'db-1', name: 'CSL DB', path: '/a.json', type: 'csl-json' },
+      ];
+      tab.display();
+      const countFile = getSettings().length;
+
+      // Readwise has token + buttons (2 extra) vs path (1)
+      expect(countReadwise).toBeGreaterThan(countFile);
+    });
+
+    it('type dropdown changing to readwise sets sourceType and clears path', async () => {
+      plugin.settings.databases = [
+        { id: 'db-1', name: 'CSL DB', path: '/a.json', type: 'csl-json' },
+      ];
+      tab.display();
+
+      const allDropdowns: Array<{ triggerChange(v: string): void }> = [];
+      for (const setting of getSettings()) {
+        allDropdowns.push(...setting.getDropdownComponents());
+      }
+
+      // dropdowns[0] = database type
+      allDropdowns[0].triggerChange('readwise');
+      await Promise.resolve();
+
+      expect(plugin.settings.databases[0].type).toBe('readwise');
+      expect(plugin.settings.databases[0].sourceType).toBe('readwise');
+      expect(plugin.settings.databases[0].path).toBe('');
+      expect(plugin.saveSettings).toHaveBeenCalled();
+      // Readwise does not trigger reload on type change — token not yet entered
+      expect(plugin.libraryService.load).not.toHaveBeenCalled();
+    });
+
+    it('type dropdown changing from readwise deletes sourceType', async () => {
+      tab.display();
+
+      const allDropdowns: Array<{ triggerChange(v: string): void }> = [];
+      for (const setting of getSettings()) {
+        allDropdowns.push(...setting.getDropdownComponents());
+      }
+
+      // dropdowns[0] = database type (currently readwise)
+      allDropdowns[0].triggerChange('csl-json');
+      await Promise.resolve();
+
+      expect(plugin.settings.databases[0].type).toBe('csl-json');
+      expect(plugin.settings.databases[0].sourceType).toBeUndefined();
+      expect(plugin.saveSettings).toHaveBeenCalled();
+    });
+
+    it('API token text input saves setting on change', async () => {
+      tab.display();
+
+      // Collect all text components
+      const allTexts: Array<{ triggerChange(v: string): void }> = [];
+      for (const setting of getSettings()) {
+        allTexts.push(...setting.getTextComponents());
+      }
+
+      // For a Readwise card: db-name(0), api-token(1), ...literature note fields
+      // (no path text for readwise)
+      expect(allTexts.length).toBeGreaterThanOrEqual(2);
+      allTexts[1].triggerChange('new-token-value');
+      await Promise.resolve();
+
+      expect(plugin.settings.databases[0].path).toBe('new-token-value');
+      expect(plugin.saveSettings).toHaveBeenCalled();
+    });
+
+    it('displays last sync date when available', () => {
+      plugin.settings.readwiseLastSyncDate = '2024-06-15T12:00:00Z';
+      tab.display();
+
+      const container = (tab as unknown as { containerEl: HTMLElement })
+        .containerEl;
+      const statusEl = container.querySelector('.readwise-status');
+      expect(statusEl).not.toBeNull();
+      expect(statusEl!.textContent).toBe('Last sync: 2024-06-15T12:00:00Z');
+    });
+
+    it('does not display last sync date when empty', () => {
+      plugin.settings.readwiseLastSyncDate = '';
+      tab.display();
+
+      const container = (tab as unknown as { containerEl: HTMLElement })
+        .containerEl;
+      const statusEl = container.querySelector('.readwise-status');
+      expect(statusEl).not.toBeNull();
+      expect(statusEl!.textContent).toBe('');
+    });
+
+    describe('validate token button', () => {
+      // Button order for Readwise card: validate(0), sync(1), add-database(2), show-variables(3)
+      const VALIDATE_BTN_IDX = 0;
+
+      it('shows Notice when no token is set', async () => {
+        plugin.settings.databases[0].path = '';
+        tab.display();
+
+        const allButtons: Array<{ triggerClick(): void }> = [];
+        for (const setting of getSettings()) {
+          allButtons.push(...setting.getButtonComponents());
+        }
+
+        allButtons[VALIDATE_BTN_IDX].triggerClick();
+        await Promise.resolve();
+
+        expect(mockNotice).toHaveBeenCalledWith(
+          'Please enter an API token first.',
+        );
+      });
+
+      it('shows success when token is valid', async () => {
+        mockValidateToken.mockResolvedValue(true);
+        tab.display();
+
+        const allButtons: Array<{ triggerClick(): void }> = [];
+        for (const setting of getSettings()) {
+          allButtons.push(...setting.getButtonComponents());
+        }
+
+        allButtons[VALIDATE_BTN_IDX].triggerClick();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(mockNotice).toHaveBeenCalledWith(
+          'Readwise token validated. Loading library…',
+        );
+        expect(plugin.libraryService.load).toHaveBeenCalled();
+      });
+
+      it('shows error when token is invalid', async () => {
+        mockValidateToken.mockResolvedValue(false);
+        tab.display();
+
+        const allButtons: Array<{ triggerClick(): void }> = [];
+        for (const setting of getSettings()) {
+          allButtons.push(...setting.getButtonComponents());
+        }
+
+        allButtons[VALIDATE_BTN_IDX].triggerClick();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(mockNotice).toHaveBeenCalledWith(
+          'Readwise token is invalid. Please check and retry.',
+        );
+      });
+
+      it('shows network error when validation throws', async () => {
+        mockValidateToken.mockRejectedValue(new Error('Network failure'));
+        tab.display();
+
+        const allButtons: Array<{ triggerClick(): void }> = [];
+        for (const setting of getSettings()) {
+          allButtons.push(...setting.getButtonComponents());
+        }
+
+        allButtons[VALIDATE_BTN_IDX].triggerClick();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(mockNotice).toHaveBeenCalledWith(
+          'Could not reach Readwise API. Check your connection.',
+        );
+      });
+    });
+
+    describe('sync now button', () => {
+      // Button order for Readwise card: validate(0), sync(1), add-database(2), show-variables(3)
+      const SYNC_BTN_IDX = 1;
+
+      it('shows Notice when no token is set', async () => {
+        plugin.settings.databases[0].path = '';
+        tab.display();
+
+        const allButtons: Array<{ triggerClick(): void }> = [];
+        for (const setting of getSettings()) {
+          allButtons.push(...setting.getButtonComponents());
+        }
+
+        allButtons[SYNC_BTN_IDX].triggerClick();
+        await Promise.resolve();
+
+        expect(mockNotice).toHaveBeenCalledWith(
+          'Please enter an API token first.',
+        );
+      });
+
+      it('reloads library and updates last sync date', async () => {
+        tab.display();
+
+        const allButtons: Array<{ triggerClick(): void }> = [];
+        for (const setting of getSettings()) {
+          allButtons.push(...setting.getButtonComponents());
+        }
+
+        allButtons[SYNC_BTN_IDX].triggerClick();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(mockNotice).toHaveBeenCalledWith('Syncing Readwise data...');
+        expect(plugin.libraryService.load).toHaveBeenCalled();
+        expect(plugin.settings.readwiseLastSyncDate).not.toBe('');
+        expect(plugin.saveSettings).toHaveBeenCalled();
+        expect(mockNotice).toHaveBeenCalledWith('Readwise sync complete.');
+      });
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // renderLiteratureNotesSection — additional coverage
+  // -----------------------------------------------------------------------
+
+  describe('renderLiteratureNotesSection — link display template', () => {
+    it('literatureNoteLinkDisplayTemplate text saves setting on change', async () => {
+      tab.display();
+
+      // Collect all text components
+      const allTexts: Array<{ triggerChange(v: string): void }> = [];
+      for (const setting of getSettings()) {
+        allTexts.push(...setting.getTextComponents());
+      }
+
+      // The link display template is the last text field before the display section
+      // Fields: db-name(0), db-path(1), lit-note-folder(2), lit-note-title(3),
+      //         lit-note-content-path(4), primary-citation(5), alt-citation(6),
+      //         link-display(7)
+      const lastText = allTexts[allTexts.length - 1];
+      lastText.triggerChange('{{authorString}} ({{year}})');
+      await Promise.resolve();
+
+      expect(plugin.settings.literatureNoteLinkDisplayTemplate).toBe(
+        '{{authorString}} ({{year}})',
+      );
+      expect(plugin.saveSettings).toHaveBeenCalled();
     });
   });
 

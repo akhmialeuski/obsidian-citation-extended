@@ -62,8 +62,14 @@ function parseHayagriva(raw: string): ParseResult {
  * worker, so the parser simply deserializes the array.
  */
 function parseReadwise(raw: string): ParseResult {
-  const entries: EntryData[] = JSON.parse(raw);
-  return { entries, parseErrors: [] };
+  const data: unknown = JSON.parse(raw);
+  if (!Array.isArray(data)) {
+    return {
+      entries: [],
+      parseErrors: [{ message: 'Readwise data is not an array' }],
+    };
+  }
+  return { entries: data as EntryData[], parseErrors: [] };
 }
 
 /**

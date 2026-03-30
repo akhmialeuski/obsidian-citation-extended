@@ -1,4 +1,11 @@
 import { z } from 'zod';
+import { DATABASE_FORMATS, DatabaseType } from '../../core/types/database';
+
+// Zod-compatible tuple derived from DATABASE_FORMATS constants
+const DATABASE_FORMAT_ENUM = Object.values(DATABASE_FORMATS) as [
+  DatabaseType,
+  ...DatabaseType[],
+];
 
 // ---- Citation style presets ------------------------------------------------
 
@@ -31,30 +38,11 @@ export const CITATION_STYLE_PRESETS: Record<
   },
 };
 
-// ---- Readwise mode options -------------------------------------------------
-
-export const READWISE_MODE_OPTIONS = [
-  'readwise-highlights',
-  'reader-documents',
-] as const;
-
-export type ReadwiseModeSetting = (typeof READWISE_MODE_OPTIONS)[number];
-
-export const READWISE_MODE_LABELS: Record<ReadwiseModeSetting, string> = {
-  'readwise-highlights': 'Readwise Highlights (v2 Export)',
-  'reader-documents': 'Readwise Reader Documents (v3)',
-};
-
 // ---- Zod schema ------------------------------------------------------------
 
 export const SettingsSchema = z.object({
   citationExportPath: z.string(),
-  citationExportFormat: z.enum([
-    'csl-json',
-    'biblatex',
-    'hayagriva',
-    'readwise',
-  ]),
+  citationExportFormat: z.enum(DATABASE_FORMAT_ENUM),
   literatureNoteTitleTemplate: z.string().min(1),
   literatureNoteFolder: z.string(),
   // Legacy: kept for migration. New installs use only the path field.
@@ -75,7 +63,7 @@ export const SettingsSchema = z.object({
       z.object({
         id: z.string().optional(),
         name: z.string(),
-        type: z.enum(['csl-json', 'biblatex', 'hayagriva', 'readwise']),
+        type: z.enum(DATABASE_FORMAT_ENUM),
         path: z.string(),
         sourceType: z.string().optional(),
       }),
@@ -95,9 +83,8 @@ export const SettingsSchema = z.object({
     )
     .default([]),
   // ---- Readwise integration ------------------------------------------------
+  // Legacy: token was global before it moved into db.path. Kept for migration.
   readwiseApiToken: z.string().default(''),
-  readwiseSyncEnabled: z.boolean().default(false),
-  readwiseMode: z.enum(READWISE_MODE_OPTIONS).default('readwise-highlights'),
   readwiseLastSyncDate: z.string().default(''),
 });
 
@@ -113,7 +100,7 @@ export const DEFAULT_CONTENT_TEMPLATE =
 
 export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   citationExportPath: '',
-  citationExportFormat: 'csl-json',
+  citationExportFormat: DATABASE_FORMATS.CslJson,
   literatureNoteTitleTemplate: '@{{citekey}}',
   literatureNoteFolder: 'Reading notes',
   literatureNoteContentTemplate: '',
@@ -129,8 +116,6 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   templateProfiles: [],
   // Readwise defaults
   readwiseApiToken: '',
-  readwiseSyncEnabled: false,
-  readwiseMode: 'readwise-highlights',
   readwiseLastSyncDate: '',
 };
 

@@ -9,8 +9,7 @@ The plugin supports loading bibliography data from multiple sources and formats.
 | **CSL-JSON** | `.json` | Standard citation format, fast loading |
 | **BibLaTeX** | `.bib` | Rich format with PDF paths, keywords, notes. Slower to parse but more data available |
 | **Hayagriva** | `.yml` / `.yaml` | YAML-based bibliography format used by [Typst](https://typst.app). Supports basic fields: title, author, date, DOI, URL, parent (container) |
-| **Readwise Highlights** | API | Highlights and annotations from Readwise (v2 Export API) |
-| **Readwise Reader** | API | Documents and articles from Readwise Reader (v3 API) |
+| **Readwise** | API | Highlights and documents from Readwise (v2 Export + v3 Reader APIs, loaded together) |
 
 ### Choosing a Format
 
@@ -47,29 +46,29 @@ Reads from a file inside the Obsidian vault using the Vault API. Uses Obsidian's
 
 ### Readwise API
 
-Loads highlights and documents directly from the Readwise API. No file export needed — the plugin fetches data over the network.
+Loads highlights and documents directly from the Readwise API. No file export needed -- the plugin fetches data over the network.
 
 **When to use:** If you use Readwise to collect highlights from books, articles, podcasts, or other sources, and want those highlights available as citable entries in Obsidian.
 
-**Two modes:**
+The plugin loads data from both Readwise APIs in parallel and merges the results into a single database:
 
-| Mode | API Version | What it loads | Citekey format |
-|------|------------|---------------|----------------|
-| **Readwise Highlights** | v2 Export | Books with nested highlights from Kindle, Instapaper, etc. | `rw-{id}` |
-| **Readwise Reader** | v3 List | Documents, articles, PDFs saved in Readwise Reader | `rd-{id}` |
+| API | What it loads | Citekey format |
+|-----|---------------|----------------|
+| **v2 Export** | Books with nested highlights from Kindle, Instapaper, etc. | `rw-{id}` |
+| **v3 Reader** | Documents, articles, PDFs saved in Readwise Reader | `rd-{id}` |
 
 **Setup:**
-1. Go to **Settings** > **Citation plugin** > **Readwise integration**
-2. Enable "Readwise sync"
-3. Choose a mode (Highlights or Reader Documents)
+1. Go to **Settings** > **Citation plugin** > **Citation databases**
+2. Click **Add database**
+3. Change the **Database type** dropdown to **Readwise**
 4. Enter your API token (get it from [readwise.io/access_token](https://readwise.io/access_token))
-5. Click "Validate token" to confirm it works
-6. Click "Sync now" to load data
+5. Click **Validate token** to confirm it works
+6. Click **Sync now** to load data
 
 **How it works:**
-- The plugin creates a virtual "Readwise" database entry automatically when sync is enabled
+- Readwise is a regular database type -- you add it the same way you add a BibLaTeX or CSL-JSON database
 - Data is fetched on each sync (manual "Sync now" or plugin reload)
-- No file watching — Readwise data loads on demand, not in real-time
+- No file watching -- Readwise data loads on demand, not in real-time
 - Readwise entries appear in the search modal alongside your other databases
 - All standard features work: citation insertion, literature note creation, templates
 
@@ -85,7 +84,7 @@ Loads highlights and documents directly from the Readwise API. No file export ne
 | `summary` | `abstract` | |
 | `book_tags` / `tags` | `keywords[]` | |
 | `highlights[].text` | `note` | Aggregated with `---` separator |
-| `published_date` | `issuedDate` | Reader mode only |
+| `published_date` | `issuedDate` | Reader (v3) entries only |
 
 ## Multiple Databases
 

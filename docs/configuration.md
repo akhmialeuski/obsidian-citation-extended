@@ -56,31 +56,35 @@ To use more than one bibliography source (e.g. personal library + shared team li
 
 ## Readwise Integration
 
-Connect the plugin to your Readwise account to import highlights and documents as citable entries.
+Connect the plugin to your Readwise account to import highlights and documents as citable entries. Readwise is configured as a regular database in the **Citation databases** section -- there is no separate settings panel.
 
-| Setting | Description | Default |
-|---------|-------------|---------|
-| Enable Readwise sync | When enabled, Readwise data is loaded as an additional citation database | `false` |
-| Readwise mode | Choose which data to import: **Readwise Highlights** (v2 Export — books, articles with highlights) or **Readwise Reader Documents** (v3 — saved documents in Reader) | `Readwise Highlights` |
-| API token | Your Readwise access token. Get it from [readwise.io/access_token](https://readwise.io/access_token). The token is stored in plugin settings and displayed as a password field | (empty) |
+### Adding a Readwise Database
 
-### Buttons
+1. Open **Settings** > **Citation plugin** > **Citation databases**
+2. Click **Add database**
+3. In the new database card, change the **Database type** dropdown to **Readwise**
+4. The card now shows Readwise-specific fields instead of a file path
 
-| Button | Action |
-|--------|--------|
+### Readwise Database Card Settings
+
+| Setting / Button | Description |
+|------------------|-------------|
+| **Database name** | Friendly label for this database (default: `Database N`). You can rename it to `Readwise` or any name you prefer |
+| **Database type** | Must be set to **Readwise** |
+| **API token** | Your Readwise access token (password field). Get it from [readwise.io/access_token](https://readwise.io/access_token). Stored in plugin settings |
 | **Validate token** | Tests the API token against Readwise. Shows "Token is valid" or "Token is invalid" |
-| **Sync now** | Immediately fetches data from Readwise and reloads the library. Updates the "Last sync" timestamp |
+| **Sync now** | Fetches data from both Readwise APIs and reloads the library. Updates the "Last sync" timestamp shown below the token field |
 
 ### How It Works
 
-When Readwise sync is enabled and a valid API token is provided, the plugin automatically creates a virtual "Readwise" database entry in your databases list. This entry:
+When a Readwise database is configured with a valid API token, clicking **Sync now** fetches data from both Readwise APIs in parallel:
 
-- Uses the `readwise` source type (API-based, not file-based)
-- Appears alongside your other databases in the library
-- Is automatically removed when you disable Readwise sync
-- Updates its format when you change the Readwise mode
+- **v2 Export API** -- books with nested highlights (Kindle, Instapaper, etc.). Entries use citekeys like `rw-12345`
+- **v3 Reader API** -- documents, articles, and PDFs saved in Readwise Reader. Entries use citekeys like `rd-abc123`
 
-Readwise entries appear in search with citekeys like `rw-12345` (highlights mode) or `rd-abc123` (reader mode). They support all standard plugin features: citation insertion, literature note creation, templates, and batch operations.
+Both sets of entries are merged into a single database. There is no mode selector -- the plugin always loads from both APIs automatically.
+
+Readwise entries support all standard plugin features: citation insertion, literature note creation, templates, and batch operations. See the [Readwise Integration use case](use-cases/readwise-integration.md) for a complete walkthrough.
 
 ---
 

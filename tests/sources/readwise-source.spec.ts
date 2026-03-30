@@ -121,22 +121,17 @@ describe('ReadwiseSource', () => {
     it('creates a source with the given id', () => {
       const client = createMockClient();
       const worker = createMockWorkerManager();
-      const source = new ReadwiseSource(
-        'rw-src-1',
-        client,
-        'readwise-highlights',
-        worker as never,
-      );
+      const source = new ReadwiseSource('rw-src-1', client, worker as never);
       expect(source.id).toBe('rw-src-1');
     });
   });
 
   // -------------------------------------------------------------------------
-  // load() — readwise-highlights mode
+  // load() — merged behavior (both APIs fetched in parallel)
   // -------------------------------------------------------------------------
 
-  describe('load (readwise-highlights)', () => {
-    it('loads books and converts to ReadwiseAdapter entries', async () => {
+  describe('load (merged behavior)', () => {
+    it('loads books from v2 API and converts to ReadwiseAdapter entries', async () => {
       const books = [
         makeExportBook({ user_book_id: 1, title: 'Book 1' }),
         makeExportBook({ user_book_id: 2, title: 'Book 2' }),
@@ -146,20 +141,54 @@ describe('ReadwiseSource', () => {
       } as unknown as Partial<ReadwiseApiClient>);
       const worker = createMockWorkerManager();
 
-      const source = new ReadwiseSource(
-        'rw-src-1',
-        client,
-        'readwise-highlights',
-        worker as never,
-      );
+      const source = new ReadwiseSource('rw-src-1', client, worker as never);
       const result = await source.load();
 
       expect(result.sourceId).toBe('rw-src-1');
+      // Both books should appear as entries (reader docs return empty)
       expect(result.entries).toHaveLength(2);
       expect(result.entries[0]).toBeInstanceOf(ReadwiseAdapter);
       expect(result.entries[0].id).toBe('rw-1');
       expect(result.entries[1].id).toBe('rw-2');
       expect(result.modifiedAt).toBeInstanceOf(Date);
+    });
+
+    it('loads documents from v3 API and converts to ReadwiseAdapter entries', async () => {
+      const docs = [
+        makeReaderDoc({ id: 'doc-1', title: 'Article 1' }),
+        makeReaderDoc({ id: 'doc-2', title: 'Article 2' }),
+      ];
+      const client = createMockClient({
+        fetchReaderDocuments: jest.fn().mockResolvedValue(docs),
+      } as unknown as Partial<ReadwiseApiClient>);
+      const worker = createMockWorkerManager();
+
+      const source = new ReadwiseSource('rd-src-1', client, worker as never);
+      const result = await source.load();
+
+      expect(result.sourceId).toBe('rd-src-1');
+      expect(result.entries).toHaveLength(2);
+      expect(result.entries[0]).toBeInstanceOf(ReadwiseAdapter);
+      expect(result.entries[0].id).toBe('rd-doc-1');
+      expect(result.entries[1].id).toBe('rd-doc-2');
+    });
+
+    it('merges results from both APIs', async () => {
+      const books = [makeExportBook({ user_book_id: 1, title: 'Book 1' })];
+      const docs = [makeReaderDoc({ id: 'doc-1', title: 'Article 1' })];
+      const client = createMockClient({
+        fetchExportBooks: jest.fn().mockResolvedValue(books),
+        fetchReaderDocuments: jest.fn().mockResolvedValue(docs),
+      } as unknown as Partial<ReadwiseApiClient>);
+      const worker = createMockWorkerManager();
+
+      const source = new ReadwiseSource('rw-src-1', client, worker as never);
+      const result = await source.load();
+
+      // Both the book and the document should appear
+      expect(result.entries).toHaveLength(2);
+      expect(result.entries[0].id).toBe('rw-1');
+      expect(result.entries[1].id).toBe('rd-doc-1');
     });
 
     it('posts serialized entry data to the worker', async () => {
@@ -169,12 +198,7 @@ describe('ReadwiseSource', () => {
       } as unknown as Partial<ReadwiseApiClient>);
       const worker = createMockWorkerManager();
 
-      const source = new ReadwiseSource(
-        'src-1',
-        client,
-        'readwise-highlights',
-        worker as never,
-      );
+      const source = new ReadwiseSource('src-1', client, worker as never);
       await source.load();
 
       expect(worker.post).toHaveBeenCalledTimes(1);
@@ -187,23 +211,24 @@ describe('ReadwiseSource', () => {
       expect(parsed[0].rawId).toBe('1');
     });
 
-    it('passes updatedAfter to API client', async () => {
-      const fetchMock = jest.fn().mockResolvedValue([]);
+    it('passes updatedAfter to both API clients', async () => {
+      const fetchBooksMock = jest.fn().mockResolvedValue([]);
+      const fetchDocsMock = jest.fn().mockResolvedValue([]);
       const client = createMockClient({
-        fetchExportBooks: fetchMock,
+        fetchExportBooks: fetchBooksMock,
+        fetchReaderDocuments: fetchDocsMock,
       } as unknown as Partial<ReadwiseApiClient>);
       const worker = createMockWorkerManager();
 
-      const source = new ReadwiseSource(
-        'rw-src-1',
-        client,
-        'readwise-highlights',
-        worker as never,
-        { updatedAfter: '2024-01-01' },
-      );
+      const source = new ReadwiseSource('rw-src-1', client, worker as never, {
+        updatedAfter: '2024-01-01',
+      });
       await source.load();
 
-      expect(fetchMock).toHaveBeenCalledWith({
+      expect(fetchBooksMock).toHaveBeenCalledWith({
+        updatedAfter: '2024-01-01',
+      });
+      expect(fetchDocsMock).toHaveBeenCalledWith({
         updatedAfter: '2024-01-01',
       });
     });
@@ -253,12 +278,7 @@ describe('ReadwiseSource', () => {
       } as unknown as Partial<ReadwiseApiClient>);
       const worker = createMockWorkerManager();
 
-      const source = new ReadwiseSource(
-        'src-1',
-        client,
-        'readwise-highlights',
-        worker as never,
-      );
+      const source = new ReadwiseSource('src-1', client, worker as never);
       const result = await source.load();
       const entry = result.entries[0];
 
@@ -279,12 +299,7 @@ describe('ReadwiseSource', () => {
       } as unknown as Partial<ReadwiseApiClient>);
       const worker = createMockWorkerManager();
 
-      const source = new ReadwiseSource(
-        'src-1',
-        client,
-        'readwise-highlights',
-        worker as never,
-      );
+      const source = new ReadwiseSource('src-1', client, worker as never);
       const result = await source.load();
 
       expect(result.entries[0].note).toBe('');
@@ -300,12 +315,7 @@ describe('ReadwiseSource', () => {
       } as unknown as Partial<ReadwiseApiClient>);
       const worker = createMockWorkerManager();
 
-      const source = new ReadwiseSource(
-        'src-1',
-        client,
-        'readwise-highlights',
-        worker as never,
-      );
+      const source = new ReadwiseSource('src-1', client, worker as never);
       const result = await source.load();
 
       expect(result.entries[0].abstract).toBe(
@@ -313,39 +323,28 @@ describe('ReadwiseSource', () => {
       );
     });
 
-    it('returns empty array when no books', async () => {
+    it('returns empty array when both APIs return empty', async () => {
       const client = createMockClient({
         fetchExportBooks: jest.fn().mockResolvedValue([]),
+        fetchReaderDocuments: jest.fn().mockResolvedValue([]),
       } as unknown as Partial<ReadwiseApiClient>);
       const worker = createMockWorkerManager();
 
-      const source = new ReadwiseSource(
-        'src-1',
-        client,
-        'readwise-highlights',
-        worker as never,
-      );
+      const source = new ReadwiseSource('src-1', client, worker as never);
       const result = await source.load();
 
       expect(result.entries).toEqual([]);
     });
 
     it('returns parseErrors from worker response', async () => {
-      const client = createMockClient({
-        fetchExportBooks: jest.fn().mockResolvedValue([]),
-      } as unknown as Partial<ReadwiseApiClient>);
+      const client = createMockClient();
       const worker = createMockWorkerManager();
       worker.post.mockResolvedValue({
         entries: [],
         parseErrors: [{ message: 'test parse error' }],
       });
 
-      const source = new ReadwiseSource(
-        'src-1',
-        client,
-        'readwise-highlights',
-        worker as never,
-      );
+      const source = new ReadwiseSource('src-1', client, worker as never);
       const result = await source.load();
 
       expect(result.parseErrors).toEqual([{ message: 'test parse error' }]);
@@ -353,54 +352,25 @@ describe('ReadwiseSource', () => {
   });
 
   // -------------------------------------------------------------------------
-  // load() — reader-documents mode
+  // load() — reader document specifics
   // -------------------------------------------------------------------------
 
-  describe('load (reader-documents)', () => {
-    it('loads documents and converts to ReadwiseAdapter entries', async () => {
-      const docs = [
-        makeReaderDoc({ id: 'doc-1', title: 'Article 1' }),
-        makeReaderDoc({ id: 'doc-2', title: 'Article 2' }),
-      ];
-      const client = createMockClient({
-        fetchReaderDocuments: jest.fn().mockResolvedValue(docs),
-      } as unknown as Partial<ReadwiseApiClient>);
-      const worker = createMockWorkerManager();
-
-      const source = new ReadwiseSource(
-        'rd-src-1',
-        client,
-        'reader-documents',
-        worker as never,
-      );
-      const result = await source.load();
-
-      expect(result.sourceId).toBe('rd-src-1');
-      expect(result.entries).toHaveLength(2);
-      expect(result.entries[0]).toBeInstanceOf(ReadwiseAdapter);
-      expect(result.entries[0].id).toBe('rd-doc-1');
-      expect(result.entries[1].id).toBe('rd-doc-2');
-    });
-
-    it('posts serialized entry data to the worker', async () => {
+  describe('load (reader document specifics)', () => {
+    it('posts serialized reader entry data to the worker', async () => {
       const docs = [makeReaderDoc({ id: 'doc-1' })];
       const client = createMockClient({
         fetchReaderDocuments: jest.fn().mockResolvedValue(docs),
       } as unknown as Partial<ReadwiseApiClient>);
       const worker = createMockWorkerManager();
 
-      const source = new ReadwiseSource(
-        'src-1',
-        client,
-        'reader-documents',
-        worker as never,
-      );
+      const source = new ReadwiseSource('src-1', client, worker as never);
       await source.load();
 
       expect(worker.post).toHaveBeenCalledTimes(1);
       const call = worker.post.mock.calls[0][0];
       expect(call.databaseType).toBe(DATABASE_FORMATS.Readwise);
       const parsed = JSON.parse(call.databaseRaw);
+      // Should contain exactly 1 reader entry (books empty)
       expect(parsed).toHaveLength(1);
       expect(parsed[0].rawId).toBe('doc-1');
     });
@@ -416,14 +386,10 @@ describe('ReadwiseSource', () => {
       } as unknown as Partial<ReadwiseApiClient>);
       const worker = createMockWorkerManager();
 
-      const source = new ReadwiseSource(
-        'rd-src-1',
-        client,
-        'reader-documents',
-        worker as never,
-      );
+      const source = new ReadwiseSource('rd-src-1', client, worker as never);
       const result = await source.load();
 
+      // Only top-level reader docs (books array is empty)
       expect(result.entries).toHaveLength(2);
       expect(result.entries.map((e) => e.id)).toEqual([
         'rd-parent-1',
@@ -438,12 +404,7 @@ describe('ReadwiseSource', () => {
       } as unknown as Partial<ReadwiseApiClient>);
       const worker = createMockWorkerManager();
 
-      const source = new ReadwiseSource(
-        'rd-src-1',
-        client,
-        'reader-documents',
-        worker as never,
-      );
+      const source = new ReadwiseSource('rd-src-1', client, worker as never);
       const result = await source.load();
 
       expect(result.entries[0].keywords).toEqual(['science', 'ai', 'ml']);
@@ -467,12 +428,7 @@ describe('ReadwiseSource', () => {
       } as unknown as Partial<ReadwiseApiClient>);
       const worker = createMockWorkerManager();
 
-      const source = new ReadwiseSource(
-        'src-1',
-        client,
-        'reader-documents',
-        worker as never,
-      );
+      const source = new ReadwiseSource('src-1', client, worker as never);
       const result = await source.load();
       const entry = result.entries[0];
 
@@ -483,27 +439,6 @@ describe('ReadwiseSource', () => {
       expect(entry.abstract).toBe('Novel AI approach');
       expect(entry.note).toBe('Key insight about AI.');
     });
-
-    it('passes updatedAfter to API client', async () => {
-      const fetchMock = jest.fn().mockResolvedValue([]);
-      const client = createMockClient({
-        fetchReaderDocuments: fetchMock,
-      } as unknown as Partial<ReadwiseApiClient>);
-      const worker = createMockWorkerManager();
-
-      const source = new ReadwiseSource(
-        'src-1',
-        client,
-        'reader-documents',
-        worker as never,
-        { updatedAfter: '2024-06-01' },
-      );
-      await source.load();
-
-      expect(fetchMock).toHaveBeenCalledWith({
-        updatedAfter: '2024-06-01',
-      });
-    });
   });
 
   // -------------------------------------------------------------------------
@@ -511,7 +446,7 @@ describe('ReadwiseSource', () => {
   // -------------------------------------------------------------------------
 
   describe('error handling', () => {
-    it('wraps API errors with descriptive message', async () => {
+    it('collects API errors in parseErrors instead of throwing', async () => {
       const client = createMockClient({
         fetchExportBooks: jest
           .fn()
@@ -519,34 +454,30 @@ describe('ReadwiseSource', () => {
       } as unknown as Partial<ReadwiseApiClient>);
       const worker = createMockWorkerManager();
 
-      const source = new ReadwiseSource(
-        'src-1',
-        client,
-        'readwise-highlights',
-        worker as never,
-      );
+      const source = new ReadwiseSource('src-1', client, worker as never);
+      const result = await source.load();
 
-      await expect(source.load()).rejects.toThrow(
-        'Failed to load from Readwise API: API rate limited',
-      );
+      expect(result.entries).toHaveLength(0);
+      expect(result.parseErrors).toBeDefined();
+      expect(
+        result.parseErrors!.some((e) => e.message.includes('API rate limited')),
+      ).toBe(true);
     });
 
-    it('handles non-Error thrown values', async () => {
+    it('collects non-Error thrown values in parseErrors', async () => {
       const client = createMockClient({
         fetchExportBooks: jest.fn().mockRejectedValue('string error'),
       } as unknown as Partial<ReadwiseApiClient>);
       const worker = createMockWorkerManager();
 
-      const source = new ReadwiseSource(
-        'src-1',
-        client,
-        'readwise-highlights',
-        worker as never,
-      );
+      const source = new ReadwiseSource('src-1', client, worker as never);
+      const result = await source.load();
 
-      await expect(source.load()).rejects.toThrow(
-        'Failed to load from Readwise API: string error',
-      );
+      expect(result.entries).toHaveLength(0);
+      expect(result.parseErrors).toBeDefined();
+      expect(
+        result.parseErrors!.some((e) => e.message.includes('string error')),
+      ).toBe(true);
     });
   });
 
@@ -558,24 +489,14 @@ describe('ReadwiseSource', () => {
     it('watch is a no-op and does not throw', () => {
       const client = createMockClient();
       const worker = createMockWorkerManager();
-      const source = new ReadwiseSource(
-        'src-1',
-        client,
-        'readwise-highlights',
-        worker as never,
-      );
+      const source = new ReadwiseSource('src-1', client, worker as never);
       expect(() => source.watch(jest.fn())).not.toThrow();
     });
 
     it('dispose is a no-op and does not throw', () => {
       const client = createMockClient();
       const worker = createMockWorkerManager();
-      const source = new ReadwiseSource(
-        'src-1',
-        client,
-        'readwise-highlights',
-        worker as never,
-      );
+      const source = new ReadwiseSource('src-1', client, worker as never);
       expect(() => source.dispose()).not.toThrow();
     });
   });
@@ -592,12 +513,7 @@ describe('ReadwiseSource', () => {
       } as unknown as Partial<ReadwiseApiClient>);
       const worker = createMockWorkerManager();
 
-      const source = new ReadwiseSource(
-        'src-1',
-        client,
-        'readwise-highlights',
-        worker as never,
-      );
+      const source = new ReadwiseSource('src-1', client, worker as never);
       const result = await source.load();
 
       const entry = result.entries[0];

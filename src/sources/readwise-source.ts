@@ -4,11 +4,9 @@ import {
   ReadwiseExportBook,
   ReadwiseReaderDocument,
 } from '../core/readwise/readwise-api-client';
-import {
-  ReadwiseEntryData,
-  ReadwiseMode,
-} from '../core/adapters/readwise-adapter';
+import { ReadwiseEntryData } from '../core/adapters/readwise-adapter';
 import { DATABASE_FORMATS, convertToEntries } from '../core';
+import type { ParseErrorInfo } from '../core';
 import { WorkerManager } from '../util';
 
 // ---------------------------------------------------------------------------
@@ -76,9 +74,9 @@ function toEntryDataFromReader(doc: ReadwiseReaderDocument): ReadwiseEntryData {
 /**
  * Data source that loads bibliography entries from the Readwise API.
  *
- * Supports two internal modes:
- * - `readwise-highlights` — books with nested highlights via the v2 Export API.
- * - `reader-documents` — documents via the Reader v3 API.
+ * Fetches BOTH APIs in parallel via Promise.allSettled:
+ * - Books with nested highlights via the v2 Export API.
+ * - Documents via the Reader v3 API.
  *
  * Follows the same worker pipeline as file-based sources:
  * API response -> ReadwiseEntryData[] -> JSON.stringify -> Worker ->
@@ -91,7 +89,6 @@ export class ReadwiseSource implements DataSource {
   constructor(
     public readonly id: string,
     private client: ReadwiseApiClient,
-    private mode: ReadwiseMode,
     private loadWorker: WorkerManager,
     private options?: { updatedAfter?: string },
   ) {}
@@ -102,7 +99,8 @@ export class ReadwiseSource implements DataSource {
    */
   async load(): Promise<DataSourceLoadResult> {
     try {
-      const entryDataArray = await this.fetchEntryData();
+      const { entries: entryDataArray, errors: fetchErrors } =
+        await this.fetchEntryData();
 
       // Serialize to JSON for the worker (same pattern as file-based sources)
       const raw = JSON.stringify(entryDataArray);
@@ -113,11 +111,22 @@ export class ReadwiseSource implements DataSource {
         databaseType: DATABASE_FORMATS.Readwise,
       });
 
+      const entries = convertToEntries(
+        DATABASE_FORMATS.Readwise,
+        result.entries,
+      );
+
+      // Merge worker parse errors with API fetch errors
+      const allParseErrors: ParseErrorInfo[] = [
+        ...fetchErrors,
+        ...result.parseErrors,
+      ];
+
       return {
         sourceId: this.id,
-        entries: convertToEntries(DATABASE_FORMATS.Readwise, result.entries),
+        entries,
         modifiedAt: new Date(),
-        parseErrors: result.parseErrors,
+        parseErrors: allParseErrors,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -129,27 +138,55 @@ export class ReadwiseSource implements DataSource {
   }
 
   /**
-   * Fetch data from the appropriate Readwise API endpoint and convert
-   * to normalized ReadwiseEntryData objects.
+   * Fetch data from BOTH Readwise API endpoints in parallel using
+   * Promise.allSettled. Merges results and collects errors from
+   * any failed endpoint without blocking the other.
    */
-  private async fetchEntryData(): Promise<ReadwiseEntryData[]> {
-    if (this.mode === 'readwise-highlights') {
-      const books = await this.client.fetchExportBooks({
+  private async fetchEntryData(): Promise<{
+    entries: ReadwiseEntryData[];
+    errors: ParseErrorInfo[];
+  }> {
+    const [booksResult, docsResult] = await Promise.allSettled([
+      this.client.fetchExportBooks({
         updatedAfter: this.options?.updatedAfter,
-      });
-      return books.map((book) => toEntryDataFromExport(book));
+      }),
+      this.client.fetchReaderDocuments({
+        updatedAfter: this.options?.updatedAfter,
+      }),
+    ]);
+
+    const entries: ReadwiseEntryData[] = [];
+    const errors: ParseErrorInfo[] = [];
+
+    if (booksResult.status === 'fulfilled') {
+      entries.push(
+        ...booksResult.value.map((book) => toEntryDataFromExport(book)),
+      );
     } else {
-      const documents = await this.client.fetchReaderDocuments({
-        updatedAfter: this.options?.updatedAfter,
-      });
-      // Filter out child documents (those with a parent_id)
-      const topLevel = documents.filter((doc) => doc.parent_id === null);
-      return topLevel.map((doc) => toEntryDataFromReader(doc));
+      const msg =
+        booksResult.reason instanceof Error
+          ? booksResult.reason.message
+          : String(booksResult.reason);
+      errors.push({ message: `Readwise v2 Export API error: ${msg}` });
     }
+
+    if (docsResult.status === 'fulfilled') {
+      // Filter out child documents (those with a parent_id)
+      const topLevel = docsResult.value.filter((doc) => doc.parent_id === null);
+      entries.push(...topLevel.map((doc) => toEntryDataFromReader(doc)));
+    } else {
+      const msg =
+        docsResult.reason instanceof Error
+          ? docsResult.reason.message
+          : String(docsResult.reason);
+      errors.push({ message: `Readwise Reader v3 API error: ${msg}` });
+    }
+
+    return { entries, errors };
   }
 
   /**
-   * No-op — Readwise has no push notification mechanism for desktop plugins.
+   * No-op -- Readwise has no push notification mechanism for desktop plugins.
    * The plugin relies on manual sync or periodic reload.
    */
   watch(_callback: () => void): void {

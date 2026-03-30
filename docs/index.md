@@ -24,3 +24,4 @@ Welcome to the documentation for Obsidian Citation Extended, a plugin that integ
   - [Conditional Templates](use-cases/conditional-templates.md) — Smart templates with if/else logic
   - [Zotero Integration](use-cases/zotero-integration.md) — Complete Zotero workflow
   - [Hayagriva / Typst Workflow](use-cases/hayagriva-typst-workflow.md) — Hayagriva YAML with Typst
+  - [Readwise Integration](use-cases/readwise-integration.md) — Import highlights and documents from Readwise

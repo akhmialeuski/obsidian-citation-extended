@@ -41,7 +41,6 @@ import {
   generateDatabaseId,
   ReadwiseApiClient,
 } from './core';
-import type { ReadwiseMode } from './core';
 import LoadWorker from 'web-worker:./worker';
 
 export default class CitationPlugin extends Plugin {
@@ -96,15 +95,32 @@ export default class CitationPlugin extends Plugin {
       }
 
       // Migrate legacy Readwise database types to single 'readwise' format
+      const LEGACY_READWISE_HIGHLIGHTS = 'readwise-highlights';
+      const LEGACY_READER_DOCUMENTS = 'reader-documents';
       for (const db of this.settings.databases) {
         if (
-          db.type === ('readwise-highlights' as string) ||
-          db.type === ('reader-documents' as string)
+          db.type === (LEGACY_READWISE_HIGHLIGHTS as string) ||
+          db.type === (LEGACY_READER_DOCUMENTS as string)
         ) {
           db.type = DATABASE_FORMATS.Readwise;
           needsSave = true;
           console.debug(
             'Citations plugin: Migrated Readwise database type to unified format',
+          );
+        }
+      }
+
+      // Migrate legacy global readwiseApiToken into the Readwise database's path
+      if (this.settings.readwiseApiToken) {
+        const rwDb = this.settings.databases.find(
+          (db) => db.type === DATABASE_FORMATS.Readwise,
+        );
+        if (rwDb && !rwDb.path) {
+          rwDb.path = this.settings.readwiseApiToken;
+          this.settings.readwiseApiToken = '';
+          needsSave = true;
+          console.debug(
+            'Citations plugin: Migrated legacy readwiseApiToken to database path',
           );
         }
       }
@@ -165,18 +181,11 @@ export default class CitationPlugin extends Plugin {
         ),
     );
 
-    // Register Readwise source type — uses the API token from settings
-    const settingsRef = this.settings;
+    // Register Readwise source type — token lives in db.path (passed via def.path)
     registry.register(
       DATA_SOURCE_TYPES.Readwise,
       (def, id) =>
-        new ReadwiseSource(
-          id,
-          new ReadwiseApiClient(settingsRef.readwiseApiToken),
-          settingsRef.readwiseMode as ReadwiseMode,
-          workerManager,
-          { updatedAfter: settingsRef.readwiseLastSyncDate || undefined },
-        ),
+        new ReadwiseSource(id, new ReadwiseApiClient(def.path), workerManager),
     );
 
     const dataSourceFactory = new DataSourceFactory(registry);
@@ -254,9 +263,6 @@ export default class CitationPlugin extends Plugin {
   }
 
   init(): void {
-    // Ensure Readwise database config exists when sync is enabled
-    this.syncReadwiseDatabaseConfig();
-
     if (this.settings.databases.length > 0) {
       void this.libraryService.load();
     } else {
@@ -265,37 +271,5 @@ export default class CitationPlugin extends Plugin {
 
     this.uiService.init();
     this.addSettingTab(new CitationSettingTab(this.app, this));
-  }
-
-  /**
-   * Ensure a database entry exists for Readwise when sync is enabled,
-   * or remove it when sync is disabled.
-   *
-   * The database type is always 'readwise' regardless of the internal mode
-   * (readwiseMode is an internal detail of ReadwiseSource, not a database format).
-   */
-  syncReadwiseDatabaseConfig(): void {
-    const readwiseDbIndex = this.settings.databases.findIndex(
-      (db) => db.sourceType === DATA_SOURCE_TYPES.Readwise,
-    );
-
-    if (this.settings.readwiseSyncEnabled && this.settings.readwiseApiToken) {
-      if (readwiseDbIndex === -1) {
-        // Create a new Readwise database entry
-        this.settings.databases.push({
-          id: generateDatabaseId(),
-          name: 'Readwise',
-          path: 'readwise-api',
-          type: DATABASE_FORMATS.Readwise,
-          sourceType: DATA_SOURCE_TYPES.Readwise,
-        });
-        void this.saveSettings();
-      }
-      // No need to update on mode change — the database type is always 'readwise'
-    } else if (readwiseDbIndex !== -1) {
-      // Remove the Readwise database entry when sync is disabled
-      this.settings.databases.splice(readwiseDbIndex, 1);
-      void this.saveSettings();
-    }
   }
 }

@@ -121,7 +121,7 @@ describe('Invariant 3: ReadwiseSource worker pipeline', () => {
   it('load() calls worker.post() with database type "readwise"', async () => {
     const client = {
       fetchExportBooks: jest.fn().mockResolvedValue([makeExportBook()]),
-      fetchReaderDocuments: jest.fn(),
+      fetchReaderDocuments: jest.fn().mockResolvedValue([]),
       validateToken: jest.fn(),
     } as unknown as ReadwiseApiClient;
 
@@ -149,12 +149,7 @@ describe('Invariant 3: ReadwiseSource worker pipeline', () => {
 
     const worker = { post: workerPost };
 
-    const source = new ReadwiseSource(
-      'test-id',
-      client,
-      'readwise-highlights',
-      worker as never,
-    );
+    const source = new ReadwiseSource('test-id', client, worker as never);
 
     const result = await source.load();
 
@@ -172,7 +167,7 @@ describe('Invariant 3: ReadwiseSource worker pipeline', () => {
   it('load() calls worker even for empty results', async () => {
     const client = {
       fetchExportBooks: jest.fn().mockResolvedValue([]),
-      fetchReaderDocuments: jest.fn(),
+      fetchReaderDocuments: jest.fn().mockResolvedValue([]),
       validateToken: jest.fn(),
     } as unknown as ReadwiseApiClient;
 
@@ -183,12 +178,7 @@ describe('Invariant 3: ReadwiseSource worker pipeline', () => {
 
     const worker = { post: workerPost };
 
-    const source = new ReadwiseSource(
-      'test-id',
-      client,
-      'readwise-highlights',
-      worker as never,
-    );
+    const source = new ReadwiseSource('test-id', client, worker as never);
 
     const result = await source.load();
 

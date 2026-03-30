@@ -16,13 +16,12 @@ import {
   generateDatabaseId,
   ReadwiseApiClient,
 } from '../../core';
+import { DATA_SOURCE_TYPES } from '../../data-source';
 import {
   SettingsSchema,
   CitationsPluginSettingsType,
   CitationStylePreset,
   CITATION_STYLE_PRESETS,
-  ReadwiseModeSetting,
-  READWISE_MODE_LABELS,
 } from './settings-schema';
 import { ReferenceListSortOrder } from '../modals/sort-entries';
 import { VariableListModal } from '../modals/variable-list-modal';
@@ -40,18 +39,6 @@ const CITATION_STYLE_PRESET_LABELS: Record<CitationStylePreset, string> = {
   parencite: 'Parencite — (Author, Year)',
   citekey: 'Citekey — [@citekey]',
 };
-
-/**
- * Database type labels for the manual "Add database" dropdown.
- * Readwise is excluded — its database entry is auto-managed
- * by {@link CitationPlugin.syncReadwiseDatabaseConfig}.
- */
-const MANUAL_DATABASE_TYPE_LABELS: Partial<Record<DatabaseType, string>> =
-  Object.fromEntries(
-    Object.entries(DATABASE_TYPE_LABELS).filter(
-      ([key]) => key !== DATABASE_FORMATS.Readwise,
-    ),
-  );
 
 const DOCS_BASE =
   'https://github.com/akhmialeuski/obsidian-citation-extended/blob/master/docs';
@@ -73,7 +60,6 @@ export class CitationSettingTab extends PluginSettingTab {
     containerEl.setAttr('id', 'zoteroSettingTab');
 
     this.renderDatabaseSection(containerEl);
-    this.renderReadwiseSection(containerEl);
     this.renderLiteratureNotesSection(containerEl);
     this.renderCitationsSection(containerEl);
     this.renderDisplaySection(containerEl);
@@ -158,7 +144,12 @@ export class CitationSettingTab extends PluginSettingTab {
           .setTooltip('Remove database')
           .onClick(() => {
             void (async () => {
+              const removed = this.plugin.settings.databases[index];
               this.plugin.settings.databases.splice(index, 1);
+              // Clean up Readwise-specific state when removing a Readwise database
+              if (removed.type === DATABASE_FORMATS.Readwise) {
+                this.plugin.settings.readwiseLastSyncDate = '';
+              }
               await this.plugin.saveSettings();
               this.display();
               void this.plugin.libraryService.load();
@@ -167,40 +158,31 @@ export class CitationSettingTab extends PluginSettingTab {
       });
 
     new Setting(card).setName('Database type').addDropdown((dropdown) => {
-      dropdown.addOptions(
-        MANUAL_DATABASE_TYPE_LABELS as Record<string, string>,
-      );
+      dropdown.addOptions(DATABASE_TYPE_LABELS);
       dropdown.setValue(db.type);
       dropdown.onChange(async (value) => {
         this.plugin.settings.databases[index].type = value as DatabaseType;
+        if (value === DATABASE_FORMATS.Readwise) {
+          this.plugin.settings.databases[index].sourceType =
+            DATA_SOURCE_TYPES.Readwise;
+          this.plugin.settings.databases[index].path = '';
+        } else {
+          delete this.plugin.settings.databases[index].sourceType;
+        }
         await this.plugin.saveSettings();
-        new Notice('Database format changed. Reloading library…');
-        void this.plugin.libraryService.load();
+        this.display();
+        // Only reload for file-based sources — Readwise needs a token first
+        if (value !== DATABASE_FORMATS.Readwise) {
+          new Notice('Database format changed. Reloading library…');
+          void this.plugin.libraryService.load();
+        }
       });
     });
 
-    new Setting(card)
-      .setName('Database path')
-      .setDesc('Absolute path or path relative to vault root.')
-      .addText((text) => {
-        text
-          .setPlaceholder('/path/to/export.json')
-          .setValue(db.path)
-          .onChange(async (value) => {
-            this.plugin.settings.databases[index].path = value;
-            await this.plugin.saveSettings();
-            const valid = await this.checkDatabasePath(value, pathStatusEl);
-            if (valid) {
-              this.debouncedReload();
-            }
-          });
-      });
-
-    const pathStatusEl = card.createDiv('citation-path-status');
-    pathStatusEl.setCssProps({ fontSize: '0.8em', marginTop: '5px' });
-
-    if (db.path) {
-      void this.checkDatabasePath(db.path, pathStatusEl);
+    if (db.type === DATABASE_FORMATS.Readwise) {
+      this.renderReadwiseFields(card, db, index);
+    } else {
+      this.renderFilePathField(card, db, index);
     }
   }
 
@@ -227,58 +209,46 @@ export class CitationSettingTab extends PluginSettingTab {
   }
 
   // ---------------------------------------------------------------------------
-  // Section 1b: Readwise integration
+  // Database card field variants
   // ---------------------------------------------------------------------------
 
-  private renderReadwiseSection(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName('Readwise integration').setHeading();
-    containerEl.createEl('p', {
-      text: 'Connect to Readwise to import highlights and documents as citation entries.',
-      cls: 'setting-item-description',
-    });
-
-    // Enable toggle
-    new Setting(containerEl)
-      .setName('Enable Readwise sync')
-      .setDesc(
-        'When enabled, Readwise data will be loaded as an additional citation database.',
-      )
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.plugin.settings.readwiseSyncEnabled)
+  private renderFilePathField(
+    card: HTMLElement,
+    db: DatabaseConfig,
+    index: number,
+  ): void {
+    new Setting(card)
+      .setName('Database path')
+      .setDesc('Absolute path or path relative to vault root.')
+      .addText((text) => {
+        text
+          .setPlaceholder('/path/to/export.json')
+          .setValue(db.path)
           .onChange(async (value) => {
-            this.plugin.settings.readwiseSyncEnabled = value;
+            this.plugin.settings.databases[index].path = value;
             await this.plugin.saveSettings();
-            this.plugin.syncReadwiseDatabaseConfig();
-            this.display();
-            if (value && this.plugin.settings.readwiseApiToken) {
-              void this.plugin.libraryService.load();
+            const valid = await this.checkDatabasePath(value, pathStatusEl);
+            if (valid) {
+              this.debouncedReload();
             }
           });
       });
 
-    // Only show remaining settings when sync is enabled
-    if (!this.plugin.settings.readwiseSyncEnabled) return;
+    const pathStatusEl = card.createDiv('citation-path-status');
+    pathStatusEl.setCssProps({ fontSize: '0.8em', marginTop: '5px' });
 
-    // Mode selector
-    new Setting(containerEl)
-      .setName('Readwise mode')
-      .setDesc(
-        'Choose which Readwise data to import: highlights from books/articles (v2) or Reader documents (v3).',
-      )
-      .addDropdown((dropdown) => {
-        dropdown.addOptions(READWISE_MODE_LABELS);
-        dropdown.setValue(this.plugin.settings.readwiseMode);
-        dropdown.onChange(async (value) => {
-          this.plugin.settings.readwiseMode = value as ReadwiseModeSetting;
-          await this.plugin.saveSettings();
-          // Mode changed — reload to fetch different data through the same pipeline
-          void this.plugin.libraryService.load();
-        });
-      });
+    if (db.path) {
+      void this.checkDatabasePath(db.path, pathStatusEl);
+    }
+  }
 
-    // API token (password field)
-    new Setting(containerEl)
+  private renderReadwiseFields(
+    card: HTMLElement,
+    db: DatabaseConfig,
+    index: number,
+  ): void {
+    // API token stored in db.path — the "connection string" for this database
+    new Setting(card)
       .setName('API token')
       .setDesc(
         'Your Readwise access token. Get it from readwise.io/access_token.',
@@ -288,18 +258,17 @@ export class CitationSettingTab extends PluginSettingTab {
         text.inputEl.autocomplete = 'off';
         text
           .setPlaceholder('Enter your Readwise API token')
-          .setValue(this.plugin.settings.readwiseApiToken)
+          .setValue(db.path)
           .onChange(
             debounce(async (value: string) => {
-              this.plugin.settings.readwiseApiToken = value;
+              this.plugin.settings.databases[index].path = value;
               await this.plugin.saveSettings();
-              this.plugin.syncReadwiseDatabaseConfig();
             }, 500),
           );
       });
 
-    // Token validation and sync status row
-    const statusEl = containerEl.createDiv('readwise-status');
+    // Status display
+    const statusEl = card.createDiv('readwise-status');
     statusEl.setCssProps({ fontSize: '0.8em', marginTop: '5px' });
 
     if (this.plugin.settings.readwiseLastSyncDate) {
@@ -309,27 +278,26 @@ export class CitationSettingTab extends PluginSettingTab {
       statusEl.setCssProps({ color: 'var(--text-muted)' });
     }
 
-    // Validate token button
-    new Setting(containerEl)
-      .setName('Token validation')
+    // Validate + Sync buttons
+    new Setting(card)
       .addButton((button) => {
         button.setButtonText('Validate token').onClick(() => {
           void (async () => {
-            if (!this.plugin.settings.readwiseApiToken) {
+            const token = this.plugin.settings.databases[index].path;
+            if (!token) {
               new Notice('Please enter an API token first.');
               return;
             }
             statusEl.setText('Validating...');
             statusEl.setCssProps({ color: 'var(--text-muted)' });
             try {
-              const client = new ReadwiseApiClient(
-                this.plugin.settings.readwiseApiToken,
-              );
+              const client = new ReadwiseApiClient(token);
               const valid = await client.validateToken();
               if (valid) {
-                statusEl.setText('Token is valid.');
+                statusEl.setText('Token is valid. Loading library…');
                 statusEl.setCssProps({ color: 'var(--text-success)' });
-                new Notice('Readwise token validated successfully.');
+                new Notice('Readwise token validated. Loading library…');
+                void this.plugin.libraryService.load();
               } else {
                 statusEl.setText('Token is invalid.');
                 statusEl.setCssProps({ color: 'var(--text-error)' });
@@ -353,11 +321,11 @@ export class CitationSettingTab extends PluginSettingTab {
           .setCta()
           .onClick(() => {
             void (async () => {
-              if (!this.plugin.settings.readwiseApiToken) {
+              const token = this.plugin.settings.databases[index].path;
+              if (!token) {
                 new Notice('Please enter an API token first.');
                 return;
               }
-              this.plugin.syncReadwiseDatabaseConfig();
               new Notice('Syncing Readwise data...');
               await this.plugin.libraryService.load();
               this.plugin.settings.readwiseLastSyncDate =
