@@ -36,7 +36,12 @@ import {
   validateSettings,
 } from './ui/settings/settings-schema';
 import { WorkerManager } from './util';
-import { generateDatabaseId, ReadwiseApiClient } from './core';
+import {
+  DATABASE_FORMATS,
+  generateDatabaseId,
+  ReadwiseApiClient,
+} from './core';
+import type { ReadwiseMode } from './core';
 import LoadWorker from 'web-worker:./worker';
 
 export default class CitationPlugin extends Plugin {
@@ -87,6 +92,20 @@ export default class CitationPlugin extends Plugin {
         if (!db.id) {
           db.id = generateDatabaseId();
           needsSave = true;
+        }
+      }
+
+      // Migrate legacy Readwise database types to single 'readwise' format
+      for (const db of this.settings.databases) {
+        if (
+          db.type === ('readwise-highlights' as string) ||
+          db.type === ('reader-documents' as string)
+        ) {
+          db.type = DATABASE_FORMATS.Readwise;
+          needsSave = true;
+          console.debug(
+            'Citations plugin: Migrated Readwise database type to unified format',
+          );
         }
       }
 
@@ -154,10 +173,9 @@ export default class CitationPlugin extends Plugin {
         new ReadwiseSource(
           id,
           new ReadwiseApiClient(settingsRef.readwiseApiToken),
-          def.format as 'readwise-highlights' | 'reader-documents',
-          {
-            updatedAfter: settingsRef.readwiseLastSyncDate || undefined,
-          },
+          settingsRef.readwiseMode as ReadwiseMode,
+          workerManager,
+          { updatedAfter: settingsRef.readwiseLastSyncDate || undefined },
         ),
     );
 
@@ -252,6 +270,9 @@ export default class CitationPlugin extends Plugin {
   /**
    * Ensure a database entry exists for Readwise when sync is enabled,
    * or remove it when sync is disabled.
+   *
+   * The database type is always 'readwise' regardless of the internal mode
+   * (readwiseMode is an internal detail of ReadwiseSource, not a database format).
    */
   syncReadwiseDatabaseConfig(): void {
     const readwiseDbIndex = this.settings.databases.findIndex(
@@ -265,18 +286,12 @@ export default class CitationPlugin extends Plugin {
           id: generateDatabaseId(),
           name: 'Readwise',
           path: 'readwise-api',
-          type: this.settings.readwiseMode,
+          type: DATABASE_FORMATS.Readwise,
           sourceType: DATA_SOURCE_TYPES.Readwise,
         });
         void this.saveSettings();
-      } else {
-        // Update existing entry if mode changed
-        const existingDb = this.settings.databases[readwiseDbIndex];
-        if (existingDb.type !== this.settings.readwiseMode) {
-          existingDb.type = this.settings.readwiseMode;
-          void this.saveSettings();
-        }
       }
+      // No need to update on mode change — the database type is always 'readwise'
     } else if (readwiseDbIndex !== -1) {
       // Remove the Readwise database entry when sync is disabled
       this.settings.databases.splice(readwiseDbIndex, 1);

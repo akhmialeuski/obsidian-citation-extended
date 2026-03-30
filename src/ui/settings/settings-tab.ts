@@ -41,6 +41,18 @@ const CITATION_STYLE_PRESET_LABELS: Record<CitationStylePreset, string> = {
   citekey: 'Citekey — [@citekey]',
 };
 
+/**
+ * Database type labels for the manual "Add database" dropdown.
+ * Readwise is excluded — its database entry is auto-managed
+ * by {@link CitationPlugin.syncReadwiseDatabaseConfig}.
+ */
+const MANUAL_DATABASE_TYPE_LABELS: Partial<Record<DatabaseType, string>> =
+  Object.fromEntries(
+    Object.entries(DATABASE_TYPE_LABELS).filter(
+      ([key]) => key !== DATABASE_FORMATS.Readwise,
+    ),
+  );
+
 const DOCS_BASE =
   'https://github.com/akhmialeuski/obsidian-citation-extended/blob/master/docs';
 
@@ -155,7 +167,9 @@ export class CitationSettingTab extends PluginSettingTab {
       });
 
     new Setting(card).setName('Database type').addDropdown((dropdown) => {
-      dropdown.addOptions(DATABASE_TYPE_LABELS);
+      dropdown.addOptions(
+        MANUAL_DATABASE_TYPE_LABELS as Record<string, string>,
+      );
       dropdown.setValue(db.type);
       dropdown.onChange(async (value) => {
         this.plugin.settings.databases[index].type = value as DatabaseType;
@@ -258,7 +272,7 @@ export class CitationSettingTab extends PluginSettingTab {
         dropdown.onChange(async (value) => {
           this.plugin.settings.readwiseMode = value as ReadwiseModeSetting;
           await this.plugin.saveSettings();
-          this.plugin.syncReadwiseDatabaseConfig();
+          // Mode changed — reload to fetch different data through the same pipeline
           void this.plugin.libraryService.load();
         });
       });

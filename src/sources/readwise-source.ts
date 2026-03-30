@@ -5,10 +5,11 @@ import {
   ReadwiseReaderDocument,
 } from '../core/readwise/readwise-api-client';
 import {
-  ReadwiseAdapter,
   ReadwiseEntryData,
   ReadwiseMode,
 } from '../core/adapters/readwise-adapter';
+import { DATABASE_FORMATS, convertToEntries } from '../core';
+import { WorkerManager } from '../util';
 
 // ---------------------------------------------------------------------------
 // Conversion helpers
@@ -75,9 +76,13 @@ function toEntryDataFromReader(doc: ReadwiseReaderDocument): ReadwiseEntryData {
 /**
  * Data source that loads bibliography entries from the Readwise API.
  *
- * Supports two modes:
+ * Supports two internal modes:
  * - `readwise-highlights` — books with nested highlights via the v2 Export API.
  * - `reader-documents` — documents via the Reader v3 API.
+ *
+ * Follows the same worker pipeline as file-based sources:
+ * API response -> ReadwiseEntryData[] -> JSON.stringify -> Worker ->
+ * parseReadwise -> EntryData[] -> convertToEntries -> ReadwiseAdapter[]
  *
  * Unlike file-based sources, this source has no watch/push mechanism;
  * data is loaded on demand when {@link load} is called.
@@ -87,39 +92,32 @@ export class ReadwiseSource implements DataSource {
     public readonly id: string,
     private client: ReadwiseApiClient,
     private mode: ReadwiseMode,
+    private loadWorker: WorkerManager,
     private options?: { updatedAfter?: string },
   ) {}
 
   /**
-   * Fetch entries from the Readwise API and convert them to
-   * {@link ReadwiseAdapter} instances.
+   * Fetch entries from the Readwise API, serialize them, and process
+   * through the worker pipeline (same flow as LocalFileSource).
    */
   async load(): Promise<DataSourceLoadResult> {
     try {
-      let entries: ReadwiseAdapter[];
+      const entryDataArray = await this.fetchEntryData();
 
-      if (this.mode === 'readwise-highlights') {
-        const books = await this.client.fetchExportBooks({
-          updatedAfter: this.options?.updatedAfter,
-        });
-        entries = books.map(
-          (book) => new ReadwiseAdapter(toEntryDataFromExport(book)),
-        );
-      } else {
-        const documents = await this.client.fetchReaderDocuments({
-          updatedAfter: this.options?.updatedAfter,
-        });
-        // Filter out child documents (those with a parent_id)
-        const topLevel = documents.filter((doc) => doc.parent_id === null);
-        entries = topLevel.map(
-          (doc) => new ReadwiseAdapter(toEntryDataFromReader(doc)),
-        );
-      }
+      // Serialize to JSON for the worker (same pattern as file-based sources)
+      const raw = JSON.stringify(entryDataArray);
+
+      // Post to worker for parsing
+      const result = await this.loadWorker.post({
+        databaseRaw: raw,
+        databaseType: DATABASE_FORMATS.Readwise,
+      });
 
       return {
         sourceId: this.id,
-        entries,
+        entries: convertToEntries(DATABASE_FORMATS.Readwise, result.entries),
         modifiedAt: new Date(),
+        parseErrors: result.parseErrors,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -127,6 +125,26 @@ export class ReadwiseSource implements DataSource {
         `ReadwiseSource: Failed to load from Readwise API: ${message}`,
       );
       throw new Error(`Failed to load from Readwise API: ${message}`);
+    }
+  }
+
+  /**
+   * Fetch data from the appropriate Readwise API endpoint and convert
+   * to normalized ReadwiseEntryData objects.
+   */
+  private async fetchEntryData(): Promise<ReadwiseEntryData[]> {
+    if (this.mode === 'readwise-highlights') {
+      const books = await this.client.fetchExportBooks({
+        updatedAfter: this.options?.updatedAfter,
+      });
+      return books.map((book) => toEntryDataFromExport(book));
+    } else {
+      const documents = await this.client.fetchReaderDocuments({
+        updatedAfter: this.options?.updatedAfter,
+      });
+      // Filter out child documents (those with a parent_id)
+      const topLevel = documents.filter((doc) => doc.parent_id === null);
+      return topLevel.map((doc) => toEntryDataFromReader(doc));
     }
   }
 

@@ -4,8 +4,13 @@ export { Entry as EntryDataBibLaTeX } from '@retorquere/bibtex-parser';
 import { Author, Entry } from '../types/entry';
 import { EntryDataCSL } from './csl-adapter';
 import { HayagrivaEntryData } from './hayagriva-adapter';
+import { ReadwiseEntryData } from './readwise-adapter';
 
-export type EntryData = EntryDataCSL | EntryDataBibLaTeX | HayagrivaEntryData;
+export type EntryData =
+  | EntryDataCSL
+  | EntryDataBibLaTeX
+  | HayagrivaEntryData
+  | ReadwiseEntryData;
 
 export function isEntryDataBibLaTeX(
   entry: EntryData,

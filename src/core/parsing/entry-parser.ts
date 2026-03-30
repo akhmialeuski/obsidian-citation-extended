@@ -56,17 +56,28 @@ function parseHayagriva(raw: string): ParseResult {
 }
 
 /**
- * Maps file-based formats to their parser functions.
+ * Parse a JSON array of pre-processed ReadwiseEntryData objects.
  *
- * API-based formats (Readwise) do not have file parsers — they are loaded
- * directly from the network by their DataSource implementation.
+ * ReadwiseSource serializes its API response to JSON before posting to the
+ * worker, so the parser simply deserializes the array.
  */
-const FORMAT_PARSERS: Partial<
-  Record<DatabaseType, (raw: string) => ParseResult>
-> = {
+function parseReadwise(raw: string): ParseResult {
+  const entries: EntryData[] = JSON.parse(raw);
+  return { entries, parseErrors: [] };
+}
+
+/**
+ * Maps each DatabaseType to its parser function.
+ *
+ * Strict `Record<DatabaseType, ...>` — the compiler enforces that every
+ * format has a corresponding parser.  Adding a new DatabaseType without
+ * registering its parser is a compile-time error.
+ */
+const FORMAT_PARSERS: Record<DatabaseType, (raw: string) => ParseResult> = {
   [DATABASE_FORMATS.CslJson]: parseCslJson,
   [DATABASE_FORMATS.BibLaTeX]: parseBibLaTeX,
   [DATABASE_FORMATS.Hayagriva]: parseHayagriva,
+  [DATABASE_FORMATS.Readwise]: parseReadwise,
 };
 
 /**

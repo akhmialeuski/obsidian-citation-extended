@@ -6,8 +6,7 @@ export const DATABASE_FORMATS = {
   CslJson: 'csl-json',
   BibLaTeX: 'biblatex',
   Hayagriva: 'hayagriva',
-  ReadwiseHighlights: 'readwise-highlights',
-  ReaderDocuments: 'reader-documents',
+  Readwise: 'readwise',
 } as const;
 
 /**
@@ -22,8 +21,7 @@ export const DATABASE_TYPE_LABELS: Record<DatabaseType, string> = {
   [DATABASE_FORMATS.CslJson]: 'CSL-JSON',
   [DATABASE_FORMATS.BibLaTeX]: 'BibLaTeX',
   [DATABASE_FORMATS.Hayagriva]: 'Hayagriva (YAML)',
-  [DATABASE_FORMATS.ReadwiseHighlights]: 'Readwise Highlights',
-  [DATABASE_FORMATS.ReaderDocuments]: 'Readwise Reader',
+  [DATABASE_FORMATS.Readwise]: 'Readwise',
 };
 
 export interface DatabaseConfig {
