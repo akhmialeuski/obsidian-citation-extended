@@ -27,6 +27,22 @@ export {
 export type { EntryData } from './adapters/biblatex-adapter';
 export { HayagrivaAdapter } from './adapters/hayagriva-adapter';
 export type { HayagrivaEntryData } from './adapters/hayagriva-adapter';
+export { ReadwiseAdapter } from './adapters/readwise-adapter';
+export type {
+  ReadwiseEntryData,
+  ReadwiseMode,
+} from './adapters/readwise-adapter';
+
+// Readwise API client
+export {
+  ReadwiseApiClient,
+  ReadwiseApiError,
+} from './readwise/readwise-api-client';
+export type {
+  ReadwiseHighlight,
+  ReadwiseExportBook,
+  ReadwiseReaderDocument,
+} from './readwise/readwise-api-client';
 
 // Entry adapter factory
 export { convertToEntries } from './adapters/entry-adapter-factory';

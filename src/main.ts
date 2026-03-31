@@ -11,6 +11,7 @@ import { DataSourceRegistry } from './sources/data-source-registry';
 import { DATA_SOURCE_TYPES } from './data-source';
 import { LocalFileSource } from './sources/local-file-source';
 import { VaultFileSource } from './sources/vault-file-source';
+import { ReadwiseSource } from './sources/readwise-source';
 import { SourceManager } from './infrastructure/source-manager';
 import { TemplateProfileRegistry } from './domain/template-profile-registry';
 import {
@@ -35,7 +36,7 @@ import {
   validateSettings,
 } from './ui/settings/settings-schema';
 import { WorkerManager } from './util';
-import { generateDatabaseId } from './core';
+import { generateDatabaseId, ReadwiseApiClient } from './core';
 import LoadWorker from 'web-worker:./worker';
 
 export default class CitationPlugin extends Plugin {
@@ -142,6 +143,25 @@ export default class CitationPlugin extends Plugin {
           def.format,
           workerManager,
           this.app.vault,
+        ),
+    );
+
+    // Register Readwise source type — token lives in db.path (passed via def.path)
+    const readwiseCachePath = this.manifest?.dir
+      ? `${this.manifest.dir}/readwise-cache.json`
+      : '';
+    registry.register(
+      DATA_SOURCE_TYPES.Readwise,
+      (def, id) =>
+        new ReadwiseSource(
+          id,
+          new ReadwiseApiClient(def.path),
+          workerManager,
+          platformAdapter.fileSystem,
+          readwiseCachePath,
+          this.settings.readwiseSyncIntervalMinutes > 0
+            ? this.settings.readwiseSyncIntervalMinutes * 60_000
+            : undefined,
         ),
     );
 

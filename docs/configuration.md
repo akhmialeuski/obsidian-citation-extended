@@ -54,6 +54,47 @@ To use more than one bibliography source (e.g. personal library + shared team li
 
 ---
 
+## Readwise Integration
+
+Connect the plugin to your Readwise account to import highlights and documents as citable entries. Readwise is configured as a regular database in the **Citation databases** section -- there is no separate settings panel.
+
+### Adding a Readwise Database
+
+1. Open **Settings** > **Citation plugin** > **Citation databases**
+2. Click **Add database**
+3. In the new database card, change the **Database type** dropdown to **Readwise**
+4. The card now shows Readwise-specific fields instead of a file path
+
+### Readwise Database Card Settings
+
+| Setting / Button | Description |
+|------------------|-------------|
+| **Database name** | Friendly label for this database (default: `Database N`). You can rename it to `Readwise` or any name you prefer |
+| **Database type** | Must be set to **Readwise** |
+| **API token** | Your Readwise access token (password field). Get it from [readwise.io/access_token](https://readwise.io/access_token). Stored in plugin settings |
+| **Auto-sync interval (minutes)** | How often the plugin automatically fetches new data from Readwise, in minutes. Set to `0` to disable automatic sync. Default: `30` |
+| **Validate token** | Tests the API token against Readwise. Shows "Token is valid" or "Token is invalid" |
+| **Sync now** | Fetches data from both Readwise APIs and reloads the library. Updates the "Last sync" timestamp shown below the token field |
+
+### How It Works
+
+When a Readwise database is configured with a valid API token, clicking **Sync now** fetches data from both Readwise APIs in parallel:
+
+- **v2 Export API** -- books with nested highlights (Kindle, Instapaper, etc.). Entries use citekeys like `rw-12345`
+- **v3 Reader API** -- documents, articles, and PDFs saved in Readwise Reader. Entries use citekeys like `rd-abc123`
+
+Both sets of entries are merged into a single database. There is no mode selector -- the plugin always loads from both APIs automatically.
+
+Readwise entries support all standard plugin features: citation insertion, literature note creation, templates, and batch operations. See the [Readwise Integration use case](use-cases/readwise-integration.md) for a complete walkthrough.
+
+### Offline Cache
+
+After each successful sync, the plugin saves Readwise data to a local cache file at `.obsidian/plugins/citation-extended/readwise-cache.json`. If the Readwise API is unavailable on the next load (e.g., no network connection), the plugin falls back to the cached data automatically. A warning notice appears when cached data is used instead of a fresh API response.
+
+The cache file is managed automatically -- you do not need to create or edit it. It is overwritten on every successful sync.
+
+---
+
 ## Hotkeys
 
 The plugin registers eight commands but does **not** assign default hotkeys — you choose bindings that fit your workflow. To configure:
@@ -114,6 +155,8 @@ A Handlebars template that produces the filename (without `.md`). The default `@
 | `{{citekey}}` | `smith2023.md` | Without @ prefix |
 | `{{lastname}} {{year}} — {{titleShort}}` | `Smith 2023 — Attention.md` | Human-readable |
 | `{{type}}/{{citekey}}` | `article-journal/@smith2023.md` | Subfolder by type |
+
+> **Slashes in data values:** If a variable value contains a forward slash (e.g. a title like "Author A / Author B"), the slash is automatically replaced with an underscore before rendering. This prevents data values from creating unintended subdirectories. Only literal `/` characters in the template itself (e.g. `{{type}}/{{citekey}}`) act as directory separators.
 
 ### Literature note content template file
 

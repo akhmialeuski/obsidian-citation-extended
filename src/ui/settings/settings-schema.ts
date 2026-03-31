@@ -1,4 +1,11 @@
 import { z } from 'zod';
+import { DATABASE_FORMATS, DatabaseType } from '../../core/types/database';
+
+// Zod-compatible tuple derived from DATABASE_FORMATS constants
+const DATABASE_FORMAT_ENUM = Object.values(DATABASE_FORMATS) as [
+  DatabaseType,
+  ...DatabaseType[],
+];
 
 // ---- Citation style presets ------------------------------------------------
 
@@ -35,7 +42,7 @@ export const CITATION_STYLE_PRESETS: Record<
 
 export const SettingsSchema = z.object({
   citationExportPath: z.string(),
-  citationExportFormat: z.enum(['csl-json', 'biblatex', 'hayagriva']),
+  citationExportFormat: z.enum(DATABASE_FORMAT_ENUM),
   literatureNoteTitleTemplate: z.string().min(1),
   literatureNoteFolder: z.string(),
   // Legacy: kept for migration. New installs use only the path field.
@@ -56,7 +63,7 @@ export const SettingsSchema = z.object({
       z.object({
         id: z.string().optional(),
         name: z.string(),
-        type: z.enum(['csl-json', 'biblatex', 'hayagriva']),
+        type: z.enum(DATABASE_FORMAT_ENUM),
         path: z.string(),
         sourceType: z.string().optional(),
       }),
@@ -75,6 +82,9 @@ export const SettingsSchema = z.object({
       }),
     )
     .default([]),
+  // ---- Readwise integration ------------------------------------------------
+  readwiseLastSyncDate: z.string().default(''),
+  readwiseSyncIntervalMinutes: z.number().min(0).default(30),
 });
 
 export type CitationsPluginSettingsType = z.infer<typeof SettingsSchema>;
@@ -89,7 +99,7 @@ export const DEFAULT_CONTENT_TEMPLATE =
 
 export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   citationExportPath: '',
-  citationExportFormat: 'csl-json',
+  citationExportFormat: DATABASE_FORMATS.CslJson,
   literatureNoteTitleTemplate: '@{{citekey}}',
   literatureNoteFolder: 'Reading notes',
   literatureNoteContentTemplate: '',
@@ -103,6 +113,9 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   databases: [],
   disableAutomaticNoteCreation: false,
   templateProfiles: [],
+  // Readwise defaults
+  readwiseLastSyncDate: '',
+  readwiseSyncIntervalMinutes: 30,
 };
 
 export function validateSettings(settings: unknown) {

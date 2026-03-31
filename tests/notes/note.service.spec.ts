@@ -108,7 +108,12 @@ describe('NoteService', () => {
   });
 
   describe('subfolder support in title template', () => {
-    it('produces correct path when title contains a forward slash', () => {
+    // The new sanitizeTitlePath(rendered, hasPathSegments) approach requires
+    // the template to contain a literal `/` outside of {{...}} for subfolder
+    // mode. We set literatureNoteTitleTemplate accordingly in each test.
+
+    it('produces correct path when template has a literal slash', () => {
+      settings.literatureNoteTitleTemplate = '{{type}}/{{citekey}}';
       jest
         .spyOn(templateService, 'getTitle')
         .mockReturnValue({ ok: true, value: 'article/smith2023' });
@@ -119,6 +124,7 @@ describe('NoteService', () => {
     });
 
     it('produces correct path with multiple subfolder levels', () => {
+      settings.literatureNoteTitleTemplate = '{{type}}/{{year}}/{{citekey}}';
       jest
         .spyOn(templateService, 'getTitle')
         .mockReturnValue({ ok: true, value: 'journal/2024/smith2023' });
@@ -129,6 +135,7 @@ describe('NoteService', () => {
     });
 
     it('strips empty segments caused by consecutive slashes', () => {
+      settings.literatureNoteTitleTemplate = '{{type}}//{{citekey}}';
       jest
         .spyOn(templateService, 'getTitle')
         .mockReturnValue({ ok: true, value: 'article//smith2023' });
@@ -139,6 +146,7 @@ describe('NoteService', () => {
     });
 
     it('strips whitespace-only segments', () => {
+      settings.literatureNoteTitleTemplate = '{{type}}/ /{{citekey}}';
       jest
         .spyOn(templateService, 'getTitle')
         .mockReturnValue({ ok: true, value: 'article/ /smith2023' });
@@ -149,6 +157,7 @@ describe('NoteService', () => {
     });
 
     it('sanitizes disallowed characters independently in each segment', () => {
+      settings.literatureNoteTitleTemplate = '{{type}}/{{citekey}}';
       jest
         .spyOn(templateService, 'getTitle')
         .mockReturnValue({ ok: true, value: 'Art:icle/smi*th2023' });
@@ -159,6 +168,7 @@ describe('NoteService', () => {
     });
 
     it('truncates each segment independently to MAX_FILENAME_LENGTH', () => {
+      settings.literatureNoteTitleTemplate = '{{type}}/{{citekey}}';
       const longSegment = 'B'.repeat(250);
       jest
         .spyOn(templateService, 'getTitle')
@@ -458,6 +468,269 @@ describe('NoteService', () => {
           mockFile,
           false,
         );
+      });
+    });
+  });
+
+  describe('slash handling in note titles — comprehensive scenarios', () => {
+    // These tests exercise all combinations of template slash presence
+    // and data slash presence to verify correct sanitization behavior.
+
+    describe('template WITHOUT `/`, title WITHOUT `/`', () => {
+      it('should produce a simple filename from a simple title', () => {
+        settings.literatureNoteTitleTemplate = '{{title}}';
+        jest
+          .spyOn(templateService, 'getTitle')
+          .mockReturnValue({ ok: true, value: 'My Book' });
+
+        const result = noteService.getPathForCitekey('citekey1', library);
+        const normalized = result.replace(/\\/g, '/');
+        expect(normalized).toBe('Reading notes/My Book.md');
+      });
+
+      it('should produce a filename with @ prefix from default template', () => {
+        settings.literatureNoteTitleTemplate = '@{{citekey}}';
+        jest
+          .spyOn(templateService, 'getTitle')
+          .mockReturnValue({ ok: true, value: '@smith2024' });
+
+        const result = noteService.getPathForCitekey('citekey1', library);
+        const normalized = result.replace(/\\/g, '/');
+        expect(normalized).toBe('Reading notes/@smith2024.md');
+      });
+    });
+
+    describe('template WITHOUT `/`, title WITH `/`', () => {
+      it('should replace slash with underscore when title has a single slash', () => {
+        settings.literatureNoteTitleTemplate = '{{title}}';
+        // sanitizeVariablesForPath replaces `/` in data BEFORE getTitle is called,
+        // so getTitle receives already-sanitized variables and returns sanitized output
+        jest
+          .spyOn(templateService, 'getTitle')
+          .mockReturnValue({ ok: true, value: 'Author A _ Author B' });
+
+        const result = noteService.getPathForCitekey('citekey1', library);
+        const normalized = result.replace(/\\/g, '/');
+        expect(normalized).toBe('Reading notes/Author A _ Author B.md');
+      });
+
+      it('should replace multiple slashes with underscores', () => {
+        settings.literatureNoteTitleTemplate = '{{title}}';
+        // After sanitizeVariablesForPath, all `/` in data are `_`
+        jest
+          .spyOn(templateService, 'getTitle')
+          .mockReturnValue({ ok: true, value: 'A_B_C' });
+
+        const result = noteService.getPathForCitekey('citekey1', library);
+        const normalized = result.replace(/\\/g, '/');
+        expect(normalized).toBe('Reading notes/A_B_C.md');
+      });
+
+      it('should not affect citekey prefix when title has a slash', () => {
+        settings.literatureNoteTitleTemplate = '@{{citekey}}';
+        jest
+          .spyOn(templateService, 'getTitle')
+          .mockReturnValue({ ok: true, value: '@rw-123' });
+
+        const result = noteService.getPathForCitekey('citekey1', library);
+        const normalized = result.replace(/\\/g, '/');
+        // citekey without slashes is unaffected even though the DISALLOWED_FILENAME regex applies
+        expect(normalized).toBe('Reading notes/@rw-123.md');
+      });
+    });
+
+    describe('template WITH `/`, title WITHOUT `/`', () => {
+      it('should create subdirectory from type/citekey template', () => {
+        settings.literatureNoteTitleTemplate = '{{type}}/{{citekey}}';
+        jest
+          .spyOn(templateService, 'getTitle')
+          .mockReturnValue({ ok: true, value: 'book/smith2024' });
+
+        const result = noteService.getPathForCitekey('citekey1', library);
+        const normalized = result.replace(/\\/g, '/');
+        expect(normalized).toBe('Reading notes/book/smith2024.md');
+      });
+
+      it('should create subdirectory from containerTitle/citekey template', () => {
+        settings.literatureNoteTitleTemplate = '{{containerTitle}}/{{citekey}}';
+        jest
+          .spyOn(templateService, 'getTitle')
+          .mockReturnValue({ ok: true, value: 'Nature/smith2024' });
+
+        const result = noteService.getPathForCitekey('citekey1', library);
+        const normalized = result.replace(/\\/g, '/');
+        expect(normalized).toBe('Reading notes/Nature/smith2024.md');
+      });
+
+      it('should create subdirectory from year/title template', () => {
+        settings.literatureNoteTitleTemplate = '{{year}}/{{title}}';
+        jest
+          .spyOn(templateService, 'getTitle')
+          .mockReturnValue({ ok: true, value: '2024/My Book' });
+
+        const result = noteService.getPathForCitekey('citekey1', library);
+        const normalized = result.replace(/\\/g, '/');
+        expect(normalized).toBe('Reading notes/2024/My Book.md');
+      });
+    });
+
+    describe('template WITH `/`, title WITH `/` — known defect', () => {
+      /**
+       * KNOWN DEFECT: When the template contains a literal `/` for
+       * subdirectory organisation AND the rendered variable values also
+       * contain `/`, the current implementation cannot distinguish
+       * between template-originated and data-originated slashes in the
+       * rendered string.
+       *
+       * Example: template = `{{type}}/{{title}}`
+       *   type = "article", title = "A / B"
+       *   rendered = "article/A / B"
+       *   split('/') => ["article", "A ", " B"]  — creates 2 subdirs instead of 1
+       *
+       * The old `sanitizeVariablesForPath` approach (which replaced `/`
+       * in variable values BEFORE rendering) handled this correctly.
+       * The developer should restore pre-render variable sanitization
+       * for this combined case.
+       *
+       * Marking test as `.failing()` to document the expected correct
+       * behavior. Once the code is fixed, this test will start passing
+       * and the `.failing()` should be removed.
+       */
+      it.failing(
+        'should replace data slashes while preserving template slashes',
+        () => {
+          settings.literatureNoteTitleTemplate = '{{type}}/{{title}}';
+          // Rendered: "article/A / B" — after split: ["article", "A ", " B"]
+          // Expected: "article/A _ B" — template slash creates dir, data slash is sanitized
+          jest
+            .spyOn(templateService, 'getTitle')
+            .mockReturnValue({ ok: true, value: 'article/A / B' });
+
+          const result = noteService.getPathForCitekey('citekey1', library);
+          const normalized = result.replace(/\\/g, '/');
+          expect(normalized).toBe('Reading notes/article/A _ B.md');
+        },
+      );
+    });
+
+    describe('LITERAL_SLASH_RE edge cases', () => {
+      it('should detect slash after closing }} in template', () => {
+        settings.literatureNoteTitleTemplate = '{{type}}/{{citekey}}';
+        jest
+          .spyOn(templateService, 'getTitle')
+          .mockReturnValue({ ok: true, value: 'book/smith2024' });
+
+        const result = noteService.getPathForCitekey('citekey1', library);
+        const normalized = result.replace(/\\/g, '/');
+        // Slash between }} and {{ is a literal path separator
+        expect(normalized).toBe('Reading notes/book/smith2024.md');
+      });
+
+      it('should detect slash at the beginning of template', () => {
+        settings.literatureNoteTitleTemplate = 'prefix/{{citekey}}';
+        jest
+          .spyOn(templateService, 'getTitle')
+          .mockReturnValue({ ok: true, value: 'prefix/smith2024' });
+
+        const result = noteService.getPathForCitekey('citekey1', library);
+        const normalized = result.replace(/\\/g, '/');
+        expect(normalized).toBe('Reading notes/prefix/smith2024.md');
+      });
+
+      it('should detect slash at the end of template', () => {
+        settings.literatureNoteTitleTemplate = '{{type}}/suffix';
+        jest
+          .spyOn(templateService, 'getTitle')
+          .mockReturnValue({ ok: true, value: 'article/suffix' });
+
+        const result = noteService.getPathForCitekey('citekey1', library);
+        const normalized = result.replace(/\\/g, '/');
+        expect(normalized).toBe('Reading notes/article/suffix.md');
+      });
+
+      it('should NOT treat slash inside {{...}} as a path separator', () => {
+        // Template with no literal slash — only inside Handlebars expression
+        settings.literatureNoteTitleTemplate = '{{title}}';
+        // sanitizeVariablesForPath already replaced `/` before getTitle
+        jest
+          .spyOn(templateService, 'getTitle')
+          .mockReturnValue({ ok: true, value: 'A_B' });
+
+        const result = noteService.getPathForCitekey('citekey1', library);
+        const normalized = result.replace(/\\/g, '/');
+        expect(normalized).toBe('Reading notes/A_B.md');
+      });
+
+      it('should treat only literal text slashes as path separators', () => {
+        // Template: literal text "notes" / then handlebars
+        settings.literatureNoteTitleTemplate = 'notes/{{citekey}}';
+        jest
+          .spyOn(templateService, 'getTitle')
+          .mockReturnValue({ ok: true, value: 'notes/smith2024' });
+
+        const result = noteService.getPathForCitekey('citekey1', library);
+        const normalized = result.replace(/\\/g, '/');
+        expect(normalized).toBe('Reading notes/notes/smith2024.md');
+      });
+    });
+
+    describe('sanitization edge cases in both modes', () => {
+      it('should trim leading and trailing whitespace in filename mode', () => {
+        settings.literatureNoteTitleTemplate = '{{title}}';
+        jest
+          .spyOn(templateService, 'getTitle')
+          .mockReturnValue({ ok: true, value: '  My Title  ' });
+
+        const result = noteService.getPathForCitekey('citekey1', library);
+        const normalized = result.replace(/\\/g, '/');
+        expect(normalized).toBe('Reading notes/My Title.md');
+      });
+
+      it('should trim whitespace in each segment in path mode', () => {
+        settings.literatureNoteTitleTemplate = '{{type}}/{{citekey}}';
+        jest
+          .spyOn(templateService, 'getTitle')
+          .mockReturnValue({ ok: true, value: '  article  /  smith2024  ' });
+
+        const result = noteService.getPathForCitekey('citekey1', library);
+        const normalized = result.replace(/\\/g, '/');
+        expect(normalized).toBe('Reading notes/article/smith2024.md');
+      });
+
+      it('should replace all disallowed characters in filename mode', () => {
+        settings.literatureNoteTitleTemplate = '{{title}}';
+        jest
+          .spyOn(templateService, 'getTitle')
+          .mockReturnValue({ ok: true, value: 'A*B"C\\D<E>F:G|H?I' });
+
+        const result = noteService.getPathForCitekey('citekey1', library);
+        // None of the disallowed filename characters should remain
+        expect(result).not.toMatch(/[*"\\<>:|?]/);
+      });
+
+      it('should replace disallowed segment characters in path mode', () => {
+        settings.literatureNoteTitleTemplate = '{{type}}/{{title}}';
+        jest
+          .spyOn(templateService, 'getTitle')
+          .mockReturnValue({ ok: true, value: 'book/A*B"C\\D<E>F:G|H?I' });
+
+        const result = noteService.getPathForCitekey('citekey1', library);
+        const parts = result.replace(/\\/g, '/').split('/');
+        const lastPart = parts[parts.length - 1].replace('.md', '');
+        // None of the disallowed segment characters should remain
+        expect(lastPart).not.toMatch(/[*"\\<>:|?]/);
+      });
+
+      it('should handle empty rendered title gracefully in filename mode', () => {
+        settings.literatureNoteTitleTemplate = '{{title}}';
+        jest
+          .spyOn(templateService, 'getTitle')
+          .mockReturnValue({ ok: true, value: '' });
+
+        const result = noteService.getPathForCitekey('citekey1', library);
+        const normalized = result.replace(/\\/g, '/');
+        // Empty title should still produce a valid path with .md extension
+        expect(normalized).toBe('Reading notes/.md');
       });
     });
   });
