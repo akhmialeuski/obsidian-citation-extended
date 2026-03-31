@@ -28,45 +28,61 @@ export class NoteService implements INoteService {
   }
 
   /**
-   * Sanitize each segment of a rendered title independently.
-   *
-   * Forward slashes inside the title are treated as subfolder separators,
-   * allowing templates like `{{containerTitle}}/{{citekey}}` to produce
-   * nested paths.  Each individual segment is stripped of disallowed
-   * characters and truncated to {@link MAX_FILENAME_LENGTH}.
-   * Empty / whitespace-only segments are removed so stray slashes don't
-   * produce blank folder names.
+   * Matches a literal `/` in a Handlebars template that is outside
+   * of `{{ }}` expressions — i.e. an intentional path separator.
    */
+  private static readonly LITERAL_SLASH_RE = /(?:^|}})[^{]*\/[^{]*(?:{{|$)/;
+
   /**
-   * Replace forward slashes in string variable values with underscores
-   * so that data like "Author A / Author B" does not produce subdirectories.
+   * Sanitize a rendered title for use as a file path.
+   *
+   * Variable values are always pre-cleaned (slashes replaced with `_`)
+   * so that data like "Author A / Author B" never produces subdirectories.
+   * If the template itself contains literal `/` separators, the rendered
+   * result is split into path segments for subfolder support.
+   */
+  private sanitizeTitlePath(
+    rendered: string,
+    hasPathSegments: boolean,
+  ): string {
+    if (hasPathSegments) {
+      return rendered
+        .split('/')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0)
+        .map((s) => this.truncateSegment(s))
+        .join('/');
+    }
+    return this.truncateSegment(rendered.trim());
+  }
+
+  /** Strip disallowed characters and enforce the filename length limit. */
+  private truncateSegment(raw: string): string {
+    let clean = raw.replace(DISALLOWED_SEGMENT_CHARACTERS_RE, '_');
+    if (clean.length > MAX_FILENAME_LENGTH) {
+      clean = clean.substring(0, MAX_FILENAME_LENGTH);
+    }
+    return clean;
+  }
+
+  /**
+   * Replace `/` in string variable values so that data never introduces
+   * unintended path separators. Called before rendering the title template.
    */
   private sanitizeVariablesForPath(
     variables: TemplateContext,
   ): TemplateContext {
-    const result = { ...variables };
-    for (const key of Object.keys(result) as Array<keyof TemplateContext>) {
-      const value = result[key];
+    const result: TemplateContext = { ...variables };
+    for (const key of Object.keys(result)) {
+      const value = (result as unknown as Record<string, unknown>)[key];
       if (typeof value === 'string') {
-        (result as Record<string, unknown>)[key] = value.replace(/\//g, '_');
+        (result as unknown as Record<string, unknown>)[key] = value.replace(
+          /\//g,
+          '_',
+        );
       }
     }
     return result;
-  }
-
-  private sanitizeTitlePath(rawTitle: string): string {
-    return rawTitle
-      .split('/')
-      .map((segment) => segment.trim())
-      .filter((segment) => segment.length > 0)
-      .map((segment) => {
-        let clean = segment.replace(DISALLOWED_SEGMENT_CHARACTERS_RE, '_');
-        if (clean.length > MAX_FILENAME_LENGTH) {
-          clean = clean.substring(0, MAX_FILENAME_LENGTH);
-        }
-        return clean;
-      })
-      .join('/');
   }
 
   /**
@@ -78,16 +94,14 @@ export class NoteService implements INoteService {
       throw new EntryNotFoundError(citekey);
     }
     const variables = this.templateService.getTemplateVariables(entry);
-    // Sanitize slashes in variable values so data like "A / B" in a title
-    // does not create unintended subdirectories. Literal slashes in the
-    // template string (e.g. {{containerTitle}}/{{citekey}}) are preserved
-    // because they are not part of the variable values.
-    const safeVariables = this.sanitizeVariablesForPath(variables);
-    const titleResult = this.templateService.getTitle(safeVariables);
+    const safeVars = this.sanitizeVariablesForPath(variables);
+    const titleResult = this.templateService.getTitle(safeVars);
     if (!titleResult.ok) {
       throw titleResult.error;
     }
-    const title = this.sanitizeTitlePath(titleResult.value);
+    const template = this.settings.literatureNoteTitleTemplate;
+    const hasPathSegments = NoteService.LITERAL_SLASH_RE.test(template);
+    const title = this.sanitizeTitlePath(titleResult.value, hasPathSegments);
     return path.join(this.settings.literatureNoteFolder, `${title}.md`);
   }
 
