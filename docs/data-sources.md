@@ -80,11 +80,15 @@ The plugin loads data from both Readwise APIs in parallel and merges the results
 | `author` | `authorString`, `author[]` | Parsed into structured authors |
 | `category` | `type` | Mapped: books→book, articles→article, tweets→webpage, etc. |
 | `source_url` | `URL` | Original source URL |
-| `readwise_url` | `zoteroSelectURI` | Opens in Readwise web app |
+| `readwise_url` / `unique_url` | `zoteroSelectURI` | Opens in Readwise Reader app (see note below) |
 | `summary` | `abstract` | |
 | `book_tags` / `tags` | `keywords[]` | |
 | `highlights[].text` | `note` | Aggregated with `---` separator |
 | `published_date` | `issuedDate` | Reader (v3) entries only |
+
+**Readwise Reader URLs:** The `zoteroSelectURI` field (used by the "Open in Readwise" action) points to the Readwise Reader app. For v2 Export books, the plugin uses the `unique_url` field (e.g., `https://read.readwise.io/read/01abc123`) when available, falling back to the legacy `readwise_url`. For v3 Reader documents, the URL already points to the Reader app. This means the "Open in Readwise" action opens the item directly in Readwise Reader.
+
+**Offline cache:** After each successful sync, Readwise data is cached locally at `.obsidian/plugins/citation-extended/readwise-cache.json`. If the API is unavailable on the next plugin load, the cached data is used as a fallback. A warning is shown when cached data is used. The cache is overwritten on every successful sync.
 
 ## Multiple Databases
 

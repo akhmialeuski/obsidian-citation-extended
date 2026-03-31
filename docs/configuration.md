@@ -86,6 +86,12 @@ Both sets of entries are merged into a single database. There is no mode selecto
 
 Readwise entries support all standard plugin features: citation insertion, literature note creation, templates, and batch operations. See the [Readwise Integration use case](use-cases/readwise-integration.md) for a complete walkthrough.
 
+### Offline Cache
+
+After each successful sync, the plugin saves Readwise data to a local cache file at `.obsidian/plugins/citation-extended/readwise-cache.json`. If the Readwise API is unavailable on the next load (e.g., no network connection), the plugin falls back to the cached data automatically. A warning notice appears when cached data is used instead of a fresh API response.
+
+The cache file is managed automatically -- you do not need to create or edit it. It is overwritten on every successful sync.
+
 ---
 
 ## Hotkeys

@@ -93,7 +93,7 @@ keywords: {{#each keywords}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}
 
 **Template variable notes for Readwise entries:**
 - `{{note}}` -- contains all highlights aggregated with `---` separators
-- `{{zoteroSelectURI}}` -- links to the Readwise web page (not Zotero)
+- `{{zoteroSelectURI}}` -- links to the Readwise Reader app (not Zotero). For v2 books this is typically `https://read.readwise.io/read/{id}`; for v3 Reader documents it is the Reader document URL
 - `{{URL}}` -- the original source URL (e.g., Amazon book page, article URL)
 - `{{abstract}}` -- the book summary (from Readwise summary or document_note)
 - `{{keywords}}` -- tags from Readwise
@@ -121,7 +121,7 @@ authors: "James Clear"
 type: book
 source: Readwise
 url: https://amazon.com/atomic-habits
-readwise: https://readwise.io/bookreview/12345
+readwise: https://read.readwise.io/read/01abc123
 keywords: habits, productivity, self-improvement
 ---
 
@@ -149,6 +149,8 @@ You do not rise to the level of your goals. You fall to the level of your system
 - Rate limiting is handled automatically -- the plugin respects Readwise's API rate limits
 - You can use Readwise alongside file-based databases (Zotero, BibTeX, etc.) -- all entries are merged into a single searchable library
 - The plugin loads data from both Readwise APIs automatically; there is no mode selector
+- **Offline cache:** After each successful sync, data is cached locally at `.obsidian/plugins/citation-extended/readwise-cache.json`. If the Readwise API is unavailable on the next plugin load (e.g., you are offline), the plugin falls back to the cached data and shows a warning. You do not need to manage the cache file -- it is updated automatically on every sync
+- **Reader URLs:** The `{{zoteroSelectURI}}` variable and the "Open in Readwise" action open items in the Readwise Reader app, not the legacy Readwise highlights page
 
 ## Related
 

@@ -182,10 +182,19 @@ export default class CitationPlugin extends Plugin {
     );
 
     // Register Readwise source type — token lives in db.path (passed via def.path)
+    const readwiseCachePath = this.manifest?.dir
+      ? `${this.manifest.dir}/readwise-cache.json`
+      : '';
     registry.register(
       DATA_SOURCE_TYPES.Readwise,
       (def, id) =>
-        new ReadwiseSource(id, new ReadwiseApiClient(def.path), workerManager),
+        new ReadwiseSource(
+          id,
+          new ReadwiseApiClient(def.path),
+          workerManager,
+          platformAdapter.fileSystem,
+          readwiseCachePath,
+        ),
     );
 
     const dataSourceFactory = new DataSourceFactory(registry);

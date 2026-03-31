@@ -211,28 +211,6 @@ describe('ReadwiseSource', () => {
       expect(parsed[0].rawId).toBe('1');
     });
 
-    it('passes updatedAfter to both API clients', async () => {
-      const fetchBooksMock = jest.fn().mockResolvedValue([]);
-      const fetchDocsMock = jest.fn().mockResolvedValue([]);
-      const client = createMockClient({
-        fetchExportBooks: fetchBooksMock,
-        fetchReaderDocuments: fetchDocsMock,
-      } as unknown as Partial<ReadwiseApiClient>);
-      const worker = createMockWorkerManager();
-
-      const source = new ReadwiseSource('rw-src-1', client, worker as never, {
-        updatedAfter: '2024-01-01',
-      });
-      await source.load();
-
-      expect(fetchBooksMock).toHaveBeenCalledWith({
-        updatedAfter: '2024-01-01',
-      });
-      expect(fetchDocsMock).toHaveBeenCalledWith({
-        updatedAfter: '2024-01-01',
-      });
-    });
-
     it('converts book fields to entry data correctly', async () => {
       const book = makeExportBook({
         user_book_id: 42,
@@ -290,6 +268,48 @@ describe('ReadwiseSource', () => {
       expect(entry.keywords).toEqual(['productivity']);
       expect(entry.note).toContain('Focus on hard things');
       expect(entry.note).toContain('Eliminate distractions');
+    });
+
+    it('prefers unique_url over readwise_url for v2 book readwiseUrl', async () => {
+      const book = makeExportBook({
+        unique_url: 'https://readwise.io/reader/document_raw_id/1',
+        readwise_url: 'https://readwise.io/bookreview/1',
+      });
+      const client = createMockClient({
+        fetchExportBooks: jest.fn().mockResolvedValue([book]),
+      } as unknown as Partial<ReadwiseApiClient>);
+      const worker = createMockWorkerManager();
+
+      const source = new ReadwiseSource('src-1', client, worker as never);
+      const result = await source.load();
+
+      // The entry data's readwiseUrl should use unique_url when available
+      const raw = JSON.parse(
+        (worker.post.mock.calls[0][0] as { databaseRaw: string }).databaseRaw,
+      );
+      expect(raw[0].readwiseUrl).toBe(
+        'https://readwise.io/reader/document_raw_id/1',
+      );
+      expect(result.entries).toHaveLength(1);
+    });
+
+    it('falls back to readwise_url when unique_url is null', async () => {
+      const book = makeExportBook({
+        unique_url: null,
+        readwise_url: 'https://readwise.io/bookreview/1',
+      });
+      const client = createMockClient({
+        fetchExportBooks: jest.fn().mockResolvedValue([book]),
+      } as unknown as Partial<ReadwiseApiClient>);
+      const worker = createMockWorkerManager();
+
+      const source = new ReadwiseSource('src-1', client, worker as never);
+      await source.load();
+
+      const raw = JSON.parse(
+        (worker.post.mock.calls[0][0] as { databaseRaw: string }).databaseRaw,
+      );
+      expect(raw[0].readwiseUrl).toBe('https://readwise.io/bookreview/1');
     });
 
     it('handles book with no highlights', async () => {

@@ -7,6 +7,7 @@ import {
 import { ReadwiseEntryData } from '../core/adapters/readwise-adapter';
 import { DATABASE_FORMATS, convertToEntries } from '../core';
 import type { ParseErrorInfo } from '../core';
+import type { IFileSystem } from '../platform/platform-adapter';
 import { WorkerManager } from '../util';
 
 // ---------------------------------------------------------------------------
@@ -36,7 +37,7 @@ function toEntryDataFromExport(book: ReadwiseExportBook): ReadwiseEntryData {
     author: book.author,
     category: book.category,
     sourceUrl: book.source_url,
-    readwiseUrl: book.readwise_url,
+    readwiseUrl: book.unique_url ?? book.readwise_url,
     coverImageUrl: book.cover_image_url,
     summary: book.summary ?? book.document_note,
     highlightsText,
@@ -90,51 +91,93 @@ export class ReadwiseSource implements DataSource {
     public readonly id: string,
     private client: ReadwiseApiClient,
     private loadWorker: WorkerManager,
-    private options?: { updatedAfter?: string },
+    private fileSystem?: IFileSystem,
+    private cachePath?: string,
   ) {}
 
   /**
    * Fetch entries from the Readwise API, serialize them, and process
    * through the worker pipeline (same flow as LocalFileSource).
+   *
+   * When a cache file is configured, API results are persisted to disk.
+   * If the API is unreachable, the cache is used as a fallback.
    */
   async load(): Promise<DataSourceLoadResult> {
     try {
       const { entries: entryDataArray, errors: fetchErrors } =
         await this.fetchEntryData();
 
-      // Serialize to JSON for the worker (same pattern as file-based sources)
       const raw = JSON.stringify(entryDataArray);
 
-      // Post to worker for parsing
-      const result = await this.loadWorker.post({
-        databaseRaw: raw,
-        databaseType: DATABASE_FORMATS.Readwise,
-      });
+      // Persist to cache for offline/fast startup
+      await this.writeCache(raw);
 
-      const entries = convertToEntries(
-        DATABASE_FORMATS.Readwise,
-        result.entries,
-      );
-
-      // Merge worker parse errors with API fetch errors
-      const allParseErrors: ParseErrorInfo[] = [
-        ...fetchErrors,
-        ...result.parseErrors,
-      ];
-
-      return {
-        sourceId: this.id,
-        entries,
-        modifiedAt: new Date(),
-        parseErrors: allParseErrors,
-      };
+      return this.processRaw(raw, fetchErrors);
     } catch (error) {
+      // API failed — try loading from cache
+      const cached = await this.readCache();
+      if (cached) {
+        console.warn('ReadwiseSource: API unavailable, using cached data');
+        return this.processRaw(cached, [
+          {
+            message: `Readwise API unavailable (using cache): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          },
+        ]);
+      }
+
       const message = error instanceof Error ? error.message : String(error);
       console.error(
         `ReadwiseSource: Failed to load from Readwise API: ${message}`,
       );
       throw new Error(`Failed to load from Readwise API: ${message}`);
     }
+  }
+
+  /**
+   * Run serialized ReadwiseEntryData JSON through the worker pipeline.
+   */
+  private async processRaw(
+    raw: string,
+    fetchErrors: ParseErrorInfo[],
+  ): Promise<DataSourceLoadResult> {
+    const result = await this.loadWorker.post({
+      databaseRaw: raw,
+      databaseType: DATABASE_FORMATS.Readwise,
+    });
+
+    const entries = convertToEntries(DATABASE_FORMATS.Readwise, result.entries);
+
+    return {
+      sourceId: this.id,
+      entries,
+      modifiedAt: new Date(),
+      parseErrors: [...fetchErrors, ...result.parseErrors],
+    };
+  }
+
+  /** Write entry data to the cache file (best-effort, errors are silent). */
+  private async writeCache(raw: string): Promise<void> {
+    if (!this.fileSystem || !this.cachePath) return;
+    try {
+      await this.fileSystem.writeFile(this.cachePath, raw);
+    } catch {
+      // Cache write failure is not critical
+    }
+  }
+
+  /** Read entry data from cache file, or null if unavailable. */
+  private async readCache(): Promise<string | null> {
+    if (!this.fileSystem || !this.cachePath) return null;
+    try {
+      if (await this.fileSystem.exists(this.cachePath)) {
+        return await this.fileSystem.readFile(this.cachePath);
+      }
+    } catch {
+      // Cache read failure is not critical
+    }
+    return null;
   }
 
   /**
@@ -147,12 +190,8 @@ export class ReadwiseSource implements DataSource {
     errors: ParseErrorInfo[];
   }> {
     const [booksResult, docsResult] = await Promise.allSettled([
-      this.client.fetchExportBooks({
-        updatedAfter: this.options?.updatedAfter,
-      }),
-      this.client.fetchReaderDocuments({
-        updatedAfter: this.options?.updatedAfter,
-      }),
+      this.client.fetchExportBooks(),
+      this.client.fetchReaderDocuments(),
     ]);
 
     const entries: ReadwiseEntryData[] = [];
