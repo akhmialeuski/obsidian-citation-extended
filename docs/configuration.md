@@ -72,6 +72,7 @@ Connect the plugin to your Readwise account to import highlights and documents a
 | **Database name** | Friendly label for this database (default: `Database N`). You can rename it to `Readwise` or any name you prefer |
 | **Database type** | Must be set to **Readwise** |
 | **API token** | Your Readwise access token (password field). Get it from [readwise.io/access_token](https://readwise.io/access_token). Stored in plugin settings |
+| **Auto-sync interval (minutes)** | How often the plugin automatically fetches new data from Readwise, in minutes. Set to `0` to disable automatic sync. Default: `30` |
 | **Validate token** | Tests the API token against Readwise. Shows "Token is valid" or "Token is invalid" |
 | **Sync now** | Fetches data from both Readwise APIs and reloads the library. Updates the "Last sync" timestamp shown below the token field |
 

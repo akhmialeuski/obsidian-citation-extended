@@ -144,8 +144,8 @@ You do not rise to the level of your goals. You fall to the level of your system
 
 ## Notes
 
-- Readwise data is fetched on demand -- there is no real-time push from Readwise
-- After adding new highlights in Readwise, click "Sync now" in the database card to pull the latest data
+- By default, Readwise data syncs automatically every 30 minutes. You can change this interval in the **Auto-sync interval (minutes)** field on the database card, or set it to `0` to disable automatic sync entirely
+- To pull the latest data immediately, click **Sync now** in the database card
 - Rate limiting is handled automatically -- the plugin respects Readwise's API rate limits
 - You can use Readwise alongside file-based databases (Zotero, BibTeX, etc.) -- all entries are merged into a single searchable library
 - The plugin loads data from both Readwise APIs automatically; there is no mode selector

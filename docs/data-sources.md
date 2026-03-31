@@ -67,8 +67,9 @@ The plugin loads data from both Readwise APIs in parallel and merges the results
 
 **How it works:**
 - Readwise is a regular database type -- you add it the same way you add a BibLaTeX or CSL-JSON database
-- Data is fetched on each sync (manual "Sync now" or plugin reload)
-- No file watching -- Readwise data loads on demand, not in real-time
+- Data is fetched on each sync (manual "Sync now", plugin reload, or automatic periodic sync)
+- By default, the plugin automatically syncs Readwise data every 30 minutes. You can change the interval in the **Auto-sync interval (minutes)** field on the database card, or set it to `0` to disable automatic sync
+- The automatic sync timer starts when the plugin loads and stops when the plugin unloads
 - Readwise entries appear in the search modal alongside your other databases
 - All standard features work: citation insertion, literature note creation, templates
 
