@@ -7,6 +7,7 @@ import {
   LiteratureNoteNotFoundError,
   EntryNotFoundError,
 } from '../core';
+import type { TemplateContext } from '../core';
 import { DISALLOWED_SEGMENT_CHARACTERS_RE } from '../util';
 
 type ContentTemplateResolver = () => Promise<string>;
@@ -36,6 +37,23 @@ export class NoteService implements INoteService {
    * Empty / whitespace-only segments are removed so stray slashes don't
    * produce blank folder names.
    */
+  /**
+   * Replace forward slashes in string variable values with underscores
+   * so that data like "Author A / Author B" does not produce subdirectories.
+   */
+  private sanitizeVariablesForPath(
+    variables: TemplateContext,
+  ): TemplateContext {
+    const result = { ...variables };
+    for (const key of Object.keys(result) as Array<keyof TemplateContext>) {
+      const value = result[key];
+      if (typeof value === 'string') {
+        (result as Record<string, unknown>)[key] = value.replace(/\//g, '_');
+      }
+    }
+    return result;
+  }
+
   private sanitizeTitlePath(rawTitle: string): string {
     return rawTitle
       .split('/')
@@ -60,7 +78,12 @@ export class NoteService implements INoteService {
       throw new EntryNotFoundError(citekey);
     }
     const variables = this.templateService.getTemplateVariables(entry);
-    const titleResult = this.templateService.getTitle(variables);
+    // Sanitize slashes in variable values so data like "A / B" in a title
+    // does not create unintended subdirectories. Literal slashes in the
+    // template string (e.g. {{containerTitle}}/{{citekey}}) are preserved
+    // because they are not part of the variable values.
+    const safeVariables = this.sanitizeVariablesForPath(variables);
+    const titleResult = this.templateService.getTitle(safeVariables);
     if (!titleResult.ok) {
       throw titleResult.error;
     }
