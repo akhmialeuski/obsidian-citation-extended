@@ -84,6 +84,7 @@ export const SettingsSchema = z.object({
     .default([]),
   // ---- Readwise integration ------------------------------------------------
   readwiseLastSyncDate: z.string().default(''),
+  readwiseSyncIntervalMinutes: z.number().min(0).default(30),
 });
 
 export type CitationsPluginSettingsType = z.infer<typeof SettingsSchema>;
@@ -114,6 +115,7 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   templateProfiles: [],
   // Readwise defaults
   readwiseLastSyncDate: '',
+  readwiseSyncIntervalMinutes: 30,
 };
 
 export function validateSettings(settings: unknown) {

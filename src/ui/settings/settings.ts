@@ -43,6 +43,8 @@ export class CitationsPluginSettings {
 
   // Readwise integration
   public readwiseLastSyncDate: string = DEFAULT_SETTINGS.readwiseLastSyncDate;
+  public readwiseSyncIntervalMinutes: number =
+    DEFAULT_SETTINGS.readwiseSyncIntervalMinutes;
 
   /**
    * Returns the effective primary citation template, taking the active

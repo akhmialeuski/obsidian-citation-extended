@@ -159,6 +159,9 @@ export default class CitationPlugin extends Plugin {
           workerManager,
           platformAdapter.fileSystem,
           readwiseCachePath,
+          this.settings.readwiseSyncIntervalMinutes > 0
+            ? this.settings.readwiseSyncIntervalMinutes * 60_000
+            : undefined,
         ),
     );
 

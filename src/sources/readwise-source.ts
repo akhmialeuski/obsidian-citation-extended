@@ -87,12 +87,15 @@ function toEntryDataFromReader(doc: ReadwiseReaderDocument): ReadwiseEntryData {
  * data is loaded on demand when {@link load} is called.
  */
 export class ReadwiseSource implements DataSource {
+  private pollingTimer: ReturnType<typeof setInterval> | null = null;
+
   constructor(
     public readonly id: string,
     private client: ReadwiseApiClient,
     private loadWorker: WorkerManager,
     private fileSystem?: IFileSystem,
     private cachePath?: string,
+    private syncIntervalMs?: number,
   ) {}
 
   /**
@@ -225,15 +228,23 @@ export class ReadwiseSource implements DataSource {
   }
 
   /**
-   * No-op -- Readwise has no push notification mechanism for desktop plugins.
-   * The plugin relies on manual sync or periodic reload.
+   * Start periodic polling for Readwise data changes.
+   * The callback triggers a library reload, same as file-watcher sources.
    */
-  watch(_callback: () => void): void {
-    // Intentionally empty: Readwise API does not support push notifications
+  watch(callback: () => void): void {
+    if (this.pollingTimer || !this.syncIntervalMs) return;
+
+    this.pollingTimer = setInterval(() => {
+      console.debug('ReadwiseSource: Periodic sync triggered');
+      callback();
+    }, this.syncIntervalMs);
   }
 
-  /** Clean up resources. No-op for an API-based source. */
+  /** Stop the polling timer. */
   dispose(): void {
-    // No resources to clean up for API-based source
+    if (this.pollingTimer) {
+      clearInterval(this.pollingTimer);
+      this.pollingTimer = null;
+    }
   }
 }

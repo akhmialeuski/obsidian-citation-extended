@@ -267,6 +267,29 @@ export class CitationSettingTab extends PluginSettingTab {
           );
       });
 
+    // Sync interval
+    new Setting(card)
+      .setName('Auto-sync interval (minutes)')
+      .setDesc(
+        'How often to fetch new data from Readwise. Set to 0 to disable.',
+      )
+      .addText((text) => {
+        text
+          .setValue(String(this.plugin.settings.readwiseSyncIntervalMinutes))
+          .onChange(
+            debounce(async (value: string) => {
+              const num = parseInt(value, 10);
+              if (!isNaN(num) && num >= 0) {
+                this.plugin.settings.readwiseSyncIntervalMinutes = num;
+                await this.plugin.saveSettings();
+              }
+            }, 500),
+          );
+        text.inputEl.type = 'number';
+        text.inputEl.min = '0';
+        text.inputEl.setCssProps({ width: '80px' });
+      });
+
     // Status display
     const statusEl = card.createDiv('readwise-status');
     statusEl.setCssProps({ fontSize: '0.8em', marginTop: '5px' });
