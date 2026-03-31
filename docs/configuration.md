@@ -155,6 +155,8 @@ A Handlebars template that produces the filename (without `.md`). The default `@
 | `{{lastname}} {{year}} — {{titleShort}}` | `Smith 2023 — Attention.md` | Human-readable |
 | `{{type}}/{{citekey}}` | `article-journal/@smith2023.md` | Subfolder by type |
 
+> **Slashes in data values:** If a variable value contains a forward slash (e.g. a title like "Author A / Author B"), the slash is automatically replaced with an underscore before rendering. This prevents data values from creating unintended subdirectories. Only literal `/` characters in the template itself (e.g. `{{type}}/{{citekey}}`) act as directory separators.
+
 ### Literature note content template file
 
 Path to a Markdown file in your vault that serves as the template body. This is the recommended approach — it lets you edit the template as a normal note with full syntax highlighting. If the path is empty, an empty note body is created.
