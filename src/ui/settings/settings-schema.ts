@@ -83,8 +83,6 @@ export const SettingsSchema = z.object({
     )
     .default([]),
   // ---- Readwise integration ------------------------------------------------
-  // Legacy: token was global before it moved into db.path. Kept for migration.
-  readwiseApiToken: z.string().default(''),
   readwiseLastSyncDate: z.string().default(''),
 });
 
@@ -115,7 +113,6 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   disableAutomaticNoteCreation: false,
   templateProfiles: [],
   // Readwise defaults
-  readwiseApiToken: '',
   readwiseLastSyncDate: '',
 };
 

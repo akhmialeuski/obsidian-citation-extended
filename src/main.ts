@@ -36,11 +36,7 @@ import {
   validateSettings,
 } from './ui/settings/settings-schema';
 import { WorkerManager } from './util';
-import {
-  DATABASE_FORMATS,
-  generateDatabaseId,
-  ReadwiseApiClient,
-} from './core';
+import { generateDatabaseId, ReadwiseApiClient } from './core';
 import LoadWorker from 'web-worker:./worker';
 
 export default class CitationPlugin extends Plugin {
@@ -91,37 +87,6 @@ export default class CitationPlugin extends Plugin {
         if (!db.id) {
           db.id = generateDatabaseId();
           needsSave = true;
-        }
-      }
-
-      // Migrate legacy Readwise database types to single 'readwise' format
-      const LEGACY_READWISE_HIGHLIGHTS = 'readwise-highlights';
-      const LEGACY_READER_DOCUMENTS = 'reader-documents';
-      for (const db of this.settings.databases) {
-        if (
-          db.type === (LEGACY_READWISE_HIGHLIGHTS as string) ||
-          db.type === (LEGACY_READER_DOCUMENTS as string)
-        ) {
-          db.type = DATABASE_FORMATS.Readwise;
-          needsSave = true;
-          console.debug(
-            'Citations plugin: Migrated Readwise database type to unified format',
-          );
-        }
-      }
-
-      // Migrate legacy global readwiseApiToken into the Readwise database's path
-      if (this.settings.readwiseApiToken) {
-        const rwDb = this.settings.databases.find(
-          (db) => db.type === DATABASE_FORMATS.Readwise,
-        );
-        if (rwDb && !rwDb.path) {
-          rwDb.path = this.settings.readwiseApiToken;
-          this.settings.readwiseApiToken = '';
-          needsSave = true;
-          console.debug(
-            'Citations plugin: Migrated legacy readwiseApiToken to database path',
-          );
         }
       }
 

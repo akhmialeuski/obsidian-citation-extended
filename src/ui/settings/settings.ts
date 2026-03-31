@@ -42,7 +42,6 @@ export class CitationsPluginSettings {
     DEFAULT_SETTINGS.templateProfiles as TemplateProfile[];
 
   // Readwise integration
-  public readwiseApiToken: string = DEFAULT_SETTINGS.readwiseApiToken;
   public readwiseLastSyncDate: string = DEFAULT_SETTINGS.readwiseLastSyncDate;
 
   /**
