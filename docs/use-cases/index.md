@@ -21,6 +21,7 @@ Practical, step-by-step guides for common workflows with Obsidian Citation Exten
 - [Multiple Databases](multiple-databases.md) — Work with personal and shared bibliography libraries simultaneously
 - [Searching Effectively](searching-effectively.md) — Get the most out of the search modal with fuzzy, accent-insensitive, and prefix matching
 - [Conditional Templates](conditional-templates.md) — Build smart templates with if/else logic, type-specific rendering, and author formatting
+- [Filename Sanitization](filename-sanitization.md) — Customize how illegal characters in titles are replaced in filenames
 
 ### Integration Guides
 

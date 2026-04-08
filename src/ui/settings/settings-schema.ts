@@ -55,6 +55,8 @@ export const SettingsSchema = z.object({
   referenceListSortOrder: z
     .enum(['default', 'year-desc', 'year-asc', 'author-asc'])
     .default('default'),
+  // Character used to replace disallowed filename characters during sanitization
+  filenameSanitizationReplacement: z.string().max(5).default('_'),
   autoCreateNoteOnCitation: z.boolean().default(false),
   literatureNoteLinkDisplayTemplate: z.string().default(''),
   // Multi-source configuration
@@ -108,6 +110,7 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   markdownCitationTemplate: '[@{{citekey}}]',
   alternativeMarkdownCitationTemplate: '@{{citekey}}',
   referenceListSortOrder: 'default',
+  filenameSanitizationReplacement: '_',
   autoCreateNoteOnCitation: false,
   literatureNoteLinkDisplayTemplate: '',
   databases: [],

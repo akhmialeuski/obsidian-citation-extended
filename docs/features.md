@@ -15,6 +15,7 @@ Opens (or creates) a literature note for a selected reference.
 - The title, folder, and content are configured in settings
 - If "Disable automatic note creation" is enabled, only existing notes are opened
 - Notes can be organized in subfolders using `/` in the title template (e.g. `{{type}}/{{citekey}}`)
+- Illegal filename characters (`: * ? " < > |`) are replaced with a configurable string (default `_`); see [Filename sanitization replacement](configuration.md#filename-sanitization-replacement)
 
 **How it works:** A search modal opens where you type to find a reference by title, author, year, or citekey. Press Enter to open the corresponding literature note. If the note doesn't exist, it's created from your content template.
 

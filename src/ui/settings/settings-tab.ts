@@ -393,6 +393,15 @@ export class CitationSettingTab extends PluginSettingTab {
           });
       });
 
+    this.buildTextField(
+      containerEl,
+      'Filename sanitization replacement',
+      'Character(s) used to replace illegal filename characters (e.g. : * ? " < > |). ' +
+        'Default is underscore (_). Use a space for "Title Subtitle", a dash for "Title- Subtitle", ' +
+        'or leave empty to remove characters entirely.',
+      'filenameSanitizationReplacement',
+    );
+
     new Setting(containerEl).setName('Literature note templates').setHeading();
 
     this.buildTextField(

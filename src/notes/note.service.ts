@@ -58,7 +58,8 @@ export class NoteService implements INoteService {
 
   /** Strip disallowed characters and enforce the filename length limit. */
   private truncateSegment(raw: string): string {
-    let clean = raw.replace(DISALLOWED_SEGMENT_CHARACTERS_RE, '_');
+    const replacement = this.settings.filenameSanitizationReplacement;
+    let clean = raw.replace(DISALLOWED_SEGMENT_CHARACTERS_RE, replacement);
     if (clean.length > MAX_FILENAME_LENGTH) {
       clean = clean.substring(0, MAX_FILENAME_LENGTH);
     }
@@ -78,7 +79,7 @@ export class NoteService implements INoteService {
       if (typeof value === 'string') {
         (result as unknown as Record<string, unknown>)[key] = value.replace(
           /\//g,
-          '_',
+          this.settings.filenameSanitizationReplacement,
         );
       }
     }

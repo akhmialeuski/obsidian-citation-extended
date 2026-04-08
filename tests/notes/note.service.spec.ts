@@ -472,6 +472,91 @@ describe('NoteService', () => {
     });
   });
 
+  describe('filenameSanitizationReplacement setting (#59)', () => {
+    it('replaces disallowed characters with space when configured', () => {
+      settings.filenameSanitizationReplacement = ' ';
+      jest
+        .spyOn(templateService, 'getTitle')
+        .mockReturnValue({ ok: true, value: 'Title: Subtitle' });
+
+      const result = noteService.getPathForCitekey('citekey1', library);
+      const normalized = result.replace(/\\/g, '/');
+      expect(normalized).toBe('Reading notes/Title  Subtitle.md');
+    });
+
+    it('replaces disallowed characters with dash when configured', () => {
+      settings.filenameSanitizationReplacement = '-';
+      jest
+        .spyOn(templateService, 'getTitle')
+        .mockReturnValue({ ok: true, value: 'Title: Subtitle' });
+
+      const result = noteService.getPathForCitekey('citekey1', library);
+      const normalized = result.replace(/\\/g, '/');
+      expect(normalized).toBe('Reading notes/Title- Subtitle.md');
+    });
+
+    it('removes disallowed characters when replacement is empty string', () => {
+      settings.filenameSanitizationReplacement = '';
+      jest
+        .spyOn(templateService, 'getTitle')
+        .mockReturnValue({ ok: true, value: 'Title: Subtitle' });
+
+      const result = noteService.getPathForCitekey('citekey1', library);
+      const normalized = result.replace(/\\/g, '/');
+      expect(normalized).toBe('Reading notes/Title Subtitle.md');
+    });
+
+    it('defaults to underscore replacement', () => {
+      jest
+        .spyOn(templateService, 'getTitle')
+        .mockReturnValue({ ok: true, value: 'Title: Subtitle' });
+
+      const result = noteService.getPathForCitekey('citekey1', library);
+      const normalized = result.replace(/\\/g, '/');
+      expect(normalized).toBe('Reading notes/Title_ Subtitle.md');
+    });
+
+    it('applies replacement in subfolder path segments', () => {
+      settings.filenameSanitizationReplacement = ' ';
+      settings.literatureNoteTitleTemplate = '{{type}}/{{citekey}}';
+      jest
+        .spyOn(templateService, 'getTitle')
+        .mockReturnValue({ ok: true, value: 'Art:icle/smi*th' });
+
+      const result = noteService.getPathForCitekey('citekey1', library);
+      const normalized = result.replace(/\\/g, '/');
+      expect(normalized).toBe('Reading notes/Art icle/smi th.md');
+    });
+
+    it('uses replacement for slash in variable values', () => {
+      settings.filenameSanitizationReplacement = '-';
+      settings.literatureNoteTitleTemplate = '{{title}}';
+
+      jest
+        .spyOn(templateService, 'getTemplateVariables')
+        .mockReturnValue({ title: 'Author A / Author B' } as never);
+      jest
+        .spyOn(templateService, 'getTitle')
+        .mockReturnValue({ ok: true, value: 'Author A - Author B' });
+
+      const result = noteService.getPathForCitekey('citekey1', library);
+      const normalized = result.replace(/\\/g, '/');
+      expect(normalized).toBe('Reading notes/Author A - Author B.md');
+    });
+
+    it('handles multiple disallowed characters with custom replacement', () => {
+      settings.filenameSanitizationReplacement = '';
+      jest
+        .spyOn(templateService, 'getTitle')
+        .mockReturnValue({ ok: true, value: 'A*B"C\\D<E>F:G|H?I' });
+
+      const result = noteService.getPathForCitekey('citekey1', library);
+      expect(result).not.toMatch(/[*"\\<>:|?]/);
+      const filename = result.replace(/\\/g, '/').split('/').pop()!;
+      expect(filename).toBe('ABCDEFGHI.md');
+    });
+  });
+
   describe('slash handling in note titles — comprehensive scenarios', () => {
     // These tests exercise all combinations of template slash presence
     // and data slash presence to verify correct sanitization behavior.
