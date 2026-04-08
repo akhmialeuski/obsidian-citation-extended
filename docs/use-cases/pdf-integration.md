@@ -221,8 +221,10 @@ Notice the "PDF" section is completely absent when no PDF is available.
 | Open PDF from search modal | `Shift+Tab` | System PDF viewer opens the attached file |
 | Open entry in Zotero | `Tab` | Zotero opens and selects the entry |
 | PDF link in template (`pdfMarkdownLink`) | — | `[filename](file:///path/to/file.pdf)` rendered in note |
-| PDF link in template (`pdfLink`) | — | `file:///path/to/file.pdf` URI rendered in note |
-| PDF link in template (`urlEncode`) | — | `file:///path/to/url-encoded-file.pdf` URI rendered in note |
+| PDF link in template (`pdfLink`)         | —             | `file:///path/to/file.pdf` URI rendered in note                       |
+| PDF link in template (`urlEncode`)       | —             | `file:///path/to/url-encoded-file.pdf` URI rendered in note           |
+| Open PDF in Zotero (`zoteroPdfURI`)      | —             | `zotero://open-pdf/library/items/ABCD1234` URI rendered in note       |
+| Open all PDFs in Zotero (`zoteroPdfURIs`) | —            | Multiple `zotero://open-pdf` URIs, one per PDF attachment             |
 
 ## Variations
 
@@ -249,6 +251,59 @@ If an entry has multiple PDF files, `pdfLink` and `pdfMarkdownLink` return the l
 ```markdown
 - [paper.pdf](file:///home/user/Zotero/storage/ABCD1234/paper.pdf)
 - [supplement.pdf](file:///home/user/Zotero/storage/ABCD1234/supplement.pdf)
+```
+
+### Open PDF Directly in Zotero
+
+Use `zoteroPdfURI` to generate a `zotero://open-pdf` link that opens the PDF in Zotero's built-in reader instead of the system PDF viewer:
+
+```handlebars
+{{#if (zoteroPdfURI entry.files)}}
+[Open in Zotero PDF reader]({{zoteroPdfURI entry.files}})
+{{/if}}
+```
+
+**Expected output:**
+
+```markdown
+[Open in Zotero PDF reader](zotero://open-pdf/library/items/EBAUJBLY)
+```
+
+> The `{{#if}}` block ensures nothing is rendered when the entry has no PDF attachments or when the file path does not contain a Zotero storage key.
+
+### Multiple PDFs — Open All in Zotero
+
+When an entry has multiple PDF attachments (e.g. main paper + supplementary material), use `zoteroPdfURIs` to list them all:
+
+```handlebars
+{{#if (zoteroPdfURIs entry.files)}}
+**PDFs:**
+{{#each (split (zoteroPdfURIs entry.files) "\n")}}
+- [PDF {{math @index "+" 1}}]({{this}})
+{{/each}}
+{{/if}}
+```
+
+**Expected output (entry with 2 PDFs and 1 HTML snapshot):**
+
+```markdown
+**PDFs:**
+- [PDF 1](zotero://open-pdf/library/items/EBAUJBLY)
+- [PDF 2](zotero://open-pdf/library/items/N6LQL4XL)
+```
+
+Non-PDF attachments (HTML snapshots, images) are automatically excluded.
+
+### No PDF Attachments
+
+When an entry has no PDF files (only HTML snapshots, or no attachments at all), both `zoteroPdfURI` and `zoteroPdfURIs` return an empty string. The `{{#if}}` wrapper ensures your note stays clean:
+
+```handlebars
+{{#if (zoteroPdfURI entry.files)}}
+[Open PDF]({{zoteroPdfURI entry.files}})
+{{else}}
+*No PDF attached*
+{{/if}}
 ```
 
 ### PDF Link with Custom Display Text
