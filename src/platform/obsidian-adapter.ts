@@ -128,6 +128,13 @@ class ObsidianVaultAccess implements IVaultAccess {
       throw new Error(`Cannot modify file at ${file.path}`);
     }
   }
+
+  getFrontmatter(file: IVaultFile): Record<string, unknown> | null {
+    const tFile = this.app.vault.getAbstractFileByPath(file.path);
+    if (!(tFile instanceof TFile)) return null;
+    const cache = this.app.metadataCache.getFileCache(tFile);
+    return (cache?.frontmatter as Record<string, unknown>) ?? null;
+  }
 }
 
 class ObsidianWorkspaceAccess implements IWorkspaceAccess {

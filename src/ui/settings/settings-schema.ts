@@ -92,6 +92,10 @@ export const SettingsSchema = z.object({
       }),
     )
     .default([]),
+  // ---- Note identifier (frontmatter-based lookup) --------------------------
+  // When set, the plugin scans vault notes for a matching frontmatter field
+  // as a last-resort fallback when filename-based lookup fails.
+  noteIdentifierField: z.string().default(''),
   // ---- Readwise integration ------------------------------------------------
   readwiseLastSyncDate: z.string().default(''),
   readwiseSyncIntervalMinutes: z.number().min(0).default(30),
@@ -124,6 +128,8 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   databases: [],
   disableAutomaticNoteCreation: false,
   templateProfiles: [],
+  // Note identifier
+  noteIdentifierField: '',
   // Readwise defaults
   readwiseLastSyncDate: '',
   readwiseSyncIntervalMinutes: 30,

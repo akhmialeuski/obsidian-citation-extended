@@ -130,11 +130,12 @@ The search index is rebuilt each time the library loads. On a typical library (1
 
 ## Note Lookup
 
-When opening or linking a literature note, the plugin uses a four-step lookup to find existing notes:
+When opening or linking a literature note, the plugin uses a multi-step lookup to find existing notes:
 
 1. **Exact path match** — checks the expected path directly (e.g. `Reading notes/@smith2023.md`)
 2. **Case-insensitive match** — handles renamed notes with different casing
 3. **Subfolder search** — recursively scans the literature note folder for notes moved into subfolders
 4. **Vault-wide search** — scans the entire vault as a last resort, finding notes moved completely outside the literature note folder
+5. **Frontmatter field match** — when configured, scans vault notes for a frontmatter field (e.g. `citekey`) whose value matches the target citekey. This handles notes that were renamed by the user (see [Configuration: Note identifier field](configuration.md#note-identifier-field))
 
-This prevents duplicate note creation when you reorganize your vault. The plugin finds your note regardless of where you moved it.
+This prevents duplicate note creation when you reorganize or rename notes in your vault.

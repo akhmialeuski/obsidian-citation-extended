@@ -396,6 +396,14 @@ export class CitationSettingTab extends PluginSettingTab {
 
     this.buildTextField(
       containerEl,
+      'Note identifier field',
+      'Frontmatter field name used to match notes to library entries when the filename no longer matches. ' +
+        'Leave empty to disable. Your content template must include the field (e.g. citekey: {{citekey}}).',
+      'noteIdentifierField',
+    );
+
+    this.buildTextField(
+      containerEl,
       'Filename sanitization replacement',
       'Character(s) used to replace illegal filename characters (e.g. : * ? " < > |). ' +
         'Default is underscore (_). Use a space for "Title Subtitle", a dash for "Title- Subtitle", ' +

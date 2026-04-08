@@ -168,6 +168,30 @@ export class NoteService implements INoteService {
   }
 
   /**
+   * Scan vault markdown files for a note whose frontmatter field matches
+   * the given citekey.  Uses the platform's metadata cache for zero-IO
+   * lookups.  Returns the first match or null.
+   */
+  private findNoteByFrontmatter(
+    citekey: string,
+    fieldName: string,
+  ): IVaultFile | null {
+    const files = this.platform.vault.getMarkdownFiles();
+    for (const file of files) {
+      const fm = this.platform.vault.getFrontmatter(file);
+      const value = fm?.[fieldName];
+      if (
+        value != null &&
+        (typeof value === 'string' || typeof value === 'number') &&
+        String(value) === citekey
+      ) {
+        return file;
+      }
+    }
+    return null;
+  }
+
+  /**
    * @throws {TemplateRenderError} when the title or content template fails to render
    */
   async getOrCreateLiteratureNoteFile(
@@ -240,6 +264,24 @@ export class NoteService implements INoteService {
         `Citations: note "${expectedBasename}" found outside the literature note folder at "${vaultWide.path}". Using vault-wide match.`,
       );
       return vaultWide;
+    }
+
+    // Frontmatter-based lookup (#53): when a noteIdentifierField is
+    // configured, scan all markdown files for a frontmatter field whose
+    // value matches the target citekey.  This handles notes that were
+    // renamed by the user.
+    const identifierField = this.settings.noteIdentifierField;
+    if (identifierField) {
+      const byFrontmatter = this.findNoteByFrontmatter(
+        citekey,
+        identifierField,
+      );
+      if (byFrontmatter) {
+        console.debug(
+          `Citations: note for "${citekey}" found via frontmatter field "${identifierField}" at "${byFrontmatter.path}".`,
+        );
+        return byFrontmatter;
+      }
     }
 
     return null;

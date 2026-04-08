@@ -472,6 +472,166 @@ describe('NoteService', () => {
     });
   });
 
+  describe('frontmatter-based note lookup (#53)', () => {
+    it('finds a renamed note via frontmatter citekey field', () => {
+      settings.noteIdentifierField = 'citekey';
+
+      const renamedFile: IVaultFile = {
+        path: 'Reading notes/Smithson - 2020 Paper.md',
+        name: 'Smithson - 2020 Paper.md',
+      };
+
+      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(null);
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([
+        renamedFile,
+      ]);
+      (platform.vault.getFrontmatter as jest.Mock).mockReturnValue({
+        citekey: 'citekey1',
+      });
+
+      const result = noteService.findExistingLiteratureNoteFile(
+        'citekey1',
+        library,
+      );
+      expect(result).toBe(renamedFile);
+    });
+
+    it('returns null when frontmatter field does not match', () => {
+      settings.noteIdentifierField = 'citekey';
+
+      const otherFile: IVaultFile = {
+        path: 'Reading notes/Other Note.md',
+        name: 'Other Note.md',
+      };
+
+      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(null);
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([
+        otherFile,
+      ]);
+      (platform.vault.getFrontmatter as jest.Mock).mockReturnValue({
+        citekey: 'different_key',
+      });
+
+      const result = noteService.findExistingLiteratureNoteFile(
+        'citekey1',
+        library,
+      );
+      expect(result).toBeNull();
+    });
+
+    it('skips frontmatter lookup when noteIdentifierField is empty', () => {
+      settings.noteIdentifierField = '';
+
+      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(null);
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([]);
+
+      const result = noteService.findExistingLiteratureNoteFile(
+        'citekey1',
+        library,
+      );
+      expect(result).toBeNull();
+      expect(platform.vault.getFrontmatter).not.toHaveBeenCalled();
+    });
+
+    it('handles files with no frontmatter gracefully', () => {
+      settings.noteIdentifierField = 'citekey';
+
+      const fileNoFm: IVaultFile = {
+        path: 'Reading notes/No Frontmatter.md',
+        name: 'No Frontmatter.md',
+      };
+
+      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(null);
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([
+        fileNoFm,
+      ]);
+      (platform.vault.getFrontmatter as jest.Mock).mockReturnValue(null);
+
+      const result = noteService.findExistingLiteratureNoteFile(
+        'citekey1',
+        library,
+      );
+      expect(result).toBeNull();
+    });
+
+    it('works with a custom identifier field name', () => {
+      settings.noteIdentifierField = 'zotero_id';
+
+      const renamedFile: IVaultFile = {
+        path: 'Reading notes/Custom Note.md',
+        name: 'Custom Note.md',
+      };
+
+      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(null);
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([
+        renamedFile,
+      ]);
+      (platform.vault.getFrontmatter as jest.Mock).mockReturnValue({
+        zotero_id: 'citekey1',
+      });
+
+      const result = noteService.findExistingLiteratureNoteFile(
+        'citekey1',
+        library,
+      );
+      expect(result).toBe(renamedFile);
+    });
+
+    it('coerces numeric frontmatter values to string for comparison', () => {
+      settings.noteIdentifierField = 'id';
+
+      // Library has an entry whose citekey is the string "citekey1".
+      // The frontmatter stores a numeric value that, when coerced to
+      // string, equals the citekey we are searching for.
+      library = new Library({
+        '42': { id: '42' } as Entry,
+      });
+
+      const file: IVaultFile = {
+        path: 'Reading notes/Numeric ID.md',
+        name: 'Numeric ID.md',
+      };
+
+      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(null);
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([file]);
+      (platform.vault.getFrontmatter as jest.Mock).mockReturnValue({
+        id: 42,
+      });
+
+      const result = noteService.findExistingLiteratureNoteFile('42', library);
+      expect(result).toBe(file);
+    });
+
+    it('prefers filename match over frontmatter match', () => {
+      settings.noteIdentifierField = 'citekey';
+
+      const filenameMatch: IVaultFile = {
+        path: 'reading notes/my title.md',
+        name: 'my title.md',
+      };
+      const frontmatterMatch: IVaultFile = {
+        path: 'Reading notes/Renamed Note.md',
+        name: 'Renamed Note.md',
+      };
+
+      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(null);
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([
+        filenameMatch,
+        frontmatterMatch,
+      ]);
+      (platform.vault.getFrontmatter as jest.Mock).mockReturnValue({
+        citekey: 'citekey1',
+      });
+
+      const result = noteService.findExistingLiteratureNoteFile(
+        'citekey1',
+        library,
+      );
+      // Case-insensitive path match (level 2) should win over frontmatter (level 5)
+      expect(result).toBe(filenameMatch);
+    });
+  });
+
   describe('filenameSanitizationReplacement setting (#59)', () => {
     it('replaces disallowed characters with space when configured', () => {
       settings.filenameSanitizationReplacement = ' ';
