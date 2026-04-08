@@ -69,7 +69,10 @@ export class CitationService implements ICitationService {
     if (!titleResult.ok) return titleResult;
 
     return ok(
-      titleResult.value.replace(DISALLOWED_FILENAME_CHARACTERS_RE, '_'),
+      titleResult.value.replace(
+        DISALLOWED_FILENAME_CHARACTERS_RE,
+        this.settings.filenameSanitizationReplacement,
+      ),
     );
   }
 

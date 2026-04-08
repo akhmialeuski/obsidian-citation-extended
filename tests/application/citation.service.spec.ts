@@ -40,6 +40,7 @@ function makeMocks(overrides: Record<string, unknown> = {}) {
 
   const settings = {
     literatureNoteTitleTemplate: '@{{citekey}}',
+    filenameSanitizationReplacement: '_',
     ...(overrides.settings as Record<string, unknown>),
   };
 
@@ -134,6 +135,66 @@ describe('CitationService', () => {
       const service = createService();
       const result = service.getTitleForCitekey('nonexistent');
       expect(result.ok).toBe(false);
+    });
+
+    it('uses space replacement when configured', () => {
+      const service = createService({
+        settings: { filenameSanitizationReplacement: ' ' },
+        templateService: {
+          getTemplateVariables: jest.fn((entry: unknown) => ({
+            citekey: (entry as { id: string }).id,
+          })),
+          getTitle: jest.fn(() => ({
+            ok: true,
+            value: 'Title: Subtitle',
+          })),
+        },
+      });
+      const result = service.getTitleForCitekey('key1');
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value).toBe('Title  Subtitle');
+      }
+    });
+
+    it('uses dash replacement when configured', () => {
+      const service = createService({
+        settings: { filenameSanitizationReplacement: '-' },
+        templateService: {
+          getTemplateVariables: jest.fn((entry: unknown) => ({
+            citekey: (entry as { id: string }).id,
+          })),
+          getTitle: jest.fn(() => ({
+            ok: true,
+            value: 'Title: Subtitle',
+          })),
+        },
+      });
+      const result = service.getTitleForCitekey('key1');
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value).toBe('Title- Subtitle');
+      }
+    });
+
+    it('removes characters when replacement is empty string', () => {
+      const service = createService({
+        settings: { filenameSanitizationReplacement: '' },
+        templateService: {
+          getTemplateVariables: jest.fn((entry: unknown) => ({
+            citekey: (entry as { id: string }).id,
+          })),
+          getTitle: jest.fn(() => ({
+            ok: true,
+            value: 'Title: Subtitle',
+          })),
+        },
+      });
+      const result = service.getTitleForCitekey('key1');
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value).toBe('Title Subtitle');
+      }
     });
   });
 

@@ -126,10 +126,11 @@ This section controls how literature notes are created, named, and where they ar
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| Literature note folder | Folder inside the vault where new notes are created | `Reading notes` |
-| Disable automatic note creation | When enabled, only opens existing notes — never creates new ones | `false` |
-| Literature note title template | Handlebars template for the note filename (without `.md` extension) | `@{{citekey}}` |
-| Literature note content template file | Path to a vault file used as the note body template | (empty) |
+| Literature note folder                | Folder inside the vault where new notes are created                                         | `Reading notes` |
+| Disable automatic note creation       | When enabled, only opens existing notes — never creates new ones                            | `false`         |
+| Filename sanitization replacement     | Character(s) used to replace illegal filename characters (`: * ? " < > \|`)                 | `_`             |
+| Literature note title template        | Handlebars template for the note filename (without `.md` extension)                         | `@{{citekey}}`  |
+| Literature note content template file | Path to a vault file used as the note body template                                         | (empty)         |
 
 ### Literature note folder
 
@@ -142,6 +143,21 @@ The folder path is relative to the vault root. If the folder doesn't exist, it w
 ### Disable automatic note creation
 
 When **off** (default): selecting a reference in the search modal creates a new note if one doesn't exist yet. When **on**: the command only opens existing notes and shows an error if no note exists for the selected reference. Useful when you create notes via another plugin (e.g. Zotero Integration) and only want to open them through this plugin.
+
+### Filename sanitization replacement
+
+When generating filenames for literature notes, characters that are not allowed in filenames (`: * ? " < > |`) are replaced with this string. The default is underscore (`_`), so a title like "Title: Subtitle" becomes "Title_ Subtitle".
+
+![Filename sanitization replacement setting](images/filename-sanitization-setting.png)
+
+| Replacement | Input              | Output             |
+| ----------- | ------------------ | ------------------ |
+| `_`         | `Title: Subtitle`  | `Title_ Subtitle`  |
+| ` ` (space) | `Title: Subtitle`  | `Title  Subtitle`  |
+| `-`         | `Title: Subtitle`  | `Title- Subtitle`  |
+| (empty)     | `Title: Subtitle`  | `Title Subtitle`   |
+
+This setting also applies when slashes in data values are replaced to prevent unintended subdirectories, and when batch updates generate filenames via the citation service.
 
 ### Literature note title template
 

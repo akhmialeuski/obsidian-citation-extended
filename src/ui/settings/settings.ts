@@ -35,6 +35,9 @@ export class CitationsPluginSettings {
   public referenceListSortOrder: ReferenceListSortOrder =
     DEFAULT_SETTINGS.referenceListSortOrder;
 
+  public filenameSanitizationReplacement: string =
+    DEFAULT_SETTINGS.filenameSanitizationReplacement;
+
   public databases: DatabaseConfig[] = DEFAULT_SETTINGS.databases;
   public disableAutomaticNoteCreation: boolean =
     DEFAULT_SETTINGS.disableAutomaticNoteCreation;

@@ -430,6 +430,7 @@ describe('CitationPlugin', () => {
       plugin.settings = {
         databases: [{ name: 'Test', path: 'test.bib', type: 'biblatex' }],
         templateProfiles: [],
+        filenameSanitizationReplacement: '_',
       } as unknown as CitationsPluginSettings;
       await plugin.onload();
       (
