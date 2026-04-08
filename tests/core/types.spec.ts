@@ -49,12 +49,12 @@ describe('biblatex regression tests', () => {
       loadBibLaTeXLibrary(loadBibLaTeXEntries('regression_7f9aefe.bib'));
     };
 
-    // unknownCommandHandler resolves unknown TeX commands silently — no warnings expected
+    // \dag has no unicode2latex mapping — falls through to errorHandler as a warning
     const warnCallback = jest.fn();
     jest.spyOn(global.console, 'warn').mockImplementation(warnCallback);
 
     expect(load).not.toThrow();
-    expect(warnCallback).not.toHaveBeenCalled();
+    expect(warnCallback.mock.calls.length).toBe(1);
   });
 
   test('regression fe15ef6 (fatal parser error handling)', () => {

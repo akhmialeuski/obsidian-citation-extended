@@ -34,12 +34,25 @@ function parseBibLaTeX(raw: string): ParseResult {
     },
     unknownCommandHandler: (node) => {
       const src = node.source.trim();
-      const value = latexToUnicode[src] ?? latexToUnicode[`${src}{}`] ?? '';
+      const unicode = latexToUnicode[src] ?? latexToUnicode[`${src}{}`];
+      if (unicode === undefined) {
+        // No mapping found — record as non-fatal error (same as errorHandler path)
+        // Cannot re-throw: the parser doesn't route unknownCommandHandler throws
+        // through errorHandler, it crashes instead.
+        const msg = `Unhandled command: ${node.command}`;
+        parseErrors.push({ message: msg });
+        console.warn(
+          'Citation plugin: non-fatal error loading BibLaTeX entry:',
+          msg,
+        );
+      }
+      // The parser's Node union isn't directly constructible from external code.
+      // This cast is safe: clean_command() returns identical { kind: 'Text' } nodes internally.
       return {
         kind: 'Text',
-        value,
+        value: unicode ?? '',
         loc: node.loc,
-        source: value,
+        source: unicode ?? '',
       } as unknown as ReturnType<
         NonNullable<
           Exclude<BibTeXParser.ParserOptions['unknownCommandHandler'], false>
