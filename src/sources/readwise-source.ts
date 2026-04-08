@@ -234,6 +234,9 @@ export class ReadwiseSource implements DataSource {
   watch(callback: () => void): void {
     if (this.pollingTimer || !this.syncIntervalMs) return;
 
+    console.debug(
+      `ReadwiseSource: Starting periodic sync every ${Math.round(this.syncIntervalMs / 60_000)} min`,
+    );
     this.pollingTimer = setInterval(() => {
       console.debug('ReadwiseSource: Periodic sync triggered');
       callback();
