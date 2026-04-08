@@ -692,6 +692,16 @@ describe('TemplateService', () => {
       );
     });
 
+    it('zoteroPdfURI handles relative storage path (no leading slash)', () => {
+      expectOk(
+        service.render('{{zoteroPdfURI files}}', {
+          ...mockContext,
+          files: ['storage/EBAUJBLY/paper.pdf'],
+        } as unknown as TemplateContext),
+        'zotero://open-pdf/library/items/EBAUJBLY',
+      );
+    });
+
     it('zoteroPdfURI returns empty string when no PDFs exist', () => {
       expectOk(
         service.render('{{zoteroPdfURI files}}', {

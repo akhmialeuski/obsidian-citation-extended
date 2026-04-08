@@ -29,10 +29,12 @@ function findAllPdfs(files: unknown): string[] {
 }
 
 /**
- * Regex matching `/storage/<KEY>/` in a Zotero file path.
- * The KEY is an 8-character alphanumeric Zotero storage identifier.
+ * Regex matching `storage/<KEY>/` in a Zotero file path.
+ * Handles both absolute paths (`/storage/KEY/`) and relative paths
+ * (`storage/KEY/`) produced by some Better BibTeX export configurations.
+ * The KEY is an alphanumeric Zotero storage identifier (typically 8 chars).
  */
-const ZOTERO_STORAGE_KEY_RE = /\/storage\/([A-Za-z0-9]+)\//;
+const ZOTERO_STORAGE_KEY_RE = /(?:^|\/)storage\/([A-Za-z0-9]+)\//;
 
 /**
  * Extract the Zotero storage key from a normalized file path.
