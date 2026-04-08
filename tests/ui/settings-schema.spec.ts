@@ -72,6 +72,99 @@ describe('SettingsSchema', () => {
     });
   });
 
+  describe('filenameSanitizationReplacement validation', () => {
+    it('accepts underscore (default)', () => {
+      const result = validateSettings({
+        ...DEFAULT_SETTINGS,
+        filenameSanitizationReplacement: '_',
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('accepts space', () => {
+      const result = validateSettings({
+        ...DEFAULT_SETTINGS,
+        filenameSanitizationReplacement: ' ',
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('accepts dash', () => {
+      const result = validateSettings({
+        ...DEFAULT_SETTINGS,
+        filenameSanitizationReplacement: '-',
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('accepts empty string', () => {
+      const result = validateSettings({
+        ...DEFAULT_SETTINGS,
+        filenameSanitizationReplacement: '',
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('accepts multi-character replacement', () => {
+      const result = validateSettings({
+        ...DEFAULT_SETTINGS,
+        filenameSanitizationReplacement: ' - ',
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects forward slash', () => {
+      const result = validateSettings({
+        ...DEFAULT_SETTINGS,
+        filenameSanitizationReplacement: '/',
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects colon', () => {
+      const result = validateSettings({
+        ...DEFAULT_SETTINGS,
+        filenameSanitizationReplacement: ':',
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects asterisk', () => {
+      const result = validateSettings({
+        ...DEFAULT_SETTINGS,
+        filenameSanitizationReplacement: '*',
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects string containing disallowed character', () => {
+      const result = validateSettings({
+        ...DEFAULT_SETTINGS,
+        filenameSanitizationReplacement: 'a/b',
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects string longer than 5 characters', () => {
+      const result = validateSettings({
+        ...DEFAULT_SETTINGS,
+        filenameSanitizationReplacement: 'toolong',
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('defaults to underscore when field is missing', () => {
+      const { filenameSanitizationReplacement: _unused, ...withoutField } =
+        DEFAULT_SETTINGS;
+      void _unused;
+      const result = validateSettings(withoutField);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.filenameSanitizationReplacement).toBe('_');
+      }
+    });
+  });
+
   describe('database id migration', () => {
     it('databases without id pass validation (backward compat)', () => {
       const settings = {

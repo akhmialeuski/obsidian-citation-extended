@@ -555,6 +555,18 @@ describe('NoteService', () => {
       const filename = result.replace(/\\/g, '/').split('/').pop()!;
       expect(filename).toBe('ABCDEFGHI.md');
     });
+
+    it('uses multi-character replacement string', () => {
+      settings.filenameSanitizationReplacement = ' - ';
+      jest
+        .spyOn(templateService, 'getTitle')
+        .mockReturnValue({ ok: true, value: 'Title: Subtitle' });
+
+      const result = noteService.getPathForCitekey('citekey1', library);
+      const normalized = result.replace(/\\/g, '/');
+      // `:` replaced with ` - `, original space after colon preserved
+      expect(normalized).toBe('Reading notes/Title -  Subtitle.md');
+    });
   });
 
   describe('slash handling in note titles — comprehensive scenarios', () => {
@@ -680,6 +692,11 @@ describe('NoteService', () => {
        * Marking test as `.failing()` to document the expected correct
        * behavior. Once the code is fixed, this test will start passing
        * and the `.failing()` should be removed.
+       *
+       * NOTE: The expected output uses the default replacement character
+       * (`_`). Since filenameSanitizationReplacement is configurable
+       * (#59), the actual replacement depends on the setting value.
+       * The beforeEach block resets settings to defaults (`_`) each run.
        */
       it.failing(
         'should replace data slashes while preserving template slashes',

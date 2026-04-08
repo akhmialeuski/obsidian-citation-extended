@@ -55,8 +55,16 @@ export const SettingsSchema = z.object({
   referenceListSortOrder: z
     .enum(['default', 'year-desc', 'year-asc', 'author-asc'])
     .default('default'),
-  // Character used to replace disallowed filename characters during sanitization
-  filenameSanitizationReplacement: z.string().max(5).default('_'),
+  // Character used to replace disallowed filename characters during sanitization.
+  // Must not itself contain any disallowed filename characters or forward slashes.
+  filenameSanitizationReplacement: z
+    .string()
+    .max(5)
+    .refine((s) => !/[*"\\/<>:|?]/.test(s), {
+      message:
+        'Replacement must not contain illegal filename characters (* " \\ / < > : | ?)',
+    })
+    .default('_'),
   autoCreateNoteOnCitation: z.boolean().default(false),
   literatureNoteLinkDisplayTemplate: z.string().default(''),
   // Multi-source configuration
