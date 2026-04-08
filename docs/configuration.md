@@ -127,7 +127,7 @@ This section controls how literature notes are created, named, and where they ar
 | ------------------------------------- | ------------------------------------------------------------------------------------------- | -------------- |
 | Literature note folder                | Folder inside the vault where new notes are created                                         | `Reading notes` |
 | Disable automatic note creation       | When enabled, only opens existing notes — never creates new ones                            | `false`         |
-| Note identifier field                 | Frontmatter field name used to find renamed notes (see [details below](#note-identifier-field)) | (empty)     |
+| Note identifier field                 | Frontmatter field name used to find renamed notes (see [details below](#note-identifier-field)) | (empty)         |
 | Filename sanitization replacement     | Character(s) used to replace illegal filename characters (`: * ? " < > \|`)                 | `_`             |
 | Literature note title template        | Handlebars template for the note filename (without `.md` extension)                         | `@{{citekey}}`  |
 | Literature note content template file | Path to a vault file used as the note body template                                         | (empty)         |

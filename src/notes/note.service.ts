@@ -277,7 +277,7 @@ export class NoteService implements INoteService {
         identifierField,
       );
       if (byFrontmatter) {
-        console.warn(
+        console.debug(
           `Citations: note for "${citekey}" found via frontmatter field "${identifierField}" at "${byFrontmatter.path}".`,
         );
         return byFrontmatter;
