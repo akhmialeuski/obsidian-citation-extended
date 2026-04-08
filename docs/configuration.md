@@ -146,6 +146,8 @@ When **off** (default): selecting a reference in the search modal creates a new 
 
 ### Note identifier field
 
+![Note identifier field setting](images/settings-note-identifier-field.png)
+
 When you rename a literature note, the plugin can no longer find it by filename and may create a duplicate. The **Note identifier field** setting solves this by telling the plugin which frontmatter field to check as a last-resort lookup.
 
 **How to set up:**
