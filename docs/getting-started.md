@@ -23,7 +23,7 @@ The plugin reads bibliography data from files exported by your reference manager
 ### Mendeley
 
 1. Export your library as BibTeX (`.bib` file)
-2. In plugin settings select **BibLaTeX** format
+2. In plugin settings select **Better BibTeX** format (the label for BibLaTeX `.bib` files)
 
 ### Paperpile
 

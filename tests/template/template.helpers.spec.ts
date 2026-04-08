@@ -667,6 +667,139 @@ describe('TemplateService', () => {
     });
   });
 
+  describe('Zotero PDF URI Helpers', () => {
+    it('zoteroPdfURI returns URI for the first PDF with storage key', () => {
+      expectOk(
+        service.render('{{zoteroPdfURI files}}', {
+          ...mockContext,
+          files: ['C:/Users/me/Zotero/storage/EBAUJBLY/paper.pdf'],
+        } as unknown as TemplateContext),
+        'zotero://open-pdf/library/items/EBAUJBLY',
+      );
+    });
+
+    it('zoteroPdfURI picks first PDF and ignores non-PDF attachments', () => {
+      expectOk(
+        service.render('{{zoteroPdfURI files}}', {
+          ...mockContext,
+          files: [
+            '/home/user/Zotero/storage/HTML1234/snapshot.html',
+            '/home/user/Zotero/storage/ABCD5678/article.pdf',
+            '/home/user/Zotero/storage/WXYZ9999/supplement.pdf',
+          ],
+        } as unknown as TemplateContext),
+        'zotero://open-pdf/library/items/ABCD5678',
+      );
+    });
+
+    it('zoteroPdfURI handles relative storage path (no leading slash)', () => {
+      expectOk(
+        service.render('{{zoteroPdfURI files}}', {
+          ...mockContext,
+          files: ['storage/EBAUJBLY/paper.pdf'],
+        } as unknown as TemplateContext),
+        'zotero://open-pdf/library/items/EBAUJBLY',
+      );
+    });
+
+    it('zoteroPdfURI handles Windows backslash paths', () => {
+      expectOk(
+        service.render('{{zoteroPdfURI files}}', {
+          ...mockContext,
+          files: ['C:\\Users\\me\\Zotero\\storage\\EBAUJBLY\\paper.pdf'],
+        } as unknown as TemplateContext),
+        'zotero://open-pdf/library/items/EBAUJBLY',
+      );
+    });
+
+    it('zoteroPdfURI returns empty string when no PDFs exist', () => {
+      expectOk(
+        service.render('{{zoteroPdfURI files}}', {
+          ...mockContext,
+          files: ['/home/user/Zotero/storage/HTML1234/snapshot.html'],
+        } as unknown as TemplateContext),
+        '',
+      );
+    });
+
+    it('zoteroPdfURI returns empty string when files is empty', () => {
+      expectOk(
+        service.render('{{zoteroPdfURI files}}', {
+          ...mockContext,
+          files: [],
+        } as unknown as TemplateContext),
+        '',
+      );
+    });
+
+    it('zoteroPdfURI returns empty string when files is not an array', () => {
+      expectOk(
+        service.render('{{zoteroPdfURI files}}', {
+          ...mockContext,
+          files: null,
+        } as unknown as TemplateContext),
+        '',
+      );
+    });
+
+    it('zoteroPdfURI returns empty string when PDF has no storage key', () => {
+      expectOk(
+        service.render('{{zoteroPdfURI files}}', {
+          ...mockContext,
+          files: ['/custom/path/paper.pdf'],
+        } as unknown as TemplateContext),
+        '',
+      );
+    });
+
+    it('zoteroPdfURIs returns URIs for all PDFs, newline-separated', () => {
+      expectOk(
+        service.render('{{zoteroPdfURIs files}}', {
+          ...mockContext,
+          files: [
+            'C:/Users/me/Zotero/storage/EBAUJBLY/paper.pdf',
+            '/home/user/Zotero/storage/HTML1234/snapshot.html',
+            'C:/Users/me/Zotero/storage/N6LQL4XL/supplement.pdf',
+          ],
+        } as unknown as TemplateContext),
+        'zotero://open-pdf/library/items/EBAUJBLY\nzotero://open-pdf/library/items/N6LQL4XL',
+      );
+    });
+
+    it('zoteroPdfURIs returns empty string when no valid PDFs', () => {
+      expectOk(
+        service.render('{{zoteroPdfURIs files}}', {
+          ...mockContext,
+          files: ['/home/user/notes.html'],
+        } as unknown as TemplateContext),
+        '',
+      );
+    });
+
+    it('zoteroPdfURIs skips PDFs without storage key', () => {
+      expectOk(
+        service.render('{{zoteroPdfURIs files}}', {
+          ...mockContext,
+          files: [
+            '/custom/path/paper.pdf',
+            '/home/user/Zotero/storage/ABCD1234/real.pdf',
+          ],
+        } as unknown as TemplateContext),
+        'zotero://open-pdf/library/items/ABCD1234',
+      );
+    });
+
+    it('zoteroPdfURIs returns empty string when files is not an array', () => {
+      expectOk(
+        service.render('{{zoteroPdfURIs files}}', {
+          ...mockContext,
+          files: null,
+        } as unknown as TemplateContext),
+        '',
+      );
+    });
+  });
+
   describe('String Helpers — branch coverage', () => {
     it('replace returns original value when input is not a string', () => {
       expectOk(

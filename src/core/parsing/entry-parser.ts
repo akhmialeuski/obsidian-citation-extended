@@ -1,4 +1,5 @@
 import * as BibTeXParser from '@retorquere/bibtex-parser';
+import { latex as latexToUnicode } from 'unicode2latex';
 
 import { DatabaseType, DATABASE_FORMATS } from '../types/database';
 import { EntryData } from '../adapters/biblatex-adapter';
@@ -30,6 +31,33 @@ function parseBibLaTeX(raw: string): ParseResult {
         'Citation plugin: non-fatal error loading BibLaTeX entry:',
         err,
       );
+    },
+    unknownCommandHandler: (node) => {
+      const src = node.source.trim();
+      const unicode = latexToUnicode[src] ?? latexToUnicode[`${src}{}`];
+      if (unicode === undefined) {
+        // No mapping found — record as non-fatal error (same as errorHandler path)
+        // Cannot re-throw: the parser doesn't route unknownCommandHandler throws
+        // through errorHandler, it crashes instead.
+        const msg = `Unhandled command: ${node.command}`;
+        parseErrors.push({ message: msg });
+        console.warn(
+          'Citation plugin: non-fatal error loading BibLaTeX entry:',
+          msg,
+        );
+      }
+      // The parser's Node union isn't directly constructible from external code.
+      // This cast is safe: clean_command() returns identical { kind: 'Text' } nodes internally.
+      return {
+        kind: 'Text',
+        value: unicode ?? '',
+        loc: node.loc,
+        source: unicode ?? '',
+      } as unknown as ReturnType<
+        NonNullable<
+          Exclude<BibTeXParser.ParserOptions['unknownCommandHandler'], false>
+        >
+      >;
     },
   };
 

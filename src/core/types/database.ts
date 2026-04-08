@@ -16,10 +16,11 @@ export const DATABASE_FORMATS = {
 export type DatabaseType =
   (typeof DATABASE_FORMATS)[keyof typeof DATABASE_FORMATS];
 
-/** Human-readable labels for database format dropdowns. */
+/** Human-readable labels for database format dropdowns.
+ *  Labels match Zotero / Better BibTeX export format names. */
 export const DATABASE_TYPE_LABELS: Record<DatabaseType, string> = {
-  [DATABASE_FORMATS.CslJson]: 'CSL-JSON',
-  [DATABASE_FORMATS.BibLaTeX]: 'BibLaTeX',
+  [DATABASE_FORMATS.CslJson]: 'Better CSL JSON',
+  [DATABASE_FORMATS.BibLaTeX]: 'Better BibTeX',
   [DATABASE_FORMATS.Hayagriva]: 'Hayagriva (YAML)',
   [DATABASE_FORMATS.Readwise]: 'Readwise',
 };

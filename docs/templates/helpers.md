@@ -445,6 +445,50 @@ Generate a complete Markdown link to the first PDF attachment. The link text is 
 **Input:** `files: ["/home/user/papers/smith2023.pdf"]`
 **Output:** `[smith2023](file:///home/user/papers/smith2023.pdf)`
 
+### `zoteroPdfURI`
+
+Generate a `zotero://open-pdf` URI for the **first** PDF attachment. Extracts the Zotero storage key from the file path (the `/storage/<KEY>/` segment). Returns an empty string when no PDF is found, the file list is empty, or the path has no Zotero storage key.
+
+```handlebars
+{{zoteroPdfURI entry.files}}
+```
+
+**Input:** `files: ["C:/Users/me/Zotero/storage/EBAUJBLY/paper.pdf"]`
+**Output:** `zotero://open-pdf/library/items/EBAUJBLY`
+
+Use with a conditional to avoid empty links when no PDF is attached:
+
+```handlebars
+{{#if (zoteroPdfURI entry.files)}}
+[Open PDF in Zotero]({{zoteroPdfURI entry.files}})
+{{/if}}
+```
+
+### `zoteroPdfURIs`
+
+Generate `zotero://open-pdf` URIs for **all** PDF attachments, separated by newlines. Non-PDF attachments (HTML snapshots, images, etc.) are skipped. Returns an empty string when no valid PDFs are found.
+
+```handlebars
+{{zoteroPdfURIs entry.files}}
+```
+
+**Input:**
+```
+files: [
+  "C:/Users/me/Zotero/storage/EBAUJBLY/paper.pdf",
+  "C:/Users/me/Zotero/storage/HTML1234/snapshot.html",
+  "C:/Users/me/Zotero/storage/N6LQL4XL/supplement.pdf"
+]
+```
+
+**Output:**
+```
+zotero://open-pdf/library/items/EBAUJBLY
+zotero://open-pdf/library/items/N6LQL4XL
+```
+
+> **Note:** Both `zoteroPdfURI` and `zoteroPdfURIs` require that the file paths contain a Zotero storage path segment (`/storage/<KEY>/`). This is the case for BibLaTeX exports from Better BibTeX. CSL-JSON and Hayagriva formats typically do not include file attachment paths, so these helpers will return empty strings for those formats.
+
 ---
 
 ## Quick Reference
@@ -466,5 +510,7 @@ Generate a complete Markdown link to the first PDF attachment. The link text is 
 | Path | `basename` | Filename with extension |
 | Path | `filename` | Filename without extension |
 | Path | `dirname` | Directory path |
-| Path | `pdfLink` | `file://` URI to first PDF |
-| Path | `pdfMarkdownLink` | Markdown link to first PDF |
+| Path     | `pdfLink`         | `file://` URI to first PDF               |
+| Path     | `pdfMarkdownLink` | Markdown link to first PDF               |
+| Zotero   | `zoteroPdfURI`    | `zotero://open-pdf` URI for first PDF    |
+| Zotero   | `zoteroPdfURIs`   | `zotero://open-pdf` URIs for all PDFs    |

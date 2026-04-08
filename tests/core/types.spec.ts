@@ -49,7 +49,7 @@ describe('biblatex regression tests', () => {
       loadBibLaTeXLibrary(loadBibLaTeXEntries('regression_7f9aefe.bib'));
     };
 
-    // Make sure we log warning
+    // \dag has no unicode2latex mapping — falls through to errorHandler as a warning
     const warnCallback = jest.fn();
     jest.spyOn(global.console, 'warn').mockImplementation(warnCallback);
 
@@ -68,6 +68,33 @@ describe('biblatex regression tests', () => {
 
     expect(load).not.toThrow();
     expect(warnCallback.mock.calls.length).toBe(1);
+  });
+});
+
+describe('biblatex cyrchar (Cyrillic) handling', () => {
+  test('parses \\cyrchar commands into Cyrillic Unicode characters', () => {
+    const entries = loadBibLaTeXEntries('cyrchar_entries.bib');
+    const library = loadBibLaTeXLibrary(entries);
+
+    expect(entries).toHaveLength(3);
+
+    const simple = library.entries['CyrillicSimple'];
+    expect(simple?.title).toBe('Аналіз');
+
+    const mixed = library.entries['CyrillicMixed'];
+    expect(mixed?.title).toBe('131. Нязручная рэчаіснасць');
+
+    const upperLower = library.entries['CyrillicUpperLower'];
+    expect(upperLower?.title).toBe('Беларусь');
+  });
+
+  test('does not emit warnings for \\cyrchar commands', () => {
+    const warnCallback = jest.fn();
+    jest.spyOn(global.console, 'warn').mockImplementation(warnCallback);
+
+    loadBibLaTeXEntries('cyrchar_entries.bib');
+
+    expect(warnCallback).not.toHaveBeenCalled();
   });
 });
 

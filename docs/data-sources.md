@@ -6,8 +6,8 @@ The plugin supports loading bibliography data from multiple sources and formats.
 
 | Format | Extension | Description |
 |--------|-----------|-------------|
-| **CSL-JSON** | `.json` | Standard citation format, fast loading |
-| **BibLaTeX** | `.bib` | Rich format with PDF paths, keywords, notes. Slower to parse but more data available |
+| **Better CSL JSON** | `.json` | Standard citation format, fast loading |
+| **Better BibTeX** | `.bib` | Rich format with PDF paths, keywords, notes. Slower to parse but more data available |
 | **Hayagriva** | `.yml` / `.yaml` | YAML-based bibliography format used by [Typst](https://typst.app). Supports basic fields: title, author, date, DOI, URL, parent (container) |
 | **Readwise** | API | Highlights and documents from Readwise (v2 Export + v3 Reader APIs, loaded together) |
 
