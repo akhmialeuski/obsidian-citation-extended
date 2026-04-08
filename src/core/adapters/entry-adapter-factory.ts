@@ -4,14 +4,16 @@ import { EntryBibLaTeXAdapter, EntryData } from './biblatex-adapter';
 import { EntryDataBibLaTeX } from './biblatex-adapter';
 import { EntryCSLAdapter, EntryDataCSL } from './csl-adapter';
 import { HayagrivaAdapter, HayagrivaEntryData } from './hayagriva-adapter';
+import { ReadwiseAdapter, ReadwiseEntryData } from './readwise-adapter';
 import { UnsupportedFormatError } from '../errors';
 
 /**
- * A registry mapping each DatabaseType to a function that wraps raw
- * EntryData objects in the appropriate typed adapter.
+ * Maps each DatabaseType to the function that wraps raw EntryData objects
+ * in the appropriate typed adapter.
  *
- * Every format follows the same pattern: cast the raw object to the
- * format-specific interface and pass it to the adapter constructor.
+ * Strict `Record<DatabaseType, ...>` — the compiler enforces that every
+ * format has a corresponding adapter factory.  Adding a new DatabaseType
+ * without registering its adapter is a compile-time error.
  */
 const ENTRY_ADAPTERS: Record<DatabaseType, (entries: EntryData[]) => Entry[]> =
   {
@@ -23,6 +25,9 @@ const ENTRY_ADAPTERS: Record<DatabaseType, (entries: EntryData[]) => Entry[]> =
 
     [DATABASE_FORMATS.Hayagriva]: (entries) =>
       entries.map((e) => new HayagrivaAdapter(e as HayagrivaEntryData)),
+
+    [DATABASE_FORMATS.Readwise]: (entries) =>
+      entries.map((e) => new ReadwiseAdapter(e as ReadwiseEntryData)),
   };
 
 /**

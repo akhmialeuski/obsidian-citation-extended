@@ -9,6 +9,7 @@ The plugin supports loading bibliography data from multiple sources and formats.
 | **CSL-JSON** | `.json` | Standard citation format, fast loading |
 | **BibLaTeX** | `.bib` | Rich format with PDF paths, keywords, notes. Slower to parse but more data available |
 | **Hayagriva** | `.yml` / `.yaml` | YAML-based bibliography format used by [Typst](https://typst.app). Supports basic fields: title, author, date, DOI, URL, parent (container) |
+| **Readwise** | API | Highlights and documents from Readwise (v2 Export + v3 Reader APIs, loaded together) |
 
 ### Choosing a Format
 
@@ -42,6 +43,53 @@ Reads from the filesystem using an absolute path or a path relative to the vault
 Reads from a file inside the Obsidian vault using the Vault API. Uses Obsidian's vault events for change detection.
 
 **When to use:** Mobile (iOS/Android) or when your bibliography file is synced into the vault (e.g. via Obsidian Sync, iCloud, or Dropbox). Also useful if you don't want to rely on filesystem paths.
+
+### Readwise API
+
+Loads highlights and documents directly from the Readwise API. No file export needed -- the plugin fetches data over the network.
+
+**When to use:** If you use Readwise to collect highlights from books, articles, podcasts, or other sources, and want those highlights available as citable entries in Obsidian.
+
+The plugin loads data from both Readwise APIs in parallel and merges the results into a single database:
+
+| API | What it loads | Citekey format |
+|-----|---------------|----------------|
+| **v2 Export** | Books with nested highlights from Kindle, Instapaper, etc. | `rw-{id}` |
+| **v3 Reader** | Documents, articles, PDFs saved in Readwise Reader | `rd-{id}` |
+
+**Setup:**
+1. Go to **Settings** > **Citation plugin** > **Citation databases**
+2. Click **Add database**
+3. Change the **Database type** dropdown to **Readwise**
+4. Enter your API token (get it from [readwise.io/access_token](https://readwise.io/access_token))
+5. Click **Validate token** to confirm it works
+6. Click **Sync now** to load data
+
+**How it works:**
+- Readwise is a regular database type -- you add it the same way you add a BibLaTeX or CSL-JSON database
+- Data is fetched on each sync (manual "Sync now", plugin reload, or automatic periodic sync)
+- By default, the plugin automatically syncs Readwise data every 30 minutes. You can change the interval in the **Auto-sync interval (minutes)** field on the database card, or set it to `0` to disable automatic sync
+- The automatic sync timer starts when the plugin loads and stops when the plugin unloads
+- Readwise entries appear in the search modal alongside your other databases
+- All standard features work: citation insertion, literature note creation, templates
+
+**Field mapping:**
+
+| Readwise field | Entry field | Notes |
+|---------------|-------------|-------|
+| `title` | `title` | |
+| `author` | `authorString`, `author[]` | Parsed into structured authors |
+| `category` | `type` | Mapped: books→book, articles→article, tweets→webpage, etc. |
+| `source_url` | `URL` | Original source URL |
+| `readwise_url` / `unique_url` | `zoteroSelectURI` | Opens in Readwise Reader app (see note below) |
+| `summary` | `abstract` | |
+| `book_tags` / `tags` | `keywords[]` | |
+| `highlights[].text` | `note` | Aggregated with `---` separator |
+| `published_date` | `issuedDate` | Reader (v3) entries only |
+
+**Readwise Reader URLs:** The `zoteroSelectURI` field (used by the "Open in Readwise" action) points to the Readwise Reader app. For v2 Export books, the plugin uses the `unique_url` field (e.g., `https://read.readwise.io/read/01abc123`) when available, falling back to the legacy `readwise_url`. For v3 Reader documents, the URL already points to the Reader app. This means the "Open in Readwise" action opens the item directly in Readwise Reader.
+
+**Offline cache:** After each successful sync, Readwise data is cached locally at `.obsidian/plugins/citation-extended/readwise-cache.json`. If the API is unavailable on the next plugin load, the cached data is used as a fallback. A warning is shown when cached data is used. The cache is overwritten on every successful sync.
 
 ## Multiple Databases
 
@@ -98,5 +146,4 @@ jones2022:
 
 ## Coming Soon
 
-- **Readwise API** — load highlights and annotations from Readwise
 - **HTTP/Network sources** — fetch bibliography from a URL

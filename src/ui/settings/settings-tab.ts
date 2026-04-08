@@ -14,7 +14,9 @@ import {
   DATABASE_TYPE_LABELS,
   DATABASE_FORMATS,
   generateDatabaseId,
+  ReadwiseApiClient,
 } from '../../core';
+import { DATA_SOURCE_TYPES } from '../../data-source';
 import {
   SettingsSchema,
   CitationsPluginSettingsType,
@@ -142,7 +144,12 @@ export class CitationSettingTab extends PluginSettingTab {
           .setTooltip('Remove database')
           .onClick(() => {
             void (async () => {
+              const removed = this.plugin.settings.databases[index];
               this.plugin.settings.databases.splice(index, 1);
+              // Clean up Readwise-specific state when removing a Readwise database
+              if (removed.type === DATABASE_FORMATS.Readwise) {
+                this.plugin.settings.readwiseLastSyncDate = '';
+              }
               await this.plugin.saveSettings();
               this.display();
               void this.plugin.libraryService.load();
@@ -155,12 +162,61 @@ export class CitationSettingTab extends PluginSettingTab {
       dropdown.setValue(db.type);
       dropdown.onChange(async (value) => {
         this.plugin.settings.databases[index].type = value as DatabaseType;
+        if (value === DATABASE_FORMATS.Readwise) {
+          this.plugin.settings.databases[index].sourceType =
+            DATA_SOURCE_TYPES.Readwise;
+          this.plugin.settings.databases[index].path = '';
+        } else {
+          delete this.plugin.settings.databases[index].sourceType;
+        }
         await this.plugin.saveSettings();
-        new Notice('Database format changed. Reloading library…');
-        void this.plugin.libraryService.load();
+        this.display();
+        // Only reload for file-based sources — Readwise needs a token first
+        if (value !== DATABASE_FORMATS.Readwise) {
+          new Notice('Database format changed. Reloading library…');
+          void this.plugin.libraryService.load();
+        }
       });
     });
 
+    if (db.type === DATABASE_FORMATS.Readwise) {
+      this.renderReadwiseFields(card, db, index);
+    } else {
+      this.renderFilePathField(card, db, index);
+    }
+  }
+
+  private async checkDatabasePath(
+    filePath: string,
+    statusEl: HTMLElement,
+  ): Promise<boolean> {
+    statusEl.empty();
+    statusEl.setText('Checking path...');
+    statusEl.setCssProps({ color: 'var(--text-muted)' });
+
+    try {
+      await FileSystemAdapter.readLocalFile(
+        this.plugin.libraryService.resolveLibraryPath(filePath),
+      );
+      statusEl.setText('Path verified.');
+      statusEl.setCssProps({ color: 'var(--text-success)' });
+      return true;
+    } catch {
+      statusEl.setText('File not found.');
+      statusEl.setCssProps({ color: 'var(--text-error)' });
+      return false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Database card field variants
+  // ---------------------------------------------------------------------------
+
+  private renderFilePathField(
+    card: HTMLElement,
+    db: DatabaseConfig,
+    index: number,
+  ): void {
     new Setting(card)
       .setName('Database path')
       .setDesc('Absolute path or path relative to vault root.')
@@ -186,26 +242,126 @@ export class CitationSettingTab extends PluginSettingTab {
     }
   }
 
-  private async checkDatabasePath(
-    filePath: string,
-    statusEl: HTMLElement,
-  ): Promise<boolean> {
-    statusEl.empty();
-    statusEl.setText('Checking path...');
-    statusEl.setCssProps({ color: 'var(--text-muted)' });
+  private renderReadwiseFields(
+    card: HTMLElement,
+    db: DatabaseConfig,
+    index: number,
+  ): void {
+    // API token stored in db.path — the "connection string" for this database
+    new Setting(card)
+      .setName('API token')
+      .setDesc(
+        'Your Readwise access token. Get it from readwise.io/access_token.',
+      )
+      .addText((text) => {
+        text.inputEl.type = 'password';
+        text.inputEl.autocomplete = 'off';
+        text
+          .setPlaceholder('Enter your Readwise API token')
+          .setValue(db.path)
+          .onChange(
+            debounce(async (value: string) => {
+              this.plugin.settings.databases[index].path = value;
+              await this.plugin.saveSettings();
+            }, 500),
+          );
+      });
 
-    try {
-      await FileSystemAdapter.readLocalFile(
-        this.plugin.libraryService.resolveLibraryPath(filePath),
+    // Sync interval
+    new Setting(card)
+      .setName('Auto-sync interval (minutes)')
+      .setDesc(
+        'How often to fetch new data from Readwise. Set to 0 to disable.',
+      )
+      .addText((text) => {
+        text
+          .setValue(String(this.plugin.settings.readwiseSyncIntervalMinutes))
+          .onChange(
+            debounce(async (value: string) => {
+              const num = parseInt(value, 10);
+              if (!isNaN(num) && num >= 0) {
+                this.plugin.settings.readwiseSyncIntervalMinutes = num;
+                await this.plugin.saveSettings();
+              }
+            }, 500),
+          );
+        text.inputEl.type = 'number';
+        text.inputEl.min = '0';
+        text.inputEl.setCssProps({ width: '80px' });
+      });
+
+    // Status display
+    const statusEl = card.createDiv('readwise-status');
+    statusEl.setCssProps({ fontSize: '0.8em', marginTop: '5px' });
+
+    if (this.plugin.settings.readwiseLastSyncDate) {
+      statusEl.setText(
+        `Last sync: ${this.plugin.settings.readwiseLastSyncDate}`,
       );
-      statusEl.setText('Path verified.');
-      statusEl.setCssProps({ color: 'var(--text-success)' });
-      return true;
-    } catch {
-      statusEl.setText('File not found.');
-      statusEl.setCssProps({ color: 'var(--text-error)' });
-      return false;
+      statusEl.setCssProps({ color: 'var(--text-muted)' });
     }
+
+    // Validate + Sync buttons
+    new Setting(card)
+      .addButton((button) => {
+        button.setButtonText('Validate token').onClick(() => {
+          void (async () => {
+            const token = this.plugin.settings.databases[index].path;
+            if (!token) {
+              new Notice('Please enter an API token first.');
+              return;
+            }
+            statusEl.setText('Validating...');
+            statusEl.setCssProps({ color: 'var(--text-muted)' });
+            try {
+              const client = new ReadwiseApiClient(token);
+              const valid = await client.validateToken();
+              if (valid) {
+                statusEl.setText('Token is valid. Loading library…');
+                statusEl.setCssProps({ color: 'var(--text-success)' });
+                new Notice('Readwise token validated. Loading library…');
+                void this.plugin.libraryService.load();
+              } else {
+                statusEl.setText('Token is invalid.');
+                statusEl.setCssProps({ color: 'var(--text-error)' });
+                new Notice(
+                  'Readwise token is invalid. Please check and retry.',
+                );
+              }
+            } catch {
+              statusEl.setText('Validation failed — network error.');
+              statusEl.setCssProps({ color: 'var(--text-error)' });
+              new Notice(
+                'Could not reach Readwise API. Check your connection.',
+              );
+            }
+          })();
+        });
+      })
+      .addButton((button) => {
+        button
+          .setButtonText('Sync now')
+          .setCta()
+          .onClick(() => {
+            void (async () => {
+              const token = this.plugin.settings.databases[index].path;
+              if (!token) {
+                new Notice('Please enter an API token first.');
+                return;
+              }
+              new Notice('Syncing Readwise data...');
+              await this.plugin.libraryService.load();
+              this.plugin.settings.readwiseLastSyncDate =
+                new Date().toISOString();
+              await this.plugin.saveSettings();
+              statusEl.setText(
+                `Last sync: ${this.plugin.settings.readwiseLastSyncDate}`,
+              );
+              statusEl.setCssProps({ color: 'var(--text-muted)' });
+              new Notice('Readwise sync complete.');
+            })();
+          });
+      });
   }
 
   // ---------------------------------------------------------------------------

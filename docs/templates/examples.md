@@ -350,6 +350,8 @@ Title template: {{lastname.[0]}}/{{citekey}}
 → `Reading notes/S/@smith2020.md`
 → `Reading notes/J/@jones2021.md`
 
+> **Slashes in data values are safe.** Only literal `/` characters in the template string act as directory separators. If a variable value contains a forward slash (e.g. a title like "Physics / Chemistry Review"), the slash is automatically replaced with an underscore before rendering, so the resulting filename is `Physics _ Chemistry Review` rather than an unintended subdirectory.
+
 When you open a literature note, the plugin searches recursively inside your literature note folder, so manually reorganizing notes into different subfolders won't break anything.
 
 ---

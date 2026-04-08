@@ -26,3 +26,4 @@ Practical, step-by-step guides for common workflows with Obsidian Citation Exten
 
 - [Zotero Integration](zotero-integration.md) — Complete workflow from Better BibTeX export to Zotero deep links
 - [Hayagriva / Typst Workflow](hayagriva-typst-workflow.md) — Use Hayagriva YAML bibliographies with Typst
+- [Readwise Integration](readwise-integration.md) — Import highlights and documents from Readwise

@@ -41,6 +41,11 @@ export class CitationsPluginSettings {
   public templateProfiles: TemplateProfile[] =
     DEFAULT_SETTINGS.templateProfiles as TemplateProfile[];
 
+  // Readwise integration
+  public readwiseLastSyncDate: string = DEFAULT_SETTINGS.readwiseLastSyncDate;
+  public readwiseSyncIntervalMinutes: number =
+    DEFAULT_SETTINGS.readwiseSyncIntervalMinutes;
+
   /**
    * Returns the effective primary citation template, taking the active
    * preset into account.  When the preset is not 'custom', the preset

@@ -221,7 +221,7 @@ Reading notes/book/@goodfellow2016.md
 Reading notes/paper-conference/@vaswani2017.md
 ```
 
-Missing folders are created automatically.
+Missing folders are created automatically. Forward slashes that appear inside data values (e.g. a title like "Author A / Author B") are replaced with underscores so they do not create unintended subdirectories.
 
 ### Subfolder Organization by Author Initial
 
