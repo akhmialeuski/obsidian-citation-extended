@@ -148,6 +148,8 @@ When **off** (default): selecting a reference in the search modal creates a new 
 
 When generating filenames for literature notes, characters that are not allowed in filenames (`: * ? " < > |`) are replaced with this string. The default is underscore (`_`), so a title like "Title: Subtitle" becomes "Title_ Subtitle".
 
+![Filename sanitization replacement setting](images/filename-sanitization-setting.png)
+
 | Replacement | Input              | Output             |
 | ----------- | ------------------ | ------------------ |
 | `_`         | `Title: Subtitle`  | `Title_ Subtitle`  |
