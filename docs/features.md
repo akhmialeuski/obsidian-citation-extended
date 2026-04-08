@@ -113,7 +113,7 @@ Manually reloads all configured citation databases.
 - Useful when your bibliography file was updated outside Obsidian or when auto-reload didn't trigger
 - The plugin also watches for file changes and reloads automatically in most cases
 
-**When to use:** You generally don't need this — the plugin auto-reloads when the bibliography file changes on disk. Use manual refresh if: (1) you edited the `.bib`/`.json` file in another application and changes aren't appearing, or (2) you switched to a different exported file.
+**When to use:** You generally don't need this — the plugin auto-reloads when the bibliography file changes on disk. Use manual refresh if: (1) you edited the `.bib`/`.json` file in another application and changes aren't appearing, or (2) you switched to a different exported file. For Readwise databases, data is synced automatically at a configurable interval (default: every 30 minutes), so manual refresh is rarely needed — use the **Sync now** button in the database card for an immediate fetch.
 
 ## Search Features
 
