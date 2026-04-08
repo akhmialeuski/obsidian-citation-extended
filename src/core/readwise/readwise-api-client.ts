@@ -3,7 +3,32 @@
  *
  * Pure TypeScript — no Obsidian dependencies.  Handles authentication,
  * pagination, rate-limit back-off, and cancellation via AbortSignal.
+ *
+ * Network I/O is delegated to an injected {@link HttpGetFn} so that
+ * the host environment can provide its own transport (e.g. Obsidian's
+ * `requestUrl`).
  */
+
+// ---------------------------------------------------------------------------
+// HTTP abstraction
+// ---------------------------------------------------------------------------
+
+/** Minimal HTTP response surface used by the client. */
+export interface HttpResponse {
+  status: number;
+  headers: Record<string, string>;
+  json(): Promise<unknown>;
+}
+
+/**
+ * A function that performs an HTTP GET request and returns an
+ * {@link HttpResponse}.  The caller is responsible for providing an
+ * implementation — e.g. wrapping the platform's built-in HTTP API.
+ */
+export type HttpGetFn = (
+  url: string,
+  headers: Record<string, string>,
+) => Promise<HttpResponse>;
 
 // ---------------------------------------------------------------------------
 // Error
@@ -122,7 +147,10 @@ const DEFAULT_RETRY_SECONDS = 60;
  * and automatically retry on HTTP 429 (rate-limit) responses.
  */
 export class ReadwiseApiClient {
-  constructor(private readonly token: string) {}
+  constructor(
+    private readonly token: string,
+    private readonly httpGet: HttpGetFn,
+  ) {}
 
   // -------------------------------------------------------------------------
   // Public API
@@ -231,21 +259,24 @@ export class ReadwiseApiClient {
   private async fetchWithRateLimit(
     url: string,
     signal?: AbortSignal,
-  ): Promise<Response> {
+  ): Promise<HttpResponse> {
     let attempt = 0;
 
     while (true) {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: { Authorization: `Token ${this.token}` },
-        signal,
+      if (signal?.aborted) {
+        throw signal.reason as Error;
+      }
+
+      const response = await this.httpGet(url, {
+        Authorization: `Token ${this.token}`,
       });
 
-      if (response.ok || response.status === 204) {
+      const { status } = response;
+      if ((status >= 200 && status < 300) || status === 204) {
         return response;
       }
 
-      if (response.status === 429 && attempt < MAX_RETRIES) {
+      if (status === 429 && attempt < MAX_RETRIES) {
         attempt++;
         const retryAfter = this.parseRetryAfter(response);
         console.warn(
@@ -256,9 +287,9 @@ export class ReadwiseApiClient {
       }
 
       throw new ReadwiseApiError(
-        `Readwise API request failed: ${response.status} ${response.statusText} (${url})`,
-        response.status,
-        response.status === 429 ? this.parseRetryAfter(response) : undefined,
+        `Readwise API request failed: ${status} (${url})`,
+        status,
+        status === 429 ? this.parseRetryAfter(response) : undefined,
       );
     }
   }
@@ -279,9 +310,10 @@ export class ReadwiseApiClient {
     return url.toString();
   }
 
-  /** Parse the Retry-After header from a 429 response. */
-  private parseRetryAfter(response: Response): number {
-    const header = response.headers.get('Retry-After');
+  /** Parse the Retry-After header from a 429 response (case-insensitive). */
+  private parseRetryAfter(response: HttpResponse): number {
+    const header =
+      response.headers['Retry-After'] ?? response.headers['retry-after'];
     if (header) {
       const seconds = parseInt(header, 10);
       if (!isNaN(seconds) && seconds > 0) {

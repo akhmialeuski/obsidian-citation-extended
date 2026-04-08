@@ -1,4 +1,5 @@
 import { FileSystemAdapter, Notice, Plugin } from 'obsidian';
+import { obsidianHttpGet } from './platform/obsidian-http';
 
 import { TemplateService } from './template/template.service';
 import { NoteService } from './notes/note.service';
@@ -155,7 +156,7 @@ export default class CitationPlugin extends Plugin {
       (def, id) =>
         new ReadwiseSource(
           id,
-          new ReadwiseApiClient(def.path),
+          new ReadwiseApiClient(def.path, obsidianHttpGet),
           workerManager,
           platformAdapter.fileSystem,
           readwiseCachePath,

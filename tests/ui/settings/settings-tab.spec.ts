@@ -377,6 +377,7 @@ jest.mock(
       },
       Notice: mockNotice,
       debounce: (fn: (...args: unknown[]) => void) => fn,
+      requestUrl: jest.fn(),
     };
   },
   { virtual: true },

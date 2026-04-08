@@ -16,6 +16,7 @@ import {
   generateDatabaseId,
   ReadwiseApiClient,
 } from '../../core';
+import { obsidianHttpGet } from '../../platform/obsidian-http';
 import { DATA_SOURCE_TYPES } from '../../data-source';
 import {
   SettingsSchema,
@@ -314,7 +315,7 @@ export class CitationSettingTab extends PluginSettingTab {
             statusEl.setText('Validating...');
             statusEl.setCssProps({ color: 'var(--text-muted)' });
             try {
-              const client = new ReadwiseApiClient(token);
+              const client = new ReadwiseApiClient(token, obsidianHttpGet);
               const valid = await client.validateToken();
               if (valid) {
                 statusEl.setText('Token is valid. Loading library…');

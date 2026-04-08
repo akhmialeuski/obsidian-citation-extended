@@ -8,6 +8,8 @@ import {
   ReadwiseApiError,
   ReadwiseExportBook,
   ReadwiseReaderDocument,
+  HttpGetFn,
+  HttpResponse,
 } from '../../../src/core/readwise/readwise-api-client';
 
 // ---------------------------------------------------------------------------
@@ -81,19 +83,16 @@ function makeReaderDoc(
   };
 }
 
-function mockFetchResponse(
+function mockHttpResponse(
   body: unknown,
   status = 200,
   headers: Record<string, string> = {},
-): Response {
+): HttpResponse {
   return {
-    ok: status >= 200 && status < 300,
     status,
-    statusText: status === 200 ? 'OK' : status === 204 ? 'No Content' : 'Error',
-    headers: new Headers(headers),
+    headers,
     json: jest.fn().mockResolvedValue(body),
-    text: jest.fn().mockResolvedValue(JSON.stringify(body)),
-  } as unknown as Response;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -102,15 +101,11 @@ function mockFetchResponse(
 
 describe('ReadwiseApiClient', () => {
   let client: ReadwiseApiClient;
-  const originalFetch = globalThis.fetch;
+  let mockHttpGet: jest.MockedFunction<HttpGetFn>;
 
   beforeEach(() => {
-    client = new ReadwiseApiClient('test-token-abc');
-    globalThis.fetch = jest.fn();
-  });
-
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
+    mockHttpGet = jest.fn();
+    client = new ReadwiseApiClient('test-token-abc', mockHttpGet);
   });
 
   // -------------------------------------------------------------------------
@@ -140,49 +135,37 @@ describe('ReadwiseApiClient', () => {
 
   describe('validateToken', () => {
     it('returns true for 204 response', async () => {
-      (globalThis.fetch as jest.Mock).mockResolvedValue(
-        mockFetchResponse(null, 204),
-      );
+      mockHttpGet.mockResolvedValue(mockHttpResponse(null, 204));
 
       const result = await client.validateToken();
       expect(result).toBe(true);
-      expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect(mockHttpGet).toHaveBeenCalledWith(
         'https://readwise.io/api/v2/auth/',
-        expect.objectContaining({
-          headers: { Authorization: 'Token test-token-abc' },
-        }),
+        { Authorization: 'Token test-token-abc' },
       );
     });
 
     it('returns false for 401 response', async () => {
-      (globalThis.fetch as jest.Mock).mockResolvedValue(
-        mockFetchResponse(null, 401),
-      );
+      mockHttpGet.mockResolvedValue(mockHttpResponse(null, 401));
 
       const result = await client.validateToken();
       expect(result).toBe(false);
     });
 
     it('throws ReadwiseApiError for other non-OK statuses', async () => {
-      (globalThis.fetch as jest.Mock).mockResolvedValue(
-        mockFetchResponse(null, 500),
-      );
+      mockHttpGet.mockResolvedValue(mockHttpResponse(null, 500));
 
       await expect(client.validateToken()).rejects.toThrow(ReadwiseApiError);
     });
 
-    it('passes AbortSignal to fetch', async () => {
+    it('throws when AbortSignal is already aborted', async () => {
       const controller = new AbortController();
-      (globalThis.fetch as jest.Mock).mockResolvedValue(
-        mockFetchResponse(null, 204),
-      );
+      controller.abort(new Error('cancelled'));
 
-      await client.validateToken(controller.signal);
-
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({ signal: controller.signal }),
+      await expect(client.validateToken(controller.signal)).rejects.toThrow(
+        'cancelled',
       );
+      expect(mockHttpGet).not.toHaveBeenCalled();
     });
   });
 
@@ -193,29 +176,29 @@ describe('ReadwiseApiClient', () => {
   describe('fetchExportBooks', () => {
     it('returns books from single page', async () => {
       const books = [makeExportBook()];
-      (globalThis.fetch as jest.Mock).mockResolvedValue(
-        mockFetchResponse({ count: 1, nextPageCursor: null, results: books }),
+      mockHttpGet.mockResolvedValue(
+        mockHttpResponse({ count: 1, nextPageCursor: null, results: books }),
       );
 
       const result = await client.fetchExportBooks();
       expect(result).toEqual(books);
-      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      expect(mockHttpGet).toHaveBeenCalledTimes(1);
     });
 
     it('handles pagination across multiple pages', async () => {
       const book1 = makeExportBook({ user_book_id: 1, title: 'Book 1' });
       const book2 = makeExportBook({ user_book_id: 2, title: 'Book 2' });
 
-      (globalThis.fetch as jest.Mock)
+      mockHttpGet
         .mockResolvedValueOnce(
-          mockFetchResponse({
+          mockHttpResponse({
             count: 2,
             nextPageCursor: 'cursor-2',
             results: [book1],
           }),
         )
         .mockResolvedValueOnce(
-          mockFetchResponse({
+          mockHttpResponse({
             count: 2,
             nextPageCursor: null,
             results: [book2],
@@ -224,41 +207,37 @@ describe('ReadwiseApiClient', () => {
 
       const result = await client.fetchExportBooks();
       expect(result).toEqual([book1, book2]);
-      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+      expect(mockHttpGet).toHaveBeenCalledTimes(2);
 
       // Second call should include pageCursor
-      const secondCallUrl = (globalThis.fetch as jest.Mock).mock.calls[1][0];
+      const secondCallUrl = mockHttpGet.mock.calls[1][0];
       expect(secondCallUrl).toContain('pageCursor=cursor-2');
     });
 
     it('passes updatedAfter parameter', async () => {
-      (globalThis.fetch as jest.Mock).mockResolvedValue(
-        mockFetchResponse({ count: 0, nextPageCursor: null, results: [] }),
+      mockHttpGet.mockResolvedValue(
+        mockHttpResponse({ count: 0, nextPageCursor: null, results: [] }),
       );
 
       await client.fetchExportBooks({ updatedAfter: '2024-01-01T00:00:00Z' });
 
-      const url = (globalThis.fetch as jest.Mock).mock.calls[0][0];
+      const url = mockHttpGet.mock.calls[0][0];
       expect(url).toContain('updatedAfter=2024-01-01T00%3A00%3A00Z');
     });
 
-    it('passes AbortSignal', async () => {
+    it('checks AbortSignal before each request', async () => {
       const controller = new AbortController();
-      (globalThis.fetch as jest.Mock).mockResolvedValue(
-        mockFetchResponse({ count: 0, nextPageCursor: null, results: [] }),
-      );
+      controller.abort(new Error('cancelled'));
 
-      await client.fetchExportBooks({ signal: controller.signal });
-
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({ signal: controller.signal }),
-      );
+      await expect(
+        client.fetchExportBooks({ signal: controller.signal }),
+      ).rejects.toThrow('cancelled');
+      expect(mockHttpGet).not.toHaveBeenCalled();
     });
 
     it('returns empty array when no books', async () => {
-      (globalThis.fetch as jest.Mock).mockResolvedValue(
-        mockFetchResponse({ count: 0, nextPageCursor: null, results: [] }),
+      mockHttpGet.mockResolvedValue(
+        mockHttpResponse({ count: 0, nextPageCursor: null, results: [] }),
       );
 
       const result = await client.fetchExportBooks();
@@ -273,8 +252,8 @@ describe('ReadwiseApiClient', () => {
   describe('fetchReaderDocuments', () => {
     it('returns documents from single page', async () => {
       const docs = [makeReaderDoc()];
-      (globalThis.fetch as jest.Mock).mockResolvedValue(
-        mockFetchResponse({ count: 1, nextPageCursor: null, results: docs }),
+      mockHttpGet.mockResolvedValue(
+        mockHttpResponse({ count: 1, nextPageCursor: null, results: docs }),
       );
 
       const result = await client.fetchReaderDocuments();
@@ -285,16 +264,16 @@ describe('ReadwiseApiClient', () => {
       const doc1 = makeReaderDoc({ id: 'doc-1' });
       const doc2 = makeReaderDoc({ id: 'doc-2' });
 
-      (globalThis.fetch as jest.Mock)
+      mockHttpGet
         .mockResolvedValueOnce(
-          mockFetchResponse({
+          mockHttpResponse({
             count: 2,
             nextPageCursor: 'cursor-next',
             results: [doc1],
           }),
         )
         .mockResolvedValueOnce(
-          mockFetchResponse({
+          mockHttpResponse({
             count: 2,
             nextPageCursor: null,
             results: [doc2],
@@ -303,30 +282,30 @@ describe('ReadwiseApiClient', () => {
 
       const result = await client.fetchReaderDocuments();
       expect(result).toEqual([doc1, doc2]);
-      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+      expect(mockHttpGet).toHaveBeenCalledTimes(2);
     });
 
     it('passes updatedAfter parameter', async () => {
-      (globalThis.fetch as jest.Mock).mockResolvedValue(
-        mockFetchResponse({ count: 0, nextPageCursor: null, results: [] }),
+      mockHttpGet.mockResolvedValue(
+        mockHttpResponse({ count: 0, nextPageCursor: null, results: [] }),
       );
 
       await client.fetchReaderDocuments({
         updatedAfter: '2024-03-01',
       });
 
-      const url = (globalThis.fetch as jest.Mock).mock.calls[0][0];
+      const url = mockHttpGet.mock.calls[0][0];
       expect(url).toContain('updatedAfter=2024-03-01');
     });
 
     it('uses v3 API base URL', async () => {
-      (globalThis.fetch as jest.Mock).mockResolvedValue(
-        mockFetchResponse({ count: 0, nextPageCursor: null, results: [] }),
+      mockHttpGet.mockResolvedValue(
+        mockHttpResponse({ count: 0, nextPageCursor: null, results: [] }),
       );
 
       await client.fetchReaderDocuments();
 
-      const url = (globalThis.fetch as jest.Mock).mock.calls[0][0];
+      const url = mockHttpGet.mock.calls[0][0];
       expect(url).toContain('readwise.io/api/v3/list/');
     });
   });
@@ -345,11 +324,11 @@ describe('ReadwiseApiClient', () => {
     });
 
     it('retries on 429 with Retry-After header', async () => {
-      (globalThis.fetch as jest.Mock)
+      mockHttpGet
         .mockResolvedValueOnce(
-          mockFetchResponse(null, 429, { 'Retry-After': '2' }),
+          mockHttpResponse(null, 429, { 'Retry-After': '2' }),
         )
-        .mockResolvedValueOnce(mockFetchResponse(null, 204));
+        .mockResolvedValueOnce(mockHttpResponse(null, 204));
 
       const promise = client.validateToken();
 
@@ -358,7 +337,7 @@ describe('ReadwiseApiClient', () => {
 
       const result = await promise;
       expect(result).toBe(true);
-      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+      expect(mockHttpGet).toHaveBeenCalledTimes(2);
     });
 
     it('throws after MAX_RETRIES (3) rate limit responses', async () => {
@@ -366,22 +345,22 @@ describe('ReadwiseApiClient', () => {
       // Use Retry-After: 1 (minimum valid value) to keep the test fast.
       jest.useRealTimers();
 
-      (globalThis.fetch as jest.Mock).mockResolvedValue(
-        mockFetchResponse(null, 429, { 'Retry-After': '1' }),
+      mockHttpGet.mockResolvedValue(
+        mockHttpResponse(null, 429, { 'Retry-After': '1' }),
       );
 
       await expect(client.validateToken()).rejects.toThrow(ReadwiseApiError);
       // Initial call + 3 retries = 4 total fetch calls
-      expect(globalThis.fetch).toHaveBeenCalledTimes(4);
+      expect(mockHttpGet).toHaveBeenCalledTimes(4);
 
       // Restore fake timers for remaining tests
       jest.useFakeTimers();
     }, 15000);
 
     it('uses default 60s when Retry-After header is missing', async () => {
-      (globalThis.fetch as jest.Mock)
-        .mockResolvedValueOnce(mockFetchResponse(null, 429))
-        .mockResolvedValueOnce(mockFetchResponse(null, 204));
+      mockHttpGet
+        .mockResolvedValueOnce(mockHttpResponse(null, 429))
+        .mockResolvedValueOnce(mockHttpResponse(null, 204));
 
       const promise = client.validateToken();
 
@@ -399,9 +378,7 @@ describe('ReadwiseApiClient', () => {
 
   describe('error handling', () => {
     it('throws ReadwiseApiError with status code for non-OK responses', async () => {
-      (globalThis.fetch as jest.Mock).mockResolvedValue(
-        mockFetchResponse(null, 503),
-      );
+      mockHttpGet.mockResolvedValue(mockHttpResponse(null, 503));
 
       try {
         await client.fetchExportBooks();
@@ -414,9 +391,7 @@ describe('ReadwiseApiClient', () => {
     });
 
     it('throws on network failure', async () => {
-      (globalThis.fetch as jest.Mock).mockRejectedValue(
-        new Error('Network error'),
-      );
+      mockHttpGet.mockRejectedValue(new Error('Network error'));
 
       await expect(client.validateToken()).rejects.toThrow('Network error');
     });
@@ -428,18 +403,13 @@ describe('ReadwiseApiClient', () => {
 
   describe('authorization', () => {
     it('sends Authorization header with Token prefix', async () => {
-      (globalThis.fetch as jest.Mock).mockResolvedValue(
-        mockFetchResponse(null, 204),
-      );
+      mockHttpGet.mockResolvedValue(mockHttpResponse(null, 204));
 
       await client.validateToken();
 
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          headers: { Authorization: 'Token test-token-abc' },
-        }),
-      );
+      expect(mockHttpGet).toHaveBeenCalledWith(expect.any(String), {
+        Authorization: 'Token test-token-abc',
+      });
     });
   });
 });

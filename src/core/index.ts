@@ -39,6 +39,8 @@ export {
   ReadwiseApiError,
 } from './readwise/readwise-api-client';
 export type {
+  HttpResponse,
+  HttpGetFn,
   ReadwiseHighlight,
   ReadwiseExportBook,
   ReadwiseReaderDocument,
