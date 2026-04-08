@@ -123,10 +123,11 @@ The plugin registers eight commands but does **not** assign default hotkeys — 
 
 This section controls how literature notes are created, named, and where they are stored.
 
-| Setting | Description | Default |
-|---------|-------------|---------|
+| Setting                               | Description                                                                                 | Default        |
+| ------------------------------------- | ------------------------------------------------------------------------------------------- | -------------- |
 | Literature note folder                | Folder inside the vault where new notes are created                                         | `Reading notes` |
 | Disable automatic note creation       | When enabled, only opens existing notes — never creates new ones                            | `false`         |
+| Note identifier field                 | Frontmatter field name used to find renamed notes (see [details below](#note-identifier-field)) | (empty)     |
 | Filename sanitization replacement     | Character(s) used to replace illegal filename characters (`: * ? " < > \|`)                 | `_`             |
 | Literature note title template        | Handlebars template for the note filename (without `.md` extension)                         | `@{{citekey}}`  |
 | Literature note content template file | Path to a vault file used as the note body template                                         | (empty)         |
@@ -142,6 +143,34 @@ The folder path is relative to the vault root. If the folder doesn't exist, it w
 ### Disable automatic note creation
 
 When **off** (default): selecting a reference in the search modal creates a new note if one doesn't exist yet. When **on**: the command only opens existing notes and shows an error if no note exists for the selected reference. Useful when you create notes via another plugin (e.g. Zotero Integration) and only want to open them through this plugin.
+
+### Note identifier field
+
+When you rename a literature note, the plugin can no longer find it by filename and may create a duplicate. The **Note identifier field** setting solves this by telling the plugin which frontmatter field to check as a last-resort lookup.
+
+**How to set up:**
+
+1. Add the identifier field to your content template's frontmatter:
+   ```yaml
+   ---
+   citekey: {{citekey}}
+   title: {{title}}
+   ---
+   ```
+2. Set **Note identifier field** to the name of that field (e.g. `citekey`)
+3. Now you can freely rename notes — the plugin will still find them
+
+The field name is configurable, so you can use any identifier that your template provides:
+
+| Field name   | Template frontmatter        | Use case                              |
+| ------------ | --------------------------- | ------------------------------------- |
+| `citekey`    | `citekey: {{citekey}}`      | Default — works with all source types |
+| `zoteroId`   | `zoteroId: {{zoteroId}}`    | Zotero item key                       |
+| `DOI`        | `DOI: {{DOI}}`              | Digital Object Identifier             |
+
+When the field is empty (default), this lookup is disabled and the plugin uses filename-based matching only.
+
+> **Note:** This only works for notes that have the configured field in their frontmatter. Existing notes created before adding the field need it added manually, or you can use **Update all literature notes** to re-render them from an updated template.
 
 ### Filename sanitization replacement
 

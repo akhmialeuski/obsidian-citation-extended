@@ -59,6 +59,13 @@ export interface IVaultAccess {
 
   /** Overwrite the content of an existing vault file. */
   modify(file: IVaultFile, content: string): Promise<void>;
+
+  /**
+   * Return the frontmatter metadata for a vault file, or null when
+   * unavailable.  Implementations may delegate to the host's metadata
+   * cache (e.g. Obsidian `metadataCache`) for zero-IO lookups.
+   */
+  getFrontmatter(file: IVaultFile): Record<string, unknown> | null;
 }
 
 // ---------------------------------------------------------------------------

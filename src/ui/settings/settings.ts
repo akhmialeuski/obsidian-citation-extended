@@ -44,6 +44,9 @@ export class CitationsPluginSettings {
   public templateProfiles: TemplateProfile[] =
     DEFAULT_SETTINGS.templateProfiles as TemplateProfile[];
 
+  // Note identifier (frontmatter-based lookup)
+  public noteIdentifierField: string = DEFAULT_SETTINGS.noteIdentifierField;
+
   // Readwise integration
   public readwiseLastSyncDate: string = DEFAULT_SETTINGS.readwiseLastSyncDate;
   public readwiseSyncIntervalMinutes: number =

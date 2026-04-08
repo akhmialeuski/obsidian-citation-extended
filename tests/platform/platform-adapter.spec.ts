@@ -34,6 +34,7 @@ export function createMockPlatformAdapter(
     isFile: jest.fn().mockReturnValue(true),
     isFolder: jest.fn().mockReturnValue(false),
     modify: jest.fn().mockResolvedValue(undefined),
+    getFrontmatter: jest.fn().mockReturnValue(null),
     ...(overrides.vault as Partial<IVaultAccess>),
   };
 
@@ -175,6 +176,7 @@ describe('IPlatformAdapter mock factory', () => {
         isFile: jest.fn().mockReturnValue(true),
         isFolder: jest.fn().mockReturnValue(false),
         modify: jest.fn().mockResolvedValue(undefined),
+        getFrontmatter: jest.fn().mockReturnValue(null),
       },
     });
 

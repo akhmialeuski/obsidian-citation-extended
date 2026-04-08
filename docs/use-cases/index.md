@@ -18,6 +18,7 @@ Practical, step-by-step guides for common workflows with Obsidian Citation Exten
 
 ### Advanced Configuration
 
+- [Renaming Literature Notes](renaming-literature-notes.md) — Rename literature notes freely without breaking the plugin's ability to find them
 - [Multiple Databases](multiple-databases.md) — Work with personal and shared bibliography libraries simultaneously
 - [Searching Effectively](searching-effectively.md) — Get the most out of the search modal with fuzzy, accent-insensitive, and prefix matching
 - [Conditional Templates](conditional-templates.md) — Build smart templates with if/else logic, type-specific rendering, and author formatting
