@@ -4,7 +4,7 @@ This plugin for [Obsidian](https://obsidian.md) integrates your academic referen
 
 ![](docs/images/screenshot.png)
 
-The plugin supports reading bibliographies in [BibTeX / BibLaTeX `.bib` format][4] and [CSL-JSON format][1], with more formats planned.
+The plugin supports reading bibliographies in [BibTeX / BibLaTeX `.bib` format][4], [CSL-JSON format][1], [Hayagriva YAML][5], and directly from the [Readwise](https://readwise.io) API.
 
 ## Quick Start
 
@@ -21,6 +21,7 @@ For detailed setup instructions, see [Getting Started](docs/getting-started.md).
 - **Insert literature note link** — insert a wiki-link or markdown link
 - **Insert literature note content** — insert rendered template content at cursor
 - **Insert markdown citation** — insert [Pandoc-style citations][3] with presets (textcite, parencite)
+- **Readwise integration** — import highlights and documents from Readwise as citable entries
 - **Refresh citation database** — manually reload all sources
 
 See [Features](docs/features.md) for details.
@@ -35,7 +36,7 @@ Customize your notes using [Handlebars](https://handlebarsjs.com/) templates wit
 
 ## Multiple Databases
 
-Load citations from multiple `.bib` or `.json` files. Duplicate citekeys are preserved with database prefixes.
+Load citations from multiple `.bib`, `.json`, or `.yml` files and the Readwise API. Duplicate citekeys are preserved with database prefixes.
 
 ![Multiple Databases Settings](docs/images/settings-multiple-databases.png)
 
@@ -68,3 +69,4 @@ If you find this plugin useful, consider [buying me a coffee](https://coff.ee/ak
 [2]: https://retorque.re/zotero-better-bibtex/
 [3]: https://pandoc.org/MANUAL.html#extension-citations
 [4]: http://www.bibtex.org/
+[5]: https://github.com/typst/hayagriva

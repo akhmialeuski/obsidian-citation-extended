@@ -37,6 +37,16 @@ If you use [Typst](https://typst.app) for typesetting, you can use your Hayagriv
 1. In plugin settings, select **Hayagriva (YAML)** as the database format
 2. Point to your `.yml` file
 
+### Readwise
+
+If you use [Readwise](https://readwise.io) to collect highlights, you can import them directly — no file export needed:
+
+1. In plugin settings, click **Add database** and set the type to **Readwise**
+2. Paste your API token (get it from [readwise.io/access_token](https://readwise.io/access_token))
+3. Click **Validate token**, then **Sync now**
+
+See [Readwise Integration](use-cases/readwise-integration.md) for a complete walkthrough.
+
 ### Adding the Database in Settings
 
 1. Open plugin settings > **Citation databases**
