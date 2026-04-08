@@ -18,11 +18,11 @@ The plugin supports up to 20 databases loaded simultaneously. All entries are me
 
 1. Open **Settings > Citation plugin > Citation databases**.
 
-2. Your first database is already configured. Give it a descriptive name, for example `Personal Library`. Select the format (e.g., `BibLaTeX`) and enter the file path:
+2. Your first database is already configured. Give it a descriptive name, for example `Personal Library`. Select the format (e.g., `Better BibTeX`) and enter the file path:
 
    ```
    Name:   Personal Library
-   Type:   BibLaTeX
+   Type:   Better BibTeX
    Path:   /home/user/Zotero/personal-library.bib
    ```
 
@@ -34,7 +34,7 @@ The plugin supports up to 20 databases loaded simultaneously. All entries are me
 
    ```
    Name:   Team Library
-   Type:   CSL-JSON
+   Type:   Better CSL JSON
    Path:   /home/user/Dropbox/shared/team-references.json
    ```
 
@@ -42,7 +42,7 @@ The plugin supports up to 20 databases loaded simultaneously. All entries are me
 
    ```
    Name:   Conference Papers
-   Type:   BibLaTeX
+   Type:   Better BibTeX
    Path:   /home/user/Zotero/conference-2024.bib
    ```
 

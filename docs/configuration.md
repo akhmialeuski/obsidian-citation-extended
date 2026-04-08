@@ -27,18 +27,17 @@ This section controls where the plugin reads your bibliography data from.
 
 ### Database Formats
 
-**CSL-JSON** (`.json`) — The Citation Style Language JSON format. This is a standardized, lightweight format that most reference managers can export. It loads quickly and is the recommended choice for most users.
+**Better CSL JSON** (`.json`) — The Citation Style Language JSON format. This is a standardized, lightweight format that most reference managers can export. It loads quickly and is the recommended choice for most users.
 
-- **Best for:** Zotero (via "Export Library" → CSL JSON), Mendeley, Paperpile
+- **Best for:** Zotero (via "Export Library" → Better CSL JSON), Mendeley, Paperpile
 - **Advantages:** Fast parsing, standard format, smaller file size
 - **Limitations:** May not include all custom fields (e.g. PDF file paths, Zotero notes)
 
-**BibLaTeX** (`.bib`) — A LaTeX bibliography format that carries richer metadata than CSL-JSON, including PDF file paths, keywords, abstract, and annotation notes. Parsing is slower because the BibTeX grammar is more complex.
+**Better BibTeX** (`.bib`) — A LaTeX bibliography format that carries richer metadata than CSL-JSON, including PDF file paths, keywords, abstract, and annotation notes. Parsing is slower because the BibTeX grammar is more complex.
 
 - **Best for:** Zotero with [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin, LaTeX users
-- **Advantages:** Richer metadata (PDF paths, keywords, notes), seamless LaTeX integration
+- **Advantages:** Richer metadata (PDF paths, keywords, notes), seamless LaTeX integration, full Cyrillic support via `\cyrchar` commands
 - **Limitations:** Slower to parse on large libraries (5000+ entries), larger file size
-- **Note:** "Better BibTeX" refers to the Zotero plugin that exports `.bib` files; the database type in settings is called `BibLaTeX`
 
 ### Setting Up Multiple Databases
 

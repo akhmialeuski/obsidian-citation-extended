@@ -41,7 +41,7 @@ This guide covers the complete Zotero-to-Obsidian pipeline, from Better BibTeX c
 
    ```
    Name:   Zotero Library
-   Type:   BibLaTeX          (or CSL-JSON if you exported that format)
+   Type:   Better BibTeX      (or Better CSL JSON if you exported that format)
    Path:   /home/user/Zotero/obsidian-export.bib
    ```
 
@@ -249,7 +249,7 @@ Deep learning allows computational models...
 If you prefer CSL-JSON:
 
 1. In Zotero, export as **Better CSL JSON** (with "Keep updated").
-2. In plugin settings, set the database type to **CSL-JSON**.
+2. In plugin settings, set the database type to **Better CSL JSON**.
 3. All citation and note features work the same, but PDF paths, keywords, and Zotero-specific fields will not be available in templates.
 
 ### Multiple Zotero Collections
@@ -257,9 +257,9 @@ If you prefer CSL-JSON:
 Export different Zotero collections as separate files and configure each as a database:
 
 ```
-Database 1: Research Papers — BibLaTeX — /home/user/Zotero/research.bib
-Database 2: Teaching Materials — BibLaTeX — /home/user/Zotero/teaching.bib
-Database 3: Book Collection — BibLaTeX — /home/user/Zotero/books.bib
+Database 1: Research Papers — Better BibTeX — /home/user/Zotero/research.bib
+Database 2: Teaching Materials — Better BibTeX — /home/user/Zotero/teaching.bib
+Database 3: Book Collection — Better BibTeX — /home/user/Zotero/books.bib
 ```
 
 All entries appear in one unified search.

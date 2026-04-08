@@ -279,7 +279,7 @@ When an entry has multiple PDF attachments (e.g. main paper + supplementary mate
 {{#if (zoteroPdfURIs entry.files)}}
 **PDFs:**
 {{#each (split (zoteroPdfURIs entry.files) "\n")}}
-- [PDF {{math @index "+" 1}}]({{this}})
+- [PDF]({{this}})
 {{/each}}
 {{/if}}
 ```
@@ -288,8 +288,8 @@ When an entry has multiple PDF attachments (e.g. main paper + supplementary mate
 
 ```markdown
 **PDFs:**
-- [PDF 1](zotero://open-pdf/library/items/EBAUJBLY)
-- [PDF 2](zotero://open-pdf/library/items/N6LQL4XL)
+- [PDF](zotero://open-pdf/library/items/EBAUJBLY)
+- [PDF](zotero://open-pdf/library/items/N6LQL4XL)
 ```
 
 Non-PDF attachments (HTML snapshots, images) are automatically excluded.

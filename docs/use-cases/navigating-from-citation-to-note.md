@@ -116,31 +116,6 @@ The two commands serve different purposes:
 
 Use **Open literature note for citation at cursor** for fast in-context navigation and **Open literature note** for exploratory browsing.
 
-### Using the Right-Click Context Menu
-
-Instead of memorizing a keyboard shortcut, you can right-click directly on a citation to navigate:
-
-1. You have a document with citations:
-
-   ```markdown
-   The original Transformer paper [@vaswani2017] introduced self-attention.
-   ```
-
-2. Right-click anywhere on the line where the citation appears. If the cursor is on or near a recognized citation pattern, the context menu includes an item **"Open note for @vaswani2017"**.
-
-3. Click the menu item. The literature note `Reading notes/@vaswani2017.md` opens immediately — identical behavior to the keyboard command.
-
-4. If no citation is detected at the cursor position, the menu item does not appear. The context menu shows only the standard Obsidian options.
-
-**When to use the context menu vs the keyboard shortcut:**
-
-| Method | Best for |
-|--------|----------|
-| Your configured hotkey (e.g. `Ctrl+Shift+G`) | Fast, hands-on-keyboard workflow. You know the citation is there. |
-| Right-click → "Open note for @..." | Discovery. You see the citekey in the menu item and confirm before navigating. |
-
-Both methods produce identical results — the only difference is the interaction style.
-
 ## Tips
 
 - **This command is read-only navigation.** It never modifies your document — it only opens or creates the literature note file.

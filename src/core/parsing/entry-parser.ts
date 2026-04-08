@@ -1,4 +1,5 @@
 import * as BibTeXParser from '@retorquere/bibtex-parser';
+import { latex as latexToUnicode } from 'unicode2latex';
 
 import { DatabaseType, DATABASE_FORMATS } from '../types/database';
 import { EntryData } from '../adapters/biblatex-adapter';
@@ -30,6 +31,20 @@ function parseBibLaTeX(raw: string): ParseResult {
         'Citation plugin: non-fatal error loading BibLaTeX entry:',
         err,
       );
+    },
+    unknownCommandHandler: (node) => {
+      const src = node.source.trim();
+      const value = latexToUnicode[src] ?? latexToUnicode[`${src}{}`] ?? '';
+      return {
+        kind: 'Text',
+        value,
+        loc: node.loc,
+        source: value,
+      } as unknown as ReturnType<
+        NonNullable<
+          Exclude<BibTeXParser.ParserOptions['unknownCommandHandler'], false>
+        >
+      >;
     },
   };
 
