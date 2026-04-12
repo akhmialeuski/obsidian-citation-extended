@@ -466,10 +466,14 @@ Use with a conditional to avoid empty links when no PDF is attached:
 
 ### `zoteroPdfURIs`
 
-Generate `zotero://open-pdf` URIs for **all** PDF attachments, separated by newlines. Non-PDF attachments (HTML snapshots, images, etc.) are skipped. Returns an empty string when no valid PDFs are found.
+Generate `zotero://open-pdf` URIs for **all** PDF attachments as an **array**. Non-PDF attachments (HTML snapshots, images, etc.) are skipped. Returns an empty array when no valid PDFs are found.
+
+Use with `{{#each}}` to iterate over the URIs:
 
 ```handlebars
-{{zoteroPdfURIs entry.files}}
+{{#each (zoteroPdfURIs entry.files)}}
+- [PDF]({{this}})
+{{/each}}
 ```
 
 **Input:**
@@ -481,13 +485,24 @@ files: [
 ]
 ```
 
-**Output:**
-```
-zotero://open-pdf/library/items/EBAUJBLY
-zotero://open-pdf/library/items/N6LQL4XL
+**Expected output:**
+```markdown
+- [PDF](zotero://open-pdf/library/items/EBAUJBLY)
+- [PDF](zotero://open-pdf/library/items/N6LQL4XL)
 ```
 
-> **Note:** Both `zoteroPdfURI` and `zoteroPdfURIs` require that the file paths contain a Zotero storage path segment (`/storage/<KEY>/`). This is the case for BibLaTeX exports from Better BibTeX. CSL-JSON and Hayagriva formats typically do not include file attachment paths, so these helpers will return empty strings for those formats.
+Wrap in `{{#if}}` to render the section only when PDFs exist:
+
+```handlebars
+{{#if (zoteroPdfURIs entry.files)}}
+**PDFs:**
+{{#each (zoteroPdfURIs entry.files)}}
+- [PDF]({{this}})
+{{/each}}
+{{/if}}
+```
+
+> **Note:** Both `zoteroPdfURI` and `zoteroPdfURIs` require that the file paths contain a Zotero storage path segment (`/storage/<KEY>/`). This is the case for BibLaTeX exports from Better BibTeX. CSL-JSON and Hayagriva formats typically do not include file attachment paths, so `zoteroPdfURI` will return an empty string and `zoteroPdfURIs` will return an empty array for those formats.
 
 ---
 
@@ -513,4 +528,4 @@ zotero://open-pdf/library/items/N6LQL4XL
 | Path     | `pdfLink`         | `file://` URI to first PDF               |
 | Path     | `pdfMarkdownLink` | Markdown link to first PDF               |
 | Zotero   | `zoteroPdfURI`    | `zotero://open-pdf` URI for first PDF    |
-| Zotero   | `zoteroPdfURIs`   | `zotero://open-pdf` URIs for all PDFs    |
+| Zotero   | `zoteroPdfURIs`   | `zotero://open-pdf` URI array for all PDFs |

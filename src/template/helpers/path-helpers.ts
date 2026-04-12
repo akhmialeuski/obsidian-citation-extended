@@ -98,18 +98,20 @@ export function registerPathHelpers(hbs: HandlebarsInstance): void {
   });
 
   /**
-   * Generate zotero://open-pdf URIs for all PDF attachments, newline-separated.
+   * Generate zotero://open-pdf URIs for all PDF attachments as an array.
    * Non-PDF attachments are excluded. Entries without a storage key are skipped.
-   * Returns an empty string when no valid PDFs are found.
+   * Returns an empty array when no valid PDFs are found.
+   *
+   * Use with {{#each}} to iterate:
+   *   {{#each (zoteroPdfURIs entry.files)}}[PDF]({{this}}){{/each}}
    */
   hbs.registerHelper('zoteroPdfURIs', (files: unknown) => {
     const pdfs = findAllPdfs(files);
-    const uris = pdfs
+    return pdfs
       .map((pdf) => {
         const key = extractStorageKey(pdf);
         return key ? `zotero://open-pdf/library/items/${key}` : null;
       })
       .filter((uri): uri is string => uri !== null);
-    return uris.join('\n');
   });
 }
