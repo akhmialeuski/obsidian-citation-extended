@@ -752,9 +752,9 @@ describe('TemplateService', () => {
       );
     });
 
-    it('zoteroPdfURIs returns URIs for all PDFs, newline-separated', () => {
+    it('zoteroPdfURIs returns array of URIs for all PDFs', () => {
       expectOk(
-        service.render('{{zoteroPdfURIs files}}', {
+        service.render('{{#each (zoteroPdfURIs files)}}{{this}}\n{{/each}}', {
           ...mockContext,
           files: [
             'C:/Users/me/Zotero/storage/EBAUJBLY/paper.pdf',
@@ -762,13 +762,13 @@ describe('TemplateService', () => {
             'C:/Users/me/Zotero/storage/N6LQL4XL/supplement.pdf',
           ],
         } as unknown as TemplateContext),
-        'zotero://open-pdf/library/items/EBAUJBLY\nzotero://open-pdf/library/items/N6LQL4XL',
+        'zotero://open-pdf/library/items/EBAUJBLY\nzotero://open-pdf/library/items/N6LQL4XL\n',
       );
     });
 
-    it('zoteroPdfURIs returns empty string when no valid PDFs', () => {
+    it('zoteroPdfURIs renders empty when no valid PDFs', () => {
       expectOk(
-        service.render('{{zoteroPdfURIs files}}', {
+        service.render('{{#each (zoteroPdfURIs files)}}{{this}}{{/each}}', {
           ...mockContext,
           files: ['/home/user/notes.html'],
         } as unknown as TemplateContext),
@@ -778,7 +778,7 @@ describe('TemplateService', () => {
 
     it('zoteroPdfURIs skips PDFs without storage key', () => {
       expectOk(
-        service.render('{{zoteroPdfURIs files}}', {
+        service.render('{{#each (zoteroPdfURIs files)}}{{this}}{{/each}}', {
           ...mockContext,
           files: [
             '/custom/path/paper.pdf',
@@ -789,13 +789,52 @@ describe('TemplateService', () => {
       );
     });
 
-    it('zoteroPdfURIs returns empty string when files is not an array', () => {
+    it('zoteroPdfURIs renders empty when files is not an array', () => {
       expectOk(
-        service.render('{{zoteroPdfURIs files}}', {
+        service.render('{{#each (zoteroPdfURIs files)}}{{this}}{{/each}}', {
           ...mockContext,
           files: null,
         } as unknown as TemplateContext),
         '',
+      );
+    });
+
+    it('zoteroPdfURIs works with #if guard for conditional rendering', () => {
+      expectOk(
+        service.render(
+          '{{#if (zoteroPdfURIs files)}}has PDFs{{else}}no PDFs{{/if}}',
+          {
+            ...mockContext,
+            files: ['C:/Users/me/Zotero/storage/EBAUJBLY/paper.pdf'],
+          } as unknown as TemplateContext,
+        ),
+        'has PDFs',
+      );
+      expectOk(
+        service.render(
+          '{{#if (zoteroPdfURIs files)}}has PDFs{{else}}no PDFs{{/if}}',
+          {
+            ...mockContext,
+            files: ['/home/user/notes.html'],
+          } as unknown as TemplateContext,
+        ),
+        'no PDFs',
+      );
+    });
+
+    it('zoteroPdfURIs combined with #each renders markdown list', () => {
+      expectOk(
+        service.render(
+          '{{#each (zoteroPdfURIs files)}}- [PDF]({{this}})\n{{/each}}',
+          {
+            ...mockContext,
+            files: [
+              'C:/Users/me/Zotero/storage/EBAUJBLY/paper.pdf',
+              'C:/Users/me/Zotero/storage/N6LQL4XL/supplement.pdf',
+            ],
+          } as unknown as TemplateContext,
+        ),
+        '- [PDF](zotero://open-pdf/library/items/EBAUJBLY)\n- [PDF](zotero://open-pdf/library/items/N6LQL4XL)\n',
       );
     });
   });

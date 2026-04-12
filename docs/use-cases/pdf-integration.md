@@ -224,7 +224,7 @@ Notice the "PDF" section is completely absent when no PDF is available.
 | PDF link in template (`pdfLink`)         | —             | `file:///path/to/file.pdf` URI rendered in note                       |
 | PDF link in template (`urlEncode`)       | —             | `file:///path/to/url-encoded-file.pdf` URI rendered in note           |
 | Open PDF in Zotero (`zoteroPdfURI`)      | —             | `zotero://open-pdf/library/items/ABCD1234` URI rendered in note       |
-| Open all PDFs in Zotero (`zoteroPdfURIs`) | —            | Multiple `zotero://open-pdf` URIs, one per PDF attachment             |
+| Open all PDFs in Zotero (`zoteroPdfURIs`) | —            | Array of `zotero://open-pdf` URIs, one per PDF attachment             |
 
 ## Variations
 
@@ -273,12 +273,12 @@ Use `zoteroPdfURI` to generate a `zotero://open-pdf` link that opens the PDF in 
 
 ### Multiple PDFs — Open All in Zotero
 
-When an entry has multiple PDF attachments (e.g. main paper + supplementary material), use `zoteroPdfURIs` to list them all:
+When an entry has multiple PDF attachments (e.g. main paper + supplementary material), use `zoteroPdfURIs` to list them all. The helper returns an array, so iterate directly with `{{#each}}`:
 
 ```handlebars
 {{#if (zoteroPdfURIs entry.files)}}
 **PDFs:**
-{{#each (split (zoteroPdfURIs entry.files) "\n")}}
+{{#each (zoteroPdfURIs entry.files)}}
 - [PDF]({{this}})
 {{/each}}
 {{/if}}
