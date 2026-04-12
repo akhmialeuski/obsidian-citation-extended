@@ -837,6 +837,24 @@ describe('TemplateService', () => {
         '- [PDF](zotero://open-pdf/library/items/EBAUJBLY)\n- [PDF](zotero://open-pdf/library/items/N6LQL4XL)\n',
       );
     });
+
+    it('zoteroPdfURIs works via entry.files path (real template usage)', () => {
+      expectOk(
+        service.render(
+          '{{#each (zoteroPdfURIs entry.files)}}- [PDF]({{this}})\n{{/each}}',
+          {
+            ...mockContext,
+            entry: {
+              files: [
+                'C:/Users/me/Zotero/storage/EBAUJBLY/paper.pdf',
+                'C:/Users/me/Zotero/storage/N6LQL4XL/supplement.pdf',
+              ],
+            },
+          } as unknown as TemplateContext,
+        ),
+        '- [PDF](zotero://open-pdf/library/items/EBAUJBLY)\n- [PDF](zotero://open-pdf/library/items/N6LQL4XL)\n',
+      );
+    });
   });
 
   describe('String Helpers — branch coverage', () => {

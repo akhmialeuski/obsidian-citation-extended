@@ -502,7 +502,7 @@ Wrap in `{{#if}}` to render the section only when PDFs exist:
 {{/if}}
 ```
 
-> **Note:** Both `zoteroPdfURI` and `zoteroPdfURIs` require that the file paths contain a Zotero storage path segment (`/storage/<KEY>/`). This is the case for BibLaTeX exports from Better BibTeX. CSL-JSON and Hayagriva formats typically do not include file attachment paths, so these helpers will return empty strings for those formats.
+> **Note:** Both `zoteroPdfURI` and `zoteroPdfURIs` require that the file paths contain a Zotero storage path segment (`/storage/<KEY>/`). This is the case for BibLaTeX exports from Better BibTeX. CSL-JSON and Hayagriva formats typically do not include file attachment paths, so `zoteroPdfURI` will return an empty string and `zoteroPdfURIs` will return an empty array for those formats.
 
 ---
 
