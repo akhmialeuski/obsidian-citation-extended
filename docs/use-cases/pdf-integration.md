@@ -225,6 +225,8 @@ Notice the "PDF" section is completely absent when no PDF is available.
 | PDF link in template (`urlEncode`)       | —             | `file:///path/to/url-encoded-file.pdf` URI rendered in note           |
 | Open PDF in Zotero (`zoteroPdfURI`)      | —             | `zotero://open-pdf/library/items/ABCD1234` URI rendered in note       |
 | Open all PDFs in Zotero (`zoteroPdfURIs`) | —            | Array of `zotero://open-pdf` URIs, one per PDF attachment             |
+| Named Zotero PDF link (`zoteroPdfMarkdownLink`)   | —    | `[filename](zotero://open-pdf/library/items/KEY)` for first PDF       |
+| Named Zotero PDF links (`zoteroPdfMarkdownLinks`) | —    | Array of `[filename](zotero://...)` Markdown links for all PDFs       |
 
 ## Variations
 
@@ -293,6 +295,35 @@ When an entry has multiple PDF attachments (e.g. main paper + supplementary mate
 ```
 
 Non-PDF attachments (HTML snapshots, images) are automatically excluded.
+
+### Multiple PDFs — Named Zotero Links
+
+When you want each PDF link to display the file's actual name (e.g. `Smith2023`, `Smith2023-supplement`) rather than a generic `[PDF]` label, use `zoteroPdfMarkdownLinks`. The helper returns an array of pre-built Markdown links, so iterate with `{{#each}}`:
+
+```handlebars
+{{#if (zoteroPdfMarkdownLinks entry.files)}}
+**PDFs:**
+{{#each (zoteroPdfMarkdownLinks entry.files)}}
+- {{this}}
+{{/each}}
+{{/if}}
+```
+
+**Expected output (entry with 2 PDFs and 1 HTML snapshot):**
+
+```markdown
+**PDFs:**
+- [Smith2023](zotero://open-pdf/library/items/EBAUJBLY)
+- [Smith2023-supplement](zotero://open-pdf/library/items/N6LQL4XL)
+```
+
+For a single PDF, the singular form `zoteroPdfMarkdownLink` returns one link string:
+
+```handlebars
+{{#if (zoteroPdfMarkdownLink entry.files)}}
+{{zoteroPdfMarkdownLink entry.files}}
+{{/if}}
+```
 
 ### No PDF Attachments
 

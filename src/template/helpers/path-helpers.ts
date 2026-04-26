@@ -45,6 +45,14 @@ function extractStorageKey(filePath: string): string | null {
   return match ? match[1] : null;
 }
 
+/**
+ * Strip directory prefix and final extension from a file path.
+ * Used to derive a human-readable display name for Markdown links.
+ */
+function stripPathAndExtension(filePath: string): string {
+  return filePath.replace(/^.*[\\/]/, '').replace(/\.[^/.]+$/, '');
+}
+
 export function registerPathHelpers(hbs: HandlebarsInstance): void {
   hbs.registerHelper('urlEncode', (value: unknown) => {
     if (typeof value !== 'string') return value;
@@ -80,8 +88,7 @@ export function registerPathHelpers(hbs: HandlebarsInstance): void {
   hbs.registerHelper('pdfMarkdownLink', (files: unknown) => {
     const pdf = findFirstPdf(files);
     if (!pdf) return '';
-    const name = pdf.replace(/^.*[\\/]/, '').replace(/\.[^/.]+$/, '');
-    return `[${name}](file://${encodeURI(pdf)})`;
+    return `[${stripPathAndExtension(pdf)}](file://${encodeURI(pdf)})`;
   });
 
   /**
@@ -113,5 +120,40 @@ export function registerPathHelpers(hbs: HandlebarsInstance): void {
         return key ? `zotero://open-pdf/library/items/${key}` : null;
       })
       .filter((uri): uri is string => uri !== null);
+  });
+
+  /**
+   * Generate a Markdown link to the first PDF attachment that opens in
+   * Zotero's built-in PDF reader. The link text is the filename without
+   * extension. Returns an empty string when no PDF is found or the path
+   * has no Zotero storage key.
+   */
+  hbs.registerHelper('zoteroPdfMarkdownLink', (files: unknown) => {
+    const pdf = findFirstPdf(files);
+    if (!pdf) return '';
+    const key = extractStorageKey(pdf);
+    if (!key) return '';
+    return `[${stripPathAndExtension(pdf)}](zotero://open-pdf/library/items/${key})`;
+  });
+
+  /**
+   * Generate Markdown links for all PDF attachments that open in Zotero's
+   * built-in PDF reader. Each link uses the filename without extension as
+   * the display text. Non-PDF attachments are excluded. Entries without a
+   * storage key are skipped. Returns an empty array when no valid PDFs
+   * are found.
+   *
+   * Use with {{#each}} to iterate:
+   *   {{#each (zoteroPdfMarkdownLinks entry.files)}}- {{this}}{{/each}}
+   */
+  hbs.registerHelper('zoteroPdfMarkdownLinks', (files: unknown) => {
+    const pdfs = findAllPdfs(files);
+    return pdfs
+      .map((pdf) => {
+        const key = extractStorageKey(pdf);
+        if (!key) return null;
+        return `[${stripPathAndExtension(pdf)}](zotero://open-pdf/library/items/${key})`;
+      })
+      .filter((link): link is string => link !== null);
   });
 }

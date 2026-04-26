@@ -1,6 +1,6 @@
 # Template Helpers
 
-Helpers extend Handlebars with custom logic for use inside `{{...}}` expressions. The plugin registers **22 helpers** across five categories. All helpers are available in both literature note templates and citation templates.
+Helpers extend Handlebars with custom logic for use inside `{{...}}` expressions. The plugin registers **27 helpers** across five categories. All helpers are available in both literature note templates and citation templates.
 
 Helpers can be **nested** using parentheses — the inner helper resolves first:
 
@@ -504,6 +504,65 @@ Wrap in `{{#if}}` to render the section only when PDFs exist:
 
 > **Note:** Both `zoteroPdfURI` and `zoteroPdfURIs` require that the file paths contain a Zotero storage path segment (`/storage/<KEY>/`). This is the case for BibLaTeX exports from Better BibTeX. CSL-JSON and Hayagriva formats typically do not include file attachment paths, so `zoteroPdfURI` will return an empty string and `zoteroPdfURIs` will return an empty array for those formats.
 
+### `zoteroPdfMarkdownLink`
+
+Generate a complete Markdown link to the **first** PDF attachment that opens in Zotero's built-in PDF reader. The link text is the filename without extension. Returns an empty string when no PDF is found, the file list is empty, or the path has no Zotero storage key.
+
+```handlebars
+{{zoteroPdfMarkdownLink entry.files}}
+```
+
+**Input:** `files: ["C:/Users/me/Zotero/storage/EBAUJBLY/Smith2023.pdf"]`
+**Output:** `[Smith2023](zotero://open-pdf/library/items/EBAUJBLY)`
+
+Use with a conditional to avoid empty output when no PDF is attached:
+
+```handlebars
+{{#if (zoteroPdfMarkdownLink entry.files)}}
+{{zoteroPdfMarkdownLink entry.files}}
+{{/if}}
+```
+
+### `zoteroPdfMarkdownLinks`
+
+Generate Markdown links for **all** PDF attachments that open in Zotero's built-in PDF reader. Each link uses the filename without extension as display text. Returns an **array** of link strings; non-PDF attachments and entries without a Zotero storage key are skipped. Returns an empty array when no valid PDFs are found.
+
+Use with `{{#each}}` to iterate over the links:
+
+```handlebars
+{{#each (zoteroPdfMarkdownLinks entry.files)}}
+- {{this}}
+{{/each}}
+```
+
+**Input:**
+```
+files: [
+  "C:/Users/me/Zotero/storage/EBAUJBLY/Smith2023.pdf",
+  "C:/Users/me/Zotero/storage/HTML1234/snapshot.html",
+  "C:/Users/me/Zotero/storage/N6LQL4XL/Smith2023-supplement.pdf"
+]
+```
+
+**Expected output:**
+```markdown
+- [Smith2023](zotero://open-pdf/library/items/EBAUJBLY)
+- [Smith2023-supplement](zotero://open-pdf/library/items/N6LQL4XL)
+```
+
+Wrap in `{{#if}}` to render the section only when PDFs exist:
+
+```handlebars
+{{#if (zoteroPdfMarkdownLinks entry.files)}}
+**PDFs:**
+{{#each (zoteroPdfMarkdownLinks entry.files)}}
+- {{this}}
+{{/each}}
+{{/if}}
+```
+
+> **Note:** `zoteroPdfMarkdownLink` and `zoteroPdfMarkdownLinks` share the same `/storage/<KEY>/` requirement as `zoteroPdfURI` and `zoteroPdfURIs`.
+
 ---
 
 ## Quick Reference
@@ -525,7 +584,9 @@ Wrap in `{{#if}}` to render the section only when PDFs exist:
 | Path | `basename` | Filename with extension |
 | Path | `filename` | Filename without extension |
 | Path | `dirname` | Directory path |
-| Path     | `pdfLink`         | `file://` URI to first PDF               |
-| Path     | `pdfMarkdownLink` | Markdown link to first PDF               |
-| Zotero   | `zoteroPdfURI`    | `zotero://open-pdf` URI for first PDF    |
-| Zotero   | `zoteroPdfURIs`   | `zotero://open-pdf` URI array for all PDFs |
+| Path     | `pdfLink`                 | `file://` URI to first PDF                            |
+| Path     | `pdfMarkdownLink`         | Markdown link to first PDF                            |
+| Zotero   | `zoteroPdfURI`            | `zotero://open-pdf` URI for first PDF                 |
+| Zotero   | `zoteroPdfURIs`           | `zotero://open-pdf` URI array for all PDFs            |
+| Zotero   | `zoteroPdfMarkdownLink`   | Markdown link `[name](zotero://...)` for first PDF    |
+| Zotero   | `zoteroPdfMarkdownLinks`  | Array of `[name](zotero://...)` links for all PDFs    |
