@@ -216,15 +216,17 @@ Notice the "PDF" section is completely absent when no PDF is available.
 
 ## Expected Result Summary
 
-| Action | Keyboard shortcut | What happens |
-|--------|-------------------|-------------|
-| Open PDF from search modal | `Shift+Tab` | System PDF viewer opens the attached file |
-| Open entry in Zotero | `Tab` | Zotero opens and selects the entry |
-| PDF link in template (`pdfMarkdownLink`) | — | `[filename](file:///path/to/file.pdf)` rendered in note |
-| PDF link in template (`pdfLink`)         | —             | `file:///path/to/file.pdf` URI rendered in note                       |
-| PDF link in template (`urlEncode`)       | —             | `file:///path/to/url-encoded-file.pdf` URI rendered in note           |
-| Open PDF in Zotero (`zoteroPdfURI`)      | —             | `zotero://open-pdf/library/items/ABCD1234` URI rendered in note       |
-| Open all PDFs in Zotero (`zoteroPdfURIs`) | —            | Array of `zotero://open-pdf` URIs, one per PDF attachment             |
+| Action                                            | Keyboard shortcut | What happens                                                    |
+| ------------------------------------------------- | ----------------- | --------------------------------------------------------------- |
+| Open PDF from search modal                        | `Shift+Tab`       | System PDF viewer opens the attached file                       |
+| Open entry in Zotero                              | `Tab`             | Zotero opens and selects the entry                              |
+| PDF link in template (`pdfMarkdownLink`)          | —                 | `[filename](file:///path/to/file.pdf)` rendered in note         |
+| PDF link in template (`pdfLink`)                  | —                 | `file:///path/to/file.pdf` URI rendered in note                 |
+| PDF link in template (`urlEncode`)                | —                 | `file:///path/to/url-encoded-file.pdf` URI rendered in note     |
+| Open PDF in Zotero (`zoteroPdfURI`)               | —                 | `zotero://open-pdf/library/items/ABCD1234` URI rendered in note |
+| Open all PDFs in Zotero (`zoteroPdfURIs`)         | —                 | Array of `zotero://open-pdf` URIs, one per PDF attachment       |
+| Named Zotero PDF link (`zoteroPdfMarkdownLink`)   | —                 | `[filename](zotero://open-pdf/library/items/KEY)` for first PDF |
+| Named Zotero PDF links (`zoteroPdfMarkdownLinks`) | —                 | Array of `[filename](zotero://...)` Markdown links for all PDFs |
 
 ## Variations
 
@@ -294,9 +296,38 @@ When an entry has multiple PDF attachments (e.g. main paper + supplementary mate
 
 Non-PDF attachments (HTML snapshots, images) are automatically excluded.
 
+### Multiple PDFs — Named Zotero Links
+
+When you want each PDF link to display the file's actual name (e.g. `Smith2023`, `Smith2023-supplement`) rather than a generic `[PDF]` label, use `zoteroPdfMarkdownLinks`. The helper returns an array of pre-built Markdown links, so iterate with `{{#each}}`:
+
+```handlebars
+{{#if (zoteroPdfMarkdownLinks entry.files)}}
+**PDFs:**
+{{#each (zoteroPdfMarkdownLinks entry.files)}}
+- {{this}}
+{{/each}}
+{{/if}}
+```
+
+**Expected output (entry with 2 PDFs and 1 HTML snapshot):**
+
+```markdown
+**PDFs:**
+- [Smith2023](zotero://open-pdf/library/items/EBAUJBLY)
+- [Smith2023-supplement](zotero://open-pdf/library/items/N6LQL4XL)
+```
+
+For a single PDF, the singular form `zoteroPdfMarkdownLink` returns one link string:
+
+```handlebars
+{{#if (zoteroPdfMarkdownLink entry.files)}}
+{{zoteroPdfMarkdownLink entry.files}}
+{{/if}}
+```
+
 ### No PDF Attachments
 
-When an entry has no PDF files (only HTML snapshots, or no attachments at all), both `zoteroPdfURI` and `zoteroPdfURIs` return an empty string. The `{{#if}}` wrapper ensures your note stays clean:
+When an entry has no PDF files (only HTML snapshots, or no attachments at all), `zoteroPdfURI` and `zoteroPdfMarkdownLink` return an empty string, while `zoteroPdfURIs` and `zoteroPdfMarkdownLinks` return an empty array. The `{{#if}}` wrapper ensures your note stays clean in either case:
 
 ```handlebars
 {{#if (zoteroPdfURI entry.files)}}

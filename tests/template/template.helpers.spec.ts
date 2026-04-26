@@ -857,6 +857,279 @@ describe('TemplateService', () => {
     });
   });
 
+  describe('Zotero PDF Markdown Link Helpers', () => {
+    it('zoteroPdfMarkdownLink returns Markdown link for the first PDF', () => {
+      expectOk(
+        service.render('{{zoteroPdfMarkdownLink files}}', {
+          ...mockContext,
+          files: ['C:/Users/me/Zotero/storage/EBAUJBLY/paper.pdf'],
+        } as unknown as TemplateContext),
+        '[paper](zotero://open-pdf/library/items/EBAUJBLY)',
+      );
+    });
+
+    it('zoteroPdfMarkdownLink picks first PDF and ignores non-PDF attachments', () => {
+      expectOk(
+        service.render('{{zoteroPdfMarkdownLink files}}', {
+          ...mockContext,
+          files: [
+            '/home/user/Zotero/storage/HTML1234/snapshot.html',
+            '/home/user/Zotero/storage/ABCD5678/article.pdf',
+            '/home/user/Zotero/storage/WXYZ9999/supplement.pdf',
+          ],
+        } as unknown as TemplateContext),
+        '[article](zotero://open-pdf/library/items/ABCD5678)',
+      );
+    });
+
+    it('zoteroPdfMarkdownLink handles relative storage path', () => {
+      expectOk(
+        service.render('{{zoteroPdfMarkdownLink files}}', {
+          ...mockContext,
+          files: ['storage/EBAUJBLY/paper.pdf'],
+        } as unknown as TemplateContext),
+        '[paper](zotero://open-pdf/library/items/EBAUJBLY)',
+      );
+    });
+
+    it('zoteroPdfMarkdownLink handles Windows backslash paths', () => {
+      expectOk(
+        service.render('{{zoteroPdfMarkdownLink files}}', {
+          ...mockContext,
+          files: ['C:\\Users\\me\\Zotero\\storage\\EBAUJBLY\\paper.pdf'],
+        } as unknown as TemplateContext),
+        '[paper](zotero://open-pdf/library/items/EBAUJBLY)',
+      );
+    });
+
+    it('zoteroPdfMarkdownLink preserves spaces in filename', () => {
+      expectOk(
+        service.render('{{zoteroPdfMarkdownLink files}}', {
+          ...mockContext,
+          files: [
+            '/home/user/Zotero/storage/EBAUJBLY/Smith - Deep Learning.pdf',
+          ],
+        } as unknown as TemplateContext),
+        '[Smith - Deep Learning](zotero://open-pdf/library/items/EBAUJBLY)',
+      );
+    });
+
+    it('zoteroPdfMarkdownLink returns empty string when no PDFs exist', () => {
+      expectOk(
+        service.render('{{zoteroPdfMarkdownLink files}}', {
+          ...mockContext,
+          files: ['/home/user/Zotero/storage/HTML1234/snapshot.html'],
+        } as unknown as TemplateContext),
+        '',
+      );
+    });
+
+    it('zoteroPdfMarkdownLink returns empty string when files is empty', () => {
+      expectOk(
+        service.render('{{zoteroPdfMarkdownLink files}}', {
+          ...mockContext,
+          files: [],
+        } as unknown as TemplateContext),
+        '',
+      );
+    });
+
+    it('zoteroPdfMarkdownLink returns empty string when files is not an array', () => {
+      expectOk(
+        service.render('{{zoteroPdfMarkdownLink files}}', {
+          ...mockContext,
+          files: null,
+        } as unknown as TemplateContext),
+        '',
+      );
+    });
+
+    it('zoteroPdfMarkdownLink returns empty string when PDF has no storage key', () => {
+      expectOk(
+        service.render('{{zoteroPdfMarkdownLink files}}', {
+          ...mockContext,
+          files: ['/custom/path/paper.pdf'],
+        } as unknown as TemplateContext),
+        '',
+      );
+    });
+
+    it('zoteroPdfMarkdownLink works with #if guard', () => {
+      expectOk(
+        service.render(
+          '{{#if (zoteroPdfMarkdownLink files)}}has link{{else}}no link{{/if}}',
+          {
+            ...mockContext,
+            files: ['C:/Users/me/Zotero/storage/EBAUJBLY/paper.pdf'],
+          } as unknown as TemplateContext,
+        ),
+        'has link',
+      );
+      expectOk(
+        service.render(
+          '{{#if (zoteroPdfMarkdownLink files)}}has link{{else}}no link{{/if}}',
+          {
+            ...mockContext,
+            files: ['/home/user/notes.html'],
+          } as unknown as TemplateContext,
+        ),
+        'no link',
+      );
+    });
+
+    it('zoteroPdfMarkdownLinks returns array of Markdown links for all PDFs', () => {
+      expectOk(
+        service.render(
+          '{{#each (zoteroPdfMarkdownLinks files)}}{{this}}\n{{/each}}',
+          {
+            ...mockContext,
+            files: [
+              'C:/Users/me/Zotero/storage/EBAUJBLY/paper.pdf',
+              '/home/user/Zotero/storage/HTML1234/snapshot.html',
+              'C:/Users/me/Zotero/storage/N6LQL4XL/supplement.pdf',
+            ],
+          } as unknown as TemplateContext,
+        ),
+        '[paper](zotero://open-pdf/library/items/EBAUJBLY)\n[supplement](zotero://open-pdf/library/items/N6LQL4XL)\n',
+      );
+    });
+
+    it('zoteroPdfMarkdownLinks renders empty when no valid PDFs', () => {
+      expectOk(
+        service.render(
+          '{{#each (zoteroPdfMarkdownLinks files)}}{{this}}{{/each}}',
+          {
+            ...mockContext,
+            files: ['/home/user/notes.html'],
+          } as unknown as TemplateContext,
+        ),
+        '',
+      );
+    });
+
+    it('zoteroPdfMarkdownLinks skips PDFs without storage key', () => {
+      expectOk(
+        service.render(
+          '{{#each (zoteroPdfMarkdownLinks files)}}{{this}}{{/each}}',
+          {
+            ...mockContext,
+            files: [
+              '/custom/path/paper.pdf',
+              '/home/user/Zotero/storage/ABCD1234/real.pdf',
+            ],
+          } as unknown as TemplateContext,
+        ),
+        '[real](zotero://open-pdf/library/items/ABCD1234)',
+      );
+    });
+
+    it('zoteroPdfMarkdownLinks renders empty when files is not an array', () => {
+      expectOk(
+        service.render(
+          '{{#each (zoteroPdfMarkdownLinks files)}}{{this}}{{/each}}',
+          {
+            ...mockContext,
+            files: null,
+          } as unknown as TemplateContext,
+        ),
+        '',
+      );
+    });
+
+    it('zoteroPdfMarkdownLinks works with #if guard for conditional rendering', () => {
+      expectOk(
+        service.render(
+          '{{#if (zoteroPdfMarkdownLinks files)}}has PDFs{{else}}no PDFs{{/if}}',
+          {
+            ...mockContext,
+            files: ['C:/Users/me/Zotero/storage/EBAUJBLY/paper.pdf'],
+          } as unknown as TemplateContext,
+        ),
+        'has PDFs',
+      );
+      expectOk(
+        service.render(
+          '{{#if (zoteroPdfMarkdownLinks files)}}has PDFs{{else}}no PDFs{{/if}}',
+          {
+            ...mockContext,
+            files: ['/home/user/notes.html'],
+          } as unknown as TemplateContext,
+        ),
+        'no PDFs',
+      );
+    });
+
+    it('zoteroPdfMarkdownLinks combined with #each renders [PDF_NAME](URI) list (issue #71)', () => {
+      expectOk(
+        service.render(
+          '{{#each (zoteroPdfMarkdownLinks files)}}- {{this}}\n{{/each}}',
+          {
+            ...mockContext,
+            files: [
+              'C:/Users/me/Zotero/storage/EBAUJBLY/Smith2023.pdf',
+              'C:/Users/me/Zotero/storage/N6LQL4XL/Smith2023-supplement.pdf',
+            ],
+          } as unknown as TemplateContext,
+        ),
+        '- [Smith2023](zotero://open-pdf/library/items/EBAUJBLY)\n- [Smith2023-supplement](zotero://open-pdf/library/items/N6LQL4XL)\n',
+      );
+    });
+
+    it('zoteroPdfMarkdownLinks works via entry.files path (real template usage)', () => {
+      expectOk(
+        service.render(
+          '{{#each (zoteroPdfMarkdownLinks entry.files)}}- {{this}}\n{{/each}}',
+          {
+            ...mockContext,
+            entry: {
+              files: [
+                'C:/Users/me/Zotero/storage/EBAUJBLY/paper.pdf',
+                'C:/Users/me/Zotero/storage/N6LQL4XL/supplement.pdf',
+              ],
+            },
+          } as unknown as TemplateContext,
+        ),
+        '- [paper](zotero://open-pdf/library/items/EBAUJBLY)\n- [supplement](zotero://open-pdf/library/items/N6LQL4XL)\n',
+      );
+    });
+
+    it('zoteroPdfMarkdownLink matches case-insensitive .PDF extension', () => {
+      expectOk(
+        service.render('{{zoteroPdfMarkdownLink files}}', {
+          ...mockContext,
+          files: ['/home/user/Zotero/storage/EBAUJBLY/Paper.PDF'],
+        } as unknown as TemplateContext),
+        '[Paper](zotero://open-pdf/library/items/EBAUJBLY)',
+      );
+    });
+
+    it('zoteroPdfMarkdownLinks matches case-insensitive .PDF extension', () => {
+      expectOk(
+        service.render(
+          '{{#each (zoteroPdfMarkdownLinks files)}}{{this}}\n{{/each}}',
+          {
+            ...mockContext,
+            files: [
+              '/home/user/Zotero/storage/EBAUJBLY/A.Pdf',
+              '/home/user/Zotero/storage/N6LQL4XL/B.PDF',
+            ],
+          } as unknown as TemplateContext,
+        ),
+        '[A](zotero://open-pdf/library/items/EBAUJBLY)\n[B](zotero://open-pdf/library/items/N6LQL4XL)\n',
+      );
+    });
+
+    it('zoteroPdfMarkdownLink does not escape brackets in filename (known limitation)', () => {
+      expectOk(
+        service.render('{{zoteroPdfMarkdownLink files}}', {
+          ...mockContext,
+          files: ['/home/user/Zotero/storage/EBAUJBLY/Smith [2023].pdf'],
+        } as unknown as TemplateContext),
+        '[Smith [2023]](zotero://open-pdf/library/items/EBAUJBLY)',
+      );
+    });
+  });
+
   describe('String Helpers — branch coverage', () => {
     it('replace returns original value when input is not a string', () => {
       expectOk(
