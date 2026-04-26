@@ -1092,6 +1092,42 @@ describe('TemplateService', () => {
         '- [paper](zotero://open-pdf/library/items/EBAUJBLY)\n- [supplement](zotero://open-pdf/library/items/N6LQL4XL)\n',
       );
     });
+
+    it('zoteroPdfMarkdownLink matches case-insensitive .PDF extension', () => {
+      expectOk(
+        service.render('{{zoteroPdfMarkdownLink files}}', {
+          ...mockContext,
+          files: ['/home/user/Zotero/storage/EBAUJBLY/Paper.PDF'],
+        } as unknown as TemplateContext),
+        '[Paper](zotero://open-pdf/library/items/EBAUJBLY)',
+      );
+    });
+
+    it('zoteroPdfMarkdownLinks matches case-insensitive .PDF extension', () => {
+      expectOk(
+        service.render(
+          '{{#each (zoteroPdfMarkdownLinks files)}}{{this}}\n{{/each}}',
+          {
+            ...mockContext,
+            files: [
+              '/home/user/Zotero/storage/EBAUJBLY/A.Pdf',
+              '/home/user/Zotero/storage/N6LQL4XL/B.PDF',
+            ],
+          } as unknown as TemplateContext,
+        ),
+        '[A](zotero://open-pdf/library/items/EBAUJBLY)\n[B](zotero://open-pdf/library/items/N6LQL4XL)\n',
+      );
+    });
+
+    it('zoteroPdfMarkdownLink does not escape brackets in filename (known limitation)', () => {
+      expectOk(
+        service.render('{{zoteroPdfMarkdownLink files}}', {
+          ...mockContext,
+          files: ['/home/user/Zotero/storage/EBAUJBLY/Smith [2023].pdf'],
+        } as unknown as TemplateContext),
+        '[Smith [2023]](zotero://open-pdf/library/items/EBAUJBLY)',
+      );
+    });
   });
 
   describe('String Helpers — branch coverage', () => {

@@ -567,26 +567,26 @@ Wrap in `{{#if}}` to render the section only when PDFs exist:
 
 ## Quick Reference
 
-| Category | Helper | Purpose |
-|----------|--------|---------|
-| Comparison | `eq`, `ne` | Equality / inequality |
-| Comparison | `gt`, `lt`, `gte`, `lte` | Numeric comparisons |
-| Boolean | `and`, `or`, `not` | Combine / invert conditions |
-| String | `replace` | Regex find & replace |
-| String | `truncate` | Limit string length |
-| String | `match` | Extract regex match |
-| String | `quote` | JSON-stringify for safe YAML |
-| Date | `currentDate` | Current date/time with format |
-| Author | `formatNames` | Author list with et al. |
-| Author | `join` | Array to string |
-| Author | `split` | String to array |
-| Path | `urlEncode` | URL-encode for links |
-| Path | `basename` | Filename with extension |
-| Path | `filename` | Filename without extension |
-| Path | `dirname` | Directory path |
-| Path     | `pdfLink`                 | `file://` URI to first PDF                            |
-| Path     | `pdfMarkdownLink`         | Markdown link to first PDF                            |
-| Zotero   | `zoteroPdfURI`            | `zotero://open-pdf` URI for first PDF                 |
-| Zotero   | `zoteroPdfURIs`           | `zotero://open-pdf` URI array for all PDFs            |
-| Zotero   | `zoteroPdfMarkdownLink`   | Markdown link `[name](zotero://...)` for first PDF    |
-| Zotero   | `zoteroPdfMarkdownLinks`  | Array of `[name](zotero://...)` links for all PDFs    |
+| Category   | Helper                   | Purpose                                            |
+| ---------- | ------------------------ | -------------------------------------------------- |
+| Comparison | `eq`, `ne`               | Equality / inequality                              |
+| Comparison | `gt`, `lt`, `gte`, `lte` | Numeric comparisons                                |
+| Boolean    | `and`, `or`, `not`       | Combine / invert conditions                        |
+| String     | `replace`                | Regex find & replace                               |
+| String     | `truncate`               | Limit string length                                |
+| String     | `match`                  | Extract regex match                                |
+| String     | `quote`                  | JSON-stringify for safe YAML                       |
+| Date       | `currentDate`            | Current date/time with format                      |
+| Author     | `formatNames`            | Author list with et al.                            |
+| Author     | `join`                   | Array to string                                    |
+| Author     | `split`                  | String to array                                    |
+| Path       | `urlEncode`              | URL-encode for links                               |
+| Path       | `basename`               | Filename with extension                            |
+| Path       | `filename`               | Filename without extension                         |
+| Path       | `dirname`                | Directory path                                     |
+| Path       | `pdfLink`                | `file://` URI to first PDF                         |
+| Path       | `pdfMarkdownLink`        | Markdown link to first PDF                         |
+| Zotero     | `zoteroPdfURI`           | `zotero://open-pdf` URI for first PDF              |
+| Zotero     | `zoteroPdfURIs`          | `zotero://open-pdf` URI array for all PDFs         |
+| Zotero     | `zoteroPdfMarkdownLink`  | Markdown link `[name](zotero://...)` for first PDF |
+| Zotero     | `zoteroPdfMarkdownLinks` | Array of `[name](zotero://...)` links for all PDFs |

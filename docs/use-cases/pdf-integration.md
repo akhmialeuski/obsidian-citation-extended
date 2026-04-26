@@ -216,17 +216,17 @@ Notice the "PDF" section is completely absent when no PDF is available.
 
 ## Expected Result Summary
 
-| Action | Keyboard shortcut | What happens |
-|--------|-------------------|-------------|
-| Open PDF from search modal | `Shift+Tab` | System PDF viewer opens the attached file |
-| Open entry in Zotero | `Tab` | Zotero opens and selects the entry |
-| PDF link in template (`pdfMarkdownLink`) | — | `[filename](file:///path/to/file.pdf)` rendered in note |
-| PDF link in template (`pdfLink`)         | —             | `file:///path/to/file.pdf` URI rendered in note                       |
-| PDF link in template (`urlEncode`)       | —             | `file:///path/to/url-encoded-file.pdf` URI rendered in note           |
-| Open PDF in Zotero (`zoteroPdfURI`)      | —             | `zotero://open-pdf/library/items/ABCD1234` URI rendered in note       |
-| Open all PDFs in Zotero (`zoteroPdfURIs`) | —            | Array of `zotero://open-pdf` URIs, one per PDF attachment             |
-| Named Zotero PDF link (`zoteroPdfMarkdownLink`)   | —    | `[filename](zotero://open-pdf/library/items/KEY)` for first PDF       |
-| Named Zotero PDF links (`zoteroPdfMarkdownLinks`) | —    | Array of `[filename](zotero://...)` Markdown links for all PDFs       |
+| Action                                            | Keyboard shortcut | What happens                                                    |
+| ------------------------------------------------- | ----------------- | --------------------------------------------------------------- |
+| Open PDF from search modal                        | `Shift+Tab`       | System PDF viewer opens the attached file                       |
+| Open entry in Zotero                              | `Tab`             | Zotero opens and selects the entry                              |
+| PDF link in template (`pdfMarkdownLink`)          | —                 | `[filename](file:///path/to/file.pdf)` rendered in note         |
+| PDF link in template (`pdfLink`)                  | —                 | `file:///path/to/file.pdf` URI rendered in note                 |
+| PDF link in template (`urlEncode`)                | —                 | `file:///path/to/url-encoded-file.pdf` URI rendered in note     |
+| Open PDF in Zotero (`zoteroPdfURI`)               | —                 | `zotero://open-pdf/library/items/ABCD1234` URI rendered in note |
+| Open all PDFs in Zotero (`zoteroPdfURIs`)         | —                 | Array of `zotero://open-pdf` URIs, one per PDF attachment       |
+| Named Zotero PDF link (`zoteroPdfMarkdownLink`)   | —                 | `[filename](zotero://open-pdf/library/items/KEY)` for first PDF |
+| Named Zotero PDF links (`zoteroPdfMarkdownLinks`) | —                 | Array of `[filename](zotero://...)` Markdown links for all PDFs |
 
 ## Variations
 
@@ -327,7 +327,7 @@ For a single PDF, the singular form `zoteroPdfMarkdownLink` returns one link str
 
 ### No PDF Attachments
 
-When an entry has no PDF files (only HTML snapshots, or no attachments at all), both `zoteroPdfURI` and `zoteroPdfURIs` return an empty string. The `{{#if}}` wrapper ensures your note stays clean:
+When an entry has no PDF files (only HTML snapshots, or no attachments at all), `zoteroPdfURI` and `zoteroPdfMarkdownLink` return an empty string, while `zoteroPdfURIs` and `zoteroPdfMarkdownLinks` return an empty array. The `{{#if}}` wrapper ensures your note stays clean in either case:
 
 ```handlebars
 {{#if (zoteroPdfURI entry.files)}}
