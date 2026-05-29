@@ -109,7 +109,7 @@ describe('LibraryService Loading Behavior', () => {
     expect(service.state.error?.message).toContain('File not found');
   });
 
-  it('should timeout if loading takes too long', async () => {
+  it('should timeout if loading takes too long, without a retry storm', async () => {
     jest.useFakeTimers();
     global.window.setTimeout = setTimeout;
     global.window.clearTimeout = clearTimeout;
@@ -118,22 +118,31 @@ describe('LibraryService Loading Behavior', () => {
       { name: 'Slow', path: 'slow.json', type: 'csl-json' },
     ];
 
+    // Never resolves — forces the load timeout to fire.
+    const loadMock = jest.fn().mockImplementation(() => new Promise(() => {}));
     (LocalFileSource as jest.Mock).mockImplementation(() => ({
       id: 'slow-source',
-      load: jest.fn().mockImplementation(() => new Promise(() => {})), // Never resolves
+      load: loadMock,
       watch: jest.fn(),
       dispose: jest.fn(),
     }));
 
     const loadPromise = service.load();
 
-    // Fast-forward time
-    jest.advanceTimersByTime(11000);
+    // Fast-forward past the default 30s load timeout
+    jest.advanceTimersByTime(31000);
 
     await loadPromise;
 
     expect(service.state.status).toBe(LoadingStatus.Error);
     expect(service.state.error?.message).toContain('Timeout');
+
+    // A timeout must NOT schedule a retry: the worker is still parsing, so a
+    // retry would queue a second parse behind it (a self-worsening storm).
+    // Advancing past the first backoff window must not trigger another load.
+    jest.advanceTimersByTime(5000);
+    await Promise.resolve();
+    expect(loadMock).toHaveBeenCalledTimes(1);
 
     jest.useRealTimers();
   });
