@@ -1,0 +1,20 @@
+# Normalize line endings: store LF in the repo, check out LF on every OS.
+# Prevents the CRLF-vs-LF churn that breaks Prettier/ESLint on Windows
+# checkouts (core.autocrlf=true). Run `git add --renormalize .` once to
+# convert already-committed files.
+* text=auto eol=lf
+
+# Windows-specific scripts must keep CRLF to run correctly.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets — never normalize.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary

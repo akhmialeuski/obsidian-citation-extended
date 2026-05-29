@@ -52,6 +52,10 @@ export class CitationsPluginSettings {
   public readwiseSyncIntervalMinutes: number =
     DEFAULT_SETTINGS.readwiseSyncIntervalMinutes;
 
+  // Performance
+  public libraryLoadTimeoutSeconds: number =
+    DEFAULT_SETTINGS.libraryLoadTimeoutSeconds;
+
   /**
    * Returns the effective primary citation template, taking the active
    * preset into account.  When the preset is not 'custom', the preset

@@ -99,6 +99,12 @@ export const SettingsSchema = z.object({
   // ---- Readwise integration ------------------------------------------------
   readwiseLastSyncDate: z.string().default(''),
   readwiseSyncIntervalMinutes: z.number().min(0).default(30),
+  // ---- Performance ---------------------------------------------------------
+  // Max seconds to wait for all databases to load + parse before aborting.
+  // Large or LaTeX-escaped (e.g. Cyrillic \cyrchar) BibTeX libraries can take
+  // longer than the old fixed 10s; raise this if you see
+  // "Timeout loading citation database".
+  libraryLoadTimeoutSeconds: z.number().min(5).max(600).default(30),
 });
 
 export type CitationsPluginSettingsType = z.infer<typeof SettingsSchema>;
@@ -133,6 +139,8 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   // Readwise defaults
   readwiseLastSyncDate: '',
   readwiseSyncIntervalMinutes: 30,
+  // Performance
+  libraryLoadTimeoutSeconds: 30,
 };
 
 export function validateSettings(settings: unknown) {

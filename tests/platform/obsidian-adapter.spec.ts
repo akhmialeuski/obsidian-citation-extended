@@ -65,6 +65,7 @@ jest.mock(
   { virtual: true },
 );
 
+import * as nodePath from 'path';
 import { ObsidianPlatformAdapter } from '../../src/platform/obsidian-adapter';
 import { App, Plugin, TFile, TFolder, FileSystemAdapter } from 'obsidian';
 
@@ -693,8 +694,10 @@ describe('ObsidianPlatformAdapter', () => {
 
       const result = adapterWithFS.resolvePath('refs/library.bib');
 
-      // path.resolve('/vault', 'refs/library.bib') = '/vault/refs/library.bib'
-      expect(result).toBe('/vault/refs/library.bib');
+      // Resolved against the mock base path. Computed via the same node
+      // `path.resolve` so the assertion is cross-platform: POSIX yields
+      // '/vault/refs/library.bib', Windows yields 'C:\\vault\\refs\\library.bib'.
+      expect(result).toBe(nodePath.resolve('/vault', 'refs/library.bib'));
     });
   });
 

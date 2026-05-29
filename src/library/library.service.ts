@@ -16,11 +16,29 @@ import type {
   SourceLoadResult,
 } from '../infrastructure/normalization-pipeline';
 
-const LOAD_TIMEOUT_MS = 10_000;
+/** Fallback timeout when the setting is missing (e.g. legacy config). */
+const DEFAULT_LOAD_TIMEOUT_MS = 30_000;
 const LOAD_DEBOUNCE_MS = 1_000;
 const MAX_RETRY_COUNT = 5;
 const INITIAL_RETRY_DELAY_MS = 1_000;
 const MAX_RETRY_DELAY_MS = 30_000;
+
+/**
+ * Thrown when source loading exceeds the configured timeout. Kept distinct from
+ * transient errors so the retry logic can skip it: when a load times out the
+ * parse is still running in the worker, and retrying would queue another parse
+ * behind it — a self-worsening "retry storm" that can prevent the library from
+ * ever loading.
+ */
+class LibraryLoadTimeoutError extends Error {
+  constructor(seconds: number) {
+    super(
+      `Timeout loading citation database after ${seconds}s. ` +
+        `If your library is large, raise "Library load timeout" in settings.`,
+    );
+    this.name = 'LibraryLoadTimeoutError';
+  }
+}
 
 /**
  * Metadata collected from each source during loading.
@@ -134,7 +152,12 @@ export class LibraryService implements ILibraryService {
         ],
       });
 
-      this.handleErrorRetry();
+      // A timeout means the worker is still parsing; retrying would queue a
+      // second parse behind it and make things worse. Only retry transient
+      // failures (e.g. a file briefly locked during Better BibTeX auto-export).
+      if (!(e instanceof LibraryLoadTimeoutError)) {
+        this.handleErrorRetry();
+      }
       return null;
     } finally {
       if (this.abortController?.signal === signal) {
@@ -146,11 +169,14 @@ export class LibraryService implements ILibraryService {
   private async loadFromSources(): Promise<SourceLoadResult[]> {
     this.sourceManager.syncSources(this.settings.databases);
 
+    const timeoutSeconds =
+      this.settings.libraryLoadTimeoutSeconds ?? DEFAULT_LOAD_TIMEOUT_MS / 1000;
+
     let timeoutId: number = 0;
     const timeoutPromise = new Promise<never>((_, reject) => {
       timeoutId = window.setTimeout(
-        () => reject(new Error('Timeout loading citation database')),
-        LOAD_TIMEOUT_MS,
+        () => reject(new LibraryLoadTimeoutError(timeoutSeconds)),
+        timeoutSeconds * 1000,
       );
     });
 

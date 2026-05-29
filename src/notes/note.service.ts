@@ -103,7 +103,11 @@ export class NoteService implements INoteService {
     const template = this.settings.literatureNoteTitleTemplate;
     const hasPathSegments = NoteService.LITERAL_SLASH_RE.test(template);
     const title = this.sanitizeTitlePath(titleResult.value, hasPathSegments);
-    return path.join(this.settings.literatureNoteFolder, `${title}.md`);
+    // Vault paths must always use forward slashes on every OS. Node's
+    // platform-specific `path.join` injects backslashes on Windows, which
+    // desync note creation (raw path) from lookup (normalized path) and break
+    // wiki-links and dedup. `path.posix.join` keeps the separator consistent.
+    return path.posix.join(this.settings.literatureNoteFolder, `${title}.md`);
   }
 
   /**
