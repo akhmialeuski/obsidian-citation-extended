@@ -47,20 +47,20 @@ export class CitationSearchModal extends SuggestModal<Entry> {
 
     const parent = this.resultContainerEl.parentElement;
     if (parent) {
-      this.loadingEl = parent.createEl('div', {
+      this.loadingEl = parent.createDiv({
         cls: 'zoteroModalLoading',
       });
     } else {
-      this.loadingEl = this.resultContainerEl.createEl('div', {
+      this.loadingEl = this.resultContainerEl.createDiv({
         cls: 'zoteroModalLoading',
       });
     }
-    this.loadingEl.createEl('div', { cls: 'zoteroModalLoadingAnimation' });
+    this.loadingEl.createDiv({ cls: 'zoteroModalLoadingAnimation' });
     this.loadingEl.createEl('p', {
       text: 'Loading citation database. Please wait...',
     });
 
-    this.errorEl = this.loadingEl.createEl('div', {
+    this.errorEl = this.loadingEl.createDiv({
       cls: 'zoteroModalError d-none',
     });
   }
@@ -125,7 +125,7 @@ export class CitationSearchModal extends SuggestModal<Entry> {
   onClose() {
     this.unsubscribeStore?.();
     if (this.inputTimeout) {
-      clearTimeout(this.inputTimeout);
+      window.clearTimeout(this.inputTimeout);
       this.inputTimeout = undefined;
     }
     this.inputEl.removeEventListener('keydown', this.boundKeydown);
@@ -181,7 +181,7 @@ export class CitationSearchModal extends SuggestModal<Entry> {
     // In multi-select mode, re-open the modal after each selection
     if (this.action.keepOpen) {
       this.isReopening = true;
-      setTimeout(() => {
+      window.setTimeout(() => {
         const modal = new CitationSearchModal(
           this.app,
           this.action,
@@ -205,18 +205,18 @@ export class CitationSearchModal extends SuggestModal<Entry> {
     const displayedAuthorString = entry.displayAuthors(AUTHOR_DISPLAY_LIMIT);
     const yearString = entry.yearString();
 
-    const container = el.createEl('div', { cls: 'zoteroResult' });
-    container.createEl('span', {
+    const container = el.createDiv({ cls: 'zoteroResult' });
+    container.createSpan({
       cls: 'zoteroTitle',
       text: entryTitle,
     });
-    container.createEl('span', {
+    container.createSpan({
       cls: 'zoteroCitekey',
       text: entry.displayKey(),
     });
 
     if (yearString) {
-      container.createEl('span', {
+      container.createSpan({
         cls: 'zoteroYear',
         text: yearString,
       });
@@ -225,7 +225,7 @@ export class CitationSearchModal extends SuggestModal<Entry> {
     const authorsCls = entry.authorString
       ? 'zoteroAuthors'
       : 'zoteroAuthors zoteroAuthorsEmpty';
-    container.createEl('span', {
+    container.createSpan({
       cls: authorsCls,
       text: displayedAuthorString,
     });

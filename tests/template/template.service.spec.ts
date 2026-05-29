@@ -1,6 +1,5 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as _ from 'lodash';
 
 jest.mock(
   'obsidian',
@@ -117,12 +116,14 @@ function matchLibraryRender(
       dropFields.forEach((f) => delete dict[f]);
     }
 
-    return _.mapValues(dict, (val: unknown) =>
-      val
+    const result: Record<string, string | undefined> = {};
+    for (const [key, val] of Object.entries(dict)) {
+      result[key] = val
         ?.toString()
         .toLowerCase()
-        .replace(/[\u2012-\u2014]/g, '-'),
-    ) as Record<string, string>;
+        .replace(/[\u2012-\u2014]/g, '-');
+    }
+    return result as Record<string, string>;
   };
 
   actual = actual.map((a) => transform(a as Record<string, unknown>));

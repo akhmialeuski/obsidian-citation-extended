@@ -281,7 +281,7 @@ export abstract class Entry {
     const jsonObj = { ...this } as Record<string, unknown>;
 
     // add getter values
-    const proto = Object.getPrototypeOf(this);
+    const proto = Object.getPrototypeOf(this) as object;
     Object.entries(Object.getOwnPropertyDescriptors(proto))
       .filter(([, descriptor]) => typeof descriptor.get == 'function')
       .forEach(([key, descriptor]) => {

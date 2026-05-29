@@ -33,7 +33,8 @@ const DEFAULT_DATE_FORMAT = 'YYYY-MM-DD';
 
 export function registerDateHelpers(hbs: HandlebarsInstance): void {
   hbs.registerHelper('currentDate', (options: Handlebars.HelperOptions) => {
-    const format = (options.hash.format as string) || DEFAULT_DATE_FORMAT;
+    const hash = options.hash as { format?: string };
+    const format = hash.format || DEFAULT_DATE_FORMAT;
     return formatDate(new Date(), format);
   });
 }

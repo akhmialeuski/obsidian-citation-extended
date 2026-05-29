@@ -8,9 +8,14 @@ export function registerAuthorHelpers(hbs: HandlebarsInstance): void {
     'formatNames',
     (authors: unknown, options: Handlebars.HelperOptions) => {
       if (!Array.isArray(authors)) return '';
-      const max = (options.hash.max as number) || 2;
-      const etAl = (options.hash.etAl as string) || ' et al.';
-      const connector = (options.hash.connector as string) || ' and ';
+      const hash = options.hash as {
+        max?: number;
+        etAl?: string;
+        connector?: string;
+      };
+      const max = hash.max || 2;
+      const etAl = hash.etAl || ' et al.';
+      const connector = hash.connector || ' and ';
 
       const authorList = authors as Author[];
       const names = authorList.map(

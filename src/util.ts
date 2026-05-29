@@ -42,7 +42,9 @@ export class WorkerManager {
         try {
           // We can't truly "cancel" the worker thread operation once sent,
           // but we can ignore the result if aborted.
-          const result = await this.worker.postMessage(msg);
+          // postMessage is typed as Promise<any> by promise-worker; the caller
+          // declares the concrete TResult via the generic parameter.
+          const result = (await this.worker.postMessage(msg)) as TResult;
 
           if (signal?.aborted) {
             reject(new DOMException('Aborted', 'AbortError'));

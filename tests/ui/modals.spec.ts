@@ -23,21 +23,30 @@ jest.mock(
           removeEventListener: jest.fn(),
           focus: jest.fn(),
         } as unknown as HTMLInputElement;
+        // Leaf element mock (loading animation, error, 'p' text, etc.)
+        const childEl = () => ({
+          addClass: jest.fn(),
+          removeClass: jest.fn(),
+          setText: jest.fn(),
+        });
+        // loadingEl-like mock exposing createEl/createDiv/createSpan, matching
+        // Obsidian's HTMLElement creation helpers used by the modal.
+        const containerChild = () => ({
+          createEl: jest.fn(childEl),
+          createDiv: jest.fn(childEl),
+          createSpan: jest.fn(childEl),
+          addClass: jest.fn(),
+          removeClass: jest.fn(),
+          setText: jest.fn(),
+          children: [
+            { addClass: jest.fn(), removeClass: jest.fn() },
+            { addClass: jest.fn(), removeClass: jest.fn() },
+          ],
+        });
         this.resultContainerEl = {
           addClass: jest.fn(),
-          createEl: jest.fn().mockReturnValue({
-            createEl: jest.fn().mockReturnValue({
-              addClass: jest.fn(),
-              removeClass: jest.fn(),
-              setText: jest.fn(),
-            }),
-            addClass: jest.fn(),
-            removeClass: jest.fn(),
-            children: [
-              { addClass: jest.fn(), removeClass: jest.fn() },
-              { addClass: jest.fn(), removeClass: jest.fn() },
-            ],
-          }),
+          createEl: jest.fn(containerChild),
+          createDiv: jest.fn(containerChild),
           empty: jest.fn(),
         } as unknown as HTMLElement;
       }

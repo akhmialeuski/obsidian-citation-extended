@@ -46,6 +46,15 @@ See [Data Sources](docs/data-sources.md) and [Configuration](docs/configuration.
 
 Full documentation is in the [docs/](docs/index.md) directory.
 
+## Network Use
+
+This plugin accesses the network only when **you** configure it to, and it never sends telemetry or analytics.
+
+- **Readwise API (`readwise.io`)** — contacted **only** if you add a Readwise data source and supply your own API token, in order to fetch your highlights (v2) and documents (v3) as citable entries. If you set a sync interval, the plugin re-fetches from this endpoint on that schedule; otherwise it fetches on demand. Your token is stored locally in plugin settings and sent only to Readwise for authentication.
+- **Documentation links (`github.com`)** — the settings screen links to the plugin's documentation. These open in your browser **when you click them**; the plugin makes no automatic requests to GitHub.
+
+All bibliography parsing happens locally. Nothing leaves your vault unless you explicitly enable the Readwise integration above.
+
 ## Development
 
 ```bash

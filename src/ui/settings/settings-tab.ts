@@ -252,7 +252,7 @@ export class CitationSettingTab extends PluginSettingTab {
     new Setting(card)
       .setName('API token')
       .setDesc(
-        'Your Readwise access token. Get it from readwise.io/access_token.',
+        'Your Readwise access token. Get it from Readwise.io/access_token.',
       )
       .addText((text) => {
         text.inputEl.type = 'password';
