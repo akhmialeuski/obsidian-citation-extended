@@ -7,11 +7,16 @@ import fs from 'fs';
 import replace from '@rollup/plugin-replace';
 import webWorkerLoader from 'rollup-plugin-web-worker-loader';
 
+// Rollup sets ROLLUP_WATCH=true in `--watch` (dev) mode. Production builds
+// (`npm run build`) ship without source maps: inline maps embed the entire
+// source as base64, inflating main.js past Obsidian Sync's 5 MB limit.
+const isProd = !process.env.ROLLUP_WATCH;
+
 export default {
   input: 'src/main.ts',
   output: {
     dir: 'dist',
-    sourcemap: 'inline',
+    sourcemap: isProd ? false : 'inline',
     format: 'cjs',
     exports: 'default',
   },
@@ -42,7 +47,7 @@ export default {
       targetPlatform: 'browser',
       extensions: ['.ts'],
       preserveSource: true,
-      sourcemap: true,
+      sourcemap: !isProd,
     }),
     {
       name: 'copy-static-files',
@@ -58,9 +63,9 @@ export default {
         if (fs.existsSync('manifest.json')) {
           fs.copyFileSync('manifest.json', 'dist/manifest.json');
         }
-        if (fs.existsSync('versions.json')) {
-          fs.copyFileSync('versions.json', 'dist/versions.json');
-        }
+        // versions.json is intentionally NOT copied: Obsidian only downloads
+        // main.js, manifest.json, and styles.css from a release. versions.json
+        // lives in the repo root for the plugin-update compatibility check.
       }
     }
   ],

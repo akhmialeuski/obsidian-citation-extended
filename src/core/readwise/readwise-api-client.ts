@@ -331,12 +331,12 @@ export class ReadwiseApiClient {
         return;
       }
 
-      const timer = setTimeout(resolve, ms);
+      const timer = window.setTimeout(resolve, ms);
 
       signal?.addEventListener(
         'abort',
         () => {
-          clearTimeout(timer);
+          window.clearTimeout(timer);
           reject(signal.reason as Error);
         },
         { once: true },

@@ -55,8 +55,8 @@ export default class CitationPlugin extends Plugin {
   async loadSettings(): Promise<void> {
     this.settings = new CitationsPluginSettings();
 
-    const loadedSettings = await this.loadData();
-    if (!loadedSettings) return;
+    const loadedSettings: unknown = await this.loadData();
+    if (!loadedSettings || typeof loadedSettings !== 'object') return;
 
     const mergedSettings = { ...DEFAULT_SETTINGS, ...loadedSettings };
     const validationResult = validateSettings(mergedSettings);

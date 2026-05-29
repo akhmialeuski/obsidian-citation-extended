@@ -1,3 +1,9 @@
+/**
+ * @jest-environment jsdom
+ *
+ * jsdom provides `window`, matching Obsidian's Electron renderer where the
+ * client runs. The rate-limit `sleep()` uses `window.setTimeout`.
+ */
 jest.mock('obsidian', () => ({}), { virtual: true });
 jest.mock('web-worker:../../src/worker', () => ({ default: class {} }), {
   virtual: true,

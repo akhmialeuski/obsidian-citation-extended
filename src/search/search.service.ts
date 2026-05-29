@@ -22,9 +22,10 @@ export class SearchService {
   private isIndexing = false;
 
   constructor() {
-    // Handle potential interoperability issues with MiniSearch import
-    // @ts-expect-error -- minisearch types are not perfect
-    const MiniSearchConstructor = MiniSearch.default || MiniSearch;
+    // Handle ESM/CJS interop: some bundlers nest the constructor under `.default`.
+    const MiniSearchConstructor: typeof MiniSearch =
+      (MiniSearch as unknown as { default?: typeof MiniSearch }).default ??
+      MiniSearch;
     this.index = new MiniSearchConstructor({
       fields: ['title', 'authorString', 'year', 'id', 'zoteroId'],
       storeFields: ['id'],
@@ -54,7 +55,7 @@ export class SearchService {
     if (!query) return [];
     // Return top 50 results IDs
     const results = this.index.search(query);
-    return results.map((r) => r.id);
+    return results.map((r) => r.id as string);
   }
 
   public get isReady(): boolean {

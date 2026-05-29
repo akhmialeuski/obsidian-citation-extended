@@ -87,7 +87,7 @@ function toEntryDataFromReader(doc: ReadwiseReaderDocument): ReadwiseEntryData {
  * data is loaded on demand when {@link load} is called.
  */
 export class ReadwiseSource implements DataSource {
-  private pollingTimer: ReturnType<typeof setInterval> | null = null;
+  private pollingTimer: number | null = null;
 
   constructor(
     public readonly id: string,
@@ -237,7 +237,7 @@ export class ReadwiseSource implements DataSource {
     console.debug(
       `ReadwiseSource: Starting periodic sync every ${Math.round(this.syncIntervalMs / 60_000)} min`,
     );
-    this.pollingTimer = setInterval(() => {
+    this.pollingTimer = window.setInterval(() => {
       console.debug('ReadwiseSource: Periodic sync triggered');
       callback();
     }, this.syncIntervalMs);
@@ -246,7 +246,7 @@ export class ReadwiseSource implements DataSource {
   /** Stop the polling timer. */
   dispose(): void {
     if (this.pollingTimer) {
-      clearInterval(this.pollingTimer);
+      window.clearInterval(this.pollingTimer);
       this.pollingTimer = null;
     }
   }

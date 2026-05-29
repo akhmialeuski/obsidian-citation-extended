@@ -16,8 +16,8 @@ interface ParseResult {
 }
 
 function parseCslJson(raw: string): ParseResult {
-  const entries: EntryData[] = JSON.parse(raw);
-  return { entries, parseErrors: [] };
+  const data: unknown = JSON.parse(raw);
+  return { entries: data as EntryData[], parseErrors: [] };
 }
 
 function parseBibLaTeX(raw: string): ParseResult {

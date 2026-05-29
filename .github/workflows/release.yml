@@ -1,0 +1,54 @@
+name: Release
+
+# Runs when a version tag is pushed (e.g. created by `npm run release`).
+# Builds the plugin, attaches the Obsidian-required assets to a GitHub
+# release, and attaches a build-provenance attestation to each asset.
+on:
+  push:
+    tags:
+      - '*'
+
+permissions:
+  contents: write # create the release and upload assets
+  id-token: write # required by attest-build-provenance
+  attestations: write # required by attest-build-provenance
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # Produces a signed provenance attestation for the release artifacts,
+      # resolving the "release assets are missing a GitHub artifact
+      # attestation" finding from the plugin review.
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/main.js
+            dist/manifest.json
+            dist/styles.css
+
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # Create the release if it does not exist yet, otherwise just
+          # upload (clobbering) the assets onto the existing tag.
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          fi
+          gh release upload "$TAG" \
+            dist/main.js dist/manifest.json dist/styles.css --clobber

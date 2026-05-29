@@ -34,15 +34,27 @@ beforeAll(() => {
       this.textContent = text;
     };
   }
+  // Obsidian's createEl/createDiv/createSpan accept either a class string or a
+  // DomElementInfo object ({ cls, text, ... }). Mirror both forms here.
+  const applyElOpts = (
+    el: HTMLElement,
+    opts?: string | { text?: string; cls?: string },
+  ): void => {
+    if (typeof opts === 'string') {
+      el.className = opts;
+    } else if (opts) {
+      if (opts.text) el.textContent = opts.text;
+      if (opts.cls) el.className = opts.cls;
+    }
+  };
   if (!proto.createEl) {
     proto.createEl = function (
       this: HTMLElement,
       tag: string,
-      opts?: { text?: string; cls?: string },
+      opts?: string | { text?: string; cls?: string },
     ): HTMLElement {
       const el = document.createElement(tag);
-      if (opts?.text) el.textContent = opts.text;
-      if (opts?.cls) el.className = opts.cls;
+      applyElOpts(el, opts);
       this.appendChild(el);
       return el;
     };
@@ -50,12 +62,17 @@ beforeAll(() => {
   if (!proto.createDiv) {
     proto.createDiv = function (
       this: HTMLElement,
-      cls?: string,
+      opts?: string | { text?: string; cls?: string },
     ): HTMLDivElement {
-      const el = document.createElement('div');
-      if (cls) el.className = cls;
-      this.appendChild(el);
-      return el;
+      return (this as any).createEl('div', opts) as HTMLDivElement;
+    };
+  }
+  if (!proto.createSpan) {
+    proto.createSpan = function (
+      this: HTMLElement,
+      opts?: string | { text?: string; cls?: string },
+    ): HTMLSpanElement {
+      return (this as any).createEl('span', opts) as HTMLSpanElement;
     };
   }
   /* eslint-enable @typescript-eslint/no-explicit-any */
