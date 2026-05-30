@@ -65,3 +65,17 @@ export function generateDatabaseId(): string {
   const random = Math.random().toString(36).substring(2, 6).padEnd(4, '0');
   return `db-${timestamp}-${random}`;
 }
+
+/**
+ * Resolve the per-database Readwise filters for a given database id.
+ *
+ * Returns `undefined` when the id is missing or not found — so an absent id
+ * never matches an id-less database (which would otherwise share filters).
+ */
+export function resolveReadwiseFilters(
+  databases: DatabaseConfig[],
+  databaseId: string | undefined,
+): ReadwiseFilters | undefined {
+  if (!databaseId) return undefined;
+  return databases.find((db) => db.id === databaseId)?.readwiseFilters;
+}

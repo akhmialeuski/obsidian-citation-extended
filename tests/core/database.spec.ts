@@ -1,4 +1,8 @@
-import { generateDatabaseId } from '../../src/core/types/database';
+import {
+  generateDatabaseId,
+  resolveReadwiseFilters,
+} from '../../src/core/types/database';
+import type { DatabaseConfig } from '../../src/core/types/database';
 
 jest.mock('obsidian', () => ({}), { virtual: true });
 
@@ -29,5 +33,35 @@ describe('generateDatabaseId', () => {
     const timestamp = parseInt(parts[1], 10);
     expect(timestamp).toBeGreaterThanOrEqual(before);
     expect(timestamp).toBeLessThanOrEqual(after);
+  });
+});
+
+describe('resolveReadwiseFilters', () => {
+  const databases: DatabaseConfig[] = [
+    {
+      id: 'db-rw',
+      name: 'Readwise',
+      type: 'readwise',
+      path: 'token',
+      readwiseFilters: { categories: ['books'] },
+    },
+    { id: 'db-bib', name: 'Zotero', type: 'biblatex', path: '/z.bib' },
+  ];
+
+  it('returns the matching database filters', () => {
+    expect(resolveReadwiseFilters(databases, 'db-rw')).toEqual({
+      categories: ['books'],
+    });
+  });
+
+  it('returns undefined for a non-matching id', () => {
+    expect(resolveReadwiseFilters(databases, 'nope')).toBeUndefined();
+  });
+
+  it('returns undefined for an undefined id (never matches an id-less db)', () => {
+    const withIdless: DatabaseConfig[] = [
+      { name: 'Idless', type: 'readwise', path: 't' },
+    ];
+    expect(resolveReadwiseFilters(withIdless, undefined)).toBeUndefined();
   });
 });

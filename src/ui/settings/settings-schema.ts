@@ -49,6 +49,17 @@ export const READWISE_SYNC_INTERVAL_DEFAULT_MINUTES = 30;
 // Minimum allowed value for the per-database "minimum highlights" import filter.
 export const READWISE_FILTER_MIN_HIGHLIGHTS = 0;
 
+/**
+ * Resolve the configured Readwise sync interval (minutes) to milliseconds for
+ * `setInterval`, clamped to the valid range. Returns `undefined` when polling
+ * is disabled (interval at/below the minimum). Single home for the bound + ms
+ * conversion shared by main.ts (read time) and the settings UI.
+ */
+export function resolveSyncIntervalMs(minutes: number): number | undefined {
+  if (minutes <= READWISE_SYNC_INTERVAL_MIN_MINUTES) return undefined;
+  return Math.min(minutes, READWISE_SYNC_INTERVAL_MAX_MINUTES) * 60_000;
+}
+
 // ---- Zod schema ------------------------------------------------------------
 
 export const SettingsSchema = z.object({
