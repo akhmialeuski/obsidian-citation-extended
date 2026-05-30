@@ -38,6 +38,17 @@ export const CITATION_STYLE_PRESETS: Record<
   },
 };
 
+// ---- Readwise sync interval bounds -----------------------------------------
+// `window.setInterval` overflows beyond ~2^31 ms (~24.8 days / ~35791 minutes),
+// wrapping around to fire immediately. Cap the configurable interval well below
+// that at one week. 0 disables periodic polling.
+export const READWISE_SYNC_INTERVAL_MIN_MINUTES = 0;
+export const READWISE_SYNC_INTERVAL_MAX_MINUTES = 60 * 24 * 7; // 10080 = 1 week
+export const READWISE_SYNC_INTERVAL_DEFAULT_MINUTES = 30;
+
+// Minimum allowed value for the per-database "minimum highlights" import filter.
+export const READWISE_FILTER_MIN_HIGHLIGHTS = 0;
+
 // ---- Zod schema ------------------------------------------------------------
 
 export const SettingsSchema = z.object({
@@ -76,6 +87,18 @@ export const SettingsSchema = z.object({
         type: z.enum(DATABASE_FORMAT_ENUM),
         path: z.string(),
         sourceType: z.string().optional(),
+        // Readwise-only client-side import filters (optional, backward-compat).
+        readwiseFilters: z
+          .object({
+            categories: z.array(z.string()).optional(),
+            tags: z.array(z.string()).optional(),
+            minHighlights: z
+              .number()
+              .min(READWISE_FILTER_MIN_HIGHLIGHTS)
+              .optional(),
+            readerLocations: z.array(z.string()).optional(),
+          })
+          .optional(),
       }),
     )
     .default([]),
@@ -98,7 +121,11 @@ export const SettingsSchema = z.object({
   noteIdentifierField: z.string().default(''),
   // ---- Readwise integration ------------------------------------------------
   readwiseLastSyncDate: z.string().default(''),
-  readwiseSyncIntervalMinutes: z.number().min(0).default(30),
+  readwiseSyncIntervalMinutes: z
+    .number()
+    .min(READWISE_SYNC_INTERVAL_MIN_MINUTES)
+    .max(READWISE_SYNC_INTERVAL_MAX_MINUTES)
+    .default(READWISE_SYNC_INTERVAL_DEFAULT_MINUTES),
   // ---- Performance ---------------------------------------------------------
   // Max seconds to wait for all databases to load + parse before aborting.
   // Large or LaTeX-escaped (e.g. Cyrillic \cyrchar) BibTeX libraries can take
@@ -138,7 +165,7 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   noteIdentifierField: '',
   // Readwise defaults
   readwiseLastSyncDate: '',
-  readwiseSyncIntervalMinutes: 30,
+  readwiseSyncIntervalMinutes: READWISE_SYNC_INTERVAL_DEFAULT_MINUTES,
   // Performance
   libraryLoadTimeoutSeconds: 30,
 };

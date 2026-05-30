@@ -1,16 +1,29 @@
+/**
+ * @jest-environment jsdom
+ *
+ * jsdom provides `window`, matching Obsidian's Electron renderer. The polling
+ * timer in ReadwiseSource.watch() uses `window.setInterval`.
+ */
 jest.mock('obsidian', () => ({}), { virtual: true });
 jest.mock('web-worker:../../src/worker', () => ({ default: class {} }), {
   virtual: true,
 });
 
-import { ReadwiseSource } from '../../src/sources/readwise-source';
+import {
+  ReadwiseSource,
+  applyReadwiseFilters,
+} from '../../src/sources/readwise-source';
 import {
   ReadwiseApiClient,
   ReadwiseExportBook,
   ReadwiseReaderDocument,
 } from '../../src/core/readwise/readwise-api-client';
-import { ReadwiseAdapter } from '../../src/core/adapters/readwise-adapter';
+import {
+  ReadwiseAdapter,
+  ReadwiseEntryData,
+} from '../../src/core/adapters/readwise-adapter';
 import { DATABASE_FORMATS } from '../../src/core/types/database';
+import type { IFileSystem } from '../../src/platform/platform-adapter';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -83,6 +96,28 @@ function makeReaderDoc(
   };
 }
 
+function makeReadwiseEntryData(
+  overrides: Partial<ReadwiseEntryData> = {},
+): ReadwiseEntryData {
+  return {
+    mode: 'readwise-highlights',
+    rawId: '1',
+    title: 'T',
+    author: 'A',
+    category: 'books',
+    sourceUrl: null,
+    readwiseUrl: 'https://readwise.io/x',
+    coverImageUrl: null,
+    summary: null,
+    highlightsText: null,
+    highlightCount: 0,
+    tags: [],
+    publishedDate: null,
+    updatedAt: null,
+    ...overrides,
+  };
+}
+
 function createMockClient(
   overrides: Partial<ReadwiseApiClient> = {},
 ): ReadwiseApiClient {
@@ -92,6 +127,19 @@ function createMockClient(
     fetchReaderDocuments: jest.fn().mockResolvedValue([]),
     ...overrides,
   } as unknown as ReadwiseApiClient;
+}
+
+function createMockFileSystem(
+  overrides: Partial<IFileSystem> = {},
+): IFileSystem {
+  return {
+    readFile: jest.fn().mockResolvedValue(''),
+    writeFile: jest.fn().mockResolvedValue(undefined),
+    exists: jest.fn().mockResolvedValue(false),
+    createFolder: jest.fn().mockResolvedValue(undefined),
+    getBasePath: jest.fn().mockReturnValue('/vault'),
+    ...overrides,
+  } as unknown as IFileSystem;
 }
 
 /** Create a mock WorkerManager that returns the data passed to it. */
@@ -395,11 +443,16 @@ describe('ReadwiseSource', () => {
       expect(parsed[0].rawId).toBe('doc-1');
     });
 
-    it('filters out child documents with parent_id', async () => {
+    it('merges child documents into their parent instead of dropping them', async () => {
       const docs = [
-        makeReaderDoc({ id: 'parent-1', parent_id: null }),
-        makeReaderDoc({ id: 'child-1', parent_id: 'parent-1' }),
-        makeReaderDoc({ id: 'parent-2', parent_id: null }),
+        makeReaderDoc({ id: 'parent-1', parent_id: null, notes: '' }),
+        makeReaderDoc({
+          id: 'child-1',
+          parent_id: 'parent-1',
+          content: 'Child highlight text',
+          notes: '',
+        }),
+        makeReaderDoc({ id: 'parent-2', parent_id: null, notes: '' }),
       ];
       const client = createMockClient({
         fetchReaderDocuments: jest.fn().mockResolvedValue(docs),
@@ -409,12 +462,44 @@ describe('ReadwiseSource', () => {
       const source = new ReadwiseSource('rd-src-1', client, worker as never);
       const result = await source.load();
 
-      // Only top-level reader docs (books array is empty)
+      // Children are folded into parents — only the two parents remain.
       expect(result.entries).toHaveLength(2);
       expect(result.entries.map((e) => e.id)).toEqual([
         'rd-parent-1',
         'rd-parent-2',
       ]);
+
+      const parent1 = result.entries.find(
+        (e) => e.id === 'rd-parent-1',
+      ) as ReadwiseAdapter;
+      expect(parent1.highlights).toHaveLength(1);
+      expect(parent1.highlights[0].text).toBe('Child highlight text');
+
+      const parent2 = result.entries.find(
+        (e) => e.id === 'rd-parent-2',
+      ) as ReadwiseAdapter;
+      expect(parent2.highlights).toHaveLength(0);
+    });
+
+    it('keeps orphan child documents (missing parent) as top-level entries', async () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      const docs = [
+        makeReaderDoc({ id: 'parent-x', parent_id: null }),
+        makeReaderDoc({ id: 'orphan-1', parent_id: 'missing-parent' }),
+      ];
+      const client = createMockClient({
+        fetchReaderDocuments: jest.fn().mockResolvedValue(docs),
+      } as unknown as Partial<ReadwiseApiClient>);
+      const worker = createMockWorkerManager();
+
+      const source = new ReadwiseSource('rd-src-1', client, worker as never);
+      const result = await source.load();
+
+      const ids = result.entries.map((e) => e.id);
+      expect(ids).toContain('rd-parent-x');
+      expect(ids).toContain('rd-orphan-1');
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
     });
 
     it('extracts tags from object keys', async () => {
@@ -499,6 +584,145 @@ describe('ReadwiseSource', () => {
         result.parseErrors!.some((e) => e.message.includes('string error')),
       ).toBe(true);
     });
+
+    it('collects errors from BOTH APIs when both fail (no cache)', async () => {
+      const client = createMockClient({
+        fetchExportBooks: jest.fn().mockRejectedValue(new Error('v2 down')),
+        fetchReaderDocuments: jest.fn().mockRejectedValue(new Error('v3 down')),
+      } as unknown as Partial<ReadwiseApiClient>);
+      const worker = createMockWorkerManager();
+
+      const source = new ReadwiseSource('src-1', client, worker as never);
+      const result = await source.load();
+
+      expect(result.entries).toHaveLength(0);
+      expect(
+        result.parseErrors!.some((e) => e.message.includes('v2 down')),
+      ).toBe(true);
+      expect(
+        result.parseErrors!.some((e) => e.message.includes('v3 down')),
+      ).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Highlight aggregation robustness
+  // -------------------------------------------------------------------------
+
+  describe('highlight aggregation', () => {
+    it('skips highlights with missing or blank text when aggregating', async () => {
+      const base = makeExportBook().highlights[0];
+      const book = makeExportBook({
+        highlights: [
+          { ...base, id: 1, text: 'first' },
+          { ...base, id: 2, text: '   ' },
+          { ...base, id: 3, text: undefined as unknown as string },
+          { ...base, id: 4, text: 'second' },
+        ],
+      });
+      const client = createMockClient({
+        fetchExportBooks: jest.fn().mockResolvedValue([book]),
+      } as unknown as Partial<ReadwiseApiClient>);
+      const worker = createMockWorkerManager();
+
+      const source = new ReadwiseSource('src-1', client, worker as never);
+      const result = await source.load();
+
+      expect(result.entries[0].note).toBe('first\n\n---\n\nsecond');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Extended field mapping (Quick Wins)
+  // -------------------------------------------------------------------------
+
+  describe('extended field mapping', () => {
+    it('maps v2 book fields (readable_title, source, asin) to the entry', async () => {
+      const book = makeExportBook({
+        readable_title: 'Clean Code',
+        source: 'kindle',
+        asin: 'B00AAA',
+        document_note: 'Doc-level note',
+      });
+      const client = createMockClient({
+        fetchExportBooks: jest.fn().mockResolvedValue([book]),
+      } as unknown as Partial<ReadwiseApiClient>);
+      const worker = createMockWorkerManager();
+
+      const source = new ReadwiseSource('src-1', client, worker as never);
+      const entry = (await source.load()).entries[0] as ReadwiseAdapter;
+
+      expect(entry.titleShort).toBe('Clean Code');
+      expect(entry.source).toBe('kindle');
+      expect(entry.ISBN).toBe('B00AAA');
+      expect(entry.documentNote).toBe('Doc-level note');
+    });
+
+    it('maps v3 reader fields (site_name, word_count, reading_progress, location)', async () => {
+      const doc = makeReaderDoc({
+        site_name: 'The New Yorker',
+        word_count: 3200,
+        reading_progress: 0.75,
+        location: 'later',
+        source: 'web',
+      });
+      const client = createMockClient({
+        fetchReaderDocuments: jest.fn().mockResolvedValue([doc]),
+      } as unknown as Partial<ReadwiseApiClient>);
+      const worker = createMockWorkerManager();
+
+      const source = new ReadwiseSource('rd-src', client, worker as never);
+      const entry = (await source.load()).entries[0] as ReadwiseAdapter;
+
+      expect(entry.containerTitle).toBe('The New Yorker');
+      expect(entry.wordCount).toBe(3200);
+      expect(entry.readingProgress).toBe(0.75);
+      expect(entry.readerLocation).toBe('later');
+      expect(entry.source).toBe('web');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Structured highlights
+  // -------------------------------------------------------------------------
+
+  describe('structured highlights', () => {
+    it('builds a structured highlights array from v2 book highlights', async () => {
+      const base = makeExportBook().highlights[0];
+      const book = makeExportBook({
+        highlights: [
+          {
+            ...base,
+            id: 7,
+            text: 'HL text',
+            note: 'HL note',
+            location: 55,
+            location_type: 'page',
+            color: 'blue',
+            url: 'https://readwise.io/h/7',
+            tags: [{ name: 'k1' }, { name: 'k2' }],
+          },
+        ],
+      });
+      const client = createMockClient({
+        fetchExportBooks: jest.fn().mockResolvedValue([book]),
+      } as unknown as Partial<ReadwiseApiClient>);
+      const worker = createMockWorkerManager();
+
+      const source = new ReadwiseSource('src-1', client, worker as never);
+      const entry = (await source.load()).entries[0] as ReadwiseAdapter;
+
+      expect(entry.highlights).toHaveLength(1);
+      const h = entry.highlights[0];
+      expect(h.id).toBe('7');
+      expect(h.text).toBe('HL text');
+      expect(h.note).toBe('HL note');
+      expect(h.location).toBe(55);
+      expect(h.locationType).toBe('page');
+      expect(h.color).toBe('blue');
+      expect(h.url).toBe('https://readwise.io/h/7');
+      expect(h.tags).toEqual(['k1', 'k2']);
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -518,6 +742,93 @@ describe('ReadwiseSource', () => {
       const worker = createMockWorkerManager();
       const source = new ReadwiseSource('src-1', client, worker as never);
       expect(() => source.dispose()).not.toThrow();
+    });
+
+    it('watch() is idempotent — a second call does not start a second timer', () => {
+      const client = createMockClient();
+      const worker = createMockWorkerManager();
+      const setIntervalSpy = jest.spyOn(window, 'setInterval');
+      const source = new ReadwiseSource(
+        'src-1',
+        client,
+        worker as never,
+        undefined,
+        undefined,
+        60_000,
+      );
+
+      source.watch(jest.fn());
+      source.watch(jest.fn());
+
+      expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+
+      source.dispose();
+      setIntervalSpy.mockRestore();
+    });
+
+    it('dispose() is safe to call twice', () => {
+      const client = createMockClient();
+      const worker = createMockWorkerManager();
+      const source = new ReadwiseSource(
+        'src-1',
+        client,
+        worker as never,
+        undefined,
+        undefined,
+        60_000,
+      );
+      source.watch(jest.fn());
+
+      expect(() => {
+        source.dispose();
+        source.dispose();
+      }).not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Cancellation (AbortSignal threading)
+  // -------------------------------------------------------------------------
+
+  describe('cancellation', () => {
+    it('passes an AbortSignal to both API calls', async () => {
+      const client = createMockClient();
+      const worker = createMockWorkerManager();
+      const source = new ReadwiseSource('src-1', client, worker as never);
+
+      await source.load();
+
+      expect(client.fetchExportBooks).toHaveBeenCalledWith(
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+      expect(client.fetchReaderDocuments).toHaveBeenCalledWith(
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+    });
+
+    it('dispose() aborts the in-flight fetch signal', async () => {
+      let capturedSignal: AbortSignal | undefined;
+      const client = createMockClient({
+        fetchExportBooks: jest
+          .fn()
+          .mockImplementation((opts?: { signal?: AbortSignal }) => {
+            capturedSignal = opts?.signal;
+            // Never resolves — simulates a slow, paginating fetch.
+            return new Promise<ReadwiseExportBook[]>(() => {});
+          }),
+      } as unknown as Partial<ReadwiseApiClient>);
+      const worker = createMockWorkerManager();
+      const source = new ReadwiseSource('src-1', client, worker as never);
+
+      void source.load();
+      await Promise.resolve();
+
+      expect(capturedSignal).toBeDefined();
+      expect(capturedSignal!.aborted).toBe(false);
+
+      source.dispose();
+
+      expect(capturedSignal!.aborted).toBe(true);
     });
   });
 
@@ -547,5 +858,359 @@ describe('ReadwiseSource', () => {
       entry.id = 'rw-1@db-readwise';
       expect(entry.id).toBe('rw-1@db-readwise');
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyReadwiseFilters (pure helper)
+// ---------------------------------------------------------------------------
+
+describe('applyReadwiseFilters', () => {
+  it('returns all entries when no filters are given', () => {
+    const entries = [
+      makeReadwiseEntryData({ rawId: '1' }),
+      makeReadwiseEntryData({ rawId: '2' }),
+    ];
+    expect(applyReadwiseFilters(entries, undefined)).toHaveLength(2);
+    expect(applyReadwiseFilters(entries, {})).toHaveLength(2);
+  });
+
+  it('filters by category', () => {
+    const entries = [
+      makeReadwiseEntryData({ rawId: 'b', category: 'books' }),
+      makeReadwiseEntryData({ rawId: 'a', category: 'articles' }),
+    ];
+    const result = applyReadwiseFilters(entries, { categories: ['articles'] });
+    expect(result.map((e) => e.rawId)).toEqual(['a']);
+  });
+
+  it('filters by tags (keeps entries matching any tag)', () => {
+    const entries = [
+      makeReadwiseEntryData({ rawId: 'x', tags: ['science', 'ai'] }),
+      makeReadwiseEntryData({ rawId: 'y', tags: ['cooking'] }),
+    ];
+    const result = applyReadwiseFilters(entries, { tags: ['ai'] });
+    expect(result.map((e) => e.rawId)).toEqual(['x']);
+  });
+
+  it('applies minHighlights only to highlight-mode entries', () => {
+    const entries = [
+      makeReadwiseEntryData({
+        rawId: 'few',
+        mode: 'readwise-highlights',
+        highlightCount: 1,
+      }),
+      makeReadwiseEntryData({
+        rawId: 'many',
+        mode: 'readwise-highlights',
+        highlightCount: 10,
+      }),
+      makeReadwiseEntryData({
+        rawId: 'doc',
+        mode: 'reader-documents',
+        highlightCount: 0,
+      }),
+    ];
+    const result = applyReadwiseFilters(entries, { minHighlights: 5 });
+    // 'few' dropped; reader doc passes through despite 0 highlights.
+    expect(result.map((e) => e.rawId).sort()).toEqual(['doc', 'many']);
+  });
+
+  it('applies readerLocations only to reader documents', () => {
+    const entries = [
+      makeReadwiseEntryData({
+        rawId: 'later',
+        mode: 'reader-documents',
+        readerLocation: 'later',
+      }),
+      makeReadwiseEntryData({
+        rawId: 'archived',
+        mode: 'reader-documents',
+        readerLocation: 'archive',
+      }),
+      makeReadwiseEntryData({
+        rawId: 'book',
+        mode: 'readwise-highlights',
+        readerLocation: null,
+      }),
+    ];
+    const result = applyReadwiseFilters(entries, {
+      readerLocations: ['later'],
+    });
+    // 'archived' dropped; highlight-mode entry passes through.
+    expect(result.map((e) => e.rawId).sort()).toEqual(['book', 'later']);
+  });
+
+  it('combines multiple filter dimensions (AND)', () => {
+    const entries = [
+      makeReadwiseEntryData({
+        rawId: 'keep',
+        category: 'books',
+        tags: ['ml'],
+      }),
+      makeReadwiseEntryData({
+        rawId: 'wrong-cat',
+        category: 'articles',
+        tags: ['ml'],
+      }),
+      makeReadwiseEntryData({
+        rawId: 'wrong-tag',
+        category: 'books',
+        tags: ['other'],
+      }),
+    ];
+    const result = applyReadwiseFilters(entries, {
+      categories: ['books'],
+      tags: ['ml'],
+    });
+    expect(result.map((e) => e.rawId)).toEqual(['keep']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ReadwiseSource with import filters
+// ---------------------------------------------------------------------------
+
+describe('ReadwiseSource with filters', () => {
+  it('drops entries that do not match the configured filter', async () => {
+    const book = makeExportBook({ category: 'books' });
+    const client = createMockClient({
+      fetchExportBooks: jest.fn().mockResolvedValue([book]),
+    } as unknown as Partial<ReadwiseApiClient>);
+    const worker = createMockWorkerManager();
+
+    const source = new ReadwiseSource(
+      'src-1',
+      client,
+      worker as never,
+      undefined,
+      undefined,
+      undefined,
+      { categories: ['articles'] },
+    );
+    const result = await source.load();
+
+    expect(result.entries).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Offline cache
+// ---------------------------------------------------------------------------
+
+describe('ReadwiseSource offline cache', () => {
+  it('writes fetched data to the cache file after a successful load', async () => {
+    const fs = createMockFileSystem();
+    const client = createMockClient({
+      fetchExportBooks: jest.fn().mockResolvedValue([makeExportBook()]),
+    } as unknown as Partial<ReadwiseApiClient>);
+    const worker = createMockWorkerManager();
+
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      '/cache.json',
+    );
+    await source.load();
+
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      '/cache.json',
+      expect.any(String),
+    );
+  });
+
+  it('does not fail the load when the cache write throws', async () => {
+    const fs = createMockFileSystem({
+      writeFile: jest.fn().mockRejectedValue(new Error('disk full')),
+    });
+    const client = createMockClient({
+      fetchExportBooks: jest.fn().mockResolvedValue([makeExportBook()]),
+    } as unknown as Partial<ReadwiseApiClient>);
+    const worker = createMockWorkerManager();
+
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      '/cache.json',
+    );
+    const result = await source.load();
+
+    expect(result.entries.length).toBeGreaterThan(0);
+  });
+
+  it('falls back to cached data when both APIs fail, without clobbering the cache', async () => {
+    const cachedRaw = JSON.stringify([
+      makeReadwiseEntryData({ rawId: 'cached' }),
+    ]);
+    const fs = createMockFileSystem({
+      exists: jest.fn().mockResolvedValue(true),
+      readFile: jest.fn().mockResolvedValue(cachedRaw),
+    });
+    const client = createMockClient({
+      fetchExportBooks: jest.fn().mockRejectedValue(new Error('down')),
+      fetchReaderDocuments: jest.fn().mockRejectedValue(new Error('down')),
+    } as unknown as Partial<ReadwiseApiClient>);
+    const worker = createMockWorkerManager();
+
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      '/cache.json',
+    );
+    const result = await source.load();
+    warnSpy.mockRestore();
+
+    expect(
+      result.parseErrors!.some((e) => e.message.includes('using cache')),
+    ).toBe(true);
+    expect(result.entries).toHaveLength(1);
+    // The good cache must NOT be overwritten with the empty fetch result.
+    expect(fs.writeFile).not.toHaveBeenCalled();
+  });
+
+  it('surfaces errors without throwing when both APIs fail and no cache exists', async () => {
+    const fs = createMockFileSystem({
+      exists: jest.fn().mockResolvedValue(false),
+    });
+    const client = createMockClient({
+      fetchExportBooks: jest.fn().mockRejectedValue(new Error('down')),
+      fetchReaderDocuments: jest.fn().mockRejectedValue(new Error('down')),
+    } as unknown as Partial<ReadwiseApiClient>);
+    const worker = createMockWorkerManager();
+
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      '/cache.json',
+    );
+    const result = await source.load();
+
+    expect(result.entries).toHaveLength(0);
+    expect(result.parseErrors!.some((e) => e.message.includes('down'))).toBe(
+      true,
+    );
+  });
+
+  it('treats a cache read error as no cache', async () => {
+    const fs = createMockFileSystem({
+      exists: jest.fn().mockResolvedValue(true),
+      readFile: jest.fn().mockRejectedValue(new Error('read error')),
+    });
+    const client = createMockClient({
+      fetchExportBooks: jest.fn().mockRejectedValue(new Error('down')),
+      fetchReaderDocuments: jest.fn().mockRejectedValue(new Error('down')),
+    } as unknown as Partial<ReadwiseApiClient>);
+    const worker = createMockWorkerManager();
+
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      '/cache.json',
+    );
+    const result = await source.load();
+
+    // readCache swallows the read error and returns null → errors surfaced.
+    expect(result.entries).toHaveLength(0);
+    expect(result.parseErrors!.some((e) => e.message.includes('down'))).toBe(
+      true,
+    );
+  });
+
+  it('throws when worker processing fails and no cache is available', async () => {
+    const client = createMockClient({
+      fetchExportBooks: jest.fn().mockResolvedValue([makeExportBook()]),
+    } as unknown as Partial<ReadwiseApiClient>);
+    const worker = {
+      post: jest.fn().mockRejectedValue(new Error('worker boom')),
+    };
+
+    const errSpy = jest.spyOn(console, 'error').mockImplementation();
+    // No file system → no cache fallback available.
+    const source = new ReadwiseSource('s', client, worker as never);
+    await expect(source.load()).rejects.toThrow(
+      'Failed to load from Readwise API',
+    );
+    errSpy.mockRestore();
+  });
+
+  it('falls back to cache when worker processing fails but a cache exists', async () => {
+    const cachedRaw = JSON.stringify([
+      makeReadwiseEntryData({ rawId: 'cached' }),
+    ]);
+    const fs = createMockFileSystem({
+      exists: jest.fn().mockResolvedValue(true),
+      readFile: jest.fn().mockResolvedValue(cachedRaw),
+    });
+    const client = createMockClient({
+      fetchExportBooks: jest.fn().mockResolvedValue([makeExportBook()]),
+    } as unknown as Partial<ReadwiseApiClient>);
+    // First post (fresh data) fails; the cache reprocess succeeds.
+    const worker = {
+      post: jest
+        .fn()
+        .mockRejectedValueOnce(new Error('worker boom'))
+        .mockImplementation((msg: { databaseRaw: string }) =>
+          Promise.resolve({
+            entries: JSON.parse(msg.databaseRaw),
+            parseErrors: [],
+          }),
+        ),
+    };
+
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      '/cache.json',
+    );
+    const result = await source.load();
+    warnSpy.mockRestore();
+
+    expect(result.entries).toHaveLength(1);
+    expect(
+      result.parseErrors!.some((e) => e.message.includes('using cache')),
+    ).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Periodic sync timer
+// ---------------------------------------------------------------------------
+
+describe('ReadwiseSource periodic sync', () => {
+  it('invokes the callback when the polling interval fires', () => {
+    jest.useFakeTimers();
+    const client = createMockClient();
+    const worker = createMockWorkerManager();
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      undefined,
+      undefined,
+      1000,
+    );
+    const callback = jest.fn();
+
+    source.watch(callback);
+    jest.advanceTimersByTime(1000);
+
+    expect(callback).toHaveBeenCalledTimes(1);
+
+    source.dispose();
+    jest.useRealTimers();
   });
 });

@@ -13,6 +13,11 @@ export interface SearchDocument {
   authorString: string;
   year: string;
   zoteroId: string;
+  /**
+   * Aggregated note/highlight text (truncated). Lets full-text search match
+   * phrases that appear only inside Readwise highlights or BibTeX notes.
+   */
+  notesText: string;
 }
 
 /**
@@ -215,6 +220,13 @@ export abstract class Entry {
   }
 
   /**
+   * Maximum number of characters of aggregated note/highlight text indexed
+   * per entry. Caps the search index size for entries with large Readwise
+   * highlight collections.
+   */
+  private static readonly MAX_NOTES_INDEX_CHARS = 5000;
+
+  /**
    * Build a flat document suitable for full-text search indexing.
    * Contains only string fields that the search engine needs.
    */
@@ -225,6 +237,9 @@ export abstract class Entry {
       authorString: this.authorString || '',
       year: this.yearString(),
       zoteroId: this.zoteroId || '',
+      // Truncate to bound index growth; the full note remains available via
+      // the `note` getter for templates.
+      notesText: this.note.slice(0, Entry.MAX_NOTES_INDEX_CHARS),
     };
   }
 

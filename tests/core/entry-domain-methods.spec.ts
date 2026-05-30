@@ -158,6 +158,7 @@ describe('Entry domain methods', () => {
         authorString: 'John Doe',
         year: '2023',
         zoteroId: 'Z123',
+        notesText: '',
       });
     });
 
@@ -177,6 +178,7 @@ describe('Entry domain methods', () => {
         authorString: '',
         year: '',
         zoteroId: '',
+        notesText: '',
       });
     });
   });

@@ -5,6 +5,7 @@ export { Library } from './types/library';
 export {
   type DatabaseType,
   type DatabaseConfig,
+  type ReadwiseFilters,
   DATABASE_FORMATS,
   DATABASE_TYPE_LABELS,
   generateDatabaseId,

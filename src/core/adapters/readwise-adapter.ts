@@ -7,6 +7,32 @@ import { Author, Entry } from '../types/entry';
 /** Mode indicating which Readwise API endpoint the data came from. */
 export type ReadwiseMode = 'readwise-highlights' | 'reader-documents';
 
+/**
+ * A single structured highlight/annotation belonging to a Readwise entry.
+ * Exposes per-highlight metadata (note, location, color, tags) that the
+ * aggregated {@link ReadwiseEntryData.highlightsText} string discards.
+ */
+export interface ReadwiseHighlightItem {
+  /** Stable highlight id (v2 highlight id, or Reader child document id). */
+  id: string;
+  /** The highlighted text. */
+  text: string;
+  /** Personal note attached to the highlight, or `null`. */
+  note: string | null;
+  /** Location locator (page / order / percent), or `null`. */
+  location: number | null;
+  /** Location type: "page" | "order" | "time_offset" | "none", or `null`. */
+  locationType: string | null;
+  /** Highlight color, or `null`. */
+  color: string | null;
+  /** ISO 8601 timestamp when the highlight was made, or `null`. */
+  highlightedAt: string | null;
+  /** Direct URL to the highlight, or `null`. */
+  url: string | null;
+  /** Per-highlight tags. */
+  tags: string[];
+}
+
 /** Normalized internal data shape for entries originating from Readwise. */
 export interface ReadwiseEntryData {
   /** Source API mode. */
@@ -20,12 +46,35 @@ export interface ReadwiseEntryData {
   readwiseUrl: string;
   coverImageUrl: string | null;
   summary: string | null;
-  /** Aggregated highlight texts, joined by newlines. */
+  /** Aggregated highlight texts, joined by newlines (legacy/backward-compat). */
   highlightsText: string | null;
+  /**
+   * Structured highlights with per-item metadata. Optional for backward-compat
+   * with cached JSON written before this field existed.
+   */
+  highlights?: ReadwiseHighlightItem[];
   highlightCount: number;
   tags: string[];
   publishedDate: string | null;
   updatedAt: string | null;
+  // --- Additional mapped fields (optional for backward-compat with cached
+  //     JSON written before these fields existed) ---------------------------
+  /** Cleaned/normalized title (v2 `readable_title`) → titleShort. */
+  readableTitle?: string | null;
+  /** Origin: "kindle"/"instapaper" (v2) or Reader source (v3) → source. */
+  source?: string | null;
+  /** Amazon ASIN (v2 only) → ISBN. */
+  asin?: string | null;
+  /** Document-level note (v2 `document_note` / v3 `notes`). */
+  documentNote?: string | null;
+  /** Source site name (v3 `site_name`) → containerTitle. */
+  siteName?: string | null;
+  /** Word count (v3 only). */
+  wordCount?: number | null;
+  /** Reading progress 0..1 (v3 only). */
+  readingProgress?: number | null;
+  /** Reader location: new/later/shortlist/archive/feed (v3 only). */
+  readerLocation?: string | null;
   /** Extra raw fields the adapter does not map but preserves in toJSON. */
   extra?: Record<string, unknown>;
 }
@@ -161,7 +210,7 @@ export class ReadwiseAdapter extends Entry {
   }
 
   get containerTitle(): string | undefined {
-    return undefined;
+    return this.data.siteName ?? undefined;
   }
 
   get DOI(): string | undefined {
@@ -169,7 +218,7 @@ export class ReadwiseAdapter extends Entry {
   }
 
   get ISBN(): string | undefined {
-    return undefined;
+    return this.data.asin ?? undefined;
   }
 
   get issuedDate(): Date | null {
@@ -185,7 +234,7 @@ export class ReadwiseAdapter extends Entry {
   }
 
   get titleShort(): string | undefined {
-    return undefined;
+    return this.data.readableTitle ?? undefined;
   }
 
   get URL(): string | undefined {
@@ -209,7 +258,7 @@ export class ReadwiseAdapter extends Entry {
   }
 
   get source(): string | undefined {
-    return undefined;
+    return this.data.source ?? undefined;
   }
 
   get zoteroId(): string | undefined {
@@ -255,5 +304,34 @@ export class ReadwiseAdapter extends Entry {
   /** Original Readwise / Reader category string. */
   get category(): string {
     return this.data.category;
+  }
+
+  /** Document-level note (distinct from individual highlights), or `null`. */
+  get documentNote(): string | null {
+    return this.data.documentNote ?? null;
+  }
+
+  /** Reader word count, or `null` when unavailable. */
+  get wordCount(): number | null {
+    return this.data.wordCount ?? null;
+  }
+
+  /** Reader reading progress in the range 0..1, or `null` when unavailable. */
+  get readingProgress(): number | null {
+    return this.data.readingProgress ?? null;
+  }
+
+  /** Reader location (new/later/shortlist/archive/feed), or `null`. */
+  get readerLocation(): string | null {
+    return this.data.readerLocation ?? null;
+  }
+
+  /**
+   * Structured list of highlights with per-item metadata (text, note,
+   * location, color, tags). Empty array when the entry has no highlights.
+   * Iterate in templates via `{{#each entry.highlights}}`.
+   */
+  get highlights(): ReadwiseHighlightItem[] {
+    return this.data.highlights ?? [];
   }
 }

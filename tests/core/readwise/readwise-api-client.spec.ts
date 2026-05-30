@@ -404,6 +404,85 @@ describe('ReadwiseApiClient', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Malformed responses
+  // -------------------------------------------------------------------------
+
+  describe('malformed responses', () => {
+    it('throws ReadwiseApiError when the body is not valid JSON', async () => {
+      mockHttpGet.mockResolvedValue({
+        status: 200,
+        headers: {},
+        json: jest.fn().mockRejectedValue(new SyntaxError('bad json')),
+      });
+
+      await expect(client.fetchExportBooks()).rejects.toThrow(ReadwiseApiError);
+      await expect(client.fetchExportBooks()).rejects.toThrow('invalid JSON');
+    });
+
+    it('throws ReadwiseApiError when results is not an array', async () => {
+      mockHttpGet.mockResolvedValue(
+        mockHttpResponse({
+          count: 0,
+          nextPageCursor: null,
+          results: 'not-an-array',
+        }),
+      );
+
+      await expect(client.fetchReaderDocuments()).rejects.toThrow(
+        /Unexpected Readwise API response shape/,
+      );
+    });
+
+    it('treats a non-string nextPageCursor as the end of pagination', async () => {
+      const book = makeExportBook();
+      // A numeric/garbage cursor must not cause another page request.
+      mockHttpGet.mockResolvedValue(
+        mockHttpResponse({ count: 1, nextPageCursor: 42, results: [book] }),
+      );
+
+      const result = await client.fetchExportBooks();
+      expect(result).toEqual([book]);
+      expect(mockHttpGet).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Pagination safety
+  // -------------------------------------------------------------------------
+
+  describe('pagination safety', () => {
+    it('stops paginating when the server repeats a cursor', async () => {
+      const book = makeExportBook();
+      // Every page points back to the same cursor — a server-side loop.
+      mockHttpGet.mockResolvedValue(
+        mockHttpResponse({ count: 1, nextPageCursor: 'loop', results: [book] }),
+      );
+
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      const result = await client.fetchExportBooks();
+      warnSpy.mockRestore();
+
+      // Request 1 (cursor=null) → 'loop'; request 2 (cursor='loop') → 'loop'
+      // again, already requested → stop. Two fetches, two accumulated books.
+      expect(mockHttpGet).toHaveBeenCalledTimes(2);
+      expect(result).toHaveLength(2);
+    });
+
+    it('aborts while waiting to retry after a 429', async () => {
+      const controller = new AbortController();
+      mockHttpGet.mockResolvedValue(
+        mockHttpResponse(null, 429, { 'Retry-After': '300' }),
+      );
+
+      const promise = client.fetchExportBooks({ signal: controller.signal });
+      // Abort before the (300s) retry wait completes.
+      controller.abort(new Error('aborted during wait'));
+
+      await expect(promise).rejects.toThrow('aborted during wait');
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Authorization header
   // -------------------------------------------------------------------------
 

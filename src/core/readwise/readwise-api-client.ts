@@ -112,19 +112,13 @@ export interface ReadwiseReaderDocument {
 }
 
 // ---------------------------------------------------------------------------
-// Internal pagination response shapes
+// Internal pagination response shape
 // ---------------------------------------------------------------------------
 
-interface ExportPageResponse {
-  count: number;
+/** Common shape of a cursor-paginated Readwise response. */
+interface PageResponse<T> {
   nextPageCursor: string | null;
-  results: ReadwiseExportBook[];
-}
-
-interface ReaderPageResponse {
-  count: number;
-  nextPageCursor: string | null;
-  results: ReadwiseReaderDocument[];
+  results: T[];
 }
 
 // ---------------------------------------------------------------------------
@@ -135,6 +129,13 @@ const READWISE_API_V2 = 'https://readwise.io/api/v2';
 const READER_API_V3 = 'https://readwise.io/api/v3';
 const MAX_RETRIES = 3;
 const DEFAULT_RETRY_SECONDS = 60;
+/**
+ * Hard safety backstop on the number of pages a single fetch will request.
+ * The repeated-cursor guard in {@link ReadwiseApiClient.fetchAllPages} is the
+ * primary protection against infinite pagination; this cap stops a server that
+ * emits an endless stream of distinct cursors.
+ */
+const MAX_PAGINATION_PAGES = 10_000;
 
 /**
  * Pure HTTP client for the Readwise API.
@@ -194,23 +195,10 @@ export class ReadwiseApiClient {
     updatedAfter?: string;
     signal?: AbortSignal;
   }): Promise<ReadwiseExportBook[]> {
-    const allBooks: ReadwiseExportBook[] = [];
-    let cursor: string | null = null;
-
-    do {
-      const url = this.buildUrl(`${READWISE_API_V2}/export/`, {
-        updatedAfter: options?.updatedAfter,
-        pageCursor: cursor ?? undefined,
-      });
-
-      const response = await this.fetchWithRateLimit(url, options?.signal);
-      const page = (await response.json()) as ExportPageResponse;
-
-      allBooks.push(...page.results);
-      cursor = page.nextPageCursor;
-    } while (cursor !== null);
-
-    return allBooks;
+    return this.fetchAllPages<ReadwiseExportBook>(
+      `${READWISE_API_V2}/export/`,
+      options,
+    );
   }
 
   /**
@@ -228,28 +216,104 @@ export class ReadwiseApiClient {
     updatedAfter?: string;
     signal?: AbortSignal;
   }): Promise<ReadwiseReaderDocument[]> {
-    const allDocs: ReadwiseReaderDocument[] = [];
-    let cursor: string | null = null;
-
-    do {
-      const url = this.buildUrl(`${READER_API_V3}/list/`, {
-        updatedAfter: options?.updatedAfter,
-        pageCursor: cursor ?? undefined,
-      });
-
-      const response = await this.fetchWithRateLimit(url, options?.signal);
-      const page = (await response.json()) as ReaderPageResponse;
-
-      allDocs.push(...page.results);
-      cursor = page.nextPageCursor;
-    } while (cursor !== null);
-
-    return allDocs;
+    return this.fetchAllPages<ReadwiseReaderDocument>(
+      `${READER_API_V3}/list/`,
+      options,
+    );
   }
 
   // -------------------------------------------------------------------------
   // Private helpers
   // -------------------------------------------------------------------------
+
+  /**
+   * Fetch every page of a cursor-paginated endpoint and concatenate results.
+   *
+   * Guards against malformed responses (invalid JSON or unexpected shape) by
+   * throwing a {@link ReadwiseApiError}, and against infinite pagination by
+   * stopping when the server repeats a cursor or exceeds
+   * {@link MAX_PAGINATION_PAGES} pages.
+   */
+  private async fetchAllPages<T>(
+    baseUrl: string,
+    options?: { updatedAfter?: string; signal?: AbortSignal },
+  ): Promise<T[]> {
+    const all: T[] = [];
+    const requestedCursors = new Set<string>();
+    let cursor: string | null = null;
+    let pageCount = 0;
+
+    do {
+      if (cursor !== null) {
+        if (requestedCursors.has(cursor)) {
+          console.warn(
+            'Readwise returned a repeated pagination cursor; stopping to avoid an infinite loop.',
+          );
+          break;
+        }
+        requestedCursors.add(cursor);
+      }
+
+      if (pageCount >= MAX_PAGINATION_PAGES) {
+        console.warn(
+          `Readwise pagination exceeded ${MAX_PAGINATION_PAGES} pages; stopping early.`,
+        );
+        break;
+      }
+      pageCount++;
+
+      const url = this.buildUrl(baseUrl, {
+        updatedAfter: options?.updatedAfter,
+        pageCursor: cursor ?? undefined,
+      });
+
+      const response = await this.fetchWithRateLimit(url, options?.signal);
+      const page = await this.parsePage<T>(response, url);
+
+      all.push(...page.results);
+      cursor = page.nextPageCursor;
+    } while (cursor !== null);
+
+    return all;
+  }
+
+  /**
+   * Parse a paginated response body, validating that it is well-formed JSON
+   * with a `results` array. Coerces a missing/invalid `nextPageCursor` to
+   * `null` so pagination terminates rather than looping on garbage.
+   */
+  private async parsePage<T>(
+    response: HttpResponse,
+    url: string,
+  ): Promise<PageResponse<T>> {
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch {
+      throw new ReadwiseApiError(
+        `Malformed Readwise API response (invalid JSON) from ${url}`,
+        response.status,
+      );
+    }
+
+    if (
+      typeof body !== 'object' ||
+      body === null ||
+      !Array.isArray((body as { results?: unknown }).results)
+    ) {
+      throw new ReadwiseApiError(
+        `Unexpected Readwise API response shape from ${url}`,
+        response.status,
+      );
+    }
+
+    const typed = body as { nextPageCursor?: unknown; results: T[] };
+    return {
+      nextPageCursor:
+        typeof typed.nextPageCursor === 'string' ? typed.nextPageCursor : null,
+      results: typed.results,
+    };
+  }
 
   /**
    * Perform a GET request with the Readwise authorization header,

@@ -277,3 +277,28 @@ Use with `formatNames` helper or iterate with `{{#each entry.author}}`:
 - John Smith
 - Jane Doe
 ```
+
+### `entry.highlights` Array (Readwise)
+
+Readwise entries expose a structured `entry.highlights` array. Each item carries the per-highlight metadata that the aggregated `{{note}}` string discards:
+
+| Property | Description | Example |
+|----------|-------------|---------|
+| `text` | The highlighted text | `Habits are the compound interest of self-improvement` |
+| `note` | Personal note attached to the highlight | `Key idea` |
+| `location` | Page / order / percent locator | `42` |
+| `locationType` | `page` / `order` / `time_offset` | `page` |
+| `color` | Highlight color | `yellow` |
+| `highlightedAt` | ISO timestamp when highlighted | `2024-01-01T00:00:00Z` |
+| `url` | Direct link to the highlight | |
+| `tags` | Per-highlight tags | `["important"]` |
+
+Iterate with `{{#each entry.highlights}}`:
+
+```handlebars
+{{#each entry.highlights}}
+- {{this.text}}{{#if this.location}} (loc. {{this.location}}){{/if}}
+{{/each}}
+```
+
+For non-Readwise entries this array is empty, so the loop renders nothing.

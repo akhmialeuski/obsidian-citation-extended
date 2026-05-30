@@ -391,6 +391,7 @@ import { CitationSettingTab } from '../../../src/ui/settings/settings-tab';
 import { CitationsPluginSettings } from '../../../src/ui/settings/settings';
 import type CitationPlugin from '../../../src/main';
 import type { VariableDefinition } from '../../../src/template/introspection.service';
+import { LoadingStatus } from '../../../src/library/library-state';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -420,6 +421,7 @@ function createMockPlugin(
         .mockReturnValue([] as VariableDefinition[]),
       resolveLibraryPath: jest.fn((p: string) => `/vault/${p}`),
       load: jest.fn().mockResolvedValue(null),
+      state: { status: LoadingStatus.Success, parseErrors: [] },
     },
     saveSettings: jest.fn().mockResolvedValue(undefined),
   } as unknown as CitationPlugin;
@@ -1051,7 +1053,9 @@ describe('CitationSettingTab', () => {
         );
       });
 
-      it('reloads library and updates last sync date', async () => {
+      it('reloads library and updates last sync date on success', async () => {
+        // Successful load returns a non-null library; state stays clean.
+        (plugin.libraryService.load as jest.Mock).mockResolvedValue({});
         tab.display();
 
         const allButtons: Array<{ triggerClick(): void }> = [];
@@ -1069,6 +1073,75 @@ describe('CitationSettingTab', () => {
         expect(plugin.settings.readwiseLastSyncDate).not.toBe('');
         expect(plugin.saveSettings).toHaveBeenCalled();
         expect(mockNotice).toHaveBeenCalledWith('Readwise sync complete.');
+      });
+
+      it('does NOT update last sync date when the sync fails', async () => {
+        // Default mock: load() resolves null → failure outcome.
+        plugin.settings.readwiseLastSyncDate = '';
+        tab.display();
+
+        const allButtons: Array<{ triggerClick(): void }> = [];
+        for (const setting of getSettings()) {
+          allButtons.push(...setting.getButtonComponents());
+        }
+        // Isolate the click's effect on saveSettings from any render-time calls.
+        (plugin.saveSettings as jest.Mock).mockClear();
+
+        allButtons[SYNC_BTN_IDX].triggerClick();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(plugin.libraryService.load).toHaveBeenCalled();
+        expect(plugin.settings.readwiseLastSyncDate).toBe('');
+        expect(plugin.saveSettings).not.toHaveBeenCalled();
+        expect(mockNotice).toHaveBeenCalledWith('Readwise sync failed.');
+      });
+    });
+
+    describe('advanced filters', () => {
+      // Render the filters section in isolation so the four filter Settings
+      // map to settingInstances[0..3] deterministically.
+      function renderFiltersInIsolation(): MockSettingInstance[] {
+        settingInstances.length = 0;
+        const card = document.createElement('div');
+        (
+          tab as unknown as {
+            renderReadwiseFilters: (
+              c: HTMLElement,
+              d: unknown,
+              i: number,
+            ) => void;
+          }
+        ).renderReadwiseFilters(card, plugin.settings.databases[0], 0);
+        return getSettings();
+      }
+
+      it('writes a categories filter and prunes it when emptied', async () => {
+        const settings = renderFiltersInIsolation();
+        const categories = settings[0].getTextComponents()[0];
+
+        categories.triggerChange('books, articles');
+        await Promise.resolve();
+        expect(
+          plugin.settings.databases[0].readwiseFilters?.categories,
+        ).toEqual(['books', 'articles']);
+
+        // Emptying the field removes the key and prunes the whole object.
+        categories.triggerChange('');
+        await Promise.resolve();
+        expect(plugin.settings.databases[0].readwiseFilters).toBeUndefined();
+      });
+
+      it('writes a numeric minHighlights filter', async () => {
+        const settings = renderFiltersInIsolation();
+        const minHighlights = settings[3].getTextComponents()[0];
+
+        minHighlights.triggerChange('5');
+        await Promise.resolve();
+        expect(
+          plugin.settings.databases[0].readwiseFilters?.minHighlights,
+        ).toBe(5);
       });
     });
   });

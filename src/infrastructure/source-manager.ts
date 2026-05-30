@@ -64,7 +64,12 @@ export class SourceManager implements ISourceManager {
       if (!this.sources.has(key)) {
         const sourceId = key;
         const source = this.factory.create(
-          { type: transport, path: db.path, format: db.type },
+          {
+            type: transport,
+            path: db.path,
+            format: db.type,
+            readwiseFilters: db.readwiseFilters,
+          },
           sourceId,
         );
         const databaseId = db.id ?? db.name;
@@ -109,54 +114,75 @@ export class SourceManager implements ISourceManager {
 
   /**
    * Load from all managed sources in parallel.
-   * Returns successful results enriched with databaseName and databaseId.
-   * Failed sources are logged but don't block others.
+   * Returns results enriched with databaseName and databaseId.
+   *
+   * A source that fails while others succeed is NOT silently dropped: its
+   * error is surfaced as a synthetic result with no entries and a single
+   * parse error, so it propagates into the library's parseErrors and becomes
+   * visible in the UI (instead of console-only). Only when EVERY source fails
+   * does this throw, so the library transitions to the Error state rather than
+   * reporting an empty success.
    */
   async loadAll(): Promise<SourceLoadResult[]> {
     const entries = [...this.sources.values()];
 
-    const promises = entries.map(
-      async ({
-        source,
-        databaseId,
-        databaseName,
-      }): Promise<SourceLoadResult | Error> => {
-        try {
-          console.debug(`SourceManager: Loading from "${databaseName}"`);
-          const result: DataSourceLoadResult = await source.load();
-          console.debug(
-            `SourceManager: Loaded ${result.entries.length} entries from "${databaseName}"`,
-          );
-          return {
-            sourceId: result.sourceId,
-            databaseId,
-            databaseName,
-            entries: result.entries,
-            parseErrors: result.parseErrors ?? [],
-            modifiedAt: result.modifiedAt,
-          };
-        } catch (error) {
-          console.error(
-            `SourceManager: Error loading from "${databaseName}":`,
-            error,
-          );
-          return error instanceof Error ? error : new Error(String(error));
-        }
-      },
+    const settled = await Promise.all(
+      entries.map(
+        async ({
+          source,
+          databaseId,
+          databaseName,
+        }): Promise<{ failed: boolean; result: SourceLoadResult }> => {
+          try {
+            console.debug(`SourceManager: Loading from "${databaseName}"`);
+            const result: DataSourceLoadResult = await source.load();
+            console.debug(
+              `SourceManager: Loaded ${result.entries.length} entries from "${databaseName}"`,
+            );
+            return {
+              failed: false,
+              result: {
+                sourceId: result.sourceId,
+                databaseId,
+                databaseName,
+                entries: result.entries,
+                parseErrors: result.parseErrors ?? [],
+                modifiedAt: result.modifiedAt,
+              },
+            };
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            console.error(
+              `SourceManager: Error loading from "${databaseName}":`,
+              error,
+            );
+            return {
+              failed: true,
+              result: {
+                sourceId: source.id,
+                databaseId,
+                databaseName,
+                entries: [],
+                parseErrors: [
+                  { message: `Failed to load "${databaseName}": ${message}` },
+                ],
+              },
+            };
+          }
+        },
+      ),
     );
 
-    const results = await Promise.all(promises);
+    const failed = settled.filter((s) => s.failed);
 
-    const successful = results.filter(
-      (r): r is SourceLoadResult => !(r instanceof Error),
-    );
-    const errors = results.filter((r): r is Error => r instanceof Error);
-
-    if (successful.length === 0 && errors.length > 0) {
-      throw errors[0];
+    // Every source failed: throw so the library load enters the Error state
+    // instead of presenting an empty library as a successful load.
+    if (settled.length > 0 && failed.length === settled.length) {
+      throw new Error(failed[0].result.parseErrors[0].message);
     }
 
-    return successful;
+    return settled.map((s) => s.result);
   }
 
   /**

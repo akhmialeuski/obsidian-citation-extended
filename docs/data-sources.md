@@ -75,21 +75,36 @@ The plugin loads data from both Readwise APIs in parallel and merges the results
 
 **Field mapping:**
 
-| Readwise field | Entry field | Notes |
-|---------------|-------------|-------|
-| `title` | `title` | |
-| `author` | `authorString`, `author[]` | Parsed into structured authors |
-| `category` | `type` | Mapped: books→book, articles→article, tweets→webpage, etc. |
-| `source_url` | `URL` | Original source URL |
-| `readwise_url` / `unique_url` | `zoteroSelectURI` | Opens in Readwise Reader app (see note below) |
-| `summary` | `abstract` | |
-| `book_tags` / `tags` | `keywords[]` | |
-| `highlights[].text` | `note` | Aggregated with `---` separator |
-| `published_date` | `issuedDate` | Reader (v3) entries only |
+| Readwise field        | Entry field                  | Notes                                                                  |
+| --------------------- | ---------------------------- | ---------------------------------------------------------------------- |
+| `title`               | `title`                      |                                                                        |
+| `readable_title`      | `titleShort`                 | Cleaned title (v2 Export books only)                                   |
+| `author`              | `authorString`, `author[]`   | Parsed into structured authors                                         |
+| `category`            | `type`                       | Mapped: books→book, articles→article, tweets→webpage, etc.             |
+| `source`              | `source`                     | e.g. `kindle`, `instapaper`, Reader source                             |
+| `source_url`          | `URL`                        | Original source URL                                                    |
+| `readwise_url` / `unique_url` | `zoteroSelectURI`    | Opens in Readwise Reader app (see note below)                          |
+| `summary`             | `abstract`                   |                                                                        |
+| `asin`                | `ISBN`                       | Amazon ASIN (v2 Export books only)                                     |
+| `site_name`           | `containerTitle`             | Reader (v3) — e.g. "The New Yorker"                                     |
+| `book_tags` / `tags`  | `keywords[]`                 |                                                                        |
+| `document_note` / `notes` | `documentNote`           | Document-level note (distinct from highlights)                         |
+| `word_count`          | `wordCount`                  | Reader (v3) entries only                                               |
+| `reading_progress`    | `readingProgress`            | Reader (v3) — fraction 0..1                                            |
+| `location`            | `readerLocation`             | Reader (v3) — new/later/shortlist/archive/feed                         |
+| `highlights[].text`   | `note`                       | Aggregated with `---` separator (backward-compatible)                  |
+| `highlights[]`        | `highlights[]`               | Structured per-highlight metadata (see below)                          |
+| `published_date`      | `issuedDate`                 | Reader (v3) entries only                                               |
+
+**Structured highlights:** In addition to the aggregated `note` string, each Readwise entry exposes a structured `highlights` array via `entry.highlights`, where each item has `text`, `note`, `location`, `locationType`, `color`, `highlightedAt`, `url`, and `tags`. Iterate it in templates with `{{#each entry.highlights}}` to render highlights as a list or table. The aggregated `{{note}}` string is still available for backward compatibility.
+
+**Reader child documents:** Highlights and notes you create inside Readwise Reader are stored as child documents. The plugin merges them into their parent document's `highlights` array (rather than discarding them). A child whose parent is outside the synced set is kept as a standalone entry.
 
 **Readwise Reader URLs:** The `zoteroSelectURI` field (used by the "Open in Readwise" action) points to the Readwise Reader app. For v2 Export books, the plugin uses the `unique_url` field (e.g., `https://read.readwise.io/read/01abc123`) when available, falling back to the legacy `readwise_url`. For v3 Reader documents, the URL already points to the Reader app. This means the "Open in Readwise" action opens the item directly in Readwise Reader.
 
-**Offline cache:** After each successful sync, Readwise data is cached locally at `.obsidian/plugins/citation-extended/readwise-cache.json`. If the API is unavailable on the next plugin load, the cached data is used as a fallback. A warning is shown when cached data is used. The cache is overwritten on every successful sync.
+**Searching highlights:** Full-text search indexes the highlight/note text (truncated per entry), so a query that appears only inside a highlight will still find the entry. Title and author matches always rank above highlight-only matches.
+
+**Offline cache:** After each successful sync, Readwise data is cached locally at `.obsidian/plugins/citation-extended/readwise-cache-<id>.json` — one file per Readwise database, keyed by its stable id, so multiple Readwise databases never collide. If the API is unavailable on the next plugin load, the cached data is used as a fallback and a warning is shown. The cache is overwritten on every successful sync.
 
 ## Multiple Databases
 

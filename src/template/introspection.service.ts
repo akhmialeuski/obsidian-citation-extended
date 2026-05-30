@@ -32,6 +32,15 @@ const KNOWN_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   zoteroSelectURI: 'URI to open the reference in Zotero',
   currentDate:
     'Current date when the note is created (use as {{currentDate}} or {{currentDate format="DD.MM.YYYY"}})',
+  // Readwise-specific variables
+  documentNote:
+    'Readwise document-level note (v2 document_note / v3 Reader notes)',
+  wordCount: 'Reader document word count',
+  readingProgress: 'Reader reading progress as a fraction from 0 to 1',
+  readerLocation:
+    'Reader location of the document: new, later, shortlist, archive, or feed',
+  highlights:
+    'Structured Readwise highlights. Iterate with {{#each entry.highlights}} — each item has text, note, location, locationType, color, highlightedAt, url, tags',
 };
 
 /** Static examples for helper-based variables that are not derived from entry data */

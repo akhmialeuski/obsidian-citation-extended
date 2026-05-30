@@ -97,6 +97,27 @@ keywords: {{#each keywords}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}
 - `{{URL}}` -- the original source URL (e.g., Amazon book page, article URL)
 - `{{abstract}}` -- the book summary (from Readwise summary or document_note)
 - `{{keywords}}` -- tags from Readwise
+- `{{titleShort}}` -- the cleaned/readable title (v2 books)
+- `{{source}}` -- origin such as `kindle`, `instapaper`, or the Reader source
+- `{{containerTitle}}` -- the source site name (Reader documents, e.g. "The New Yorker")
+- `{{ISBN}}` -- the Amazon ASIN for Kindle books
+- `{{documentNote}}` -- a document-level note (distinct from individual highlights)
+- `{{wordCount}}`, `{{readingProgress}}`, `{{readerLocation}}` -- Reader document metadata
+
+### Rendering structured highlights
+
+In addition to the aggregated `{{note}}` string, each Readwise entry exposes a structured `highlights` array. Iterate it with `{{#each entry.highlights}}` to render highlights with their per-item metadata (note, page/location, color, tags):
+
+```handlebars
+## Highlights
+
+{{#each entry.highlights}}
+- {{this.text}}{{#if this.location}} (loc. {{this.location}}){{/if}}{{#if this.color}} [{{this.color}}]{{/if}}
+{{#if this.note}}  > {{this.note}}{{/if}}
+{{/each}}
+```
+
+Each highlight item has: `text`, `note`, `location`, `locationType`, `color`, `highlightedAt`, `url`, and `tags`.
 
 ## Expected Output
 
@@ -149,8 +170,12 @@ You do not rise to the level of your goals. You fall to the level of your system
 - Rate limiting is handled automatically -- the plugin respects Readwise's API rate limits
 - You can use Readwise alongside file-based databases (Zotero, BibTeX, etc.) -- all entries are merged into a single searchable library
 - The plugin loads data from both Readwise APIs automatically; there is no mode selector
-- **Offline cache:** After each successful sync, data is cached locally at `.obsidian/plugins/citation-extended/readwise-cache.json`. If the Readwise API is unavailable on the next plugin load (e.g., you are offline), the plugin falls back to the cached data and shows a warning. You do not need to manage the cache file -- it is updated automatically on every sync
+- **Import filters:** Expand **Advanced filters** on the database card to limit what gets imported -- by category, tag, Reader location, or a minimum highlight count. This is useful if you have thousands of items but only want a subset in Obsidian
+- **Reader highlights:** Highlights and notes made inside Readwise Reader are merged into their parent document (rather than dropped), so they show up in `entry.highlights` and in search
+- **Truthful sync:** If a manual **Sync now** fails (e.g., invalid token or network error), the plugin reports the error and leaves the "Last sync" timestamp unchanged -- it no longer reports a false success
+- **Offline cache:** After each successful sync, data is cached locally at `.obsidian/plugins/citation-extended/readwise-cache-<id>.json` (one file per Readwise database). If the Readwise API is unavailable on the next plugin load (e.g., you are offline), the plugin falls back to the cached data and shows a warning. You do not need to manage the cache file -- it is updated automatically on every sync
 - **Reader URLs:** The `{{zoteroSelectURI}}` variable and the "Open in Readwise" action open items in the Readwise Reader app, not the legacy Readwise highlights page
+- **Security:** Your API token is stored unencrypted in the plugin's `data.json`. Avoid committing the vault to a public repository, and regenerate the token at [readwise.io/access_token](https://readwise.io/access_token) if it is ever exposed
 
 ## Related
 
