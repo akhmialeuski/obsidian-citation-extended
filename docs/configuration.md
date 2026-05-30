@@ -106,7 +106,7 @@ After each successful sync, the plugin saves Readwise data to a local cache file
 
 Your Readwise API token is stored **unencrypted** in the plugin's `data.json` (`.obsidian/plugins/citation-extended/data.json`). Obsidian does not provide a secret store for plugins. Treat the vault accordingly: avoid committing it to a public git repository, and be mindful when syncing the vault through third-party cloud services. Revoke and regenerate the token at [readwise.io/access_token](https://readwise.io/access_token) if it is ever exposed.
 
-The cache file is managed automatically -- you do not need to create or edit it. It is overwritten on every successful sync.
+The cache file is managed automatically -- you do not need to create or edit it. It is overwritten only after a fully successful sync where every Readwise API responds; a partial outage (one API unavailable) leaves the previous cache intact rather than replacing it with an incomplete snapshot.
 
 ---
 
