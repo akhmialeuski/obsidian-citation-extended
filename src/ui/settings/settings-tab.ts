@@ -11,6 +11,7 @@ import CitationPlugin from '../../main';
 import {
   DatabaseType,
   DatabaseConfig,
+  ReadwiseFilters,
   DATABASE_TYPE_LABELS,
   DATABASE_FORMATS,
   generateDatabaseId,
@@ -23,9 +24,19 @@ import {
   CitationsPluginSettingsType,
   CitationStylePreset,
   CITATION_STYLE_PRESETS,
+  READWISE_SYNC_INTERVAL_MIN_MINUTES,
+  READWISE_SYNC_INTERVAL_MAX_MINUTES,
+  READWISE_FILTER_MIN_HIGHLIGHTS,
 } from './settings-schema';
 import { ReferenceListSortOrder } from '../modals/sort-entries';
 import { VariableListModal } from '../modals/variable-list-modal';
+import {
+  classifySyncOutcome,
+  SyncOutcomeKind,
+} from '../../library/sync-outcome';
+
+/** Maximum number of sync warnings appended to the "synced with warnings" notice. */
+const MAX_SURFACED_SYNC_WARNINGS = 3;
 
 const SORT_ORDER_LABELS: Record<ReferenceListSortOrder, string> = {
   default: 'Default (file order)',
@@ -280,16 +291,25 @@ export class CitationSettingTab extends PluginSettingTab {
           .onChange(
             debounce(async (value: string) => {
               const num = parseInt(value, 10);
-              if (!isNaN(num) && num >= 0) {
-                this.plugin.settings.readwiseSyncIntervalMinutes = num;
+              if (!isNaN(num) && num >= READWISE_SYNC_INTERVAL_MIN_MINUTES) {
+                // Clamp to the schema max so the saved value never overflows
+                // window.setInterval (which would be rejected on next load).
+                this.plugin.settings.readwiseSyncIntervalMinutes = Math.min(
+                  num,
+                  READWISE_SYNC_INTERVAL_MAX_MINUTES,
+                );
                 await this.plugin.saveSettings();
               }
             }, 500),
           );
         text.inputEl.type = 'number';
-        text.inputEl.min = '0';
+        text.inputEl.min = String(READWISE_SYNC_INTERVAL_MIN_MINUTES);
+        text.inputEl.max = String(READWISE_SYNC_INTERVAL_MAX_MINUTES);
         text.inputEl.setCssProps({ width: '80px' });
       });
+
+    // Advanced filters (collapsible)
+    this.renderReadwiseFilters(card, db, index);
 
     // Status display
     const statusEl = card.createDiv('readwise-status');
@@ -351,17 +371,159 @@ export class CitationSettingTab extends PluginSettingTab {
                 return;
               }
               new Notice('Syncing Readwise data...');
-              await this.plugin.libraryService.load();
+              const result = await this.plugin.libraryService.load();
+              const outcome = classifySyncOutcome(
+                this.plugin.libraryService.state,
+                result,
+              );
+
+              // On failure, report the error and DO NOT persist a misleading
+              // last-sync date or claim success.
+              if (outcome.kind === SyncOutcomeKind.Failure) {
+                statusEl.setText(outcome.message);
+                statusEl.setCssProps({ color: 'var(--text-error)' });
+                new Notice(outcome.message);
+                return;
+              }
+
               this.plugin.settings.readwiseLastSyncDate =
                 new Date().toISOString();
               await this.plugin.saveSettings();
+
+              const isWarning =
+                outcome.kind === SyncOutcomeKind.SuccessWithWarnings;
               statusEl.setText(
-                `Last sync: ${this.plugin.settings.readwiseLastSyncDate}`,
+                isWarning
+                  ? `Last sync: ${this.plugin.settings.readwiseLastSyncDate} — ${outcome.warnings.length} warning(s)`
+                  : `Last sync: ${this.plugin.settings.readwiseLastSyncDate}`,
               );
-              statusEl.setCssProps({ color: 'var(--text-muted)' });
-              new Notice('Readwise sync complete.');
+              statusEl.setCssProps({
+                color: isWarning ? 'var(--text-warning)' : 'var(--text-muted)',
+              });
+              new Notice(
+                isWarning
+                  ? `${outcome.message} ${outcome.warnings
+                      .slice(0, MAX_SURFACED_SYNC_WARNINGS)
+                      .join('; ')}`
+                  : outcome.message,
+              );
             })();
           });
+      });
+  }
+
+  /**
+   * Render a collapsible "Advanced filters" section for a Readwise database.
+   * Filters are stored per-database in `db.readwiseFilters`; an empty filter
+   * set is pruned so the config round-trips to `undefined`.
+   */
+  private renderReadwiseFilters(
+    card: HTMLElement,
+    db: DatabaseConfig,
+    index: number,
+  ): void {
+    const details = card.createEl('details');
+    details.createEl('summary', { text: 'Advanced filters' });
+    const body = details.createDiv();
+
+    const parseList = (value: string): string[] =>
+      value
+        .split(',')
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0);
+    const listToString = (list?: string[]): string => (list ?? []).join(', ');
+
+    const getFilters = (): ReadwiseFilters => {
+      const cfg = this.plugin.settings.databases[index];
+      if (!cfg.readwiseFilters) cfg.readwiseFilters = {};
+      return cfg.readwiseFilters;
+    };
+
+    const persist = async (): Promise<void> => {
+      // Prune an all-empty filter object so it round-trips to undefined.
+      const cfg = this.plugin.settings.databases[index];
+      const f = cfg.readwiseFilters;
+      if (
+        f &&
+        (f.categories?.length ?? 0) === 0 &&
+        (f.tags?.length ?? 0) === 0 &&
+        (f.readerLocations?.length ?? 0) === 0 &&
+        f.minHighlights === undefined
+      ) {
+        delete cfg.readwiseFilters;
+      }
+      await this.plugin.saveSettings();
+      this.debouncedReload();
+    };
+
+    const listFilters: Array<{
+      key: 'categories' | 'tags' | 'readerLocations';
+      name: string;
+      desc: string;
+    }> = [
+      {
+        key: 'categories',
+        name: 'Categories',
+        desc: 'Comma-separated. Import only these categories (e.g. books, articles).',
+      },
+      {
+        key: 'tags',
+        name: 'Tags',
+        desc: 'Comma-separated. Import only entries that have at least one of these tags.',
+      },
+      {
+        key: 'readerLocations',
+        name: 'Reader locations',
+        desc: 'Comma-separated. Import only Reader documents in these locations (e.g. later, archive).',
+      },
+    ];
+
+    for (const { key, name, desc } of listFilters) {
+      new Setting(body)
+        .setName(name)
+        .setDesc(desc)
+        .addText((text) => {
+          text.setValue(listToString(db.readwiseFilters?.[key])).onChange(
+            debounce(async (value: string) => {
+              const list = parseList(value);
+              if (list.length > 0) {
+                getFilters()[key] = list;
+              } else {
+                const f = this.plugin.settings.databases[index].readwiseFilters;
+                if (f) delete f[key];
+              }
+              await persist();
+            }, 500),
+          );
+        });
+    }
+
+    new Setting(body)
+      .setName('Minimum highlights')
+      .setDesc(
+        'Import only books with at least this many highlights (highlight-mode entries).',
+      )
+      .addText((text) => {
+        text
+          .setValue(db.readwiseFilters?.minHighlights?.toString() ?? '')
+          .onChange(
+            debounce(async (value: string) => {
+              const trimmed = value.trim();
+              if (trimmed === '') {
+                const f = this.plugin.settings.databases[index].readwiseFilters;
+                if (f) delete f.minHighlights;
+              } else {
+                const num = parseInt(trimmed, 10);
+                if (!isNaN(num) && num >= READWISE_FILTER_MIN_HIGHLIGHTS) {
+                  getFilters().minHighlights = num;
+                }
+              }
+              await persist();
+            }, 500),
+          );
+        text.inputEl.type = 'number';
+        text.inputEl.min = String(READWISE_FILTER_MIN_HIGHLIGHTS);
+        text.inputEl.setCssProps({ width: '80px' });
       });
   }
 

@@ -1,4 +1,4 @@
-import { Entry, DatabaseType, ParseErrorInfo } from './core';
+import { Entry, DatabaseType, ParseErrorInfo, ReadwiseFilters } from './core';
 
 /**
  * Known built-in data source transport types.
@@ -66,6 +66,11 @@ export interface DataSourceDefinition {
    * Format of the bibliography data
    */
   format: DatabaseType;
+
+  /**
+   * Readwise-only client-side import filters. Ignored by non-Readwise sources.
+   */
+  readwiseFilters?: ReadwiseFilters;
 }
 
 /**

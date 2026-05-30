@@ -25,6 +25,22 @@ export const DATABASE_TYPE_LABELS: Record<DatabaseType, string> = {
   [DATABASE_FORMATS.Readwise]: 'Readwise',
 };
 
+/**
+ * Optional import filters for a Readwise database. Applied client-side after
+ * fetching, since the Readwise API does not support all of these as query
+ * parameters. Empty/absent fields mean "no filtering" for that dimension.
+ */
+export interface ReadwiseFilters {
+  /** Keep only entries whose category is in this list (e.g. "books"). */
+  categories?: string[];
+  /** Keep only entries that have at least one of these tags. */
+  tags?: string[];
+  /** Keep only highlight-mode entries with at least this many highlights. */
+  minHighlights?: number;
+  /** Keep only Reader documents in these locations (e.g. "later", "archive"). */
+  readerLocations?: string[];
+}
+
 export interface DatabaseConfig {
   /** Stable internal identifier. Auto-generated on creation, never changes. */
   id?: string;
@@ -34,6 +50,8 @@ export interface DatabaseConfig {
   type: DatabaseType;
   /** Transport type — auto-derived from path if omitted. */
   sourceType?: string;
+  /** Readwise-only client-side import filters. */
+  readwiseFilters?: ReadwiseFilters;
 }
 
 /**

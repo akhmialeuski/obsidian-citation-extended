@@ -362,6 +362,112 @@ describe('ReadwiseAdapter', () => {
   // zoteroSelectURI override
   // -------------------------------------------------------------------------
 
+  describe('extended field mappings', () => {
+    it('maps readable_title to titleShort', () => {
+      const adapter = new ReadwiseAdapter(
+        makeEntryData({ readableTitle: 'Short Title' }),
+      );
+      expect(adapter.titleShort).toBe('Short Title');
+    });
+
+    it('maps source (e.g. kindle) to source', () => {
+      const adapter = new ReadwiseAdapter(makeEntryData({ source: 'kindle' }));
+      expect(adapter.source).toBe('kindle');
+    });
+
+    it('maps asin to ISBN', () => {
+      const adapter = new ReadwiseAdapter(makeEntryData({ asin: 'B0012345' }));
+      expect(adapter.ISBN).toBe('B0012345');
+    });
+
+    it('maps siteName to containerTitle', () => {
+      const adapter = new ReadwiseAdapter(
+        makeEntryData({ siteName: 'The New Yorker' }),
+      );
+      expect(adapter.containerTitle).toBe('The New Yorker');
+    });
+
+    it('exposes documentNote, wordCount, readingProgress and readerLocation', () => {
+      const adapter = new ReadwiseAdapter(
+        makeEntryData({
+          documentNote: 'My doc note',
+          wordCount: 1234,
+          readingProgress: 0.42,
+          readerLocation: 'later',
+        }),
+      );
+      expect(adapter.documentNote).toBe('My doc note');
+      expect(adapter.wordCount).toBe(1234);
+      expect(adapter.readingProgress).toBe(0.42);
+      expect(adapter.readerLocation).toBe('later');
+    });
+
+    it('falls back to undefined/null when the extended fields are absent', () => {
+      const adapter = new ReadwiseAdapter(makeEntryData());
+      expect(adapter.titleShort).toBeUndefined();
+      expect(adapter.source).toBeUndefined();
+      expect(adapter.ISBN).toBeUndefined();
+      expect(adapter.containerTitle).toBeUndefined();
+      expect(adapter.documentNote).toBeNull();
+      expect(adapter.wordCount).toBeNull();
+      expect(adapter.readingProgress).toBeNull();
+      expect(adapter.readerLocation).toBeNull();
+    });
+  });
+
+  describe('structured highlights getter', () => {
+    it('returns the structured highlights array', () => {
+      const adapter = new ReadwiseAdapter(
+        makeEntryData({
+          highlights: [
+            {
+              id: 'h1',
+              text: 'first highlight',
+              note: 'a note',
+              location: 12,
+              locationType: 'page',
+              color: 'yellow',
+              highlightedAt: '2024-01-01T00:00:00Z',
+              url: null,
+              tags: ['tag1'],
+            },
+          ],
+        }),
+      );
+      expect(adapter.highlights).toHaveLength(1);
+      expect(adapter.highlights[0].text).toBe('first highlight');
+      expect(adapter.highlights[0].note).toBe('a note');
+    });
+
+    it('returns an empty array when highlights are absent (backward-compat)', () => {
+      const adapter = new ReadwiseAdapter(makeEntryData());
+      expect(adapter.highlights).toEqual([]);
+    });
+
+    it('exposes highlights via toJSON for {{#each entry.highlights}}', () => {
+      const adapter = new ReadwiseAdapter(
+        makeEntryData({
+          highlights: [
+            {
+              id: 'h1',
+              text: 'text',
+              note: null,
+              location: null,
+              locationType: null,
+              color: null,
+              highlightedAt: null,
+              url: null,
+              tags: [],
+            },
+          ],
+        }),
+      );
+      const json = adapter.toJSON();
+      expect(Array.isArray(json.highlights)).toBe(true);
+      expect((json.highlights as unknown[]).length).toBe(1);
+    });
+  });
+
   describe('zoteroSelectURI override', () => {
     it('returns readwiseUrl instead of zotero:// URI', () => {
       const adapter = new ReadwiseAdapter(

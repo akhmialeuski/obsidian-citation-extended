@@ -200,7 +200,7 @@ describe('SourceManager', () => {
       expect(results[0].databaseId).toBe('Zotero'); // fallback to name
     });
 
-    it('returns successful results and skips failures', async () => {
+    it('surfaces a failed source as a synthetic result while others succeed', async () => {
       const factory = makeMockFactory();
       // Override second source to fail
       let callCount = 0;
@@ -230,8 +230,20 @@ describe('SourceManager', () => {
       const results = await manager.loadAll();
       consoleSpy.mockRestore();
 
-      expect(results).toHaveLength(1);
-      expect(results[0].databaseName).toBe('OK');
+      // Both the successful source and the synthetic failure result are returned
+      expect(results).toHaveLength(2);
+
+      const ok = results.find((r) => r.databaseName === 'OK');
+      const failed = results.find((r) => r.databaseName === 'Fail');
+      expect(ok).toBeDefined();
+      expect(failed).toBeDefined();
+
+      // The failed source surfaces its error as a parseError with no entries
+      expect(failed!.entries).toEqual([]);
+      expect(failed!.parseErrors).toHaveLength(1);
+      expect(failed!.parseErrors[0].message).toBe(
+        'Failed to load "Fail": fail',
+      );
     });
 
     it('throws when all sources fail', async () => {

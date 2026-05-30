@@ -147,10 +147,11 @@ export default class CitationPlugin extends Plugin {
         ),
     );
 
-    // Register Readwise source type — token lives in db.path (passed via def.path)
-    const readwiseCachePath = this.manifest?.dir
-      ? `${this.manifest.dir}/readwise-cache.json`
-      : '';
+    // Register Readwise source type — token lives in db.path (passed via def.path).
+    // Each Readwise database gets its own cache file keyed by the stable source
+    // id, so multiple Readwise databases never collide on a single shared cache.
+    const readwiseCacheDir = this.manifest?.dir ?? '';
+    const cacheNameSanitizeRe = /[^a-zA-Z0-9_-]/g;
     registry.register(
       DATA_SOURCE_TYPES.Readwise,
       (def, id) =>
@@ -159,10 +160,13 @@ export default class CitationPlugin extends Plugin {
           new ReadwiseApiClient(def.path, obsidianHttpGet),
           workerManager,
           platformAdapter.fileSystem,
-          readwiseCachePath,
+          readwiseCacheDir
+            ? `${readwiseCacheDir}/readwise-cache-${id.replace(cacheNameSanitizeRe, '-')}.json`
+            : '',
           this.settings.readwiseSyncIntervalMinutes > 0
             ? this.settings.readwiseSyncIntervalMinutes * 60_000
             : undefined,
+          def.readwiseFilters,
         ),
     );
 

@@ -187,4 +187,83 @@ describe('SettingsSchema', () => {
       }
     });
   });
+
+  describe('readwiseSyncIntervalMinutes bounds', () => {
+    it('accepts the maximum interval (1 week)', () => {
+      const result = validateSettings({
+        ...DEFAULT_SETTINGS,
+        readwiseSyncIntervalMinutes: 10080,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects an interval above the maximum (overflow risk)', () => {
+      const result = validateSettings({
+        ...DEFAULT_SETTINGS,
+        readwiseSyncIntervalMinutes: 99999,
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects a negative interval', () => {
+      const result = validateSettings({
+        ...DEFAULT_SETTINGS,
+        readwiseSyncIntervalMinutes: -1,
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('readwiseFilters', () => {
+    it('accepts a database with valid readwise filters', () => {
+      const result = validateSettings({
+        ...DEFAULT_SETTINGS,
+        databases: [
+          {
+            id: 'db-rw',
+            name: 'Readwise',
+            type: 'readwise',
+            path: 'token',
+            sourceType: 'readwise',
+            readwiseFilters: {
+              categories: ['books'],
+              tags: ['ml'],
+              minHighlights: 3,
+              readerLocations: ['later'],
+            },
+          },
+        ],
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.databases[0].readwiseFilters?.minHighlights).toBe(3);
+      }
+    });
+
+    it('accepts databases without readwiseFilters (backward-compat)', () => {
+      const result = validateSettings({
+        ...DEFAULT_SETTINGS,
+        databases: [
+          { id: 'db-1', name: 'X', type: 'biblatex', path: '/x.bib' },
+        ],
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects a negative minHighlights', () => {
+      const result = validateSettings({
+        ...DEFAULT_SETTINGS,
+        databases: [
+          {
+            id: 'db-rw',
+            name: 'Readwise',
+            type: 'readwise',
+            path: 'token',
+            readwiseFilters: { minHighlights: -5 },
+          },
+        ],
+      });
+      expect(result.success).toBe(false);
+    });
+  });
 });
