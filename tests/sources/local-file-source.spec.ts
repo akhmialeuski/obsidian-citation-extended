@@ -235,8 +235,10 @@ describe('LocalFileSource', () => {
 
       await source.load();
 
-      // path.resolve with an absolute second arg ignores the base
-      expect(fsMocks.stat).toHaveBeenCalledWith(absPath);
+      // path.resolve with an absolute second arg ignores the base. Computed via
+      // node `path.resolve` so the assertion holds on Windows too (an absolute
+      // POSIX path resolves onto the current drive, e.g. C:\absolute\...).
+      expect(fsMocks.stat).toHaveBeenCalledWith(path.resolve(absPath));
     });
   });
 

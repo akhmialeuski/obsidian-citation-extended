@@ -117,6 +117,25 @@ export class CitationSettingTab extends PluginSettingTab {
           })();
         });
     });
+
+    new Setting(containerEl)
+      .setName('Library load timeout (seconds)')
+      .setDesc(
+        'Maximum time to wait for all databases to load and parse before ' +
+          'aborting. Raise this if you see "Timeout loading citation database" ' +
+          'with a large library. Default 30, range 5–600.',
+      )
+      .addText((text) => {
+        text
+          .setValue(String(this.plugin.settings.libraryLoadTimeoutSeconds))
+          .onChange(async (value) => {
+            const num = parseInt(value, 10);
+            if (!isNaN(num) && num >= 5 && num <= 600) {
+              this.plugin.settings.libraryLoadTimeoutSeconds = num;
+              await this.plugin.saveSettings();
+            }
+          });
+      });
   }
 
   private renderDatabaseCard(
