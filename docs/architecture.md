@@ -581,7 +581,9 @@ flowchart LR
     Q --> NFD --> MS --> CK
 ```
 
-**Indexed fields:** `title`, `authorString`, `year`, `citekey`, `zoteroId`
+**Indexed fields:** `title`, `authorString`, `year`, `id`, `zoteroId`, `notesText`
+
+`notesText` is the aggregated note/highlight text (from the base `note` getter), truncated per entry (`Entry.MAX_NOTES_INDEX_CHARS`) to bound index size. It lets a query that appears only inside a Readwise highlight or BibTeX note still match the entry. **Boosts:** `title` ×2, `authorString` ×1.5, `notesText` ×0.5 — so title/author matches always rank above highlight-only matches.
 
 The index is rebuilt from scratch on every library load via `searchService.buildIndex(entries)`.
 
@@ -992,6 +994,22 @@ Readwise uses a single database format: `'readwise'`. The internal mode (`readwi
 | `readwise-highlights` | v2 Export (`/api/v2/export/`) | `rw-{user_book_id}` | Books with nested highlights |
 | `reader-documents` | v3 Reader (`/api/v3/list/`) | `rd-{document_id}` | Documents with metadata |
 
+### Structured Highlights
+
+Each entry carries both an aggregated `highlightsText` string (for backward-compatible `{{note}}` templates) and a structured `highlights: ReadwiseHighlightItem[]` array exposed via `entry.highlights` (for `{{#each entry.highlights}}`). Each item preserves per-highlight `text`, `note`, `location`, `locationType`, `color`, `highlightedAt`, `url`, and `tags`. v2 Export highlights map directly; v3 Reader child documents are merged in (see below).
+
+### Reader Child-Document Merge
+
+Reader v3 returns highlights/notes as child documents (non-null `parent_id`). `mergeReaderChildren()` groups children by `parent_id` and folds them into the parent's `highlights` array (and aggregated text) instead of dropping them. Children whose parent is outside the fetched set are kept as standalone top-level entries (logged), so no data is silently lost. The merge is deterministic (preserves API order, no time-based sorting).
+
+### Import Filters
+
+A Readwise database may carry optional `readwiseFilters` (`categories`, `tags`, `minHighlights`, `readerLocations`), threaded from `DatabaseConfig` → `DataSourceDefinition` → `ReadwiseSource`. `applyReadwiseFilters()` (a pure function) filters normalized entries after fetch/merge, before the worker pipeline. `minHighlights` applies only to highlight-mode entries; `readerLocations` only to Reader documents.
+
+### Cancellation & Cache
+
+`ReadwiseSource` owns an internal `AbortController` created per `load()` (aborting any previous in-flight fetch) and aborted in `dispose()`, so the API client's abort handling is live and network work stops on reload/unload. The offline cache is per-database — `readwise-cache-<id>.json` keyed by the stable source id — so multiple Readwise databases never collide.
+
 ### Rate Limiting
 
 The `ReadwiseApiClient` handles HTTP 429 responses with automatic retry:
@@ -1209,7 +1227,7 @@ classDiagram
 |-------|---------|---------|
 | Template/Note ops | `Result<T, E>` | `render()` returns `Result<string, TemplateRenderError>` |
 | Actions | `try/catch` → notification | `platform.notifications.show(error.message)` |
-| Source loading | Partial failure | Failed sources logged, others continue |
+| Source loading | Partial failure | `loadAll()` surfaces a failed source as a synthetic result (empty entries + a parse error) so the failure reaches `state.parseErrors` and the UI, while other sources continue. Throws only when **every** source fails |
 | Library loading | Retry with backoff | Up to 5 attempts with exponential delay |
 | Worker | Queue + abort | AbortSignal discards stale results |
 

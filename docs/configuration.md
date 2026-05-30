@@ -71,9 +71,21 @@ Connect the plugin to your Readwise account to import highlights and documents a
 | **Database name** | Friendly label for this database (default: `Database N`). You can rename it to `Readwise` or any name you prefer |
 | **Database type** | Must be set to **Readwise** |
 | **API token** | Your Readwise access token (password field). Get it from [readwise.io/access_token](https://readwise.io/access_token). Stored in plugin settings |
-| **Auto-sync interval (minutes)** | How often the plugin automatically fetches new data from Readwise, in minutes. Set to `0` to disable automatic sync. Default: `30` |
+| **Auto-sync interval (minutes)** | How often the plugin automatically fetches new data from Readwise, in minutes. Set to `0` to disable automatic sync. Default: `30`. Maximum: `10080` (1 week) — larger values are clamped to avoid timer overflow |
+| **Advanced filters** | Collapsible section with per-database import filters (see below). Optional |
 | **Validate token** | Tests the API token against Readwise. Shows "Token is valid" or "Token is invalid" |
-| **Sync now** | Fetches data from both Readwise APIs and reloads the library. Updates the "Last sync" timestamp shown below the token field |
+| **Sync now** | Fetches data from both Readwise APIs and reloads the library. On success, updates the "Last sync" timestamp; on failure it reports the error and does **not** update the timestamp |
+
+### Import Filters (Advanced filters)
+
+Each Readwise database can optionally restrict which entries are imported. Filters are applied after fetching and are stored per-database. Leave a field empty to disable that filter.
+
+| Filter | Description |
+| ------ | ----------- |
+| **Categories** | Comma-separated. Import only entries in these categories (e.g. `books, articles`) |
+| **Tags** | Comma-separated. Import only entries that have at least one of these tags |
+| **Reader locations** | Comma-separated. Import only Reader documents in these locations (e.g. `later, archive`) |
+| **Minimum highlights** | Import only books with at least this many highlights (applies to highlight-mode entries only) |
 
 ### How It Works
 
@@ -88,7 +100,11 @@ Readwise entries support all standard plugin features: citation insertion, liter
 
 ### Offline Cache
 
-After each successful sync, the plugin saves Readwise data to a local cache file at `.obsidian/plugins/citation-extended/readwise-cache.json`. If the Readwise API is unavailable on the next load (e.g., no network connection), the plugin falls back to the cached data automatically. A warning notice appears when cached data is used instead of a fresh API response.
+After each successful sync, the plugin saves Readwise data to a local cache file at `.obsidian/plugins/citation-extended/readwise-cache-<id>.json` — one file per Readwise database (keyed by its stable id) so multiple Readwise databases never overwrite each other's cache. If the Readwise API is unavailable on the next load (e.g., no network connection), the plugin falls back to the cached data automatically. A warning notice appears when cached data is used instead of a fresh API response.
+
+### Security Note
+
+Your Readwise API token is stored **unencrypted** in the plugin's `data.json` (`.obsidian/plugins/citation-extended/data.json`). Obsidian does not provide a secret store for plugins. Treat the vault accordingly: avoid committing it to a public git repository, and be mindful when syncing the vault through third-party cloud services. Revoke and regenerate the token at [readwise.io/access_token](https://readwise.io/access_token) if it is ever exposed.
 
 The cache file is managed automatically -- you do not need to create or edit it. It is overwritten on every successful sync.
 
