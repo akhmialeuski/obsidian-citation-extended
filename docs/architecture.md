@@ -341,7 +341,7 @@ sequenceDiagram
 
 | Mechanism | Value | Purpose |
 |-----------|-------|---------|
-| **Timeout** | 10 s | Race against `Promise.all` of source loads |
+| **Timeout** | configurable via `libraryLoadTimeoutSeconds` (default 30 s) | Race (`Promise.race`) against `sourceManager.loadAll()`; the load signal is threaded to sources so the in-flight work is cancelled on timeout |
 | **AbortController** | per load | Cancel in-flight load on new `load()` call |
 | **Debounce** | 1 000 ms | Coalesce rapid file change events from watchers |
 | **Retry** | 5 attempts | Exponential backoff: 1 s → 2 s → 4 s → 8 s → 16 s (capped at 30 s) |
