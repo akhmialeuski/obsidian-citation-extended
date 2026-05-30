@@ -34,6 +34,7 @@ import {
   classifySyncOutcome,
   SyncOutcomeKind,
 } from '../../library/sync-outcome';
+import { LoadingStatus } from '../../library/library-state';
 
 /** Maximum number of sync warnings appended to the "synced with warnings" notice. */
 const MAX_SURFACED_SYNC_WARNINGS = 3;
@@ -312,12 +313,21 @@ export class CitationSettingTab extends PluginSettingTab {
               const num = parseInt(value, 10);
               if (!isNaN(num) && num >= READWISE_SYNC_INTERVAL_MIN_MINUTES) {
                 // Clamp to the schema max so the saved value never overflows
-                // window.setInterval (which would be rejected on next load).
-                this.plugin.settings.readwiseSyncIntervalMinutes = Math.min(
+                // window.setInterval.
+                const clamped = Math.min(
                   num,
                   READWISE_SYNC_INTERVAL_MAX_MINUTES,
                 );
+                this.plugin.settings.readwiseSyncIntervalMinutes = clamped;
                 await this.plugin.saveSettings();
+                // Reflect a clamped value back into the field so the UI never
+                // disagrees with the saved value, and tell the user.
+                if (clamped !== num) {
+                  text.setValue(String(clamped));
+                  new Notice(
+                    `Sync interval capped at ${READWISE_SYNC_INTERVAL_MAX_MINUTES} minutes (1 week).`,
+                  );
+                }
               }
             }, 500),
           );
@@ -391,6 +401,20 @@ export class CitationSettingTab extends PluginSettingTab {
               }
               new Notice('Syncing Readwise data...');
               const result = await this.plugin.libraryService.load();
+
+              // A newer reload (poll timer or debounced file change) can
+              // supersede this sync: load() returns null but the store is back
+              // in Loading. Treat that as benign, not a failure.
+              if (
+                result === null &&
+                this.plugin.libraryService.state.status ===
+                  LoadingStatus.Loading
+              ) {
+                statusEl.setText('Sync superseded by a newer reload…');
+                statusEl.setCssProps({ color: 'var(--text-muted)' });
+                return;
+              }
+
               const outcome = classifySyncOutcome(
                 this.plugin.libraryService.state,
                 result,
@@ -432,7 +456,7 @@ export class CitationSettingTab extends PluginSettingTab {
   }
 
   /**
-   * Render a collapsible "Advanced filters" section for a Readwise database.
+   * Render the "Advanced filters" sub-section for a Readwise database.
    * Filters are stored per-database in `db.readwiseFilters`; an empty filter
    * set is pruned so the config round-trips to `undefined`.
    */
@@ -441,9 +465,10 @@ export class CitationSettingTab extends PluginSettingTab {
     db: DatabaseConfig,
     index: number,
   ): void {
-    const details = card.createEl('details');
-    details.createEl('summary', { text: 'Advanced filters' });
-    const body = details.createDiv();
+    // Use the standard settings sub-heading (consistent styling) rather than a
+    // raw <details> element, which Obsidian does not theme.
+    new Setting(card).setName('Advanced filters').setHeading();
+    const body = card;
 
     const parseList = (value: string): string[] =>
       value

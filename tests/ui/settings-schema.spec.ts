@@ -1,6 +1,7 @@
 import {
   validateSettings,
   DEFAULT_SETTINGS,
+  READWISE_SYNC_INTERVAL_MAX_MINUTES,
 } from '../../src/ui/settings/settings-schema';
 
 jest.mock('obsidian', () => ({}), { virtual: true });
@@ -192,15 +193,15 @@ describe('SettingsSchema', () => {
     it('accepts the maximum interval (1 week)', () => {
       const result = validateSettings({
         ...DEFAULT_SETTINGS,
-        readwiseSyncIntervalMinutes: 10080,
+        readwiseSyncIntervalMinutes: READWISE_SYNC_INTERVAL_MAX_MINUTES,
       });
       expect(result.success).toBe(true);
     });
 
-    it('rejects an interval above the maximum (overflow risk)', () => {
+    it('rejects an interval one above the maximum (overflow risk)', () => {
       const result = validateSettings({
         ...DEFAULT_SETTINGS,
-        readwiseSyncIntervalMinutes: 99999,
+        readwiseSyncIntervalMinutes: READWISE_SYNC_INTERVAL_MAX_MINUTES + 1,
       });
       expect(result.success).toBe(false);
     });

@@ -1100,8 +1100,8 @@ describe('CitationSettingTab', () => {
     });
 
     describe('advanced filters', () => {
-      // Render the filters section in isolation so the four filter Settings
-      // map to settingInstances[0..3] deterministically.
+      // Render the filters section in isolation. settingInstances[0] is the
+      // "Advanced filters" heading; the four filter rows are [1..4].
       function renderFiltersInIsolation(): MockSettingInstance[] {
         settingInstances.length = 0;
         const card = document.createElement('div');
@@ -1119,7 +1119,7 @@ describe('CitationSettingTab', () => {
 
       it('writes a categories filter and prunes it when emptied', async () => {
         const settings = renderFiltersInIsolation();
-        const categories = settings[0].getTextComponents()[0];
+        const categories = settings[1].getTextComponents()[0];
 
         categories.triggerChange('books, articles');
         await Promise.resolve();
@@ -1135,7 +1135,7 @@ describe('CitationSettingTab', () => {
 
       it('writes a numeric minHighlights filter', async () => {
         const settings = renderFiltersInIsolation();
-        const minHighlights = settings[3].getTextComponents()[0];
+        const minHighlights = settings[4].getTextComponents()[0];
 
         minHighlights.triggerChange('5');
         await Promise.resolve();
