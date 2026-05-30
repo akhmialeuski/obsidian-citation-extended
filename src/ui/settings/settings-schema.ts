@@ -49,6 +49,14 @@ export const READWISE_SYNC_INTERVAL_DEFAULT_MINUTES = 30;
 // Minimum allowed value for the per-database "minimum highlights" import filter.
 export const READWISE_FILTER_MIN_HIGHLIGHTS = 0;
 
+// ---- Library load timeout bounds -------------------------------------------
+// Max seconds to wait for all databases to load + parse before aborting. Shared
+// by the Zod schema (validation) and the settings UI (clamp + input bounds) so
+// there is a single source of truth for the range.
+export const LIBRARY_LOAD_TIMEOUT_MIN_SECONDS = 5;
+export const LIBRARY_LOAD_TIMEOUT_MAX_SECONDS = 600;
+export const LIBRARY_LOAD_TIMEOUT_DEFAULT_SECONDS = 30;
+
 /**
  * Resolve the configured Readwise sync interval (minutes) to milliseconds for
  * `setInterval`, clamped to the valid range. Returns `undefined` when polling
@@ -142,7 +150,11 @@ export const SettingsSchema = z.object({
   // Large or LaTeX-escaped (e.g. Cyrillic \cyrchar) BibTeX libraries can take
   // longer than the old fixed 10s; raise this if you see
   // "Timeout loading citation database".
-  libraryLoadTimeoutSeconds: z.number().min(5).max(600).default(30),
+  libraryLoadTimeoutSeconds: z
+    .number()
+    .min(LIBRARY_LOAD_TIMEOUT_MIN_SECONDS)
+    .max(LIBRARY_LOAD_TIMEOUT_MAX_SECONDS)
+    .default(LIBRARY_LOAD_TIMEOUT_DEFAULT_SECONDS),
 });
 
 export type CitationsPluginSettingsType = z.infer<typeof SettingsSchema>;
@@ -178,7 +190,7 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   readwiseLastSyncDate: '',
   readwiseSyncIntervalMinutes: READWISE_SYNC_INTERVAL_DEFAULT_MINUTES,
   // Performance
-  libraryLoadTimeoutSeconds: 30,
+  libraryLoadTimeoutSeconds: LIBRARY_LOAD_TIMEOUT_DEFAULT_SECONDS,
 };
 
 export function validateSettings(settings: unknown) {

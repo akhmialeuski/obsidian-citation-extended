@@ -392,7 +392,11 @@ import { CitationsPluginSettings } from '../../../src/ui/settings/settings';
 import type CitationPlugin from '../../../src/main';
 import type { VariableDefinition } from '../../../src/template/introspection.service';
 import { LoadingStatus } from '../../../src/library/library-state';
-import { READWISE_SYNC_INTERVAL_MAX_MINUTES } from '../../../src/ui/settings/settings-schema';
+import {
+  READWISE_SYNC_INTERVAL_MAX_MINUTES,
+  LIBRARY_LOAD_TIMEOUT_MIN_SECONDS,
+  LIBRARY_LOAD_TIMEOUT_MAX_SECONDS,
+} from '../../../src/ui/settings/settings-schema';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1169,6 +1173,65 @@ describe('CitationSettingTab', () => {
         );
         expect(mockNotice).toHaveBeenCalledWith(
           expect.stringContaining('capped'),
+        );
+      });
+    });
+
+    describe('library load timeout clamp', () => {
+      // The timeout field is the only number input with max = the timeout
+      // schema max (the auto-sync interval uses a different, larger max).
+      function findTimeoutField():
+        | { triggerChange(v: string): void }
+        | undefined {
+        for (const setting of getSettings()) {
+          for (const c of setting.getTextComponents()) {
+            if (
+              (c.inputEl as HTMLInputElement).max ===
+              String(LIBRARY_LOAD_TIMEOUT_MAX_SECONDS)
+            ) {
+              return c;
+            }
+          }
+        }
+        return undefined;
+      }
+
+      it('clamps an over-max timeout, writes it back, and notifies', async () => {
+        tab.display();
+
+        const field = findTimeoutField();
+        expect(field).toBeDefined();
+
+        field!.triggerChange(String(LIBRARY_LOAD_TIMEOUT_MAX_SECONDS + 1000));
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(plugin.settings.libraryLoadTimeoutSeconds).toBe(
+          LIBRARY_LOAD_TIMEOUT_MAX_SECONDS,
+        );
+        expect(mockNotice).toHaveBeenCalledWith(
+          expect.stringContaining('clamped'),
+        );
+      });
+
+      it('clamps a below-min timeout up to the minimum', async () => {
+        tab.display();
+
+        const field = findTimeoutField();
+        expect(field).toBeDefined();
+
+        field!.triggerChange('1');
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(plugin.settings.libraryLoadTimeoutSeconds).toBe(
+          LIBRARY_LOAD_TIMEOUT_MIN_SECONDS,
+        );
+        // A below-min value is also a clamp, so the user is notified.
+        expect(mockNotice).toHaveBeenCalledWith(
+          expect.stringContaining('clamped'),
         );
       });
     });

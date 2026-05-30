@@ -27,6 +27,9 @@ import {
   READWISE_SYNC_INTERVAL_MIN_MINUTES,
   READWISE_SYNC_INTERVAL_MAX_MINUTES,
   READWISE_FILTER_MIN_HIGHLIGHTS,
+  LIBRARY_LOAD_TIMEOUT_MIN_SECONDS,
+  LIBRARY_LOAD_TIMEOUT_MAX_SECONDS,
+  LIBRARY_LOAD_TIMEOUT_DEFAULT_SECONDS,
 } from './settings-schema';
 import { ReferenceListSortOrder } from '../modals/sort-entries';
 import { VariableListModal } from '../modals/variable-list-modal';
@@ -124,18 +127,38 @@ export class CitationSettingTab extends PluginSettingTab {
       .setDesc(
         'Maximum time to wait for all databases to load and parse before ' +
           'aborting. Raise this if you see "Timeout loading citation database" ' +
-          'with a large library. Default 30, range 5–600.',
+          `with a large library. Default ${LIBRARY_LOAD_TIMEOUT_DEFAULT_SECONDS}, ` +
+          `range ${LIBRARY_LOAD_TIMEOUT_MIN_SECONDS}–${LIBRARY_LOAD_TIMEOUT_MAX_SECONDS}.`,
       )
       .addText((text) => {
         text
           .setValue(String(this.plugin.settings.libraryLoadTimeoutSeconds))
-          .onChange(async (value) => {
-            const num = parseInt(value, 10);
-            if (!isNaN(num) && num >= 5 && num <= 600) {
-              this.plugin.settings.libraryLoadTimeoutSeconds = num;
+          .onChange(
+            // Debounced to mirror the Readwise sync-interval field and avoid
+            // rewriting the input mid-typing (the clamp writes the value back).
+            debounce(async (value: string) => {
+              const num = parseInt(value, 10);
+              if (isNaN(num)) return;
+              // Clamp to the schema range so an out-of-range entry is corrected
+              // (and reflected back) instead of being silently dropped.
+              const clamped = Math.min(
+                Math.max(num, LIBRARY_LOAD_TIMEOUT_MIN_SECONDS),
+                LIBRARY_LOAD_TIMEOUT_MAX_SECONDS,
+              );
+              this.plugin.settings.libraryLoadTimeoutSeconds = clamped;
               await this.plugin.saveSettings();
-            }
-          });
+              if (clamped !== num) {
+                text.setValue(String(clamped));
+                new Notice(
+                  `Library load timeout clamped to ${LIBRARY_LOAD_TIMEOUT_MIN_SECONDS}–${LIBRARY_LOAD_TIMEOUT_MAX_SECONDS} seconds.`,
+                );
+              }
+            }, 500),
+          );
+        text.inputEl.type = 'number';
+        text.inputEl.min = String(LIBRARY_LOAD_TIMEOUT_MIN_SECONDS);
+        text.inputEl.max = String(LIBRARY_LOAD_TIMEOUT_MAX_SECONDS);
+        text.inputEl.setCssProps({ width: '80px' });
       });
   }
 
@@ -337,7 +360,7 @@ export class CitationSettingTab extends PluginSettingTab {
         text.inputEl.setCssProps({ width: '80px' });
       });
 
-    // Advanced filters (collapsible)
+    // Advanced filters (per-database import filters)
     this.renderReadwiseFilters(card, db, index);
 
     // Status display
@@ -468,9 +491,9 @@ export class CitationSettingTab extends PluginSettingTab {
     index: number,
   ): void {
     // Use the standard settings sub-heading (consistent styling) rather than a
-    // raw <details> element, which Obsidian does not theme.
+    // raw <details> element, which Obsidian does not theme. The filter rows are
+    // appended to the same database card, directly under the heading.
     new Setting(card).setName('Advanced filters').setHeading();
-    const body = card;
 
     const parseList = (value: string): string[] =>
       value
@@ -525,7 +548,7 @@ export class CitationSettingTab extends PluginSettingTab {
     ];
 
     for (const { key, name, desc } of listFilters) {
-      new Setting(body)
+      new Setting(card)
         .setName(name)
         .setDesc(desc)
         .addText((text) => {
@@ -544,7 +567,7 @@ export class CitationSettingTab extends PluginSettingTab {
         });
     }
 
-    new Setting(body)
+    new Setting(card)
       .setName('Minimum highlights')
       .setDesc(
         'Import only books with at least this many highlights (highlight-mode entries).',

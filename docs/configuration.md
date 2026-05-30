@@ -51,6 +51,14 @@ To use more than one bibliography source (e.g. personal library + shared team li
 
 ![Multiple databases](images/settings-multiple-databases.png)
 
+### Library load timeout
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **Library load timeout (seconds)** | Maximum time to wait for all databases to load and parse before aborting. Raise this if you see "Timeout loading citation database" with a large or heavily LaTeX-escaped library. Range `5`–`600` | `30` |
+
+A load that exceeds this timeout is **not** retried automatically — the parse may still be running in the background, and a retry would queue another parse behind it. If you hit the timeout, raise the value and re-run **Refresh library** (or reopen the vault). Out-of-range values typed in the field are clamped to the valid range.
+
 ---
 
 ## Readwise Integration
