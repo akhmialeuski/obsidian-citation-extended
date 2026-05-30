@@ -33,6 +33,10 @@ export interface SyncOutcome {
  * one of three outcomes so callers (e.g. the "Sync now" button) can avoid
  * reporting false success and avoid persisting a misleading last-sync date.
  *
+ * Note: `state.parseErrors` is the library-wide aggregate across ALL databases,
+ * not just Readwise. The warning text is therefore phrased generically ("across
+ * all sources") rather than implying the warnings originate from Readwise.
+ *
  * @param state   Library state captured immediately after `load()` resolved.
  * @param result  The value returned by `load()` (`Library` on success, `null`
  *                on failure/abort/no-configured-databases).
@@ -54,7 +58,7 @@ export function classifySyncOutcome(
   if (state.parseErrors.length > 0) {
     return {
       kind: SyncOutcomeKind.SuccessWithWarnings,
-      message: `Readwise synced with ${state.parseErrors.length} warning(s).`,
+      message: `Synced with ${state.parseErrors.length} warning(s) across all sources.`,
       warnings: state.parseErrors,
     };
   }

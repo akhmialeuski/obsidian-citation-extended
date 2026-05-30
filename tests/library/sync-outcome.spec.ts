@@ -68,7 +68,9 @@ describe('classifySyncOutcome', () => {
       );
 
       expect(outcome.kind).toBe(SyncOutcomeKind.SuccessWithWarnings);
-      expect(outcome.message).toBe('Readwise synced with 1 warning(s).');
+      expect(outcome.message).toBe(
+        'Synced with 1 warning(s) across all sources.',
+      );
       expect(outcome.warnings).toHaveLength(1);
     });
   });

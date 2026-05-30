@@ -24,6 +24,7 @@ import {
 } from '../../src/core/adapters/readwise-adapter';
 import { DATABASE_FORMATS } from '../../src/core/types/database';
 import type { IFileSystem } from '../../src/platform/platform-adapter';
+import { createMockPlatformAdapter } from '../helpers/mock-platform';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -132,14 +133,10 @@ function createMockClient(
 function createMockFileSystem(
   overrides: Partial<IFileSystem> = {},
 ): IFileSystem {
-  return {
-    readFile: jest.fn().mockResolvedValue(''),
-    writeFile: jest.fn().mockResolvedValue(undefined),
-    exists: jest.fn().mockResolvedValue(false),
-    createFolder: jest.fn().mockResolvedValue(undefined),
-    getBasePath: jest.fn().mockReturnValue('/vault'),
-    ...overrides,
-  } as unknown as IFileSystem;
+  // Reuse the shared platform-adapter mock's fileSystem (tests/helpers/
+  // mock-platform.ts) rather than duplicating the mock factory here.
+  const fileSystem = createMockPlatformAdapter().fileSystem;
+  return { ...fileSystem, ...overrides };
 }
 
 /** Create a mock WorkerManager that returns the data passed to it. */
@@ -585,23 +582,22 @@ describe('ReadwiseSource', () => {
       ).toBe(true);
     });
 
-    it('collects errors from BOTH APIs when both fail (no cache)', async () => {
+    it('throws on a total outage (both APIs fail) with no cache, surfacing both errors', async () => {
       const client = createMockClient({
         fetchExportBooks: jest.fn().mockRejectedValue(new Error('v2 down')),
         fetchReaderDocuments: jest.fn().mockRejectedValue(new Error('v3 down')),
       } as unknown as Partial<ReadwiseApiClient>);
       const worker = createMockWorkerManager();
 
+      const errSpy = jest.spyOn(console, 'error').mockImplementation();
+      // No file system → no cache fallback, so a total outage throws.
       const source = new ReadwiseSource('src-1', client, worker as never);
-      const result = await source.load();
+      const error = await source.load().catch((e: Error) => e);
+      errSpy.mockRestore();
 
-      expect(result.entries).toHaveLength(0);
-      expect(
-        result.parseErrors!.some((e) => e.message.includes('v2 down')),
-      ).toBe(true);
-      expect(
-        result.parseErrors!.some((e) => e.message.includes('v3 down')),
-      ).toBe(true);
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toContain('v2 down');
+      expect((error as Error).message).toContain('v3 down');
     });
   });
 
@@ -1075,7 +1071,7 @@ describe('ReadwiseSource offline cache', () => {
     expect(fs.writeFile).not.toHaveBeenCalled();
   });
 
-  it('surfaces errors without throwing when both APIs fail and no cache exists', async () => {
+  it('throws on a total outage with no cache (so the prior library is preserved)', async () => {
     const fs = createMockFileSystem({
       exists: jest.fn().mockResolvedValue(false),
     });
@@ -1085,6 +1081,7 @@ describe('ReadwiseSource offline cache', () => {
     } as unknown as Partial<ReadwiseApiClient>);
     const worker = createMockWorkerManager();
 
+    const errSpy = jest.spyOn(console, 'error').mockImplementation();
     const source = new ReadwiseSource(
       's',
       client,
@@ -1092,15 +1089,15 @@ describe('ReadwiseSource offline cache', () => {
       fs,
       '/cache.json',
     );
-    const result = await source.load();
-
-    expect(result.entries).toHaveLength(0);
-    expect(result.parseErrors!.some((e) => e.message.includes('down'))).toBe(
-      true,
+    await expect(source.load()).rejects.toThrow(
+      'Failed to load from Readwise API',
     );
+    // The cache must NOT be overwritten with an empty result.
+    expect(fs.writeFile).not.toHaveBeenCalled();
+    errSpy.mockRestore();
   });
 
-  it('treats a cache read error as no cache', async () => {
+  it('treats a cache read error as no cache (throws on total outage)', async () => {
     const fs = createMockFileSystem({
       exists: jest.fn().mockResolvedValue(true),
       readFile: jest.fn().mockRejectedValue(new Error('read error')),
@@ -1111,6 +1108,29 @@ describe('ReadwiseSource offline cache', () => {
     } as unknown as Partial<ReadwiseApiClient>);
     const worker = createMockWorkerManager();
 
+    const errSpy = jest.spyOn(console, 'error').mockImplementation();
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      '/cache.json',
+    );
+    // readCache swallows the read error and returns null → no cache → throw.
+    await expect(source.load()).rejects.toThrow(
+      'Failed to load from Readwise API',
+    );
+    errSpy.mockRestore();
+  });
+
+  it('does not overwrite the cache on a partial fetch failure', async () => {
+    const fs = createMockFileSystem();
+    const client = createMockClient({
+      fetchExportBooks: jest.fn().mockResolvedValue([makeExportBook()]),
+      fetchReaderDocuments: jest.fn().mockRejectedValue(new Error('v3 down')),
+    } as unknown as Partial<ReadwiseApiClient>);
+    const worker = createMockWorkerManager();
+
     const source = new ReadwiseSource(
       's',
       client,
@@ -1120,11 +1140,13 @@ describe('ReadwiseSource offline cache', () => {
     );
     const result = await source.load();
 
-    // readCache swallows the read error and returns null → errors surfaced.
-    expect(result.entries).toHaveLength(0);
-    expect(result.parseErrors!.some((e) => e.message.includes('down'))).toBe(
+    // Books are still returned for this session...
+    expect(result.entries.length).toBeGreaterThan(0);
+    expect(result.parseErrors!.some((e) => e.message.includes('v3 down'))).toBe(
       true,
     );
+    // ...but the previously-complete cache is preserved (not clobbered).
+    expect(fs.writeFile).not.toHaveBeenCalled();
   });
 
   it('throws when worker processing fails and no cache is available', async () => {

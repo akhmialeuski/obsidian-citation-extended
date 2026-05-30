@@ -4,8 +4,14 @@ import { Author, Entry } from '../types/entry';
 // Types
 // ---------------------------------------------------------------------------
 
+/** Named constants for the Readwise API modes (avoids scattered string literals). */
+export const READWISE_MODES = {
+  Highlights: 'readwise-highlights',
+  Reader: 'reader-documents',
+} as const;
+
 /** Mode indicating which Readwise API endpoint the data came from. */
-export type ReadwiseMode = 'readwise-highlights' | 'reader-documents';
+export type ReadwiseMode = (typeof READWISE_MODES)[keyof typeof READWISE_MODES];
 
 /**
  * A single structured highlight/annotation belonging to a Readwise entry.
@@ -185,7 +191,7 @@ export class ReadwiseAdapter extends Entry {
   }
 
   get citekey(): string {
-    return this.data.mode === 'readwise-highlights'
+    return this.data.mode === READWISE_MODES.Highlights
       ? `rw-${this.data.rawId}`
       : `rd-${this.data.rawId}`;
   }
