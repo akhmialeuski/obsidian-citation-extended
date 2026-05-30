@@ -215,6 +215,7 @@ describe('VaultFileSource', () => {
           databaseRaw: '@article{doe2024, title={Test}}',
           databaseType: DATABASE_FORMATS.BibLaTeX,
         }),
+        undefined,
       );
     });
 

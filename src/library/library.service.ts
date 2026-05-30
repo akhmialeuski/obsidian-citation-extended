@@ -126,7 +126,7 @@ export class LibraryService implements ILibraryService {
     console.debug('Citation plugin: Reloading library from all sources');
 
     try {
-      const results = await this.loadFromSources();
+      const results = await this.loadFromSources(signal);
       if (signal.aborted) return null;
 
       this.buildLibrary(results);
@@ -166,7 +166,9 @@ export class LibraryService implements ILibraryService {
     }
   };
 
-  private async loadFromSources(): Promise<SourceLoadResult[]> {
+  private async loadFromSources(
+    signal: AbortSignal,
+  ): Promise<SourceLoadResult[]> {
     this.sourceManager.syncSources(this.settings.databases);
 
     const timeoutSeconds =
@@ -180,12 +182,17 @@ export class LibraryService implements ILibraryService {
       );
     });
 
+    // Pass the load signal so sources can cancel in-flight work (e.g. Readwise
+    // HTTP + rate-limit back-offs) when the timeout fires or a newer load starts.
+    const loadPromise = this.sourceManager.loadAll(signal);
+    // If the timeout wins the race, loadPromise keeps running and may later
+    // reject (e.g. every source fails). Attach a no-op handler so that late
+    // rejection is not an unhandled promise rejection — the real failure is
+    // already surfaced via the timeout-driven Error state.
+    loadPromise.catch(() => {});
+
     try {
-      const results = await Promise.race([
-        this.sourceManager.loadAll(),
-        timeoutPromise,
-      ]);
-      return results;
+      return await Promise.race([loadPromise, timeoutPromise]);
     } finally {
       if (timeoutId) window.clearTimeout(timeoutId);
     }

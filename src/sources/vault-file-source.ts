@@ -23,7 +23,7 @@ export class VaultFileSource implements DataSource {
   /**
    * Load entries from the vault file
    */
-  async load(): Promise<DataSourceLoadResult> {
+  async load(signal?: AbortSignal): Promise<DataSourceLoadResult> {
     try {
       const file = this.vault.getAbstractFileByPath(this.filePath);
 
@@ -37,10 +37,13 @@ export class VaultFileSource implements DataSource {
         throw new Error(`File is empty: ${this.filePath}`);
       }
 
-      const result = await this.loadWorker.post({
-        databaseRaw: content,
-        databaseType: this.format,
-      });
+      const result = await this.loadWorker.post(
+        {
+          databaseRaw: content,
+          databaseType: this.format,
+        },
+        signal,
+      );
 
       return {
         sourceId: this.id,
