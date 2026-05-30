@@ -130,6 +130,12 @@ const READER_API_V3 = 'https://readwise.io/api/v3';
 const MAX_RETRIES = 3;
 const DEFAULT_RETRY_SECONDS = 60;
 /**
+ * Upper bound on a server-supplied Retry-After (seconds). Caps how long a
+ * single 429 can block so a misconfigured/hostile header cannot stall a load
+ * far beyond the library-load timeout (worst case MAX_RETRIES × this).
+ */
+const MAX_RETRY_AFTER_SECONDS = 120;
+/**
  * Hard safety backstop on the number of pages a single fetch will request.
  * The repeated-cursor guard in {@link ReadwiseApiClient.fetchAllPages} is the
  * primary protection against infinite pagination; this cap stops a server that
@@ -381,7 +387,8 @@ export class ReadwiseApiClient {
     if (header) {
       const seconds = parseInt(header, 10);
       if (!isNaN(seconds) && seconds > 0) {
-        return seconds;
+        // Clamp so a single 429 cannot block far beyond the load timeout.
+        return Math.min(seconds, MAX_RETRY_AFTER_SECONDS);
       }
     }
     return DEFAULT_RETRY_SECONDS;

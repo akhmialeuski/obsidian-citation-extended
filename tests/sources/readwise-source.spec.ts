@@ -826,6 +826,27 @@ describe('ReadwiseSource', () => {
 
       expect(capturedSignal!.aborted).toBe(true);
     });
+
+    it('honours an already-aborted external signal', async () => {
+      let capturedSignal: AbortSignal | undefined;
+      const client = createMockClient({
+        fetchExportBooks: jest
+          .fn()
+          .mockImplementation((opts?: { signal?: AbortSignal }) => {
+            capturedSignal = opts?.signal;
+            return Promise.resolve([]);
+          }),
+      } as unknown as Partial<ReadwiseApiClient>);
+      const worker = createMockWorkerManager();
+      const source = new ReadwiseSource('src-1', client, worker as never);
+
+      const external = new AbortController();
+      external.abort();
+      await source.load(external.signal);
+
+      // The internal signal is aborted immediately, not only via a later event.
+      expect(capturedSignal?.aborted).toBe(true);
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -960,6 +981,29 @@ describe('applyReadwiseFilters', () => {
       tags: ['ml'],
     });
     expect(result.map((e) => e.rawId)).toEqual(['keep']);
+  });
+
+  it('matches categories case-insensitively', () => {
+    const entries = [makeReadwiseEntryData({ rawId: 'b', category: 'books' })];
+    // Readwise returns lowercase; a "Books" filter must still match.
+    expect(
+      applyReadwiseFilters(entries, { categories: ['Books'] }).map(
+        (e) => e.rawId,
+      ),
+    ).toEqual(['b']);
+  });
+
+  it('does not crash on a null category when a category filter is set', () => {
+    const entries = [
+      makeReadwiseEntryData({
+        rawId: 'nullcat',
+        category: null as unknown as string,
+      }),
+      makeReadwiseEntryData({ rawId: 'b', category: 'books' }),
+    ];
+    const result = applyReadwiseFilters(entries, { categories: ['books'] });
+    // The null-category entry is excluded rather than throwing.
+    expect(result.map((e) => e.rawId)).toEqual(['b']);
   });
 });
 
@@ -1147,6 +1191,40 @@ describe('ReadwiseSource offline cache', () => {
     );
     // ...but the previously-complete cache is preserved (not clobbered).
     expect(fs.writeFile).not.toHaveBeenCalled();
+  });
+
+  it('applies CURRENT filters to cached data on a total-outage fallback', async () => {
+    // Cache holds two entries of different categories (stored UNFILTERED).
+    const cachedRaw = JSON.stringify([
+      makeReadwiseEntryData({ rawId: 'book', category: 'books' }),
+      makeReadwiseEntryData({ rawId: 'art', category: 'articles' }),
+    ]);
+    const fs = createMockFileSystem({
+      exists: jest.fn().mockResolvedValue(true),
+      readFile: jest.fn().mockResolvedValue(cachedRaw),
+    });
+    const client = createMockClient({
+      fetchExportBooks: jest.fn().mockRejectedValue(new Error('down')),
+      fetchReaderDocuments: jest.fn().mockRejectedValue(new Error('down')),
+    } as unknown as Partial<ReadwiseApiClient>);
+    const worker = createMockWorkerManager();
+
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    // Current filter = articles only; it must apply to the cached (unfiltered) set.
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      '/cache.json',
+      undefined,
+      { categories: ['articles'] },
+    );
+    const result = await source.load();
+    warnSpy.mockRestore();
+
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0].id).toBe('rw-art');
   });
 
   it('throws when worker processing fails and no cache is available', async () => {

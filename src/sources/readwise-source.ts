@@ -245,7 +245,9 @@ export function applyReadwiseFilters(
       : null;
 
   return entries.filter((entry) => {
-    if (categorySet && !categorySet.has(entry.category.toLowerCase())) {
+    // `category` is non-optional in the type but copied from an unvalidated API
+    // response, so guard the dereference (a null category must not crash load).
+    if (categorySet && !categorySet.has((entry.category ?? '').toLowerCase())) {
       return false;
     }
 
@@ -275,6 +277,12 @@ export function applyReadwiseFilters(
     return true;
   });
 }
+
+/**
+ * Marker error for a deliberate total-outage-with-no-cache failure, so the
+ * load() catch can surface it directly without re-probing the cache.
+ */
+class ReadwiseOutageError extends Error {}
 
 // ---------------------------------------------------------------------------
 // DataSource implementation
@@ -322,12 +330,17 @@ export class ReadwiseSource implements DataSource {
     const controller = new AbortController();
     this.abortController = controller;
     const signal = controller.signal;
-    // If the library load is aborted (load timeout, or a newer load), cancel
-    // ours too so in-flight HTTP work and rate-limit back-offs stop instead of
-    // leaking and burning the Readwise rate-limit budget.
-    externalSignal?.addEventListener('abort', () => controller.abort(), {
-      once: true,
-    });
+    // If the library load is aborted (load timeout, dispose, or a newer load),
+    // cancel ours too so in-flight HTTP work and rate-limit back-offs stop
+    // instead of leaking and burning the Readwise rate-limit budget. Honour an
+    // already-aborted signal too (addEventListener would never fire for it).
+    if (externalSignal?.aborted) {
+      controller.abort();
+    } else {
+      externalSignal?.addEventListener('abort', () => controller.abort(), {
+        once: true,
+      });
+    }
 
     try {
       const {
@@ -346,38 +359,54 @@ export class ReadwiseSource implements DataSource {
         const cached = await this.readCache();
         if (cached) {
           console.warn('ReadwiseSource: API unavailable, using cached data');
-          return await this.processRaw(cached, [
-            {
-              message: `Readwise API unavailable (using cache): ${fetchErrors[0].message}`,
-            },
-          ]);
+          return await this.runPipeline(
+            this.parseCachedEntries(cached),
+            [
+              {
+                message: `Readwise API unavailable (using cache): ${fetchErrors[0].message}`,
+              },
+            ],
+            signal,
+          );
         }
-        throw new Error(
-          `Readwise API unavailable: ${fetchErrors.map((e) => e.message).join('; ')}`,
+        throw new ReadwiseOutageError(
+          fetchErrors.map((e) => e.message).join('; '),
         );
       }
 
-      const raw = JSON.stringify(entryDataArray);
-
-      // Persist ONLY a fully-clean fetch, so a partial outage (one API down)
-      // never clobbers a previously-complete cache with an incomplete snapshot.
+      // Persist the UNFILTERED entries (only on a fully-clean fetch), so the
+      // cache is a full-fidelity backup and later filter changes still apply on
+      // read; a partial outage never clobbers a previously-complete snapshot.
       if (fetchErrors.length === 0) {
-        await this.writeCache(raw);
+        await this.writeCache(JSON.stringify(entryDataArray));
       }
 
-      return await this.processRaw(raw, fetchErrors);
+      return await this.runPipeline(entryDataArray, fetchErrors, signal);
     } catch (error) {
+      // Deliberate total-outage failure: surface it without re-probing the
+      // cache (the outage branch already consulted it).
+      if (error instanceof ReadwiseOutageError) {
+        console.error(
+          `ReadwiseSource: Readwise API unavailable: ${error.message}`,
+        );
+        throw new Error(`Failed to load from Readwise API: ${error.message}`);
+      }
+
       // Unexpected processing failure (e.g. worker error) — last-resort cache.
       const cached = await this.readCache();
       if (cached) {
         console.warn('ReadwiseSource: load failed, using cached data');
-        return await this.processRaw(cached, [
-          {
-            message: `Readwise load failed (using cache): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          },
-        ]);
+        return await this.runPipeline(
+          this.parseCachedEntries(cached),
+          [
+            {
+              message: `Readwise load failed (using cache): ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            },
+          ],
+          signal,
+        );
       }
 
       const message = error instanceof Error ? error.message : String(error);
@@ -395,16 +424,45 @@ export class ReadwiseSource implements DataSource {
   }
 
   /**
+   * Apply the configured import filters to normalized entries, then run them
+   * through the worker pipeline. Filtering happens here (not at fetch or cache
+   * time) so the offline cache stays full-fidelity and the current filters are
+   * always honoured — including on the cache-fallback path.
+   */
+  private async runPipeline(
+    entries: ReadwiseEntryData[],
+    fetchErrors: ParseErrorInfo[],
+    signal?: AbortSignal,
+  ): Promise<DataSourceLoadResult> {
+    const filtered = applyReadwiseFilters(entries, this.filters);
+    return this.processRaw(JSON.stringify(filtered), fetchErrors, signal);
+  }
+
+  /** Safely parse cached entry-data JSON; returns [] on corruption. */
+  private parseCachedEntries(raw: string): ReadwiseEntryData[] {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as ReadwiseEntryData[]) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
    * Run serialized ReadwiseEntryData JSON through the worker pipeline.
    */
   private async processRaw(
     raw: string,
     fetchErrors: ParseErrorInfo[],
+    signal?: AbortSignal,
   ): Promise<DataSourceLoadResult> {
-    const result = await this.loadWorker.post({
-      databaseRaw: raw,
-      databaseType: DATABASE_FORMATS.Readwise,
-    });
+    const result = await this.loadWorker.post(
+      {
+        databaseRaw: raw,
+        databaseType: DATABASE_FORMATS.Readwise,
+      },
+      signal,
+    );
 
     const entries = convertToEntries(DATABASE_FORMATS.Readwise, result.entries);
 
@@ -495,11 +553,9 @@ export class ReadwiseSource implements DataSource {
     const allFailed =
       booksResult.status === 'rejected' && docsResult.status === 'rejected';
 
-    return {
-      entries: applyReadwiseFilters(entries, this.filters),
-      errors,
-      allFailed,
-    };
+    // Return UNFILTERED entries; filters are applied at read time (runPipeline)
+    // so the offline cache stays full-fidelity and current filters always apply.
+    return { entries, errors, allFailed };
   }
 
   /**
