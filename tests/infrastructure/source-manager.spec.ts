@@ -263,6 +263,35 @@ describe('SourceManager', () => {
       await expect(manager.loadAll()).rejects.toThrow('fail');
       consoleSpy.mockRestore();
     });
+
+    it('threads the abort signal through to each source.load', async () => {
+      const factory = makeMockFactory();
+      const manager = new SourceManager(factory as never);
+      manager.syncSources([makeDb('Zotero')]);
+
+      const controller = new AbortController();
+      await manager.loadAll(controller.signal);
+
+      const source = factory.create.mock.results[0].value;
+      expect(source.load).toHaveBeenCalledWith(controller.signal);
+    });
+  });
+
+  describe('API-source recreation', () => {
+    it('recreates (and disposes) a Readwise source on every sync', () => {
+      const factory = makeMockFactory();
+      const manager = new SourceManager(factory as never);
+
+      manager.syncSources([makeDb('RW', 'token', 'readwise', 'db-rw')]);
+      const first = factory.create.mock.results[0].value;
+
+      // Re-sync with the SAME config: API sources are force-recreated because
+      // the token lives in db.path and may have changed.
+      manager.syncSources([makeDb('RW', 'token', 'readwise', 'db-rw')]);
+
+      expect(first.dispose).toHaveBeenCalled();
+      expect(factory.create).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('initWatchers', () => {
