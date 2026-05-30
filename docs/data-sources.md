@@ -85,8 +85,8 @@ The plugin loads data from both Readwise APIs in parallel and merges the results
 | `source_url`          | `URL`                        | Original source URL                                                    |
 | `readwise_url` / `unique_url` | `zoteroSelectURI`    | Opens in Readwise Reader app (see note below)                          |
 | `summary`             | `abstract`                   |                                                                        |
-| `asin`                | `ISBN`                       | Amazon ASIN (v2 Export books only)                                     |
-| `site_name`           | `containerTitle`             | Reader (v3) — e.g. "The New Yorker"                                     |
+| `asin`                | `asin`                       | Amazon ASIN (v2 Export books only); not mapped to ISBN                 |
+| `site_name`           | `containerTitle`             | Reader (v3) — e.g. "The New Yorker"                                    |
 | `book_tags` / `tags`  | `keywords[]`                 |                                                                        |
 | `document_note` / `notes` | `documentNote`           | Document-level note (distinct from highlights)                         |
 | `word_count`          | `wordCount`                  | Reader (v3) entries only                                               |

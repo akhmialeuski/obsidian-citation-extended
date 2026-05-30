@@ -650,7 +650,8 @@ describe('ReadwiseSource', () => {
 
       expect(entry.titleShort).toBe('Clean Code');
       expect(entry.source).toBe('kindle');
-      expect(entry.ISBN).toBe('B00AAA');
+      expect(entry.asin).toBe('B00AAA');
+      expect(entry.ISBN).toBeUndefined();
       expect(entry.documentNote).toBe('Doc-level note');
     });
 

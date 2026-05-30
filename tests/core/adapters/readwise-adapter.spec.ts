@@ -375,9 +375,11 @@ describe('ReadwiseAdapter', () => {
       expect(adapter.source).toBe('kindle');
     });
 
-    it('maps asin to ISBN', () => {
+    it('maps asin to the asin getter and leaves ISBN empty', () => {
       const adapter = new ReadwiseAdapter(makeEntryData({ asin: 'B0012345' }));
-      expect(adapter.ISBN).toBe('B0012345');
+      expect(adapter.asin).toBe('B0012345');
+      // ASIN is not an ISBN, so the ISBN field must stay empty.
+      expect(adapter.ISBN).toBeUndefined();
     });
 
     it('maps siteName to containerTitle', () => {
@@ -406,6 +408,7 @@ describe('ReadwiseAdapter', () => {
       const adapter = new ReadwiseAdapter(makeEntryData());
       expect(adapter.titleShort).toBeUndefined();
       expect(adapter.source).toBeUndefined();
+      expect(adapter.asin).toBeUndefined();
       expect(adapter.ISBN).toBeUndefined();
       expect(adapter.containerTitle).toBeUndefined();
       expect(adapter.documentNote).toBeNull();

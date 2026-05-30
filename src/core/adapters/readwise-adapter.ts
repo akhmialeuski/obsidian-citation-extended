@@ -69,7 +69,7 @@ export interface ReadwiseEntryData {
   readableTitle?: string | null;
   /** Origin: "kindle"/"instapaper" (v2) or Reader source (v3) → source. */
   source?: string | null;
-  /** Amazon ASIN (v2 only) → ISBN. */
+  /** Amazon ASIN (v2 Export books only) → `asin` getter (deliberately not ISBN). */
   asin?: string | null;
   /** Document-level note (v2 `document_note` / v3 `notes`). */
   documentNote?: string | null;
@@ -224,7 +224,10 @@ export class ReadwiseAdapter extends Entry {
   }
 
   get ISBN(): string | undefined {
-    return this.data.asin ?? undefined;
+    // ASIN is an Amazon identifier, not an ISBN (for non-book Kindle items it
+    // is a "B0..." code). Exposing it as ISBN would put invalid values into
+    // citation styles, so keep ISBN empty and surface ASIN via its own getter.
+    return undefined;
   }
 
   get issuedDate(): Date | null {
@@ -310,6 +313,14 @@ export class ReadwiseAdapter extends Entry {
   /** Original Readwise / Reader category string. */
   get category(): string {
     return this.data.category;
+  }
+
+  /**
+   * Amazon ASIN for Kindle books (v2 Export books only), or `undefined`.
+   * Kept separate from {@link ISBN} because an ASIN is not a valid ISBN.
+   */
+  get asin(): string | undefined {
+    return this.data.asin ?? undefined;
   }
 
   /** Document-level note (distinct from individual highlights), or `null`. */

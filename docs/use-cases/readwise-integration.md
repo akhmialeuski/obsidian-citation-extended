@@ -100,9 +100,11 @@ keywords: {{#each keywords}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}
 - `{{titleShort}}` -- the cleaned/readable title (v2 books)
 - `{{source}}` -- origin such as `kindle`, `instapaper`, or the Reader source
 - `{{containerTitle}}` -- the source site name (Reader documents, e.g. "The New Yorker")
-- `{{ISBN}}` -- the Amazon ASIN for Kindle books
-- `{{documentNote}}` -- a document-level note (distinct from individual highlights)
-- `{{wordCount}}`, `{{readingProgress}}`, `{{readerLocation}}` -- Reader document metadata
+- `{{entry.asin}}` -- the Amazon ASIN for Kindle books (v2 Export books only; deliberately not exposed as `{{ISBN}}` because an ASIN is not a valid ISBN)
+- `{{entry.documentNote}}` -- a document-level note (distinct from individual highlights)
+- `{{entry.wordCount}}`, `{{entry.readingProgress}}`, `{{entry.readerLocation}}` -- Reader document metadata
+
+The Readwise-specific fields (`asin`, `documentNote`, `wordCount`, `readingProgress`, `readerLocation`) are reached through the `entry` object -- e.g. `{{entry.asin}}` -- not as bare variables. The standard fields above (`titleShort`, `source`, `containerTitle`) are available bare.
 
 ### Rendering structured highlights
 

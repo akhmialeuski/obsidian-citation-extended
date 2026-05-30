@@ -33,6 +33,7 @@ const KNOWN_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   currentDate:
     'Current date when the note is created (use as {{currentDate}} or {{currentDate format="DD.MM.YYYY"}})',
   // Readwise-specific variables
+  asin: 'Amazon ASIN for Kindle books (v2 Export books only)',
   documentNote:
     'Readwise document-level note (v2 document_note / v3 Reader notes)',
   wordCount: 'Reader document word count',
