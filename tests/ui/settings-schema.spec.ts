@@ -1,6 +1,8 @@
 import {
   validateSettings,
   DEFAULT_SETTINGS,
+  resolveSyncIntervalMs,
+  READWISE_SYNC_INTERVAL_MIN_MINUTES,
   READWISE_SYNC_INTERVAL_MAX_MINUTES,
 } from '../../src/ui/settings/settings-schema';
 
@@ -266,5 +268,30 @@ describe('SettingsSchema', () => {
       });
       expect(result.success).toBe(false);
     });
+  });
+});
+
+describe('resolveSyncIntervalMs', () => {
+  it('returns undefined when polling is disabled (at/below the minimum)', () => {
+    expect(
+      resolveSyncIntervalMs(READWISE_SYNC_INTERVAL_MIN_MINUTES),
+    ).toBeUndefined();
+    expect(resolveSyncIntervalMs(0)).toBeUndefined();
+    expect(resolveSyncIntervalMs(-10)).toBeUndefined();
+  });
+
+  it('converts a valid interval from minutes to milliseconds', () => {
+    expect(resolveSyncIntervalMs(30)).toBe(30 * 60_000);
+    expect(resolveSyncIntervalMs(1)).toBe(60_000);
+  });
+
+  it('clamps an out-of-range value to the weekly maximum', () => {
+    expect(resolveSyncIntervalMs(999_999)).toBe(
+      READWISE_SYNC_INTERVAL_MAX_MINUTES * 60_000,
+    );
+    // The clamped maximum stays below the ~2^31 ms setInterval overflow point.
+    expect(
+      resolveSyncIntervalMs(READWISE_SYNC_INTERVAL_MAX_MINUTES),
+    ).toBeLessThan(2 ** 31);
   });
 });

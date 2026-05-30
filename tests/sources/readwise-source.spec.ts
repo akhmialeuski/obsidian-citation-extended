@@ -1006,6 +1006,19 @@ describe('applyReadwiseFilters', () => {
     // The null-category entry is excluded rather than throwing.
     expect(result.map((e) => e.rawId)).toEqual(['b']);
   });
+
+  it('does not crash on missing tags when a tag filter is set', () => {
+    const entries = [
+      makeReadwiseEntryData({
+        rawId: 'notags',
+        tags: undefined as unknown as string[],
+      }),
+      makeReadwiseEntryData({ rawId: 'tagged', tags: ['ml'] }),
+    ];
+    const result = applyReadwiseFilters(entries, { tags: ['ml'] });
+    // The tag-less entry is excluded rather than throwing on a null deref.
+    expect(result.map((e) => e.rawId)).toEqual(['tagged']);
+  });
 });
 
 // ---------------------------------------------------------------------------

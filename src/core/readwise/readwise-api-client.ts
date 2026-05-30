@@ -402,12 +402,16 @@ export class ReadwiseApiClient {
         return;
       }
 
-      const timer = window.setTimeout(resolve, ms);
+      // Use `globalThis` rather than `window` so this core HTTP client stays
+      // environment-neutral (the core layer must not assume a DOM/renderer
+      // context). `globalThis.setTimeout` returns a numeric handle in the
+      // Electron renderer where the client runs.
+      const timer = globalThis.setTimeout(resolve, ms);
 
       signal?.addEventListener(
         'abort',
         () => {
-          window.clearTimeout(timer);
+          globalThis.clearTimeout(timer);
           reject(signal.reason as Error);
         },
         { once: true },

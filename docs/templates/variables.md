@@ -278,6 +278,20 @@ Use with `formatNames` helper or iterate with `{{#each entry.author}}`:
 - Jane Doe
 ```
 
+### Readwise scalar fields (`entry.*`)
+
+Readwise entries expose extra scalar fields that are not part of the top-level template context. Access them through the `entry` object, the same way you reference custom fields with `{{entry.customField}}`. The in-app variable picker lists them by their short name (e.g. `asin`), but because they live only under `entry`, the working form is `{{entry.asin}}` — not `{{asin}}`:
+
+| Variable                    | Description                                       | Example   |
+| --------------------------- | ------------------------------------------------- | --------- |
+| `{{entry.asin}}`            | Amazon ASIN for Kindle books (v2 only)            | `B0CZ...` |
+| `{{entry.documentNote}}`    | Document-level note, distinct from highlights     |           |
+| `{{entry.wordCount}}`       | Reader document word count                        | `1200`    |
+| `{{entry.readingProgress}}` | Reader reading progress, fraction 0–1             | `0.42`    |
+| `{{entry.readerLocation}}`  | Reader location: new/later/shortlist/archive/feed | `later`   |
+
+For non-Readwise entries these fields are absent, so the references render as empty strings.
+
 ### `entry.highlights` Array (Readwise)
 
 Readwise entries expose a structured `entry.highlights` array. Each item carries the per-highlight metadata that the aggregated `{{note}}` string discards:

@@ -80,7 +80,7 @@ Connect the plugin to your Readwise account to import highlights and documents a
 | **Database type** | Must be set to **Readwise** |
 | **API token** | Your Readwise access token (password field). Get it from [readwise.io/access_token](https://readwise.io/access_token). Stored in plugin settings |
 | **Auto-sync interval (minutes)** | How often the plugin automatically fetches new data from Readwise, in minutes. Set to `0` to disable automatic sync. Default: `30`. Maximum: `10080` (1 week) — larger values are clamped to avoid timer overflow |
-| **Advanced filters** | Collapsible section with per-database import filters (see below). Optional |
+| **Advanced filters** | Per-database import filters sub-section (see below). Optional |
 | **Validate token** | Tests the API token against Readwise. Shows "Token is valid" or "Token is invalid" |
 | **Sync now** | Fetches data from both Readwise APIs and reloads the library. On success, updates the "Last sync" timestamp; on failure it reports the error and does **not** update the timestamp |
 

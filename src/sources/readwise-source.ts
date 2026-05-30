@@ -251,7 +251,14 @@ export function applyReadwiseFilters(
       return false;
     }
 
-    if (tags && tags.length > 0 && !entry.tags.some((t) => tags.includes(t))) {
+    // Guard the `tags` dereference for the same reason as `category` above: a
+    // corrupt/legacy cache entry (read via parseCachedEntries, which does not
+    // validate per-field) may lack the array even though the type is non-null.
+    if (
+      tags &&
+      tags.length > 0 &&
+      !(entry.tags ?? []).some((t) => tags.includes(t))
+    ) {
       return false;
     }
 
