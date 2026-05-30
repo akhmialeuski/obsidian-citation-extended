@@ -46,11 +46,13 @@ export function classifySyncOutcome(
   result: Library | null,
 ): SyncOutcome {
   if (result === null || state.status === LoadingStatus.Error) {
+    // "Sync now" reloads ALL databases, so a failure may originate from a
+    // non-Readwise source — phrase it source-agnostically.
     return {
       kind: SyncOutcomeKind.Failure,
       message: state.error?.message
-        ? `Readwise sync failed: ${state.error.message}`
-        : 'Readwise sync failed.',
+        ? `Library reload failed: ${state.error.message}`
+        : 'Library reload failed.',
       warnings: state.parseErrors,
     };
   }

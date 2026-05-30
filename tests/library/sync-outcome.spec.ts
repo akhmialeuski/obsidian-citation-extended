@@ -26,7 +26,7 @@ describe('classifySyncOutcome', () => {
       );
 
       expect(outcome.kind).toBe(SyncOutcomeKind.Failure);
-      expect(outcome.message).toBe('Readwise sync failed.');
+      expect(outcome.message).toBe('Library reload failed.');
     });
 
     it('classifies Error status as failure and includes the error message', () => {
@@ -40,7 +40,7 @@ describe('classifySyncOutcome', () => {
       );
 
       expect(outcome.kind).toBe(SyncOutcomeKind.Failure);
-      expect(outcome.message).toBe('Readwise sync failed: network down');
+      expect(outcome.message).toBe('Library reload failed: network down');
       expect(outcome.warnings).toEqual([
         'Unable to load citations: network down.',
       ]);
@@ -53,7 +53,7 @@ describe('classifySyncOutcome', () => {
       );
 
       expect(outcome.kind).toBe(SyncOutcomeKind.Failure);
-      expect(outcome.message).toBe('Readwise sync failed.');
+      expect(outcome.message).toBe('Library reload failed.');
     });
   });
 

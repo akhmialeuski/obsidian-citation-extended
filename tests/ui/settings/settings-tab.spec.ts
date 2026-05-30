@@ -392,6 +392,7 @@ import { CitationsPluginSettings } from '../../../src/ui/settings/settings';
 import type CitationPlugin from '../../../src/main';
 import type { VariableDefinition } from '../../../src/template/introspection.service';
 import { LoadingStatus } from '../../../src/library/library-state';
+import { READWISE_SYNC_INTERVAL_MAX_MINUTES } from '../../../src/ui/settings/settings-schema';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -399,7 +400,10 @@ import { LoadingStatus } from '../../../src/library/library-state';
 
 // Helper type for interacting with mock settings
 interface MockSettingInstance {
-  getTextComponents(): Array<{ triggerChange(v: string): void }>;
+  getTextComponents(): Array<{
+    triggerChange(v: string): void;
+    inputEl: HTMLElement;
+  }>;
   getToggleComponents(): Array<{ triggerChange(v: boolean): void }>;
   getDropdownComponents(): Array<{ triggerChange(v: string): void }>;
   getButtonComponents(): Array<{ triggerClick(): void }>;
@@ -1075,16 +1079,20 @@ describe('CitationSettingTab', () => {
         expect(mockNotice).toHaveBeenCalledWith('Readwise sync complete.');
       });
 
-      it('does NOT update last sync date when the sync fails', async () => {
-        // Default mock: load() resolves null → failure outcome.
+      it('does NOT update last sync date when the sync genuinely fails', async () => {
+        // A genuine failure: load() returns null AND the store is in Error state.
         plugin.settings.readwiseLastSyncDate = '';
+        (plugin.libraryService.load as jest.Mock).mockResolvedValue(null);
+        (plugin.libraryService as unknown as { state: unknown }).state = {
+          status: LoadingStatus.Error,
+          parseErrors: [],
+        };
         tab.display();
 
         const allButtons: Array<{ triggerClick(): void }> = [];
         for (const setting of getSettings()) {
           allButtons.push(...setting.getButtonComponents());
         }
-        // Isolate the click's effect on saveSettings from any render-time calls.
         (plugin.saveSettings as jest.Mock).mockClear();
 
         allButtons[SYNC_BTN_IDX].triggerClick();
@@ -1095,7 +1103,73 @@ describe('CitationSettingTab', () => {
         expect(plugin.libraryService.load).toHaveBeenCalled();
         expect(plugin.settings.readwiseLastSyncDate).toBe('');
         expect(plugin.saveSettings).not.toHaveBeenCalled();
-        expect(mockNotice).toHaveBeenCalledWith('Readwise sync failed.');
+        expect(mockNotice).toHaveBeenCalledWith('Library reload failed.');
+      });
+
+      it('treats a superseded sync (null result, non-error state) as benign', async () => {
+        // A newer reload aborted this sync: load() returns null but the store is
+        // NOT in the Error state. Must not report failure or persist a date.
+        plugin.settings.readwiseLastSyncDate = '';
+        (plugin.libraryService.load as jest.Mock).mockResolvedValue(null);
+        (plugin.libraryService as unknown as { state: unknown }).state = {
+          status: LoadingStatus.Loading,
+          parseErrors: [],
+        };
+        tab.display();
+
+        const allButtons: Array<{ triggerClick(): void }> = [];
+        for (const setting of getSettings()) {
+          allButtons.push(...setting.getButtonComponents());
+        }
+        (plugin.saveSettings as jest.Mock).mockClear();
+        mockNotice.mockClear();
+
+        allButtons[SYNC_BTN_IDX].triggerClick();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(plugin.settings.readwiseLastSyncDate).toBe('');
+        expect(plugin.saveSettings).not.toHaveBeenCalled();
+        expect(mockNotice).not.toHaveBeenCalledWith('Library reload failed.');
+        const status = (
+          tab as unknown as { containerEl: HTMLElement }
+        ).containerEl.querySelector('.readwise-status');
+        expect(status?.textContent).toContain('superseded');
+      });
+    });
+
+    describe('auto-sync interval clamp', () => {
+      it('clamps an over-max interval, writes it back, and notifies', async () => {
+        tab.display();
+
+        // The interval field is the only number input with max = the schema max.
+        let interval: { triggerChange(v: string): void } | undefined;
+        for (const setting of getSettings()) {
+          for (const c of setting.getTextComponents()) {
+            if (
+              (c.inputEl as HTMLInputElement).max ===
+              String(READWISE_SYNC_INTERVAL_MAX_MINUTES)
+            ) {
+              interval = c;
+            }
+          }
+        }
+        expect(interval).toBeDefined();
+
+        interval!.triggerChange(
+          String(READWISE_SYNC_INTERVAL_MAX_MINUTES + 5000),
+        );
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(plugin.settings.readwiseSyncIntervalMinutes).toBe(
+          READWISE_SYNC_INTERVAL_MAX_MINUTES,
+        );
+        expect(mockNotice).toHaveBeenCalledWith(
+          expect.stringContaining('capped'),
+        );
       });
     });
 

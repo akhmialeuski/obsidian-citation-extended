@@ -403,12 +403,14 @@ export class CitationSettingTab extends PluginSettingTab {
               const result = await this.plugin.libraryService.load();
 
               // A newer reload (poll timer or debounced file change) can
-              // supersede this sync: load() returns null but the store is back
-              // in Loading. Treat that as benign, not a failure.
+              // supersede this sync: load() returns null when its signal is
+              // aborted. The superseding load may still be Loading OR may have
+              // already finished (Success). Only a genuine failure sets the
+              // Error state, so treat any null result that is NOT in the Error
+              // state as a benign supersession rather than a failure.
               if (
                 result === null &&
-                this.plugin.libraryService.state.status ===
-                  LoadingStatus.Loading
+                this.plugin.libraryService.state.status !== LoadingStatus.Error
               ) {
                 statusEl.setText('Sync superseded by a newer reload…');
                 statusEl.setCssProps({ color: 'var(--text-muted)' });
