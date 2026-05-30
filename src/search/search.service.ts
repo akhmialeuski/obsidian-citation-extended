@@ -27,12 +27,14 @@ export class SearchService {
       (MiniSearch as unknown as { default?: typeof MiniSearch }).default ??
       MiniSearch;
     this.index = new MiniSearchConstructor({
-      fields: ['title', 'authorString', 'year', 'id', 'zoteroId'],
+      fields: ['title', 'authorString', 'year', 'id', 'zoteroId', 'notesText'],
       storeFields: ['id'],
       // Normalize diacritics at index time so accented characters match their base forms
       processTerm: (term: string) => normalizeTerm(term),
       searchOptions: {
-        boost: { title: 2, authorString: 1.5 },
+        // notesText is weighted below identifier fields so a title/author match
+        // always outranks a match found only inside highlight/note text.
+        boost: { title: 2, authorString: 1.5, notesText: 0.5 },
         fuzzy: 0.2,
         prefix: true,
         // Normalize diacritics at search time to match indexed terms

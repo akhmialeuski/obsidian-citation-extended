@@ -19,13 +19,18 @@ class MockEntry extends Entry {
     return this.id;
   }
 
-  constructor(data: Partial<Entry>) {
+  constructor(data: Partial<Entry>, noteText?: string) {
     super();
     Object.assign(this, data);
     this.id = data.id || ''; // Ensure id is always set
     this.title = data.title || '';
     this.authorString = data.authorString || '';
     this._year = data.issuedDate?.getFullYear()?.toString() || '';
+    // Inject aggregated note/highlight text so the inherited `note` getter
+    // (and thus toSearchDocument().notesText) returns it.
+    if (noteText !== undefined) {
+      this._note = [noteText];
+    }
   }
 
   // Implement abstract members with dummy values
@@ -244,6 +249,92 @@ describe('SearchService', () => {
       const results = service.search('M\u00fcller');
       expect(results).toContain('muller2019');
     });
+  });
+});
+
+describe('SearchService — note/highlight text', () => {
+  let service: SearchService;
+
+  beforeEach(() => {
+    service = new SearchService();
+  });
+
+  test('finds an entry by a phrase that appears only in its highlights', () => {
+    const entry = new MockEntry(
+      { id: 'h1', title: 'Some Book', authorString: 'Author' },
+      'a profound thought about serendipity',
+    );
+    service.buildIndex([entry]);
+
+    expect(service.search('serendipity')).toContain('h1');
+  });
+
+  test('ranks a title match above a note-only match', () => {
+    const titleMatch = new MockEntry({
+      id: 'title',
+      title: 'quantum entanglement',
+      authorString: 'X',
+    });
+    const noteMatch = new MockEntry(
+      { id: 'note', title: 'Unrelated', authorString: 'Y' },
+      'quantum entanglement appears here',
+    );
+    service.buildIndex([titleMatch, noteMatch]);
+
+    const results = service.search('quantum');
+    expect(results[0]).toBe('title');
+    expect(results).toContain('note');
+  });
+
+  test('truncates indexed note text at the cap (late tokens are not found)', () => {
+    const early = 'earlysentinel';
+    const late = 'latesentinel';
+    // ~6000 chars of filler pushes `late` beyond the 5000-char index cap.
+    const filler = 'x '.repeat(3000);
+    const entry = new MockEntry(
+      { id: 'trunc', title: 'T', authorString: 'A' },
+      `${early} ${filler} ${late}`,
+    );
+    service.buildIndex([entry]);
+
+    expect(service.search(early)).toContain('trunc');
+    expect(service.search(late)).not.toContain('trunc');
+  });
+
+  test('toSearchDocument caps notesText length and is empty without a note', () => {
+    const withNote = new MockEntry(
+      { id: 'x', title: 'T', authorString: 'A' },
+      'y'.repeat(6000),
+    );
+    expect(withNote.toSearchDocument().notesText.length).toBe(5000);
+
+    const withoutNote = new MockEntry({
+      id: 'z',
+      title: 'T',
+      authorString: 'A',
+    });
+    expect(withoutNote.toSearchDocument().notesText).toBe('');
+  });
+
+  test('matches accented note text via an un-accented query', () => {
+    const entry = new MockEntry(
+      { id: 'd1', title: 'Doc', authorString: 'A' },
+      'le café était bon',
+    );
+    service.buildIndex([entry]);
+
+    expect(service.search('cafe')).toContain('d1');
+  });
+
+  test('entries without note text still index by title', () => {
+    const entry = new MockEntry({
+      id: 'plain',
+      title: 'Distinctive Title',
+      authorString: 'A',
+    });
+    service.buildIndex([entry]);
+
+    expect(service.search('Distinctive')).toContain('plain');
   });
 });
 
