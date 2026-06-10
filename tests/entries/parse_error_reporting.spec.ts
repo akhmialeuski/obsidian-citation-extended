@@ -31,9 +31,12 @@ describe('loadEntries parse error reporting', () => {
   });
 
   it('collects non-fatal errors for BibLaTeX entries with unsupported LaTeX commands', () => {
+    // \mkern was used here before, but it is now resolved by the fallback
+    // table (see latex_command_fallbacks.spec.ts) — use a command that no
+    // mapping layer knows so the error-reporting path stays exercised.
     const bib = `
 @article{entry_with_bad_latex,
-  title = {Test with \\mkern command},
+  title = {Test with \\definitelyunknowncommand command},
   author = {Doe, John},
   year = {2023},
 }
@@ -55,7 +58,7 @@ describe('loadEntries parse error reporting', () => {
     warnSpy.mockRestore();
   });
 
-  it('collects errors for entries with \\dots LaTeX command', () => {
+  it('parses \\dots via the fallback table without reporting errors', () => {
     const bib = `
 @misc{dots_entry,
   title = {Source in Source},
@@ -64,17 +67,13 @@ describe('loadEntries parse error reporting', () => {
   abstract = {Abstract {\\dots}},
 }
 `;
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-
     const result = loadEntries(bib, 'biblatex');
 
-    // The entry may or may not parse depending on parser version,
-    // but errors should be collected rather than silently swallowed
-    if (result.parseErrors.length > 0) {
-      expect(result.parseErrors[0].message).toBeDefined();
-    }
-
-    warnSpy.mockRestore();
+    // \dots is resolved by the supplementary fallback table, so it must not
+    // flood the load warnings anymore (regression guard for the 753-warning
+    // real-library report).
+    expect(result.entries.length).toBe(1);
+    expect(result.parseErrors.length).toBe(0);
   });
 
   it('returns both entries and errors for mixed valid/invalid BibLaTeX', () => {

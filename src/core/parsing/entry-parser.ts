@@ -15,6 +15,44 @@ interface ParseResult {
   parseErrors: ParseErrorInfo[];
 }
 
+/**
+ * Supplementary LaTeX-command → Unicode replacements for command spellings
+ * that the unicode2latex `latex` table does not contain (it knows e.g.
+ * `\lbrace`/`\ldots` but not the `\textbraceleft`/`\dots` aliases that
+ * Zotero/Better BibTeX exports emit). Without these, every occurrence floods
+ * the load warnings with "Unhandled command" AND silently drops the glyph
+ * from titles/abstracts.
+ *
+ * Upgrading unicode2latex (3.x → 7.x) was evaluated as the standard fix, but
+ * v7 is a breaking API redesign (split table files, different exports), so
+ * this small alias table is kept instead.
+ *
+ * Keys are matched against the trimmed `node.source`, so multi-command
+ * sequences (`\cyrchar\cyryat`) are supported. Styling/spacing commands map
+ * to an empty string: their arguments are separate AST text nodes and are
+ * preserved in the output.
+ */
+const LATEX_COMMAND_FALLBACKS: Record<string, string> = {
+  '\\textbraceleft': '{',
+  '\\textbraceright': '}',
+  '\\dots': '…',
+  '\\textnumero': '№',
+  '\\texthorizontalbar': '―', // U+2015 HORIZONTAL BAR (not an em-dash)
+  '\\textpm': '±',
+  '\\copyright': '©',
+  '\\textlnot': '¬',
+  '\\textsurd': '√',
+  '\\prime': '′', // U+2032 PRIME (not an apostrophe)
+  // The parser resolves modern \cyrchar pairs itself, but not the archaic yat.
+  '\\cyrchar\\cyryat': 'ѣ',
+  '\\cyrchar\\CYRYAT': 'Ѣ',
+  // Math styling / spacing / wrapper commands: drop the command itself.
+  '\\mathbf': '',
+  '\\mathsfbf': '',
+  '\\mkern': '',
+  '\\ensuremath': '',
+};
+
 function parseCslJson(raw: string): ParseResult {
   const data: unknown = JSON.parse(raw);
   return { entries: data as EntryData[], parseErrors: [] };
@@ -34,7 +72,10 @@ function parseBibLaTeX(raw: string): ParseResult {
     },
     unknownCommandHandler: (node) => {
       const src = node.source.trim();
-      const unicode = latexToUnicode[src] ?? latexToUnicode[`${src}{}`];
+      const unicode =
+        latexToUnicode[src] ??
+        latexToUnicode[`${src}{}`] ??
+        LATEX_COMMAND_FALLBACKS[src];
       if (unicode === undefined) {
         // No mapping found — record as non-fatal error (same as errorHandler path)
         // Cannot re-throw: the parser doesn't route unknownCommandHandler throws
