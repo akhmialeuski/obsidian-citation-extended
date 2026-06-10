@@ -88,12 +88,12 @@ Connect the plugin to your Readwise account to import highlights and documents a
 
 Each Readwise database can optionally restrict which entries are imported. Filters are applied after fetching and are stored per-database. Leave a field empty to disable that filter.
 
-| Filter | Description |
-| ------ | ----------- |
-| **Categories** | Comma-separated. Import only entries in these categories (e.g. `books, articles`) |
-| **Tags** | Comma-separated. Import only entries that have at least one of these tags |
-| **Reader locations** | Comma-separated. Import only Reader documents in these locations (e.g. `later, archive`) |
-| **Minimum highlights** | Import only books with at least this many highlights (applies to highlight-mode entries only) |
+| Filter                 | Description                                                                                                          |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Categories**         | Comma-separated. Import only entries in these categories (e.g. `books, articles`). Matched case-insensitively        |
+| **Tags**               | Comma-separated. Import only entries that have at least one of these tags. Tags are user-defined and case-sensitive  |
+| **Reader locations**   | Comma-separated. Import only Reader documents in these locations (e.g. `later, archive`). Matched case-insensitively |
+| **Minimum highlights** | Import only books with at least this many highlights (applies to highlight-mode entries only)                        |
 
 ### How It Works
 
