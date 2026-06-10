@@ -36,35 +36,35 @@ describe('@article with BibLaTeX fields (#60)', () => {
     entry = new EntryBibLaTeXAdapter(result.entries[0] as EntryDataBibLaTeX);
   });
 
-  it('parses the entry without errors', async () => {
+  it('parses the entry without errors', () => {
     const result = loadEntries(biblatexArticle, 'biblatex');
     expect(result.entries).toHaveLength(1);
     expect(result.parseErrors).toHaveLength(0);
   });
 
-  it('preserves citekey with hyphens', async () => {
+  it('preserves citekey with hyphens', () => {
     expect(entry.citekey).toBe('merton_1938_social-structure-anomie');
   });
 
-  it('sets type to article', async () => {
+  it('sets type to article', () => {
     expect(entry.type).toBe('article');
   });
 
-  it('resolves containerTitle from journaltitle', async () => {
+  it('resolves containerTitle from journaltitle', () => {
     expect(entry.containerTitle).toBe('American Sociological Review');
   });
 
-  it('derives year from date field', async () => {
+  it('derives year from date field', () => {
     expect(entry.year).toBe(1938);
   });
 
-  it('produces valid issuedDate from partial date', async () => {
+  it('produces valid issuedDate from partial date', () => {
     expect(entry.issuedDate).toBeInstanceOf(Date);
     expect(entry.issuedDate!.getUTCFullYear()).toBe(1938);
     expect(entry.issuedDate!.getUTCMonth()).toBe(9); // October = 9
   });
 
-  it('maps remaining fields correctly', async () => {
+  it('maps remaining fields correctly', () => {
     expect(entry.title).toBe('Social structure and anomie');
     expect(entry.authorString).toBe('Robert K. Merton');
     expect(entry.volume).toBe('3');
@@ -85,7 +85,7 @@ describe('@article with BibLaTeX fields (#60)', () => {
     expect(byAuthor).toContain('merton_1938_social-structure-anomie');
   });
 
-  it('produces complete template context', async () => {
+  it('produces complete template context', () => {
     const ctx = entry.toTemplateContext();
     expect(ctx.year).toBe('1938');
     expect(ctx.containerTitle).toBe('American Sociological Review');
@@ -93,7 +93,7 @@ describe('@article with BibLaTeX fields (#60)', () => {
     expect(ctx.citekey).toBe('merton_1938_social-structure-anomie');
   });
 
-  it('handles @article and @book identically with BibLaTeX fields', async () => {
+  it('handles @article and @book identically with BibLaTeX fields', () => {
     const bookVariant = biblatexArticle.replace('@Article', '@Book');
     const articleResult = loadEntries(biblatexArticle, 'biblatex');
     const bookResult = loadEntries(bookVariant, 'biblatex');

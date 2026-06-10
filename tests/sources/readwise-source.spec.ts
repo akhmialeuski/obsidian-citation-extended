@@ -1443,6 +1443,12 @@ describe('ReadwiseSource periodic sync', () => {
 
 describe('ReadwiseSource incremental sync', () => {
   const CURSOR = '2024-06-01T00:00:00.000Z';
+  /**
+   * The cursor actually sent as `updatedAfter`: the stored cursor minus the
+   * 5-minute clock-skew overlap (re-delivered entries are re-merged
+   * idempotently, so over-fetching is free).
+   */
+  const OVERLAPPED_CURSOR = '2024-05-31T23:55:00.000Z';
 
   function makeV1Cache(
     entries: ReadwiseEntryData[],
@@ -1459,7 +1465,7 @@ describe('ReadwiseSource incremental sync', () => {
     });
   }
 
-  it('passes the cached cursor as updatedAfter to both endpoints', async () => {
+  it('passes the overlapped cursor as updatedAfter to both endpoints', async () => {
     const fs = makeCachedFs(makeV1Cache([makeReadwiseEntryData()]));
     const client = createMockClient();
     const worker = createMockWorkerManager();
@@ -1474,10 +1480,31 @@ describe('ReadwiseSource incremental sync', () => {
     await source.load();
 
     expect(client.fetchExportBooks).toHaveBeenCalledWith(
-      expect.objectContaining({ updatedAfter: CURSOR }),
+      expect.objectContaining({ updatedAfter: OVERLAPPED_CURSOR }),
     );
     expect(client.fetchReaderDocuments).toHaveBeenCalledWith(
-      expect.objectContaining({ updatedAfter: CURSOR }),
+      expect.objectContaining({ updatedAfter: OVERLAPPED_CURSOR }),
+    );
+  });
+
+  it('falls back to a full fetch when the cached cursor is unparseable', async () => {
+    const fs = makeCachedFs(
+      makeV1Cache([makeReadwiseEntryData()], 'not-a-date'),
+    );
+    const client = createMockClient();
+    const worker = createMockWorkerManager();
+
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      '/c.json',
+    );
+    await source.load();
+
+    expect(client.fetchExportBooks).toHaveBeenCalledWith(
+      expect.objectContaining({ updatedAfter: undefined }),
     );
   });
 

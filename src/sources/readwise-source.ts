@@ -277,6 +277,27 @@ interface CachedState {
 
 const EMPTY_CACHED_STATE: CachedState = { entries: null, lastSyncAt: null };
 
+/**
+ * Safety overlap subtracted from the stored cursor when it is USED as
+ * `updatedAfter`. The cursor is captured from the local clock, while Readwise
+ * compares it against server-side `updated_at` timestamps — a client clock
+ * running ahead of the server would otherwise create a silent blind window of
+ * missed updates every sync. Over-fetching is free: the delta merge is
+ * idempotent, so re-delivered entries are simply re-merged.
+ */
+const CURSOR_OVERLAP_MS = 5 * 60_000;
+
+/**
+ * Apply the clock-skew overlap to a stored cursor. Returns `null` when the
+ * cursor is unparseable (corrupt cache) — the caller then falls back to a
+ * full fetch, exactly as if no cursor existed.
+ */
+function overlappedCursor(lastSyncAt: string): string | null {
+  const timestamp = Date.parse(lastSyncAt);
+  if (Number.isNaN(timestamp)) return null;
+  return new Date(timestamp - CURSOR_OVERLAP_MS).toISOString();
+}
+
 // ---------------------------------------------------------------------------
 // DataSource implementation
 // ---------------------------------------------------------------------------
@@ -349,12 +370,16 @@ export class ReadwiseSource implements DataSource {
 
     try {
       const cached = await this.readCachedState();
-      // Incremental sync requires BOTH a cached base to merge into and a
-      // cursor; a fullRefresh request bypasses it deliberately.
-      const incremental =
+      // Incremental sync requires a cached base to merge into AND a usable
+      // cursor (overlapped against clock skew); a fullRefresh request
+      // bypasses it deliberately.
+      const updatedAfter =
         !options?.fullRefresh &&
         cached.entries !== null &&
-        cached.lastSyncAt !== null;
+        cached.lastSyncAt !== null
+          ? overlappedCursor(cached.lastSyncAt)
+          : null;
+      const incremental = updatedAfter !== null;
 
       // Cursor for the NEXT sync, captured before this fetch starts.
       const fetchStartedAt = new Date().toISOString();
@@ -364,10 +389,7 @@ export class ReadwiseSource implements DataSource {
         orphanChildren,
         errors: fetchErrors,
         allFailed,
-      } = await this.fetchEntryData(
-        signal,
-        incremental ? (cached.lastSyncAt ?? undefined) : undefined,
-      );
+      } = await this.fetchEntryData(signal, updatedAfter ?? undefined);
 
       // Total outage (every API endpoint failed): fall back to the cache if
       // present; otherwise THROW so the library surfaces a real failure and

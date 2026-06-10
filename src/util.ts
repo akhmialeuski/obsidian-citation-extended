@@ -19,6 +19,8 @@ export const DISALLOWED_SEGMENT_CHARACTERS_RE = /[*"\\<>:|?]/g;
 interface PoolWorker {
   worker: Worker;
   busy: boolean;
+  /** Task currently executing on this worker (rejected on dispose). */
+  activeTask?: PendingTask;
 }
 
 /** A queued task awaiting a free worker. */
@@ -28,6 +30,11 @@ interface PendingTask {
   signal?: AbortSignal;
   resolve: (value: WorkerResponse) => void;
   reject: (reason: Error | DOMException) => void;
+  /**
+   * Abort listener active while the task waits in the queue; removed when
+   * the task starts executing (run() installs its own abort handling).
+   */
+  queueAbortHandler?: () => void;
 }
 
 /**
@@ -88,13 +95,35 @@ export class WorkerManager {
       throw new Error('WorkerManager is disposed');
     }
     return new Promise<TResult>((resolve, reject) => {
-      this.queue.push({
+      if (signal?.aborted) {
+        reject(new DOMException('Aborted', 'AbortError'));
+        return;
+      }
+
+      const task: PendingTask = {
         request: msg,
         transfer,
         signal,
         resolve: resolve as (value: WorkerResponse) => void,
         reject,
-      });
+      };
+
+      // Reject (and dequeue) immediately when the signal aborts while the
+      // task is still waiting for a worker; once the task starts executing,
+      // run() takes over with its own abort handling.
+      if (signal) {
+        task.queueAbortHandler = (): void => {
+          const index = this.queue.indexOf(task);
+          if (index < 0) return; // already running; run()'s handler owns it
+          this.queue.splice(index, 1);
+          task.reject(new DOMException('Aborted', 'AbortError'));
+        };
+        signal.addEventListener('abort', task.queueAbortHandler, {
+          once: true,
+        });
+      }
+
+      this.queue.push(task);
       this.pump();
     });
   }
@@ -102,13 +131,6 @@ export class WorkerManager {
   /** Assign queued tasks to idle workers, growing the pool up to the cap. */
   private pump(): void {
     while (this.queue.length > 0) {
-      // Drop already-aborted tasks BEFORE acquiring (or creating) a worker.
-      if (this.queue[0].signal?.aborted) {
-        const aborted = this.queue.shift()!;
-        aborted.reject(new DOMException('Aborted', 'AbortError'));
-        continue;
-      }
-
       const idle = this.pool.find((w) => !w.busy) ?? this.tryGrowPool();
       if (!idle) return; // all workers busy and pool at capacity
 
@@ -124,10 +146,18 @@ export class WorkerManager {
   }
 
   private run(pw: PoolWorker, task: PendingTask): void {
+    // The queue-phase abort listener is superseded by run()'s own handling.
+    if (task.queueAbortHandler) {
+      task.signal?.removeEventListener('abort', task.queueAbortHandler);
+      task.queueAbortHandler = undefined;
+    }
+
     pw.busy = true;
+    pw.activeTask = task;
     const id = this.nextRequestId++;
 
     const cleanup = (): void => {
+      pw.activeTask = undefined;
       pw.worker.removeEventListener('message', onMessage);
       pw.worker.removeEventListener('error', onError);
       task.signal?.removeEventListener('abort', onAbort);
@@ -188,15 +218,24 @@ export class WorkerManager {
   }
 
   /**
-   * Dispose the manager: reject queued tasks and terminate all workers.
+   * Dispose the manager: reject queued AND in-flight tasks, then terminate
+   * all workers. Every returned promise settles — a caller awaiting a task
+   * never hangs past dispose.
    */
   dispose(): void {
     this.disposed = true;
     for (const task of this.queue) {
+      if (task.queueAbortHandler) {
+        task.signal?.removeEventListener('abort', task.queueAbortHandler);
+      }
       task.reject(new DOMException('Aborted', 'AbortError'));
     }
     this.queue.length = 0;
     for (const pw of this.pool) {
+      // A terminated worker never delivers a response — reject the in-flight
+      // task here so its promise settles instead of pending forever.
+      pw.activeTask?.reject(new DOMException('Aborted', 'AbortError'));
+      pw.activeTask = undefined;
       pw.worker.terminate();
     }
     this.pool.length = 0;

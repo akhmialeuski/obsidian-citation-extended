@@ -28,7 +28,6 @@ export class SearchService {
    * build always supersedes an older one (the stale result is discarded).
    */
   private buildVersion = 0;
-  private isIndexing = false;
 
   /**
    * @param indexWorker  Optional worker pool. When provided, index builds run
@@ -49,10 +48,17 @@ export class SearchService {
    * index while a rebuild is in progress (stale-while-revalidate). When a
    * newer build starts before this one finishes, the stale result is
    * discarded.
+   *
+   * @param signal  Optional AbortSignal of the library load that requested
+   *                the build. Aborting cancels the worker-side build (the
+   *                worker is terminated, so a superseded build stops burning
+   *                a pool slot) and prevents the index swap.
    */
-  public async buildIndex(entries: Entry[]): Promise<void> {
+  public async buildIndex(
+    entries: Entry[],
+    signal?: AbortSignal,
+  ): Promise<void> {
     const version = ++this.buildVersion;
-    this.isIndexing = true;
 
     const docs = entries.map((entry) => entry.toSearchDocument());
 
@@ -60,13 +66,19 @@ export class SearchService {
 
     if (this.indexWorker) {
       try {
-        const response = await this.indexWorker.post<BuildIndexWorkerResponse>({
-          kind: WORKER_TASK_KINDS.BuildIndex,
-          documents: docs,
-        });
+        const response = await this.indexWorker.post<BuildIndexWorkerResponse>(
+          {
+            kind: WORKER_TASK_KINDS.BuildIndex,
+            documents: docs,
+          },
+          signal,
+        );
         if (version !== this.buildVersion) return; // superseded
         fresh = await loadSearchIndexJson(response.indexJson);
       } catch (e) {
+        // A cancelled build is not a failure: the load that requested it was
+        // superseded or disposed, so there is nothing to fall back to.
+        if (signal?.aborted) return;
         // Worker unavailable/failed: fall back to the local async build.
         console.warn(
           'SearchService: worker index build failed, building locally',
@@ -80,10 +92,10 @@ export class SearchService {
       await fresh.addAllAsync(docs, { chunkSize: INDEX_CHUNK_SIZE });
     }
 
+    if (signal?.aborted) return; // the requesting load was cancelled
     if (version !== this.buildVersion) return; // superseded by a newer build
 
     this.index = fresh;
-    this.isIndexing = false;
   }
 
   /**
@@ -100,9 +112,5 @@ export class SearchService {
     if (!query) return [];
     const results = this.index.search(query);
     return results.slice(0, limit).map((r) => r.id as string);
-  }
-
-  public get isReady(): boolean {
-    return !this.isIndexing;
   }
 }

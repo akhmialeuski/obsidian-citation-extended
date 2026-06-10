@@ -16,7 +16,7 @@ import { buildSearchIndexJson } from './search/search-index';
  * - `build-index`: tokenize search documents into a MiniSearch index and
  *   return its JSON serialization, keeping index builds off the main thread.
  */
-function handleRequest(request: WorkerRequest): WorkerResponse {
+export function handleRequest(request: WorkerRequest): WorkerResponse {
   switch (request.kind) {
     case WORKER_TASK_KINDS.Parse: {
       const raw =
@@ -27,30 +27,45 @@ function handleRequest(request: WorkerRequest): WorkerResponse {
     }
     case WORKER_TASK_KINDS.BuildIndex:
       return { indexJson: buildSearchIndexJson(request.documents) };
+    default: {
+      // Runtime guard for version-skewed/corrupt messages: surface a clear
+      // error envelope instead of resolving the caller with `undefined`.
+      const unknownKind = (request as { kind?: string }).kind;
+      throw new Error(`Unknown worker task kind: ${String(unknownKind)}`);
+    }
   }
 }
 
-// Minimal id-correlated RPC over postMessage (see worker-protocol.ts for the
-// rationale of not using promise-worker).
-const workerScope = self as unknown as {
+/** The subset of the worker global scope used by the RPC loop. */
+export interface WorkerRpcScope {
   addEventListener(
     type: 'message',
     listener: (event: MessageEvent<WorkerRpcRequest>) => void,
   ): void;
   postMessage(message: WorkerRpcResponse): void;
-};
+}
 
-workerScope.addEventListener(
-  'message',
-  (event: MessageEvent<WorkerRpcRequest>) => {
+/**
+ * Wire the minimal id-correlated RPC over postMessage onto a worker scope
+ * (see worker-protocol.ts for the rationale of not using promise-worker).
+ * Exported so the loop is unit-testable against a fake scope.
+ */
+export function registerWorkerRpc(scope: WorkerRpcScope): void {
+  scope.addEventListener('message', (event: MessageEvent<WorkerRpcRequest>) => {
     const { id, request } = event.data;
     try {
-      workerScope.postMessage({ id, result: handleRequest(request) });
+      scope.postMessage({ id, result: handleRequest(request) });
     } catch (e) {
-      workerScope.postMessage({
+      scope.postMessage({
         id,
         error: e instanceof Error ? e.message : String(e),
       });
     }
-  },
-);
+  });
+}
+
+// In the real Web Worker `self` is always defined; the guard only matters in
+// unit tests, where this module is imported in a Node context.
+if (typeof self !== 'undefined') {
+  registerWorkerRpc(self as unknown as WorkerRpcScope);
+}

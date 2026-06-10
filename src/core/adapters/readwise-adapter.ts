@@ -207,14 +207,11 @@ export class ReadwiseAdapter extends Entry {
   }
 
   /** Memoized structured authors — string parsing runs at most once. */
-  private _authorCache?: Author[] | null;
-
   get author(): Author[] | undefined {
-    if (this._authorCache === undefined) {
+    return this.memo('author', () => {
       const authors = parseAuthors(this.data.author);
-      this._authorCache = authors.length > 0 ? authors : null;
-    }
-    return this._authorCache ?? undefined;
+      return authors.length > 0 ? authors : undefined;
+    });
   }
 
   get authorString(): string | null {
@@ -237,13 +234,8 @@ export class ReadwiseAdapter extends Entry {
   }
 
   /** Memoized issued date — Date parsing runs at most once per entry. */
-  private _issuedDateCache?: Date | null;
-
   get issuedDate(): Date | null {
-    if (this._issuedDateCache === undefined) {
-      this._issuedDateCache = toDate(this.data.publishedDate);
-    }
-    return this._issuedDateCache;
+    return this.memo('issuedDate', () => toDate(this.data.publishedDate));
   }
 
   get page(): string | undefined {

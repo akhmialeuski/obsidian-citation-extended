@@ -147,15 +147,8 @@ export class EntryBibLaTeXAdapter extends Entry {
    * Memoized author string. Sort comparators and search-document building
    * call this getter repeatedly; the map+join is computed only once.
    */
-  private _authorStringCache?: string;
-  private _authorStringComputed = false;
-
   get authorString(): string | undefined {
-    if (!this._authorStringComputed) {
-      this._authorStringComputed = true;
-      this._authorStringCache = this.computeAuthorString();
-    }
-    return this._authorStringCache;
+    return this.memo('authorString', () => this.computeAuthorString());
   }
 
   private computeAuthorString(): string | undefined {
@@ -196,13 +189,10 @@ export class EntryBibLaTeXAdapter extends Entry {
   }
 
   /** Memoized issued date — `new Date()` parsing runs at most once per entry. */
-  private _issuedDateCache?: Date | null;
-
   get issuedDate(): Date | null {
-    if (this._issuedDateCache === undefined) {
-      this._issuedDateCache = this.issued ? new Date(this.issued) : null;
-    }
-    return this._issuedDateCache;
+    return this.memo('issuedDate', () =>
+      this.issued ? new Date(this.issued) : null,
+    );
   }
 
   get author(): Author[] {

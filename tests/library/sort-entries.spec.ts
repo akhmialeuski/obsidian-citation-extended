@@ -57,9 +57,12 @@ describe('sortEntries', () => {
       expect(result).toEqual(entries);
     });
 
-    it('returns the same array reference for default order', () => {
+    it('returns a new array (not the input reference) for default order', () => {
       const result = sortEntries(entries, 'default');
-      expect(result).toBe(entries);
+      // The contract is "returns a new array": callers cache the result, so
+      // aliasing the input would let later input mutations corrupt the cache.
+      expect(result).not.toBe(entries);
+      expect(result).toEqual(entries);
     });
   });
 

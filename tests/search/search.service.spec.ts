@@ -109,15 +109,6 @@ describe('SearchService', () => {
     expect(service.search('')).toEqual([]);
   });
 
-  test('isReady should return true when not indexing', async () => {
-    expect(service.isReady).toBe(true);
-  });
-
-  test('isReady should return true after buildIndex completes', async () => {
-    await service.buildIndex(entries);
-    expect(service.isReady).toBe(true);
-  });
-
   test('a newer buildIndex supersedes an in-flight one', async () => {
     // Start two overlapping builds; only the SECOND may win the swap.
     const first = service.buildIndex(entries);
@@ -312,7 +303,7 @@ describe('SearchService — note/highlight text', () => {
     expect(service.search(late)).not.toContain('trunc');
   });
 
-  test('toSearchDocument caps notesText length and is empty without a note', async () => {
+  test('toSearchDocument caps notesText length and is empty without a note', () => {
     const withNote = new MockEntry(
       { id: 'x', title: 'T', authorString: 'A' },
       'y'.repeat(6000),
@@ -365,28 +356,28 @@ describe('SearchService — note/highlight text', () => {
 });
 
 describe('normalizeTerm', () => {
-  test('should strip acute and grave accents', async () => {
+  test('should strip acute and grave accents', () => {
     expect(normalizeTerm('\u00e9\u00e8')).toBe('ee');
   });
 
-  test('should strip circumflex and diaeresis', async () => {
+  test('should strip circumflex and diaeresis', () => {
     expect(normalizeTerm('\u00e2\u00fc')).toBe('au');
   });
 
-  test('should convert to lowercase', async () => {
+  test('should convert to lowercase', () => {
     expect(normalizeTerm('HELLO')).toBe('hello');
   });
 
-  test('should handle plain ASCII unchanged (except case)', async () => {
+  test('should handle plain ASCII unchanged (except case)', () => {
     expect(normalizeTerm('Algorithm')).toBe('algorithm');
   });
 
-  test('should handle combined diacritics and case', async () => {
+  test('should handle combined diacritics and case', () => {
     expect(normalizeTerm('M\u00e2ri\u00e0a')).toBe('mariaa');
     expect(normalizeTerm('M\u00fcller')).toBe('muller');
   });
 
-  test('should handle empty string', async () => {
+  test('should handle empty string', () => {
     expect(normalizeTerm('')).toBe('');
   });
 });

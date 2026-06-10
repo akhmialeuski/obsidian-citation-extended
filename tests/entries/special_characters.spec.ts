@@ -31,13 +31,13 @@ describe('Special characters in entries (#119)', () => {
 }
 `;
 
-  it('parses entries with Unicode characters in title', async () => {
+  it('parses entries with Unicode characters in title', () => {
     const result = loadEntries(unicodeBib, 'biblatex');
     expect(result.entries.length).toBe(2);
     expect(result.parseErrors.length).toBe(0);
   });
 
-  it('preserves Unicode γ in title', async () => {
+  it('preserves Unicode γ in title', () => {
     const result = loadEntries(unicodeBib, 'biblatex');
     const entry = new EntryBibLaTeXAdapter(
       result.entries[0] as EntryDataBibLaTeX,
@@ -45,7 +45,7 @@ describe('Special characters in entries (#119)', () => {
     expect(entry.title).toContain('γH2AX');
   });
 
-  it('preserves accented characters in title and author', async () => {
+  it('preserves accented characters in title and author', () => {
     const result = loadEntries(unicodeBib, 'biblatex');
     const entry = new EntryBibLaTeXAdapter(
       result.entries[1] as EntryDataBibLaTeX,

@@ -45,14 +45,9 @@ export class EntryCSLAdapter extends Entry {
   _compositeCitekey?: string;
   private _id?: string;
 
-  /** Memoized year — `null` marks "computed, no value". */
-  private _yearOverrideCache?: number | null;
-
+  /** Memoized year (CSL can carry it directly in `issued.date-parts`). */
   get year(): number | undefined {
-    if (this._yearOverrideCache === undefined) {
-      this._yearOverrideCache = this.computeYear() ?? null;
-    }
-    return this._yearOverrideCache ?? undefined;
+    return this.memo('year', () => this.computeYear());
   }
 
   private computeYear(): number | undefined {
@@ -89,13 +84,8 @@ export class EntryCSLAdapter extends Entry {
   }
 
   /** Memoized author string — the map+join is computed only once. */
-  private _authorStringCache?: string | null;
-
   get authorString(): string | null {
-    if (this._authorStringCache === undefined) {
-      this._authorStringCache = this.computeAuthorString();
-    }
-    return this._authorStringCache;
+    return this.memo('authorString', () => this.computeAuthorString());
   }
 
   private computeAuthorString(): string | null {
@@ -138,13 +128,8 @@ export class EntryCSLAdapter extends Entry {
   }
 
   /** Memoized issued date — Date construction runs at most once per entry. */
-  private _issuedDateCache?: Date | null;
-
   get issuedDate(): Date | null {
-    if (this._issuedDateCache === undefined) {
-      this._issuedDateCache = this.computeIssuedDate();
-    }
-    return this._issuedDateCache;
+    return this.memo('issuedDate', () => this.computeIssuedDate());
   }
 
   private computeIssuedDate(): Date | null {

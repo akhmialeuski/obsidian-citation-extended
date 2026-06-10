@@ -23,7 +23,10 @@ export function sortEntries(
   order: ReferenceListSortOrder,
 ): Entry[] {
   if (order === 'default') {
-    return entries;
+    // Copy even when not sorting: the contract is "returns a new array", and
+    // callers (LibraryService) cache the result — aliasing the input would
+    // let a later mutation of the caller's array corrupt the cache.
+    return [...entries];
   }
 
   // Shallow copy so we don't mutate the caller's array

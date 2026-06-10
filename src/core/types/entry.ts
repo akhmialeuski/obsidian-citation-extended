@@ -21,6 +21,15 @@ export interface SearchDocument {
 }
 
 /**
+ * Per-instance compute-once caches for derived getters (see {@link Entry.memo}).
+ * A WeakMap keyed by the entry instance keeps the cache OFF the object itself:
+ * it is invisible to object spreads (`toJSON`) and to the pipeline's
+ * `Object.assign` cloning (each clone re-derives lazily), and it is collected
+ * together with the entry.
+ */
+const memoStore = new WeakMap<Entry, Map<string, unknown>>();
+
+/**
  * An `Entry` represents a single reference in a reference database.
  * Each entry has a unique identifier, known in most reference managers as its
  * "citekey."
@@ -30,6 +39,24 @@ export interface SearchDocument {
  * and transformation logic, keeping callers decoupled from field-level details.
  */
 export abstract class Entry {
+  /**
+   * Compute-once cache for derived getters on sort/search hot paths
+   * (authorString, issuedDate, year are called O(N log N) times by sort
+   * comparators). The underlying source data is immutable after parsing, so
+   * cached values never need invalidation.
+   */
+  protected memo<T>(key: string, compute: () => T): T {
+    let cache = memoStore.get(this);
+    if (!cache) {
+      cache = new Map<string, unknown>();
+      memoStore.set(this, cache);
+    }
+    if (!cache.has(key)) {
+      cache.set(key, compute());
+    }
+    return cache.get(key) as T;
+  }
+
   /**
    * Unique identifier for the entry (also the citekey).
    */
@@ -100,19 +127,12 @@ export abstract class Entry {
   public abstract eprinttype?: string | null;
 
   protected _year?: string;
-  /**
-   * Memoized publication year. `null` marks "computed, no value" so the
-   * (possibly expensive) `issuedDate` derivation runs at most once — sort
-   * comparators call this getter O(N log N) times.
-   */
-  private _yearCache?: number | null;
   public get year(): number | undefined {
-    if (this._yearCache === undefined) {
-      this._yearCache = this._year
-        ? parseInt(this._year)
-        : (this.issuedDate?.getUTCFullYear() ?? null);
-    }
-    return this._yearCache ?? undefined;
+    // Memoized: the (possibly expensive) issuedDate derivation runs at most
+    // once, while sort comparators call this getter O(N log N) times.
+    return this.memo('year', () =>
+      this._year ? parseInt(this._year) : this.issuedDate?.getUTCFullYear(),
+    );
   }
 
   protected _note?: string[];
@@ -254,10 +274,14 @@ export abstract class Entry {
     let raw = '';
     for (const el of this._note) {
       if (raw.length > 0) raw += '\n\n';
-      raw += el;
+      // Take only the prefix that still fits: a single multi-megabyte segment
+      // (e.g. aggregated Readwise highlights) must not be copied wholesale.
+      // Clamp to 0 — the separator above may have just crossed the limit.
+      const remaining = Math.max(0, rawLimit - raw.length);
+      raw += el.length > remaining ? el.slice(0, remaining) : el;
       if (raw.length >= rawLimit) break;
     }
-    return Entry.decodeNoteSegment(raw.slice(0, rawLimit)).slice(0, limit);
+    return Entry.decodeNoteSegment(raw).slice(0, limit);
   }
 
   /**

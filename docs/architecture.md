@@ -473,11 +473,11 @@ New source types are registered as creators in `main.ts` — no changes to Sourc
 
 ### Watch Mechanisms
 
-| Source            | Watcher               | Events                     | Debounce                      |
-| ----------------- | --------------------- | -------------------------- | ----------------------------- |
-| `LocalFileSource` | chokidar              | `change`, `add`            | 1 000 ms (per-source)         |
-| `VaultFileSource` | Vault events          | `modify`, `create`         | 1 000 ms (per-source)         |
-| `ReadwiseSource`  | `setInterval` polling | Configurable periodic sync | Default 30 min (0 = disabled) |
+| Source            | Watcher                                            | Events                     | Debounce                      |
+| ----------------- | -------------------------------------------------- | -------------------------- | ----------------------------- |
+| `LocalFileSource` | chokidar                                           | `change`, `add`            | 1 000 ms (per-source)         |
+| `VaultFileSource` | Vault events                                       | `modify`, `create`         | 1 000 ms (per-source)         |
+| `ReadwiseSource`  | Chained `setTimeout` (interval re-read each cycle) | Configurable periodic sync | Default 30 min (0 = disabled) |
 
 Both `watch()` methods are **silently idempotent** — calling `watch()` on an already-watching source is a no-op without warnings.
 
@@ -642,7 +642,10 @@ flowchart TD
 ```
 
 Searches keep hitting the previous index until the swap, so a rebuild never
-blanks or blocks the search modal. `LibraryService` additionally caches the
+blanks or blocks the search modal. `buildIndex` receives the load's
+`AbortSignal`: a superseded load's worker-side build is terminated outright
+(freeing the pool slot) instead of running to completion just to be
+discarded. `LibraryService` additionally caches the
 sorted entry list per sort order (`getSortedEntries`), invalidated on each
 build — the modal's empty-query path is an O(1) slice instead of an
 O(N log N) sort per keystroke.
@@ -1099,6 +1102,12 @@ Merge semantics (`src/core/readwise/readwise-delta.ts`, pure functions):
 The cursor (`lastSyncAt`) is captured at fetch START (racing updates are
 re-delivered, merge is idempotent) and advances only together with a
 successful cache write, so the on-disk cursor always matches the on-disk base.
+When the cursor is USED, a 5-minute overlap is subtracted from it
+(`CURSOR_OVERLAP_MS`): the cursor comes from the local clock while Readwise
+compares it against server-side timestamps, and a client clock running ahead
+of the server would otherwise silently miss updates. Over-fetching is free
+because the merge is idempotent; an unparseable cursor falls back to a full
+fetch.
 
 ### Periodic Sync Timer
 

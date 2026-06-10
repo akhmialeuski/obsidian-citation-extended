@@ -220,25 +220,57 @@ describe('WorkerManager (pool + RPC)', () => {
     });
   });
 
-  it('dispose() rejects queued tasks and terminates pooled workers', async () => {
+  it('dispose() rejects queued AND in-flight tasks and terminates workers', async () => {
     const manager = makeManager(() => {}, 1);
     const inFlight = manager.post(parseRequest('a'));
-    const queued = manager.post(parseRequest('b'));
+    // Queued WITH a signal: dispose must also detach its queue-abort listener.
+    const controller = new AbortController();
+    const queued = manager.post(parseRequest('b'), controller.signal);
     await Promise.resolve();
 
     manager.dispose();
 
+    // Every returned promise settles — a caller awaiting a task never hangs
+    // past dispose (the in-flight worker is gone and cannot respond).
     await expect(queued).rejects.toThrow('Aborted');
+    await expect(inFlight).rejects.toThrow('Aborted');
     expect(FakeRpcWorker.instances[0].terminated).toBe(true);
-    // Avoid unhandled rejection noise for the in-flight task: it never
-    // settles by design (its worker is gone), so stop awaiting it.
+  });
+
+  it('rejects a queued task immediately when its signal aborts', async () => {
+    // Single worker, kept busy by a never-responding first task.
+    const manager = makeManager(() => {}, 1);
+    const inFlight = manager.post(parseRequest('a'));
+    await Promise.resolve();
+
+    const controller = new AbortController();
+    const queued = manager.post(parseRequest('b'), controller.signal);
+    controller.abort();
+
+    // The queued task rejects without waiting for a worker slot, and the
+    // busy worker is untouched (only EXECUTING tasks terminate on abort).
+    await expect(queued).rejects.toThrow('Aborted');
+    expect(FakeRpcWorker.instances[0].terminated).toBe(false);
     void inFlight.catch(() => {});
+    manager.dispose();
   });
 
   it('rejects new posts after dispose()', async () => {
     const manager = makeManager();
     manager.dispose();
     await expect(manager.post(parseRequest())).rejects.toThrow('disposed');
+  });
+
+  it('rejects the task when postMessage itself throws', async () => {
+    const worker = new FakeRpcWorker(okHandler);
+    worker.postMessage = () => {
+      throw new Error('detached buffer');
+    };
+    const manager = new WorkerManager(() => worker as unknown as Worker, 1);
+
+    await expect(manager.post(parseRequest())).rejects.toThrow(
+      'detached buffer',
+    );
   });
 
   it('defaultPoolSize stays within [1, 3]', () => {

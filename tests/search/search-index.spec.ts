@@ -133,7 +133,6 @@ describe('SearchService with a worker pool', () => {
 
     expect(post).toHaveBeenCalledTimes(1);
     expect(service.search('worker')).toContain('w1');
-    expect(service.isReady).toBe(true);
   });
 
   it('falls back to a local build when the worker fails', async () => {
@@ -145,5 +144,58 @@ describe('SearchService with a worker pool', () => {
     warnSpy.mockRestore();
 
     expect(service.search('worker')).toContain('w1');
+  });
+
+  it('passes the abort signal to the worker post', async () => {
+    const post = jest.fn().mockImplementation((msg: WorkerRequest) => {
+      if (msg.kind !== WORKER_TASK_KINDS.BuildIndex) throw new Error('bad');
+      return Promise.resolve({
+        indexJson: buildSearchIndexJson(msg.documents),
+      });
+    });
+    const service = new SearchService({ post } as unknown as WorkerManager);
+    const controller = new AbortController();
+
+    await service.buildIndex(makeEntries(), controller.signal);
+
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: WORKER_TASK_KINDS.BuildIndex }),
+      controller.signal,
+    );
+  });
+
+  it('cancels an aborted worker build without falling back locally', async () => {
+    const controller = new AbortController();
+    // Worker that rejects with AbortError once the signal fires, like the
+    // real WorkerManager terminating the executing worker.
+    const post = jest.fn().mockImplementation(
+      (_msg: WorkerRequest, signal?: AbortSignal) =>
+        new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          );
+        }),
+    );
+    const service = new SearchService({ post } as unknown as WorkerManager);
+
+    const build = service.buildIndex(makeEntries(), controller.signal);
+    controller.abort();
+    await build;
+
+    // No local fallback ran and no swap happened: the entries are absent.
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(service.search('worker')).toEqual([]);
+  });
+
+  it('does not swap in a locally built index when the signal is aborted', async () => {
+    const controller = new AbortController();
+    // No worker: the local async build runs; abort before it completes.
+    const service = new SearchService();
+
+    const build = service.buildIndex(makeEntries(), controller.signal);
+    controller.abort();
+    await build;
+
+    expect(service.search('worker')).toEqual([]);
   });
 });

@@ -311,8 +311,12 @@ export class LibraryService implements ILibraryService {
 
     console.debug('Citation plugin: Building search index');
     // Async chunked build: yields to the event loop so the UI never freezes;
-    // searches keep hitting the previous index until the new one is swapped in.
-    await this.searchService.buildIndex(Object.values(this.library.entries));
+    // searches keep hitting the previous index until the new one is swapped
+    // in. The load signal cancels a superseded worker-side build outright.
+    await this.searchService.buildIndex(
+      Object.values(this.library.entries),
+      signal,
+    );
 
     // A newer load may have superseded this one while the index was building;
     // it owns the state transitions from here on.

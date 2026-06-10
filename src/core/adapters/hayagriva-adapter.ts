@@ -105,32 +105,27 @@ export class HayagrivaAdapter extends Entry {
   }
 
   /** Memoized structured authors — the per-call map is computed only once. */
-  private _authorCache?: Author[] | null;
-
   get author(): Author[] | undefined {
-    if (this._authorCache === undefined) {
+    return this.memo('author', () => {
       const authors = this.data.author;
-      this._authorCache =
-        !authors || !Array.isArray(authors) ? null : authors.map(toAuthor);
-    }
-    return this._authorCache ?? undefined;
+      return !authors || !Array.isArray(authors)
+        ? undefined
+        : authors.map(toAuthor);
+    });
   }
 
   /** Memoized author string — the map+join is computed only once. */
-  private _authorStringCache?: string | null;
-
   get authorString(): string | null {
-    if (this._authorStringCache === undefined) {
+    return this.memo('authorString', () => {
       const authors = this.author;
-      this._authorStringCache = !authors
+      return !authors
         ? null
         : authors
             .map(
               (a) => a.literal || `${a.given || ''} ${a.family || ''}`.trim(),
             )
             .join(', ');
-    }
-    return this._authorStringCache;
+    });
   }
 
   get containerTitle(): string | undefined {
@@ -146,13 +141,10 @@ export class HayagrivaAdapter extends Entry {
   }
 
   /** Memoized issued date — Date construction runs at most once per entry. */
-  private _issuedDateCache?: Date | null;
-
   get issuedDate(): Date | null {
-    if (this._issuedDateCache === undefined) {
-      this._issuedDateCache = this.data.date ? toDate(this.data.date) : null;
-    }
-    return this._issuedDateCache;
+    return this.memo('issuedDate', () =>
+      this.data.date ? toDate(this.data.date) : null,
+    );
   }
 
   get page(): string | undefined {
