@@ -90,7 +90,7 @@ flowchart TB
         Entry["Entry / Library"]
         Result["Result&lt;T,E&gt;"]
         Errors["CitationError hierarchy"]
-        Worker["WorkerManager → Web Worker"]
+        Worker["WorkerManager → Worker pool (≤3)"]
     end
 
     Init --> App & Services & Library & Infra & Template & Notes & Platform & Core
@@ -105,9 +105,11 @@ flowchart TB
     LS --> SM & NP & Store
     SM --> DF
     DF --> REG
-    REG --> LFS & VFS
+    REG --> LFS & VFS & RWS
     LFS --> Worker
     VFS --> Worker
+    RWS --> Worker
+    SS --> Worker
     Store --> UIServ
     BNO --> NS & TS
     OA -.implements.-> PA
@@ -119,21 +121,21 @@ The system follows Clean Architecture: business logic (`application/`, `domain/`
 
 ## Layer Map
 
-| Layer | Directory | Depends on Obsidian? | Responsibility |
-|-------|-----------|---------------------|----------------|
-| **Core** | `src/core/` | No | Entry types, parsers, Result, errors, adapters |
-| **Domain** | `src/domain/` | No | TemplateProfile, NoteKind, TemplateProfileRegistry |
-| **Application** | `src/application/` | No | CitationService, ActionRegistry, Actions, ContentTemplateResolver |
-| **Library** | `src/library/` | No | LibraryService, LibraryStore, SearchService |
-| **Template** | `src/template/` | No | TemplateService, Handlebars helpers, IntrospectionService |
-| **Notes** | `src/notes/` | No | NoteService, BatchNoteOrchestrator |
-| **Infrastructure** | `src/infrastructure/` | No | SourceManager, NormalizationPipeline |
-| **Search** | `src/search/` | No | MiniSearch wrapper |
-| **Platform** | `src/platform/` | **Yes** | IPlatformAdapter interfaces + ObsidianPlatformAdapter |
-| **Sources** | `src/sources/` | **Yes** | LocalFileSource, VaultFileSource, DataSourceRegistry |
-| **Services** | `src/services/` | **Yes** | CommandRegistry, ContextMenuHandler |
-| **UI** | `src/ui/` | **Yes** | Modals, SettingsTab, UIService |
-| **Entry point** | `src/main.ts` | **Yes** | Composition root, settings migration, DI wiring |
+| Layer              | Directory             | Depends on Obsidian? | Responsibility                                                    |
+| ------------------ | --------------------- | -------------------- | ----------------------------------------------------------------- |
+| **Core**           | `src/core/`           | No                   | Entry types, parsers, Result, errors, adapters                    |
+| **Domain**         | `src/domain/`         | No                   | TemplateProfile, NoteKind, TemplateProfileRegistry                |
+| **Application**    | `src/application/`    | No                   | CitationService, ActionRegistry, Actions, ContentTemplateResolver |
+| **Library**        | `src/library/`        | No                   | LibraryService, LibraryStore, SearchService                       |
+| **Template**       | `src/template/`       | No                   | TemplateService, Handlebars helpers, IntrospectionService         |
+| **Notes**          | `src/notes/`          | No                   | NoteService, BatchNoteOrchestrator                                |
+| **Infrastructure** | `src/infrastructure/` | No                   | SourceManager, NormalizationPipeline                              |
+| **Search**         | `src/search/`         | No                   | MiniSearch wrapper                                                |
+| **Platform**       | `src/platform/`       | **Yes**              | IPlatformAdapter interfaces + ObsidianPlatformAdapter             |
+| **Sources**        | `src/sources/`        | **Yes**              | LocalFileSource, VaultFileSource, DataSourceRegistry              |
+| **Services**       | `src/services/`       | **Yes**              | CommandRegistry, ContextMenuHandler                               |
+| **UI**             | `src/ui/`             | **Yes**              | Modals, SettingsTab, UIService                                    |
+| **Entry point**    | `src/main.ts`         | **Yes**              | Composition root, settings migration, DI wiring                   |
 
 ---
 
@@ -269,12 +271,12 @@ classDiagram
 
 `ObsidianPlatformAdapter` delegates to internal sub-adapters:
 
-| Sub-adapter | Wraps | Notes |
-|-------------|-------|-------|
-| `ObsidianFileSystem` | `FileSystemAdapter`, `Vault` | UTF-8 read/write, folder creation with "already exists" guard |
-| `ObsidianVaultAccess` | `App.vault` | Maps `TFile`/`TFolder` → `IVaultFile` |
-| `ObsidianWorkspaceAccess` | `App.workspace` | **Canvas fallback**: tries `MarkdownView`, then `activeEditor?.editor` for Canvas/Lineage editors. **URL opening**: Electron `shell.openExternal` on desktop, `window.open` on mobile |
-| `ObsidianNotificationService` | `Notice` | Transient toast messages |
+| Sub-adapter                   | Wraps                        | Notes                                                                                                                                                                                 |
+| ----------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ObsidianFileSystem`          | `FileSystemAdapter`, `Vault` | UTF-8 read/write, folder creation with "already exists" guard                                                                                                                         |
+| `ObsidianVaultAccess`         | `App.vault`                  | Maps `TFile`/`TFolder` → `IVaultFile`                                                                                                                                                 |
+| `ObsidianWorkspaceAccess`     | `App.workspace`              | **Canvas fallback**: tries `MarkdownView`, then `activeEditor?.editor` for Canvas/Lineage editors. **URL opening**: Electron `shell.openExternal` on desktop, `window.open` on mobile |
+| `ObsidianNotificationService` | `Notice`                     | Transient toast messages                                                                                                                                                              |
 
 All services are testable without Obsidian via `createMockPlatformAdapter()` in `tests/helpers/`.
 
@@ -305,21 +307,23 @@ sequenceDiagram
     Note over SM: Create/update/dispose sources<br/>based on config diff
 
     LS->>SM: loadAll()
-    par Parallel loading
+    par Parallel loading (worker pool)
         SM->>Src: source1.load()
-        Src->>WM: post({ databaseRaw, databaseType })
-        WM->>W: parse bibliography
+        Src->>WM: post({ kind: 'parse', databaseRaw, databaseType }, signal, [buffer])
+        WM->>W: worker A parses bibliography
         W-->>WM: { entries, parseErrors }
         WM-->>Src: DataSourceLoadResult
         Src-->>SM: SourceLoadResult
     and
         SM->>Src: source2.load()
         Src->>WM: post(...)
-        WM->>W: parse bibliography
+        WM->>W: worker B parses bibliography (concurrently)
         W-->>WM: { entries, parseErrors }
         WM-->>Src: DataSourceLoadResult
         Src-->>SM: SourceLoadResult
     end
+
+    Note over SM: Each source's result is cached<br/>for later incremental reloads
 
     SM-->>LS: SourceLoadResult[]
 
@@ -327,25 +331,47 @@ sequenceDiagram
     Note over NP: 1. SourceTaggingStep<br/>2. DeduplicationStep<br/>→ merged Library
     NP-->>LS: Library
 
-    LS->>SS: buildIndex(entries)
-    Note over SS: MiniSearch indexing
+    LS->>SS: await buildIndex(entries)
+    Note over SS: Index built in worker (or async<br/>chunked fallback), swapped in atomically;<br/>searches keep using the old index meanwhile
 
     LS->>Store: setState(Success)
     Store-->>UI: notify → update status bar
 
-    LS->>SM: initWatchers(debounceCallback)
-    Note over SM: chokidar / vault events<br/>→ debounced reload
+    LS->>SM: initWatchers((sourceKey) => debounced reload)
+    Note over SM: chokidar / vault events / Readwise poll<br/>→ debounced INCREMENTAL reload
 ```
+
+### Incremental Reload
+
+A watcher event does **not** trigger a full reload. The watcher callback
+carries the stable source key, and `LibraryService` collects pending keys
+during the debounce window, then calls `SourceManager.reloadSources(keys)`:
+
+```mermaid
+flowchart TD
+    CH["Watcher: source X changed"] --> DEB["LibraryService debounce (1 s)\ncollects pending source keys"]
+    DEB --> RS["SourceManager.reloadSources([X])"]
+    RS --> LX["X.load() — re-read + re-parse ONLY X"]
+    RS --> CACHE["Other sources: cached SourceLoadResult\n(no file read, no parse)"]
+    LX & CACHE --> PIPE["pipeline.run(all results)"]
+    PIPE --> IDX["buildIndex (worker / async)"]
+    IDX --> OK["setState(Success)"]
+```
+
+The cost of reacting to a change is proportional to the size of the changed
+database, not the whole library. A full `load()` still runs on startup,
+manual refresh, retry recovery, and settings changes.
 
 ### Protection Mechanisms
 
-| Mechanism | Value | Purpose |
-|-----------|-------|---------|
-| **Timeout** | configurable via `libraryLoadTimeoutSeconds` (default 30 s) | Race (`Promise.race`) against `sourceManager.loadAll()`; the load signal is threaded to sources so the in-flight work is cancelled on timeout |
-| **AbortController** | per load | Cancel in-flight load on new `load()` call |
-| **Debounce** | 1 000 ms | Coalesce rapid file change events from watchers |
-| **Retry** | 5 attempts | Exponential backoff: 1 s → 2 s → 4 s → 8 s → 16 s (capped at 30 s) |
-| **Worker queue** | FIFO | Sequential parsing prevents concurrent heavy operations |
+| Mechanism                  | Value                                                       | Purpose                                                                                                                                              |
+| -------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Timeout**                | configurable via `libraryLoadTimeoutSeconds` (default 30 s) | Race (`Promise.race`) against the source loading promise; the load signal is threaded to sources so the in-flight work is cancelled on timeout       |
+| **AbortController**        | per load                                                    | Cancel in-flight load on new `load()` call; aborting a worker task **terminates** its worker, so an abandoned parse stops immediately                |
+| **Debounce**               | 1 000 ms                                                    | Coalesce rapid file change events from watchers (pending source keys are collected during the window)                                                |
+| **Retry**                  | 5 attempts                                                  | Exponential backoff: 1 s → 2 s → 4 s → 8 s → 16 s (capped at 30 s); retries are always full loads                                                    |
+| **Worker pool**            | up to 3 workers                                             | Parallel parsing across databases; a wedged or aborted worker is terminated and replaced                                                             |
+| **Stale-while-revalidate** | search modal + index                                        | During a reload the modal keeps searching the previous library, and `SearchService` keeps serving the previous index until the new one is swapped in |
 
 ### State Machine
 
@@ -394,19 +420,32 @@ flowchart TD
 
 ```typescript
 interface ManagedSource {
-  source: DataSource;       // The actual data source instance
-  databaseId: string;       // Stable internal identifier (from db.id)
-  databaseName: string;     // User-facing display name (mutable, updated on sync)
+  source: DataSource;            // The actual data source instance
+  databaseId: string;            // Stable internal identifier (from db.id)
+  databaseName: string;          // User-facing display name (mutable, updated on sync)
+  lastResult?: SourceLoadResult; // Cached last load result for incremental reloads
+  lastFailed?: boolean;          // Whether lastResult is a synthetic failure
 }
 ```
 
+`lastResult` is the foundation of incremental reloading: `reloadSources(keys)`
+re-loads only the named sources (plus any source that has never loaded) and
+returns cached results for the rest. An aborted load is never cached as a
+failure.
+
 ### Key Stability
 
-The identity key is `${transport}:${type}:${id}:${path}`. This means:
+The identity key is `${transport}:${type}:${id}:${path}` for file-based
+sources and `${transport}:${type}:${id}:fp-${fingerprint}` for API-based
+sources, where the fingerprint folds the credential (`db.path` holds the
+Readwise token) and the per-database filters — so secrets never leak into
+keys or debug logs. This means:
 
 - **Renaming** a database (changing `name`) does **not** recreate the source — the key stays the same, only `databaseName` metadata is refreshed.
 - **Changing format** (e.g., `biblatex` → `csl-json`) **does** recreate the source — the key changes because `type` changed.
-- **Changing path** recreates the source.
+- **Changing path** recreates the source (for Readwise, the path is the token, so a token change recreates the source via the fingerprint).
+- **Changing Readwise filters** recreates the source (the factory snapshots filters at creation time).
+- **An unchanged Readwise config preserves the source** across reloads, keeping its polling timer and incremental-sync continuity alive (previously it was force-recreated on every sync).
 - **Without `id`** (pre-migration databases), `name` is used as fallback with a console warning.
 
 ### DataSource Registration (Open/Closed)
@@ -434,11 +473,11 @@ New source types are registered as creators in `main.ts` — no changes to Sourc
 
 ### Watch Mechanisms
 
-| Source | Watcher | Events | Debounce |
-|--------|---------|--------|----------|
-| `LocalFileSource` | chokidar | `change`, `add` | 1 000 ms (per-source) |
-| `VaultFileSource` | Vault events | `modify`, `create` | 1 000 ms (per-source) |
-| `ReadwiseSource` | `setInterval` polling | Configurable periodic sync | Default 30 min (0 = disabled) |
+| Source            | Watcher               | Events                     | Debounce                      |
+| ----------------- | --------------------- | -------------------------- | ----------------------------- |
+| `LocalFileSource` | chokidar              | `change`, `add`            | 1 000 ms (per-source)         |
+| `VaultFileSource` | Vault events          | `modify`, `create`         | 1 000 ms (per-source)         |
+| `ReadwiseSource`  | `setInterval` polling | Configurable periodic sync | Default 30 min (0 = disabled) |
 
 Both `watch()` methods are **silently idempotent** — calling `watch()` on an already-watching source is a no-op without warnings.
 
@@ -569,13 +608,13 @@ flowchart LR
         Q["'smith cognitive'"]
     end
 
-    subgraph Processing["SearchService.search()"]
+    subgraph Processing["SearchService.search(query, limit)"]
         NFD["NFD decomposition\n(strip diacritics)"]
-        MS["MiniSearch.search()\nprefix: true\nfuzzy: 0.2\nboost: title×2, authorString×1.5\nmaxResults: 50"]
+        MS["MiniSearch.search()\nprefix: true\nfuzzy: 0.2\nboost: title×2, authorString×1.5\n→ slice(0, limit) inside the service"]
     end
 
     subgraph Output["Result"]
-        CK["citekey[] — ranked matches"]
+        CK["citekey[] — top-limit ranked matches"]
     end
 
     Q --> NFD --> MS --> CK
@@ -583,9 +622,30 @@ flowchart LR
 
 **Indexed fields:** `title`, `authorString`, `year`, `id`, `zoteroId`, `notesText`
 
-`notesText` is the aggregated note/highlight text (from the base `note` getter), truncated per entry (`Entry.MAX_NOTES_INDEX_CHARS`) to bound index size. It lets a query that appears only inside a Readwise highlight or BibTeX note still match the entry. **Boosts:** `title` ×2, `authorString` ×1.5, `notesText` ×0.5 — so title/author matches always rank above highlight-only matches.
+`notesText` is built by `Entry.noteExcerpt()` — the raw note segments are truncated (with headroom) BEFORE the entity-decoding regex pipeline runs, so indexing never regexes megabytes of highlights, and capped at `Entry.MAX_NOTES_INDEX_CHARS` to bound index size. It lets a query that appears only inside a Readwise highlight or BibTeX note still match the entry. **Boosts:** `title` ×2, `authorString` ×1.5, `notesText` ×0.5 — so title/author matches always rank above highlight-only matches.
 
-The index is rebuilt from scratch on every library load via `searchService.buildIndex(entries)`.
+### Index Build (off the main thread)
+
+Index/search options live in `src/search/search-index.ts` — the single source
+of truth shared by the main thread and the worker (MiniSearch requires
+identical options for `loadJSON`).
+
+```mermaid
+flowchart TD
+    BL["LibraryService.buildLibrary"] --> DOCS["entries.map(toSearchDocument)"]
+    DOCS --> WK{"Worker pool available?"}
+    WK -->|Yes| POST["post({kind:'build-index', documents})"]
+    POST --> WBUILD["Worker: MiniSearch.addAll\n→ JSON.stringify(index)"]
+    WBUILD --> LOAD["Main: MiniSearch.loadJSONAsync\n(chunked parse)"]
+    WK -->|"No / worker failed"| LOCAL["Local fallback:\naddAllAsync({chunkSize: 200})\nyields to the event loop"]
+    LOAD & LOCAL --> SWAP["Atomic swap: this.index = fresh\n(superseded builds are discarded\nvia a monotonic build version)"]
+```
+
+Searches keep hitting the previous index until the swap, so a rebuild never
+blanks or blocks the search modal. `LibraryService` additionally caches the
+sorted entry list per sort order (`getSortedEntries`), invalidated on each
+build — the modal's empty-query path is an O(1) slice instead of an
+O(N log N) sort per keystroke.
 
 ---
 
@@ -666,17 +726,17 @@ classDiagram
 
 ### Registered Actions
 
-| Action | ID | Palette | Menu | Editor | Type |
-|--------|----|---------|------|--------|------|
-| Open Literature Note | `open-literature-note` | Yes | Yes | No | SearchModal |
-| Insert Citation | `insert-markdown-citation` | Yes | No | Yes | SearchModal |
-| Insert Note Link | `insert-citation` | Yes | Yes | Yes | SearchModal |
-| Insert Note Content | `insert-literature-note-content` | Yes | No | Yes | SearchModal |
-| Insert Subsequent | `insert-subsequent-citation` | Yes | No | Yes | SearchModal |
-| Insert Multi-Citation | `insert-multiple-citations` | Yes | No | Yes | SearchModal |
-| Open Note at Cursor | `open-note-at-cursor` | Yes | No | Yes | Direct |
-| Refresh Library | `update-bib-data` | Yes | No | No | Direct |
-| Batch Update Notes | `batch-update-notes` | Yes | No | No | Direct |
+| Action                | ID                               | Palette | Menu | Editor | Type        |
+| --------------------- | -------------------------------- | ------- | ---- | ------ | ----------- |
+| Open Literature Note  | `open-literature-note`           | Yes     | Yes  | No     | SearchModal |
+| Insert Citation       | `insert-markdown-citation`       | Yes     | No   | Yes    | SearchModal |
+| Insert Note Link      | `insert-citation`                | Yes     | Yes  | Yes    | SearchModal |
+| Insert Note Content   | `insert-literature-note-content` | Yes     | No   | Yes    | SearchModal |
+| Insert Subsequent     | `insert-subsequent-citation`     | Yes     | No   | Yes    | SearchModal |
+| Insert Multi-Citation | `insert-multiple-citations`      | Yes     | No   | Yes    | SearchModal |
+| Open Note at Cursor   | `open-note-at-cursor`            | Yes     | No   | Yes    | Direct      |
+| Refresh Library       | `update-bib-data`                | Yes     | No   | No     | Direct      |
+| Batch Update Notes    | `batch-update-notes`             | Yes     | No   | No     | Direct      |
 
 ### ActionContext
 
@@ -697,19 +757,19 @@ interface ActionContext {
 
 Runtime context provided when action is triggered. Different surfaces provide different data:
 
-| Surface | `citekey` | `selectedText` | `entry` | `event` |
-|---------|-----------|----------------|---------|---------|
-| Command palette | — | from editor | — | — |
-| Context menu | extracted | — | — | — |
-| Search modal | — | — | selected entry | click/keyboard |
+| Surface         | `citekey` | `selectedText` | `entry`        | `event`        |
+| --------------- | --------- | -------------- | -------------- | -------------- |
+| Command palette | —         | from editor    | —              | —              |
+| Context menu    | extracted | —              | —              | —              |
+| Search modal    | —         | —              | selected entry | click/keyboard |
 
 ### Keyboard Modifiers in Search Modals
 
-| Action | Default | Shift | Ctrl | Tab | Shift+Tab |
-|--------|---------|-------|------|-----|-----------|
-| OpenNote | Open note | — | Open in new pane | Open in Zotero | Open PDF |
-| InsertCitation | Primary format | Alternative format | — | — | — |
-| InsertMulti | Accumulate | Finalize | — | — | — |
+| Action         | Default        | Shift              | Ctrl             | Tab            | Shift+Tab |
+| -------------- | -------------- | ------------------ | ---------------- | -------------- | --------- |
+| OpenNote       | Open note      | —                  | Open in new pane | Open in Zotero | Open PDF  |
+| InsertCitation | Primary format | Alternative format | —                | —              | —         |
+| InsertMulti    | Accumulate     | Finalize           | —                | —              | —         |
 
 ---
 
@@ -753,17 +813,17 @@ flowchart TD
 
 Built from `Entry` fields and extras:
 
-| Variable | Source | Example |
-|----------|--------|---------|
-| `citekey` | `entry.id` | `smith2020` |
-| `title` | `entry.title` | `Cognitive Architecture` |
-| `authorString` | `entry.authorString` | `Smith, J. and Doe, A.` |
-| `year` | `entry.year` | `2020` |
-| `date` | `entry.issuedDate` (ISO) | `2020-03-15` |
-| `DOI`, `ISBN`, `URL` | direct fields | |
-| `abstract`, `keywords` | direct fields | |
-| `entry` | `entry.toJSON()` | Full object for `{{entry.customField}}` |
-| `selectedText` | from editor selection | |
+| Variable               | Source                   | Example                                 |
+| ---------------------- | ------------------------ | --------------------------------------- |
+| `citekey`              | `entry.id`               | `smith2020`                             |
+| `title`                | `entry.title`            | `Cognitive Architecture`                |
+| `authorString`         | `entry.authorString`     | `Smith, J. and Doe, A.`                 |
+| `year`                 | `entry.year`             | `2020`                                  |
+| `date`                 | `entry.issuedDate` (ISO) | `2020-03-15`                            |
+| `DOI`, `ISBN`, `URL`   | direct fields            |                                         |
+| `abstract`, `keywords` | direct fields            |                                         |
+| `entry`                | `entry.toJSON()`         | Full object for `{{entry.customField}}` |
+| `selectedText`         | from editor selection    |                                         |
 
 ### Content Template Resolution
 
@@ -855,12 +915,12 @@ flowchart TD
 
 The 5-level lookup handles real-world scenarios:
 
-| Level             | Why needed                                                             |
-| ----------------- | ---------------------------------------------------------------------- |
-| Direct path       | Fast path for normal case                                              |
-| Case-insensitive  | macOS/Windows filesystems are case-insensitive                         |
-| Subfolder search  | User manually moved note to a subfolder                                |
-| Vault-wide        | User moved note completely outside literature folder                   |
+| Level             | Why needed                                                               |
+| ----------------- | ------------------------------------------------------------------------ |
+| Direct path       | Fast path for normal case                                                |
+| Case-insensitive  | macOS/Windows filesystems are case-insensitive                           |
+| Subfolder search  | User manually moved note to a subfolder                                  |
+| Vault-wide        | User moved note completely outside literature folder                     |
 | Frontmatter field | User renamed note; configurable field (e.g. `citekey`) via metadataCache |
 
 ### Auto-Creation Control
@@ -936,12 +996,12 @@ The plugin can import highlights and documents from Readwise as an additional ci
 
 ### Components
 
-| Component | Location | Depends on Obsidian? | Role |
-|-----------|----------|---------------------|------|
-| `ReadwiseApiClient` | `src/core/readwise/` | No | Pure HTTP client: auth, pagination, rate-limit retry |
-| `ReadwiseAdapter` | `src/core/adapters/` | No | Entry subclass mapping Readwise data to unified Entry interface |
-| `ReadwiseSource` | `src/sources/` | No | DataSource implementation — calls API, posts to worker pipeline |
-| `parseReadwise` | `src/core/parsing/` | No | Registered in `FORMAT_PARSERS` — deserializes JSON array of `ReadwiseEntryData` |
+| Component           | Location             | Depends on Obsidian? | Role                                                                            |
+| ------------------- | -------------------- | -------------------- | ------------------------------------------------------------------------------- |
+| `ReadwiseApiClient` | `src/core/readwise/` | No                   | Pure HTTP client: auth, pagination, rate-limit retry                            |
+| `ReadwiseAdapter`   | `src/core/adapters/` | No                   | Entry subclass mapping Readwise data to unified Entry interface                 |
+| `ReadwiseSource`    | `src/sources/`       | No                   | DataSource implementation — calls API, posts to worker pipeline                 |
+| `parseReadwise`     | `src/core/parsing/`  | No                   | Registered in `FORMAT_PARSERS` — deserializes JSON array of `ReadwiseEntryData` |
 
 ### Data Flow
 
@@ -989,10 +1049,10 @@ Readwise uses a single database format: `'readwise'`. The internal mode (`readwi
 
 ### Two Modes (internal to ReadwiseSource)
 
-| Mode | API | Citekey Format | Data Shape |
-|------|-----|---------------|------------|
+| Mode                  | API                           | Citekey Format      | Data Shape                   |
+| --------------------- | ----------------------------- | ------------------- | ---------------------------- |
 | `readwise-highlights` | v2 Export (`/api/v2/export/`) | `rw-{user_book_id}` | Books with nested highlights |
-| `reader-documents` | v3 Reader (`/api/v3/list/`) | `rd-{document_id}` | Documents with metadata |
+| `reader-documents`    | v3 Reader (`/api/v3/list/`)   | `rd-{document_id}`  | Documents with metadata      |
 
 ### Structured Highlights
 
@@ -1005,6 +1065,48 @@ Reader v3 returns highlights/notes as child documents (non-null `parent_id`). `m
 ### Import Filters
 
 A Readwise database may carry optional `readwiseFilters` (`categories`, `tags`, `minHighlights`, `readerLocations`) on its `DatabaseConfig`. `DataSourceDefinition` stays source-agnostic — it carries only a generic `databaseId`; `main.ts` resolves the per-database `readwiseFilters` from settings by that id (`resolveReadwiseFilters`) and injects them into `ReadwiseSource`. `applyReadwiseFilters()` (a pure function) filters the normalized entries at read time — after fetch/merge and on the cache-fallback path — so the offline cache stays full-fidelity and current filters always apply. `minHighlights` applies only to highlight-mode entries; `readerLocations` only to Reader documents.
+
+### Incremental Sync
+
+After the first full download, `load()` fetches only entries updated since the
+last clean sync and merges them into the cached full set:
+
+```mermaid
+flowchart TD
+    LOAD["load(signal, options)"] --> RC["readCachedState()\nv1: {version, lastSyncAt, entries}\nlegacy: bare array (no cursor)"]
+    RC --> INC{"cursor present\nAND entries cached\nAND NOT fullRefresh?"}
+    INC -->|Yes| DELTA["fetch with updatedAfter=lastSyncAt\n→ mergeReadwiseDelta(cache, delta)"]
+    INC -->|No| FULL["full fetch (both endpoints)"]
+    DELTA & FULL --> WR{"fetch fully clean?"}
+    WR -->|Yes| WRITE["write cache v1:\n{version:1, lastSyncAt: fetchStart, entries}"]
+    WR -->|No| SKIP["keep old cache + cursor\n(next sync re-merges the same delta —\nthe merge is idempotent)"]
+    WRITE & SKIP --> PIPE["applyReadwiseFilters → worker pipeline"]
+```
+
+Merge semantics (`src/core/readwise/readwise-delta.ts`, pure functions):
+
+- **v2 Export books** arrive with ONLY the changed highlights — highlight
+  items are merged per-id (delta wins), book metadata comes from the delta,
+  and the aggregated `highlightsText` is rebuilt from the merged items.
+- **Reader v3 documents** arrive whole and replace the cached entry.
+- **Reader children without their parent in the delta** are folded into the
+  cached parent's highlights; a child with no parent even in the cache stays
+  a standalone entry (logged), so no data is silently lost.
+- **Deletions are invisible** to `updatedAfter`. The manual "Refresh citation
+  database" command passes `fullRefresh: true` through
+  `ILibraryService.load` → `DataSourceLoadOptions`, forcing a full re-fetch.
+
+The cursor (`lastSyncAt`) is captured at fetch START (racing updates are
+re-delivered, merge is idempotent) and advances only together with a
+successful cache write, so the on-disk cursor always matches the on-disk base.
+
+### Periodic Sync Timer
+
+`watch()` uses a chained `setTimeout` that re-reads the sync interval from a
+provider function on every cycle — settings changes apply on the next cycle
+without recreating the source. Because the source now survives `syncSources`
+(fingerprint key), the timer and incremental continuity are no longer reset by
+unrelated library reloads.
 
 ### Cancellation & Cache
 
@@ -1032,70 +1134,88 @@ The `ReadwiseApiClient` handles HTTP 429 responses with automatic retry:
 
 All settings are validated on load via Zod. Invalid values fall back to defaults with a console warning.
 
-| Setting | Type | Default |
-|---------|------|---------|
-| `databases` | `DatabaseConfig[]` | `[]` |
-| `literatureNoteTitleTemplate` | `string` (min 1) | `@{{citekey}}` |
-| `literatureNoteFolder` | `string` | `Reading notes` |
-| `literatureNoteContentTemplatePath` | `string` | `''` |
-| `citationStylePreset` | `enum` | `custom` |
-| `markdownCitationTemplate` | `string` (min 1) | `[@{{citekey}}]` |
-| `alternativeMarkdownCitationTemplate` | `string` (min 1) | `@{{citekey}}` |
-| `referenceListSortOrder` | `enum` | `default` |
-| `autoCreateNoteOnCitation` | `boolean` | `false` |
-| `literatureNoteLinkDisplayTemplate` | `string` | `''` |
-| `disableAutomaticNoteCreation` | `boolean` | `false` |
-| `templateProfiles` | `TemplateProfile[]` | `[]` |
+| Setting                               | Type                | Default          |
+| ------------------------------------- | ------------------- | ---------------- |
+| `databases`                           | `DatabaseConfig[]`  | `[]`             |
+| `literatureNoteTitleTemplate`         | `string` (min 1)    | `@{{citekey}}`   |
+| `literatureNoteFolder`                | `string`            | `Reading notes`  |
+| `literatureNoteContentTemplatePath`   | `string`            | `''`             |
+| `citationStylePreset`                 | `enum`              | `custom`         |
+| `markdownCitationTemplate`            | `string` (min 1)    | `[@{{citekey}}]` |
+| `alternativeMarkdownCitationTemplate` | `string` (min 1)    | `@{{citekey}}`   |
+| `referenceListSortOrder`              | `enum`              | `default`        |
+| `autoCreateNoteOnCitation`            | `boolean`           | `false`          |
+| `literatureNoteLinkDisplayTemplate`   | `string`            | `''`             |
+| `disableAutomaticNoteCreation`        | `boolean`           | `false`          |
+| `templateProfiles`                    | `TemplateProfile[]` | `[]`             |
 
 ### Citation Style Presets
 
-| Preset | Primary | Alternative |
-|--------|---------|-------------|
-| `textcite` | `{{authorString}} ({{year}})` | `[@{{citekey}}]` |
+| Preset      | Primary                        | Alternative      |
+| ----------- | ------------------------------ | ---------------- |
+| `textcite`  | `{{authorString}} ({{year}})`  | `[@{{citekey}}]` |
 | `parencite` | `({{authorString}}, {{year}})` | `[@{{citekey}}]` |
-| `citekey` | `[@{{citekey}}]` | `@{{citekey}}` |
-| `custom` | User-defined | User-defined |
+| `citekey`   | `[@{{citekey}}]`               | `@{{citekey}}`   |
+| `custom`    | User-defined                   | User-defined     |
 
 ### Settings Tab Auto-Reload
 
 The settings UI triggers library reload on structural changes:
 
-| Change | Reload? | Mechanism |
-|--------|---------|-----------|
-| Database type | Immediate | `libraryService.load()` + Notice |
-| Database path | Debounced (2 s) | Only after successful path validation |
-| Remove database | Immediate | `libraryService.load()` |
-| Add database | No | New DB has empty path; reload on path set |
-| Rename database | No | Display-only; updates on next load |
+| Change          | Reload?         | Mechanism                                 |
+| --------------- | --------------- | ----------------------------------------- |
+| Database type   | Immediate       | `libraryService.load()` + Notice          |
+| Database path   | Debounced (2 s) | Only after successful path validation     |
+| Remove database | Immediate       | `libraryService.load()`                   |
+| Add database    | No              | New DB has empty path; reload on path set |
+| Rename database | No              | Display-only; updates on next load        |
 
 ---
 
 ## Worker Protocol
 
-Parsing runs in a Web Worker to avoid blocking the UI thread.
+Parsing and index building run in Web Workers to avoid blocking the UI thread.
 
 ```mermaid
 sequenceDiagram
-    participant DS as DataSource
-    participant WM as WorkerManager
+    participant DS as DataSource / SearchService
+    participant WM as WorkerManager (pool ≤3)
     participant W as Web Worker
 
-    DS->>WM: post({ databaseRaw, databaseType }, signal?)
-    Note over WM: Enqueue in FIFO queue<br/>(sequential processing)
+    DS->>WM: post({ kind, ... }, signal?, transfer?)
+    Note over WM: Assign to an idle worker<br/>(create lazily up to the cap,<br/>queue when saturated)
 
-    WM->>W: PromiseWorker.postMessage()
-    Note over W: loadEntries()<br/>BibTeX → @retorquere/bibtex-parser<br/>CSL-JSON → JSON.parse<br/>Hayagriva → YAML parser<br/>Readwise → JSON.parse
+    WM->>W: postMessage({ id, request }, transfer)
+    Note over W: kind 'parse':<br/>ArrayBuffer → TextDecoder (in worker)<br/>BibTeX → @retorquere/bibtex-parser<br/>CSL-JSON / Readwise → JSON.parse<br/>Hayagriva → YAML parser<br/>kind 'build-index':<br/>MiniSearch.addAll → JSON
 
-    W-->>WM: { entries: EntryData[], parseErrors: ParseErrorInfo[] }
+    W-->>WM: { id, result } | { id, error }
 
-    alt AbortSignal fired
+    alt AbortSignal fired mid-flight
+        Note over WM: worker.terminate() — REAL cancellation,<br/>worker replaced lazily
         WM-->>DS: reject DOMException('Aborted')
     else Success
         WM-->>DS: resolve WorkerResponse
     end
 ```
 
-**WorkerManager** processes tasks sequentially via a FIFO queue. This prevents concurrent heavy parsing. AbortSignal is checked before posting and after completion — in-flight operations can't be cancelled but their results are discarded.
+**WorkerManager** maintains a small pool (up to `min(3, cores − 1)` workers,
+created lazily). Multiple databases parse **in parallel** — load time is the
+maximum of the parses, not their sum. The RPC envelope (`{ id, request }` /
+`{ id, result | error }`) is hand-rolled deliberately: the previously used
+`promise-worker` library supports neither transferable objects, nor pooling,
+nor real cancellation. Aborting a task terminates its worker immediately,
+which both stops the CPU burn and prevents the old "stale parse blocks the
+queue" failure mode.
+
+**Transferables:** `LocalFileSource` passes the raw file `ArrayBuffer` as a
+transferable — the buffer moves zero-copy into the worker, which decodes it
+there. Large files are no longer decoded on the main thread nor
+structured-cloned as strings.
+
+**Task kinds:** `WorkerRequest` is a discriminated union — `parse` (raw
+database → `EntryData[]`) and `build-index` (`SearchDocument[]` → serialized
+MiniSearch JSON). Adding a kind extends the union and the `handleRequest`
+switch in `worker.ts`.
 
 ---
 
@@ -1223,13 +1343,13 @@ classDiagram
 
 ### Error Handling Patterns
 
-| Layer | Pattern | Example |
-|-------|---------|---------|
-| Template/Note ops | `Result<T, E>` | `render()` returns `Result<string, TemplateRenderError>` |
-| Actions | `try/catch` → notification | `platform.notifications.show(error.message)` |
-| Source loading | Partial failure | `loadAll()` surfaces a failed source as a synthetic result (empty entries + a parse error) so the failure reaches `state.parseErrors` and the UI, while other sources continue. Throws only when **every** source fails |
-| Library loading | Retry with backoff | Up to 5 attempts with exponential delay |
-| Worker | Queue + abort | AbortSignal discards stale results |
+| Layer             | Pattern                    | Example                                                                                                                                                                                                                 |
+| ----------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Template/Note ops | `Result<T, E>`             | `render()` returns `Result<string, TemplateRenderError>`                                                                                                                                                                |
+| Actions           | `try/catch` → notification | `platform.notifications.show(error.message)`                                                                                                                                                                            |
+| Source loading    | Partial failure            | `loadAll()` surfaces a failed source as a synthetic result (empty entries + a parse error) so the failure reaches `state.parseErrors` and the UI, while other sources continue. Throws only when **every** source fails |
+| Library loading   | Retry with backoff         | Up to 5 attempts with exponential delay                                                                                                                                                                                 |
+| Worker            | Queue + abort              | AbortSignal discards stale results                                                                                                                                                                                      |
 
 ---
 
@@ -1237,17 +1357,17 @@ classDiagram
 
 `src/container.ts` defines interfaces for all services, enabling testability and layer decoupling.
 
-| Interface | Key Methods |
-|-----------|-------------|
-| `ILibraryService` | `load()`, `dispose()`, `library`, `state`, `searchService`, `store` |
-| `ITemplateService` | `render()`, `getTitle()`, `getMarkdownCitation()`, `validate()`, `getTemplateVariables()` |
-| `INoteService` | `getPathForCitekey()`, `findExistingLiteratureNoteFile()`, `getOrCreateLiteratureNoteFile()`, `openLiteratureNote()` |
-| `ICitationService` | `getEntry()`, `getMarkdownCitation()`, `getTitleForCitekey()`, `getInitialContentForCitekey()` |
-| `IBatchNoteOrchestrator` | `preview(request)`, `execute(request, onProgress?)` |
-| `IContentTemplateResolver` | `resolve(noteKind?, entryType?)`, `migrateInlineToFile()`, `ensureDefaultTemplate()` |
-| `IActionRegistry` | `register()`, `getAll()`, `getById()`, `getContextMenuActions()`, `getCommandPaletteActions()` |
-| `ISourceManager` | `syncSources()`, `loadAll()`, `initWatchers()`, `dispose()` |
-| `ILibraryStore` | `subscribe(fn)`, `getState()` |
+| Interface                  | Key Methods                                                                                                          |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `ILibraryService`          | `load(isRetry?, options?)`, `getSortedEntries(order)`, `dispose()`, `library`, `state`, `searchService`, `store`     |
+| `ITemplateService`         | `render()`, `getTitle()`, `getMarkdownCitation()`, `validate()`, `getTemplateVariables()`                            |
+| `INoteService`             | `getPathForCitekey()`, `findExistingLiteratureNoteFile()`, `getOrCreateLiteratureNoteFile()`, `openLiteratureNote()` |
+| `ICitationService`         | `getEntry()`, `getMarkdownCitation()`, `getTitleForCitekey()`, `getInitialContentForCitekey()`                       |
+| `IBatchNoteOrchestrator`   | `preview(request)`, `execute(request, onProgress?)`                                                                  |
+| `IContentTemplateResolver` | `resolve(noteKind?, entryType?)`, `migrateInlineToFile()`, `ensureDefaultTemplate()`                                 |
+| `IActionRegistry`          | `register()`, `getAll()`, `getById()`, `getContextMenuActions()`, `getCommandPaletteActions()`                       |
+| `ISourceManager`           | `syncSources()`, `loadAll()`, `reloadSources(keys)`, `initWatchers((sourceKey) => void)`, `dispose()`                |
+| `ILibraryStore`            | `subscribe(fn)`, `getState()`                                                                                        |
 
 ---
 
@@ -1255,14 +1375,14 @@ classDiagram
 
 Direct `import ... from 'obsidian'` only in:
 
-| File | What it uses |
-|------|-------------|
-| `src/platform/obsidian-adapter.ts` | `App`, `Plugin`, `FileSystemAdapter`, `Vault`, `TFile`, `TFolder`, `MarkdownView`, `Notice`, `normalizePath` |
-| `src/sources/local-file-source.ts` | `FileSystemAdapter` |
-| `src/sources/vault-file-source.ts` | `Vault`, `TFile` |
-| `src/services/command-registry.ts` | `App`, `Plugin` |
-| `src/services/context-menu-handler.ts` | `App`, `Plugin`, `Menu`, `Editor` |
-| `src/ui/` | `Modal`, `SuggestModal`, `PluginSettingTab`, `Setting`, `Notice`, `debounce` |
-| `src/main.ts` | `Plugin` |
+| File                                   | What it uses                                                                                                 |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `src/platform/obsidian-adapter.ts`     | `App`, `Plugin`, `FileSystemAdapter`, `Vault`, `TFile`, `TFolder`, `MarkdownView`, `Notice`, `normalizePath` |
+| `src/sources/local-file-source.ts`     | `FileSystemAdapter`                                                                                          |
+| `src/sources/vault-file-source.ts`     | `Vault`, `TFile`                                                                                             |
+| `src/services/command-registry.ts`     | `App`, `Plugin`                                                                                              |
+| `src/services/context-menu-handler.ts` | `App`, `Plugin`, `Menu`, `Editor`                                                                            |
+| `src/ui/`                              | `Modal`, `SuggestModal`, `PluginSettingTab`, `Setting`, `Notice`, `debounce`                                 |
+| `src/main.ts`                          | `Plugin`                                                                                                     |
 
 **Never import `obsidian`:** `src/application/`, `src/library/`, `src/notes/`, `src/template/`, `src/core/`, `src/domain/`, `src/search/`, `src/infrastructure/`.

@@ -112,9 +112,10 @@ Manually reloads all configured citation databases.
 
 - **Command**: `Citations: Refresh citation database`
 - Useful when your bibliography file was updated outside Obsidian or when auto-reload didn't trigger
-- The plugin also watches for file changes and reloads automatically in most cases
+- The plugin also watches for file changes and reloads automatically in most cases. Automatic reloads are **incremental**: only the database whose file actually changed is re-read and re-parsed; the other databases are served from the previous load
+- For Readwise databases, this command forces a **full re-download** (bypassing incremental sync), which is the way to pick up items deleted in Readwise
 
-**When to use:** You generally don't need this — the plugin auto-reloads when the bibliography file changes on disk. Use manual refresh if: (1) you edited the `.bib`/`.json` file in another application and changes aren't appearing, or (2) you switched to a different exported file. For Readwise databases, data is synced automatically at a configurable interval (default: every 30 minutes), so manual refresh is rarely needed — use the **Sync now** button in the database card for an immediate fetch.
+**When to use:** You generally don't need this — the plugin auto-reloads when the bibliography file changes on disk. Use manual refresh if: (1) you edited the `.bib`/`.json` file in another application and changes aren't appearing, (2) you switched to a different exported file, or (3) you deleted items in Readwise and want them removed from the library. For routine Readwise updates, data is synced automatically and incrementally at a configurable interval (default: every 30 minutes) — use the **Sync now** button in the database card for an immediate fetch.
 
 ## Search Features
 
@@ -126,7 +127,7 @@ The search modal supports:
 - **Prefix matching** (typing "smith" matches "Smith2023", "Smithson2021", etc.)
 - **Configurable sort order**: default, by year (newest/oldest first), by author (A-Z)
 
-The search index is rebuilt each time the library loads. On a typical library (1000-5000 entries) this takes under 200ms.
+The search index is rebuilt each time the library loads. The build runs inside a background Web Worker (with an asynchronous chunked fallback), so even very large libraries never freeze the Obsidian UI; while a rebuild is in progress, searches keep working against the previous index. The search modal also stays fully usable during background library reloads, serving results from the last loaded data.
 
 ## Note Lookup
 
