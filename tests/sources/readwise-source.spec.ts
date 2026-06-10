@@ -1181,6 +1181,62 @@ describe('ReadwiseSource offline cache', () => {
     errSpy.mockRestore();
   });
 
+  it('treats a corrupt cache as no cache (throws on total outage)', async () => {
+    const fs = createMockFileSystem({
+      exists: jest.fn().mockResolvedValue(true),
+      readFile: jest.fn().mockResolvedValue('not-json{{{'),
+    });
+    const client = createMockClient({
+      fetchExportBooks: jest.fn().mockRejectedValue(new Error('down')),
+      fetchReaderDocuments: jest.fn().mockRejectedValue(new Error('down')),
+    } as unknown as Partial<ReadwiseApiClient>);
+    const worker = createMockWorkerManager();
+
+    const errSpy = jest.spyOn(console, 'error').mockImplementation();
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      '/cache.json',
+    );
+    // An unparseable cache must NOT degrade into an empty "success with
+    // warnings" (which would wipe the in-memory library) — it must fail.
+    await expect(source.load()).rejects.toThrow(
+      'Failed to load from Readwise API',
+    );
+    errSpy.mockRestore();
+  });
+
+  it('still uses a legitimately cached empty array on a total outage', async () => {
+    const fs = createMockFileSystem({
+      exists: jest.fn().mockResolvedValue(true),
+      readFile: jest.fn().mockResolvedValue('[]'),
+    });
+    const client = createMockClient({
+      fetchExportBooks: jest.fn().mockRejectedValue(new Error('down')),
+      fetchReaderDocuments: jest.fn().mockRejectedValue(new Error('down')),
+    } as unknown as Partial<ReadwiseApiClient>);
+    const worker = createMockWorkerManager();
+
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      '/cache.json',
+    );
+    const result = await source.load();
+    warnSpy.mockRestore();
+
+    // An empty array is valid cache content, not corruption.
+    expect(result.entries).toHaveLength(0);
+    expect(
+      result.parseErrors!.some((e) => e.message.includes('using cache')),
+    ).toBe(true);
+  });
+
   it('does not overwrite the cache on a partial fetch failure', async () => {
     const fs = createMockFileSystem();
     const client = createMockClient({

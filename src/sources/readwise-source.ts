@@ -363,11 +363,11 @@ export class ReadwiseSource implements DataSource {
       // (one endpoint down, the other returning data or a legitimate empty set)
       // is NOT treated as an outage.
       if (allFailed) {
-        const cached = await this.readCache();
-        if (cached) {
+        const cachedEntries = await this.readCachedEntries();
+        if (cachedEntries) {
           console.warn('ReadwiseSource: API unavailable, using cached data');
           return await this.runPipeline(
-            this.parseCachedEntries(cached),
+            cachedEntries,
             [
               {
                 message: `Readwise API unavailable (using cache): ${fetchErrors[0].message}`,
@@ -400,11 +400,11 @@ export class ReadwiseSource implements DataSource {
       }
 
       // Unexpected processing failure (e.g. worker error) — last-resort cache.
-      const cached = await this.readCache();
-      if (cached) {
+      const cachedEntries = await this.readCachedEntries();
+      if (cachedEntries) {
         console.warn('ReadwiseSource: load failed, using cached data');
         return await this.runPipeline(
-          this.parseCachedEntries(cached),
+          cachedEntries,
           [
             {
               message: `Readwise load failed (using cache): ${
@@ -445,13 +445,21 @@ export class ReadwiseSource implements DataSource {
     return this.processRaw(JSON.stringify(filtered), fetchErrors, signal);
   }
 
-  /** Safely parse cached entry-data JSON; returns [] on corruption. */
-  private parseCachedEntries(raw: string): ReadwiseEntryData[] {
+  /**
+   * Read and parse the cache file. Returns `null` when the cache is missing
+   * OR corrupt (unparseable / not an array) — a corrupt cache must behave
+   * exactly like no cache, so an outage still surfaces as a failure instead
+   * of silently replacing the library with an empty "success". A legitimately
+   * cached empty array (`[]`) is still a valid fallback.
+   */
+  private async readCachedEntries(): Promise<ReadwiseEntryData[] | null> {
+    const raw = await this.readCache();
+    if (raw === null) return null;
     try {
       const parsed: unknown = JSON.parse(raw);
-      return Array.isArray(parsed) ? (parsed as ReadwiseEntryData[]) : [];
+      return Array.isArray(parsed) ? (parsed as ReadwiseEntryData[]) : null;
     } catch {
-      return [];
+      return null;
     }
   }
 
