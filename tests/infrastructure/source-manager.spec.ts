@@ -273,24 +273,128 @@ describe('SourceManager', () => {
       await manager.loadAll(controller.signal);
 
       const source = factory.create.mock.results[0].value;
-      expect(source.load).toHaveBeenCalledWith(controller.signal);
+      expect(source.load).toHaveBeenCalledWith(controller.signal, undefined);
     });
   });
 
-  describe('API-source recreation', () => {
-    it('recreates (and disposes) a Readwise source on every sync', () => {
+  describe('API-source lifecycle (fingerprint key)', () => {
+    it('preserves a Readwise source when the config is unchanged', () => {
       const factory = makeMockFactory();
       const manager = new SourceManager(factory as never);
 
       manager.syncSources([makeDb('RW', 'token', 'readwise', 'db-rw')]);
       const first = factory.create.mock.results[0].value;
 
-      // Re-sync with the SAME config: API sources are force-recreated because
-      // the token lives in db.path and may have changed.
+      // Re-sync with the SAME config: the source must survive so its polling
+      // timer and incremental-sync state are not reset on every reload.
       manager.syncSources([makeDb('RW', 'token', 'readwise', 'db-rw')]);
+
+      expect(first.dispose).not.toHaveBeenCalled();
+      expect(factory.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('recreates a Readwise source when the token changes', () => {
+      const factory = makeMockFactory();
+      const manager = new SourceManager(factory as never);
+
+      manager.syncSources([makeDb('RW', 'old-token', 'readwise', 'db-rw')]);
+      const first = factory.create.mock.results[0].value;
+
+      manager.syncSources([makeDb('RW', 'new-token', 'readwise', 'db-rw')]);
 
       expect(first.dispose).toHaveBeenCalled();
       expect(factory.create).toHaveBeenCalledTimes(2);
+    });
+
+    it('recreates a Readwise source when filters change', () => {
+      const factory = makeMockFactory();
+      const manager = new SourceManager(factory as never);
+
+      const db = makeDb('RW', 'token', 'readwise', 'db-rw');
+      manager.syncSources([db]);
+      const first = factory.create.mock.results[0].value;
+
+      manager.syncSources([
+        { ...db, readwiseFilters: { categories: ['books'] } },
+      ]);
+
+      expect(first.dispose).toHaveBeenCalled();
+      expect(factory.create).toHaveBeenCalledTimes(2);
+    });
+
+    it('never leaks the token into the source key', () => {
+      const factory = makeMockFactory();
+      const manager = new SourceManager(factory as never);
+
+      manager.syncSources([
+        makeDb('RW', 'super-secret-token', 'readwise', 'db-rw'),
+      ]);
+
+      const sourceId = factory.create.mock.calls[0][1] as string;
+      expect(sourceId).not.toContain('super-secret-token');
+    });
+  });
+
+  describe('reloadSources (incremental)', () => {
+    it('reloads only the requested source and reuses cached results', async () => {
+      const factory = makeMockFactory();
+      const manager = new SourceManager(factory as never);
+      manager.syncSources([
+        makeDb('A', '/a.bib', 'biblatex', 'db-a'),
+        makeDb('B', '/b.bib', 'biblatex', 'db-b'),
+      ]);
+
+      // Initial full load populates the per-source result cache.
+      await manager.loadAll();
+      const sourceA = factory.create.mock.results[0].value;
+      const sourceB = factory.create.mock.results[1].value;
+      expect(sourceA.load).toHaveBeenCalledTimes(1);
+      expect(sourceB.load).toHaveBeenCalledTimes(1);
+
+      const keyA = factory.create.mock.calls[0][1] as string;
+      const results = await manager.reloadSources([keyA]);
+
+      // Source A re-loaded, source B served from cache.
+      expect(sourceA.load).toHaveBeenCalledTimes(2);
+      expect(sourceB.load).toHaveBeenCalledTimes(1);
+      expect(results).toHaveLength(2);
+      expect(results.map((r) => r.databaseName).sort()).toEqual(['A', 'B']);
+    });
+
+    it('loads sources that have never produced a result', async () => {
+      const factory = makeMockFactory();
+      const manager = new SourceManager(factory as never);
+      manager.syncSources([makeDb('A', '/a.bib', 'biblatex', 'db-a')]);
+
+      // No prior loadAll: the source has no cached result, so an incremental
+      // reload of a DIFFERENT key must still load it.
+      const results = await manager.reloadSources(['no-such-key']);
+
+      const sourceA = factory.create.mock.results[0].value;
+      expect(sourceA.load).toHaveBeenCalledTimes(1);
+      expect(results).toHaveLength(1);
+    });
+
+    it('surfaces a failed incremental reload as a synthetic result', async () => {
+      const factory = makeMockFactory();
+      const manager = new SourceManager(factory as never);
+      manager.syncSources([
+        makeDb('OK', '/ok.bib', 'biblatex', 'db-ok'),
+        makeDb('Fail', '/fail.bib', 'biblatex', 'db-fail'),
+      ]);
+      await manager.loadAll();
+
+      const failingSource = factory.create.mock.results[1].value;
+      failingSource.load.mockRejectedValueOnce(new Error('boom'));
+      const failKey = factory.create.mock.calls[1][1] as string;
+
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      const results = await manager.reloadSources([failKey]);
+      consoleSpy.mockRestore();
+
+      const failed = results.find((r) => r.databaseName === 'Fail');
+      expect(failed!.entries).toEqual([]);
+      expect(failed!.parseErrors[0].message).toContain('boom');
     });
   });
 
@@ -305,6 +409,23 @@ describe('SourceManager', () => {
 
       const source = factory.create.mock.results[0].value;
       expect(source.watch).toHaveBeenCalled();
+    });
+
+    it('passes the stable source key to the onChange callback', () => {
+      const factory = makeMockFactory();
+      const manager = new SourceManager(factory as never);
+      manager.syncSources([makeDb('Zotero', '/z.bib', 'biblatex', 'db-z')]);
+
+      const onChange = jest.fn();
+      manager.initWatchers(onChange);
+
+      // Trigger the watch callback the source received.
+      const source = factory.create.mock.results[0].value;
+      const watchCallback = source.watch.mock.calls[0][0] as () => void;
+      watchCallback();
+
+      const expectedKey = factory.create.mock.calls[0][1] as string;
+      expect(onChange).toHaveBeenCalledWith(expectedKey);
     });
   });
 

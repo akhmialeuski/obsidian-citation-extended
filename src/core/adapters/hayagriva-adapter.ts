@@ -104,18 +104,33 @@ export class HayagrivaAdapter extends Entry {
     return this.data.abstract;
   }
 
+  /** Memoized structured authors — the per-call map is computed only once. */
+  private _authorCache?: Author[] | null;
+
   get author(): Author[] | undefined {
-    const authors = this.data.author;
-    if (!authors || !Array.isArray(authors)) return undefined;
-    return authors.map(toAuthor);
+    if (this._authorCache === undefined) {
+      const authors = this.data.author;
+      this._authorCache =
+        !authors || !Array.isArray(authors) ? null : authors.map(toAuthor);
+    }
+    return this._authorCache ?? undefined;
   }
 
+  /** Memoized author string — the map+join is computed only once. */
+  private _authorStringCache?: string | null;
+
   get authorString(): string | null {
-    const authors = this.author;
-    if (!authors) return null;
-    return authors
-      .map((a) => a.literal || `${a.given || ''} ${a.family || ''}`.trim())
-      .join(', ');
+    if (this._authorStringCache === undefined) {
+      const authors = this.author;
+      this._authorStringCache = !authors
+        ? null
+        : authors
+            .map(
+              (a) => a.literal || `${a.given || ''} ${a.family || ''}`.trim(),
+            )
+            .join(', ');
+    }
+    return this._authorStringCache;
   }
 
   get containerTitle(): string | undefined {
@@ -130,9 +145,14 @@ export class HayagrivaAdapter extends Entry {
     return this.data.isbn;
   }
 
+  /** Memoized issued date — Date construction runs at most once per entry. */
+  private _issuedDateCache?: Date | null;
+
   get issuedDate(): Date | null {
-    if (!this.data.date) return null;
-    return toDate(this.data.date);
+    if (this._issuedDateCache === undefined) {
+      this._issuedDateCache = this.data.date ? toDate(this.data.date) : null;
+    }
+    return this._issuedDateCache;
   }
 
   get page(): string | undefined {

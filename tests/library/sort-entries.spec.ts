@@ -1,7 +1,7 @@
 import {
   sortEntries,
   ReferenceListSortOrder,
-} from '../../src/ui/modals/sort-entries';
+} from '../../src/library/sort-entries';
 import { Entry } from '../../src/core';
 
 /**

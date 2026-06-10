@@ -36,35 +36,35 @@ describe('@article with BibLaTeX fields (#60)', () => {
     entry = new EntryBibLaTeXAdapter(result.entries[0] as EntryDataBibLaTeX);
   });
 
-  it('parses the entry without errors', () => {
+  it('parses the entry without errors', async () => {
     const result = loadEntries(biblatexArticle, 'biblatex');
     expect(result.entries).toHaveLength(1);
     expect(result.parseErrors).toHaveLength(0);
   });
 
-  it('preserves citekey with hyphens', () => {
+  it('preserves citekey with hyphens', async () => {
     expect(entry.citekey).toBe('merton_1938_social-structure-anomie');
   });
 
-  it('sets type to article', () => {
+  it('sets type to article', async () => {
     expect(entry.type).toBe('article');
   });
 
-  it('resolves containerTitle from journaltitle', () => {
+  it('resolves containerTitle from journaltitle', async () => {
     expect(entry.containerTitle).toBe('American Sociological Review');
   });
 
-  it('derives year from date field', () => {
+  it('derives year from date field', async () => {
     expect(entry.year).toBe(1938);
   });
 
-  it('produces valid issuedDate from partial date', () => {
+  it('produces valid issuedDate from partial date', async () => {
     expect(entry.issuedDate).toBeInstanceOf(Date);
     expect(entry.issuedDate!.getUTCFullYear()).toBe(1938);
     expect(entry.issuedDate!.getUTCMonth()).toBe(9); // October = 9
   });
 
-  it('maps remaining fields correctly', () => {
+  it('maps remaining fields correctly', async () => {
     expect(entry.title).toBe('Social structure and anomie');
     expect(entry.authorString).toBe('Robert K. Merton');
     expect(entry.volume).toBe('3');
@@ -72,9 +72,9 @@ describe('@article with BibLaTeX fields (#60)', () => {
     expect(entry.DOI).toBe('10.2307/2084686');
   });
 
-  it('is discoverable by search', () => {
+  it('is discoverable by search', async () => {
     const searchService = new SearchService();
-    searchService.buildIndex([entry]);
+    await searchService.buildIndex([entry]);
 
     const byCitekey = searchService.search(
       'merton_1938_social-structure-anomie',
@@ -85,7 +85,7 @@ describe('@article with BibLaTeX fields (#60)', () => {
     expect(byAuthor).toContain('merton_1938_social-structure-anomie');
   });
 
-  it('produces complete template context', () => {
+  it('produces complete template context', async () => {
     const ctx = entry.toTemplateContext();
     expect(ctx.year).toBe('1938');
     expect(ctx.containerTitle).toBe('American Sociological Review');
@@ -93,7 +93,7 @@ describe('@article with BibLaTeX fields (#60)', () => {
     expect(ctx.citekey).toBe('merton_1938_social-structure-anomie');
   });
 
-  it('handles @article and @book identically with BibLaTeX fields', () => {
+  it('handles @article and @book identically with BibLaTeX fields', async () => {
     const bookVariant = biblatexArticle.replace('@Article', '@Book');
     const articleResult = loadEntries(biblatexArticle, 'biblatex');
     const bookResult = loadEntries(bookVariant, 'biblatex');

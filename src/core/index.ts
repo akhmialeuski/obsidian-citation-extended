@@ -12,10 +12,18 @@ export {
   resolveReadwiseFilters,
 } from './types/database';
 export type { TemplateContext } from './types/template-context';
+export { WORKER_TASK_KINDS } from './types/worker-protocol';
 export type {
   ParseErrorInfo,
   WorkerRequest,
   WorkerResponse,
+  WorkerTaskKind,
+  ParseWorkerRequest,
+  ParseWorkerResponse,
+  BuildIndexWorkerRequest,
+  BuildIndexWorkerResponse,
+  WorkerRpcRequest,
+  WorkerRpcResponse,
 } from './types/worker-protocol';
 
 // Adapters
@@ -40,6 +48,15 @@ export {
   ReadwiseApiClient,
   ReadwiseApiError,
 } from './readwise/readwise-api-client';
+
+// Readwise incremental sync (delta merge)
+export {
+  mergeReadwiseDelta,
+  isMeaningfulHighlight,
+  readerChildToItem,
+  toEntryDataFromReader,
+} from './readwise/readwise-delta';
+export type { ReadwiseDeltaInput } from './readwise/readwise-delta';
 export type {
   HttpResponse,
   HttpGetFn,

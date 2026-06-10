@@ -45,7 +45,17 @@ export class EntryCSLAdapter extends Entry {
   _compositeCitekey?: string;
   private _id?: string;
 
+  /** Memoized year — `null` marks "computed, no value". */
+  private _yearOverrideCache?: number | null;
+
   get year(): number | undefined {
+    if (this._yearOverrideCache === undefined) {
+      this._yearOverrideCache = this.computeYear() ?? null;
+    }
+    return this._yearOverrideCache ?? undefined;
+  }
+
+  private computeYear(): number | undefined {
     const year = this.data.issued?.['date-parts']?.[0]?.[0];
     if (year !== undefined && year !== null) {
       const y = typeof year === 'string' ? parseInt(year) : year;
@@ -78,7 +88,17 @@ export class EntryCSLAdapter extends Entry {
     return this.data.author;
   }
 
+  /** Memoized author string — the map+join is computed only once. */
+  private _authorStringCache?: string | null;
+
   get authorString(): string | null {
+    if (this._authorStringCache === undefined) {
+      this._authorStringCache = this.computeAuthorString();
+    }
+    return this._authorStringCache;
+  }
+
+  private computeAuthorString(): string | null {
     if (this.data.author) {
       return this.data.author
         .map((a) => a.literal || `${a.given || ''} ${a.family || ''}`.trim())
@@ -117,7 +137,17 @@ export class EntryCSLAdapter extends Entry {
     return this.data.source;
   }
 
+  /** Memoized issued date — Date construction runs at most once per entry. */
+  private _issuedDateCache?: Date | null;
+
   get issuedDate(): Date | null {
+    if (this._issuedDateCache === undefined) {
+      this._issuedDateCache = this.computeIssuedDate();
+    }
+    return this._issuedDateCache;
+  }
+
+  private computeIssuedDate(): Date | null {
     if (
       !(
         this.data.issued &&

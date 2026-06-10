@@ -1,6 +1,6 @@
 import { Vault, EventRef, TFile } from 'obsidian';
 import { DataSource, DataSourceLoadResult } from '../data-source';
-import { DatabaseType, convertToEntries } from '../core';
+import { DatabaseType, convertToEntries, WORKER_TASK_KINDS } from '../core';
 import { WorkerManager } from '../util';
 
 /**
@@ -39,6 +39,7 @@ export class VaultFileSource implements DataSource {
 
       const result = await this.loadWorker.post(
         {
+          kind: WORKER_TASK_KINDS.Parse,
           databaseRaw: content,
           databaseType: this.format,
         },

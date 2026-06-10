@@ -800,16 +800,24 @@ describe('LibraryService', () => {
       await service.load();
       expect(watchCallback).toBeDefined();
 
-      // Set up spy BEFORE triggering the watch callback
-      const loadSpy = jest.spyOn(service, 'load');
+      // Watcher events now trigger an INCREMENTAL reload (only the changed
+      // source), which is observable as a Loading state transition after the
+      // debounce window — service.load() itself is no longer called.
+      const sourceLoad = (
+        (LocalFileSource as jest.Mock).mock.results.at(-1)!.value as {
+          load: jest.Mock;
+        }
+      ).load;
+      const loadCallsBefore = sourceLoad.mock.calls.length;
 
       // Trigger the watch callback
       watchCallback!();
 
-      // Load should be scheduled with debounce (1000ms)
+      // Reload should be scheduled with debounce (1000ms)
       jest.advanceTimersByTime(1000);
 
-      expect(loadSpy).toHaveBeenCalled();
+      expect(service.state.status).toBe(LoadingStatus.Loading);
+      expect(sourceLoad.mock.calls.length).toBe(loadCallsBefore + 1);
 
       service.dispose();
       jest.useRealTimers();
@@ -1101,5 +1109,103 @@ describe('LibraryService', () => {
       await service.load();
       expect(service.state.parseErrors).toEqual([]);
     });
+  });
+
+  // ---- getSortedEntries (per-load cache) ----------------------------------
+
+  describe('getSortedEntries()', () => {
+    it('returns an empty array before any load', () => {
+      expect(service.getSortedEntries('year-desc')).toEqual([]);
+    });
+
+    it('returns entries sorted by the requested order', async () => {
+      (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
+        id,
+        load: jest.fn().mockResolvedValue({
+          sourceId: id,
+          entries: [
+            new TestEntry({ id: 'old', issuedDate: new Date('2001-01-01') }),
+            new TestEntry({ id: 'new', issuedDate: new Date('2021-01-01') }),
+          ],
+          modifiedAt: new Date(),
+        }),
+        watch: jest.fn(),
+        dispose: jest.fn(),
+      }));
+
+      await service.load();
+
+      const sorted = service.getSortedEntries('year-desc');
+      expect(sorted.map((e) => e.id)).toEqual(['new', 'old']);
+    });
+
+    it('caches the sorted array between calls (same reference)', async () => {
+      await service.load();
+
+      const first = service.getSortedEntries('year-desc');
+      const second = service.getSortedEntries('year-desc');
+      expect(second).toBe(first);
+    });
+
+    it('invalidates the cache after a reload', async () => {
+      await service.load();
+      const first = service.getSortedEntries('year-desc');
+
+      await service.load();
+      const second = service.getSortedEntries('year-desc');
+      expect(second).not.toBe(first);
+    });
+  });
+
+  // ---- incremental reload via per-source watcher events --------------------
+
+  describe('incremental reload', () => {
+    it('reloads only the changed source on a watcher event', async () => {
+      settings.databases = [
+        { id: 'db-1', name: 'DB1', path: 'db1.bib', type: 'biblatex' },
+        { id: 'db-2', name: 'DB2', path: 'db2.bib', type: 'biblatex' },
+      ];
+
+      const loadCounts = new Map<string, number>();
+      (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
+        id,
+        load: jest.fn().mockImplementation(() => {
+          loadCounts.set(id, (loadCounts.get(id) ?? 0) + 1);
+          return Promise.resolve({
+            sourceId: id,
+            entries: [new TestEntry({ id: `entry-${id}` })],
+            modifiedAt: new Date(),
+          });
+        }),
+        watch: jest.fn(),
+        dispose: jest.fn(),
+      }));
+      // Drop instances recorded by earlier tests so mock.results below
+      // reflects only the two sources created by THIS load.
+      (LocalFileSource as jest.Mock).mockClear();
+
+      await service.load();
+
+      const sources = (LocalFileSource as jest.Mock).mock.results.map(
+        (r) => r.value as { id: string; watch: jest.Mock },
+      );
+      expect(sources).toHaveLength(2);
+      for (const id of loadCounts.keys()) {
+        expect(loadCounts.get(id)).toBe(1);
+      }
+
+      // Fire the watcher of the FIRST source only and wait out the debounce.
+      const watchCallback = sources[0].watch.mock.calls[0][0] as () => void;
+      watchCallback();
+      await new Promise((resolve) => setTimeout(resolve, 1300));
+
+      // The changed source reloaded; the other one was served from cache.
+      expect(loadCounts.get(sources[0].id)).toBe(2);
+      expect(loadCounts.get(sources[1].id)).toBe(1);
+
+      // The merged library still contains entries from BOTH sources.
+      expect(service.state.status).toBe(LoadingStatus.Success);
+      expect(service.library?.size).toBe(2);
+    }, 15_000);
   });
 });

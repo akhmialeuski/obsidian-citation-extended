@@ -100,10 +100,19 @@ export abstract class Entry {
   public abstract eprinttype?: string | null;
 
   protected _year?: string;
+  /**
+   * Memoized publication year. `null` marks "computed, no value" so the
+   * (possibly expensive) `issuedDate` derivation runs at most once — sort
+   * comparators call this getter O(N log N) times.
+   */
+  private _yearCache?: number | null;
   public get year(): number | undefined {
-    return this._year
-      ? parseInt(this._year)
-      : this.issuedDate?.getUTCFullYear();
+    if (this._yearCache === undefined) {
+      this._yearCache = this._year
+        ? parseInt(this._year)
+        : (this.issuedDate?.getUTCFullYear() ?? null);
+    }
+    return this._yearCache ?? undefined;
   }
 
   protected _note?: string[];
@@ -139,21 +148,25 @@ export abstract class Entry {
     );
   }
 
+  /**
+   * Decode a single note segment: convert parser-produced HTML anchors to
+   * Markdown links, then decode HTML entities.
+   */
+  private static decodeNoteSegment(el: string): string {
+    // Convert HTML anchor tags from bibtex-parser to Markdown links.
+    // Parser may output <a href> (from \href) or inverted-punctuation variants (from raw HTML).
+    el = el.replace(/<a href="([^"]+)">([^<]+)<\/a>/g, '[$2]($1)');
+    el = el.replace(
+      /\u00a1a href="([^"]+)"\u00bf([^\u00a1]*)\u00a1\/a\u00bf/g,
+      '[$2]($1)',
+    );
+    // Decode HTML entities that bibtex-parser may produce
+    return Entry.decodeHtmlEntities(el);
+  }
+
   public get note(): string {
     return (
-      this._note
-        ?.map((el) => {
-          // Convert HTML anchor tags from bibtex-parser to Markdown links.
-          // Parser may output <a href> (from \href) or inverted-punctuation variants (from raw HTML).
-          el = el.replace(/<a href="([^"]+)">([^<]+)<\/a>/g, '[$2]($1)');
-          el = el.replace(
-            /\u00a1a href="([^"]+)"\u00bf([^\u00a1]*)\u00a1\/a\u00bf/g,
-            '[$2]($1)',
-          );
-          // Decode HTML entities that bibtex-parser may produce
-          return Entry.decodeHtmlEntities(el);
-        })
-        .join('\n\n') || ''
+      this._note?.map((el) => Entry.decodeNoteSegment(el)).join('\n\n') || ''
     );
   }
 
@@ -227,6 +240,27 @@ export abstract class Entry {
   private static readonly MAX_NOTES_INDEX_CHARS = 5000;
 
   /**
+   * Build the truncated note text used for search indexing WITHOUT decoding
+   * the full note. Raw segments are concatenated only up to twice the limit
+   * (headroom for decode-time shrinkage), decoded, then truncated — so the
+   * regex pipeline never runs over megabytes of highlights when only the
+   * first few KB end up in the index. The cut may fall mid-link at the
+   * boundary; that is acceptable for index-only text (the `note` getter
+   * still returns the fully decoded text for templates).
+   */
+  protected noteExcerpt(limit: number): string {
+    if (!this._note || this._note.length === 0) return '';
+    const rawLimit = limit * 2;
+    let raw = '';
+    for (const el of this._note) {
+      if (raw.length > 0) raw += '\n\n';
+      raw += el;
+      if (raw.length >= rawLimit) break;
+    }
+    return Entry.decodeNoteSegment(raw.slice(0, rawLimit)).slice(0, limit);
+  }
+
+  /**
    * Build a flat document suitable for full-text search indexing.
    * Contains only string fields that the search engine needs.
    */
@@ -237,9 +271,9 @@ export abstract class Entry {
       authorString: this.authorString || '',
       year: this.yearString(),
       zoteroId: this.zoteroId || '',
-      // Truncate to bound index growth; the full note remains available via
+      // Truncated to bound index growth; the full note remains available via
       // the `note` getter for templates.
-      notesText: this.note.slice(0, Entry.MAX_NOTES_INDEX_CHARS),
+      notesText: this.noteExcerpt(Entry.MAX_NOTES_INDEX_CHARS),
     };
   }
 

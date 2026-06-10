@@ -97,6 +97,7 @@ export default tseslint.config(
             'coverage/**',
             'node_modules/**',
             '**/*.config.mjs',
+            '**/*.config.cjs',
             'docs/assets/**',
             '.agent/**',
             '.claude/**',

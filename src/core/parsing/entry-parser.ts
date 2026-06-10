@@ -3,7 +3,7 @@ import { latex as latexToUnicode } from 'unicode2latex';
 
 import { DatabaseType, DATABASE_FORMATS } from '../types/database';
 import { EntryData } from '../adapters/biblatex-adapter';
-import { ParseErrorInfo, WorkerResponse } from '../types/worker-protocol';
+import { ParseErrorInfo, ParseWorkerResponse } from '../types/worker-protocol';
 import { parseHayagrivaYaml } from './hayagriva-parser';
 
 /**
@@ -166,7 +166,7 @@ const FORMAT_PARSERS: Record<DatabaseType, (raw: string) => ParseResult> = {
 export function loadEntries(
   databaseRaw: string,
   databaseType: DatabaseType,
-): WorkerResponse {
+): ParseWorkerResponse {
   const parser = FORMAT_PARSERS[databaseType];
   if (!parser) {
     return {

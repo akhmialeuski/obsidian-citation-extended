@@ -1,6 +1,8 @@
 import { Entry, TemplateContext, Result, TemplateRenderError } from './core';
 import { Library } from './core';
 import { LibraryState } from './library/library-state';
+import type { LibraryLoadOptions } from './library/library.service';
+import type { ReferenceListSortOrder } from './library/sort-entries';
 import type { IVaultFile } from './platform/platform-adapter';
 import { SearchService } from './search/search.service';
 import {
@@ -70,10 +72,14 @@ export interface ILibraryService {
   readonly introspectionService: IntrospectionService;
   readonly store: ILibraryStore;
 
-  load(isRetry?: boolean): Promise<Library | null>;
+  load(
+    isRetry?: boolean,
+    options?: LibraryLoadOptions,
+  ): Promise<Library | null>;
   dispose(): void;
   resolveLibraryPath(rawPath: string): string;
   getTemplateVariables(): VariableDefinition[];
+  getSortedEntries(order: ReferenceListSortOrder): readonly Entry[];
   initWatcher(): void;
 }
 

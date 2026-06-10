@@ -1,24 +1,20 @@
 import MiniSearch from 'minisearch';
-import { Entry } from '../core';
+import { Entry, WORKER_TASK_KINDS } from '../core';
+import type { BuildIndexWorkerResponse } from '../core';
+import type { WorkerManager } from '../util';
+import { createSearchIndex, loadSearchIndexJson } from './search-index';
 
-// Search field boost weights. Identifier fields (year/id/zoteroId) keep the
-// default weight of 1; note/highlight text is weighted below them so a
-// title or author match always outranks a note-only match.
-const TITLE_BOOST = 2;
-const AUTHOR_BOOST = 1.5;
-const NOTES_BOOST = 0.5;
+export { normalizeTerm } from './search-index';
+
+/** Default maximum number of citekeys returned by {@link SearchService.search}. */
+export const DEFAULT_SEARCH_RESULT_LIMIT = 50;
 
 /**
- * Strip diacritical marks (accents) and convert to lowercase.
- * Uses Unicode NFD decomposition to separate base characters from
- * combining marks, then removes the combining marks.
+ * Number of documents indexed per event-loop slice during an async local
+ * build. Small enough to keep the main thread responsive, large enough to
+ * keep the total build time close to a synchronous build.
  */
-export function normalizeTerm(term: string): string {
-  return term
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
-}
+const INDEX_CHUNK_SIZE = 200;
 
 /**
  * Full-text search over bibliography entries powered by MiniSearch.
@@ -26,49 +22,84 @@ export function normalizeTerm(term: string): string {
  */
 export class SearchService {
   private index: MiniSearch;
+  /**
+   * Monotonic build counter. An in-flight async build compares its captured
+   * version against the current one before swapping the index in, so a newer
+   * build always supersedes an older one (the stale result is discarded).
+   */
+  private buildVersion = 0;
   private isIndexing = false;
 
-  constructor() {
-    // Handle ESM/CJS interop: some bundlers nest the constructor under `.default`.
-    const MiniSearchConstructor: typeof MiniSearch =
-      (MiniSearch as unknown as { default?: typeof MiniSearch }).default ??
-      MiniSearch;
-    this.index = new MiniSearchConstructor({
-      fields: ['title', 'authorString', 'year', 'id', 'zoteroId', 'notesText'],
-      storeFields: ['id'],
-      // Normalize diacritics at index time so accented characters match their base forms
-      processTerm: (term: string) => normalizeTerm(term),
-      searchOptions: {
-        // notesText is weighted below identifier fields so a title/author match
-        // always outranks a match found only inside highlight/note text.
-        boost: {
-          title: TITLE_BOOST,
-          authorString: AUTHOR_BOOST,
-          notesText: NOTES_BOOST,
-        },
-        fuzzy: 0.2,
-        prefix: true,
-        // Normalize diacritics at search time to match indexed terms
-        processTerm: (term: string) => normalizeTerm(term),
-      },
-    });
+  /**
+   * @param indexWorker  Optional worker pool. When provided, index builds run
+   *                     inside a Web Worker (tokenization off the main
+   *                     thread); without it, builds run locally in async
+   *                     chunks. Both paths swap the finished index in
+   *                     atomically.
+   */
+  constructor(private indexWorker?: WorkerManager) {
+    this.index = createSearchIndex();
   }
 
-  public buildIndex(entries: Entry[]): void {
+  /**
+   * Build the search index from the given entries.
+   *
+   * The build happens into a fresh MiniSearch instance and is swapped in
+   * atomically when complete, so searches keep working against the previous
+   * index while a rebuild is in progress (stale-while-revalidate). When a
+   * newer build starts before this one finishes, the stale result is
+   * discarded.
+   */
+  public async buildIndex(entries: Entry[]): Promise<void> {
+    const version = ++this.buildVersion;
     this.isIndexing = true;
 
-    this.index.removeAll();
-
     const docs = entries.map((entry) => entry.toSearchDocument());
-    this.index.addAll(docs);
+
+    let fresh: MiniSearch | null = null;
+
+    if (this.indexWorker) {
+      try {
+        const response = await this.indexWorker.post<BuildIndexWorkerResponse>({
+          kind: WORKER_TASK_KINDS.BuildIndex,
+          documents: docs,
+        });
+        if (version !== this.buildVersion) return; // superseded
+        fresh = await loadSearchIndexJson(response.indexJson);
+      } catch (e) {
+        // Worker unavailable/failed: fall back to the local async build.
+        console.warn(
+          'SearchService: worker index build failed, building locally',
+          e,
+        );
+      }
+    }
+
+    if (!fresh) {
+      fresh = createSearchIndex();
+      await fresh.addAllAsync(docs, { chunkSize: INDEX_CHUNK_SIZE });
+    }
+
+    if (version !== this.buildVersion) return; // superseded by a newer build
+
+    this.index = fresh;
     this.isIndexing = false;
   }
 
-  public search(query: string): string[] {
+  /**
+   * Search the index and return the top matching citekeys, ranked by score.
+   *
+   * @param limit  Maximum number of citekeys to return. The cut happens here,
+   *               before mapping, so wide queries don't materialize thousands
+   *               of intermediate ids the caller would throw away.
+   */
+  public search(
+    query: string,
+    limit: number = DEFAULT_SEARCH_RESULT_LIMIT,
+  ): string[] {
     if (!query) return [];
-    // Return top 50 results IDs
     const results = this.index.search(query);
-    return results.map((r) => r.id as string);
+    return results.slice(0, limit).map((r) => r.id as string);
   }
 
   public get isReady(): boolean {

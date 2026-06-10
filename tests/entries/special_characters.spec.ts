@@ -31,13 +31,13 @@ describe('Special characters in entries (#119)', () => {
 }
 `;
 
-  it('parses entries with Unicode characters in title', () => {
+  it('parses entries with Unicode characters in title', async () => {
     const result = loadEntries(unicodeBib, 'biblatex');
     expect(result.entries.length).toBe(2);
     expect(result.parseErrors.length).toBe(0);
   });
 
-  it('preserves Unicode γ in title', () => {
+  it('preserves Unicode γ in title', async () => {
     const result = loadEntries(unicodeBib, 'biblatex');
     const entry = new EntryBibLaTeXAdapter(
       result.entries[0] as EntryDataBibLaTeX,
@@ -45,7 +45,7 @@ describe('Special characters in entries (#119)', () => {
     expect(entry.title).toContain('γH2AX');
   });
 
-  it('preserves accented characters in title and author', () => {
+  it('preserves accented characters in title and author', async () => {
     const result = loadEntries(unicodeBib, 'biblatex');
     const entry = new EntryBibLaTeXAdapter(
       result.entries[1] as EntryDataBibLaTeX,
@@ -55,14 +55,14 @@ describe('Special characters in entries (#119)', () => {
     expect(entry.authorString).toContain('Müller');
   });
 
-  it('entries with Unicode are found by search', () => {
+  it('entries with Unicode are found by search', async () => {
     const result = loadEntries(unicodeBib, 'biblatex');
     const entries = result.entries.map(
       (e) => new EntryBibLaTeXAdapter(e as EntryDataBibLaTeX),
     );
 
     const searchService = new SearchService();
-    searchService.buildIndex(entries);
+    await searchService.buildIndex(entries);
 
     // Search by citekey
     const byKey = searchService.search('Turinetto2012');

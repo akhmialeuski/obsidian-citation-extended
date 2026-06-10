@@ -5,6 +5,10 @@ import { LoadingStatus } from '../../../src/library/library-state';
 import type { SearchModalAction } from '../../../src/application/actions/action.types';
 import type { ILibraryService } from '../../../src/container';
 import type { CitationsPluginSettings } from '../../../src/ui/settings/settings';
+import {
+  sortEntries,
+  type ReferenceListSortOrder,
+} from '../../../src/library/sort-entries';
 import { TestEntry } from '../../helpers/mock-obsidian';
 
 // ---------------------------------------------------------------------------
@@ -157,15 +161,32 @@ function createMockLibraryService(
       return jest.fn();
     });
 
+  const library =
+    overrides.library === undefined ? { entries: {} } : overrides.library;
+
   return {
     isLibraryLoading: overrides.isLibraryLoading ?? false,
-    library: overrides.library ?? { entries: {} },
+    library,
     store: {
       subscribe: storeSubscribe,
     },
     searchService: {
       search: jest.fn().mockReturnValue(overrides.searchResults ?? []),
     },
+    // Mirrors LibraryService.getSortedEntries (without the cache) so empty
+    // query suggestion tests exercise real sorting behavior.
+    getSortedEntries: jest
+      .fn()
+      .mockImplementation((order: ReferenceListSortOrder) =>
+        library
+          ? sortEntries(
+              Object.values(
+                (library as { entries: Record<string, Entry> }).entries,
+              ),
+              order,
+            )
+          : [],
+      ),
   } as unknown as ILibraryService;
 }
 
@@ -329,36 +350,71 @@ describe('CitationSearchModal', () => {
   // -----------------------------------------------------------------------
 
   describe('updateState()', () => {
-    it('shows loading state', () => {
-      modal.updateState({
+    /** Modal whose service has never produced a library (first load). */
+    function createModalWithoutLibrary(): CitationSearchModal {
+      return new CitationSearchModal(
+        {} as never,
+        action,
+        createMockLibraryService({ library: null }),
+        settings,
+      );
+    }
+
+    it('shows blocking loading state before the first load', () => {
+      const m = createModalWithoutLibrary();
+      m.updateState({
         status: LoadingStatus.Loading,
         parseErrors: [],
       });
 
       // loadingEl should be visible (no d-none class)
-      expect(modal.loadingEl.classList.contains('d-none')).toBe(false);
-      expect(modal.inputEl.disabled).toBe(true);
+      expect(m.loadingEl.classList.contains('d-none')).toBe(false);
+      expect(m.inputEl.disabled).toBe(true);
     });
 
-    it('shows error state', () => {
+    it('keeps the modal usable during a background reload (stale data present)', () => {
+      // Default mock has a (possibly empty) library object -> data available.
       modal.updateState({
+        status: LoadingStatus.Loading,
+        parseErrors: [],
+      });
+
+      expect(modal.loadingEl.classList.contains('d-none')).toBe(true);
+      expect(modal.inputEl.disabled).toBe(false);
+    });
+
+    it('shows blocking error state before the first load', () => {
+      const m = createModalWithoutLibrary();
+      m.updateState({
         status: LoadingStatus.Error,
         error: new Error('Test error'),
         parseErrors: [],
       });
 
       // Error should be displayed
-      expect(modal.errorEl.textContent).toContain('Test error');
-      expect(modal.inputEl.disabled).toBe(true);
+      expect(m.errorEl.textContent).toContain('Test error');
+      expect(m.inputEl.disabled).toBe(true);
+    });
+
+    it('keeps the modal usable on reload error when stale data is present', () => {
+      modal.updateState({
+        status: LoadingStatus.Error,
+        error: new Error('Test error'),
+        parseErrors: [],
+      });
+
+      expect(modal.inputEl.disabled).toBe(false);
+      expect(modal.errorEl.classList.contains('d-none')).toBe(true);
     });
 
     it('shows error with fallback message when no error object', () => {
-      modal.updateState({
+      const m = createModalWithoutLibrary();
+      m.updateState({
         status: LoadingStatus.Error,
         parseErrors: [],
       });
 
-      expect(modal.errorEl.textContent).toContain('Unknown error');
+      expect(m.errorEl.textContent).toContain('Unknown error');
     });
 
     it('hides loading and error on success state', () => {
@@ -424,8 +480,31 @@ describe('CitationSearchModal', () => {
   // -----------------------------------------------------------------------
 
   describe('getSuggestions()', () => {
-    it('returns empty array when library is loading', () => {
-      libraryService = createMockLibraryService({ isLibraryLoading: true });
+    it('keeps serving the stale library while a reload is in progress', () => {
+      // Stale-while-revalidate: a background reload must not blank the modal.
+      const entry = createMockEntry({ id: 'stale1', title: 'Stale Entry' });
+      libraryService = createMockLibraryService({
+        isLibraryLoading: true,
+        library: { entries: { stale1: entry } },
+        searchResults: ['stale1'],
+      });
+      modal = new CitationSearchModal(
+        {} as never,
+        action,
+        libraryService,
+        settings,
+      );
+
+      const results = modal.getSuggestions('test');
+      expect(results).toHaveLength(1);
+      expect(results[0].id).toBe('stale1');
+    });
+
+    it('returns empty array while loading when no library was ever loaded', () => {
+      libraryService = createMockLibraryService({
+        isLibraryLoading: true,
+        library: null,
+      });
       modal = new CitationSearchModal(
         {} as never,
         action,

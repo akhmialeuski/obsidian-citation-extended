@@ -117,7 +117,9 @@ export default class CitationPlugin extends Plugin {
   async onload(): Promise<void> {
     await this.loadSettings();
 
-    const workerManager = new WorkerManager(new LoadWorker());
+    // Worker factory (not an instance): the manager pools several workers
+    // for parallel parsing and recreates them after abort-termination.
+    const workerManager = new WorkerManager(() => new LoadWorker());
 
     this.platform = new ObsidianPlatformAdapter(this.app, this);
     const platformAdapter = this.platform;
@@ -168,10 +170,14 @@ export default class CitationPlugin extends Plugin {
           readwiseCacheDir
             ? `${readwiseCacheDir}/readwise-cache-${id.replace(cacheNameSanitizeRe, '-')}.json`
             : '',
-          // Clamp at point of use: a persisted out-of-range value (older build
-          // or hand-edited data.json) bypasses the schema max and would
-          // otherwise overflow window.setInterval.
-          resolveSyncIntervalMs(this.settings.readwiseSyncIntervalMinutes),
+          // Interval PROVIDER (not a snapshot): the source re-reads it on
+          // every poll cycle, so settings changes apply without recreating
+          // the source. Clamp at point of use: a persisted out-of-range value
+          // (older build or hand-edited data.json) bypasses the schema max
+          // and would otherwise overflow the timer.
+          () =>
+            resolveSyncIntervalMs(this.settings.readwiseSyncIntervalMinutes) ??
+            0,
           // Resolve per-database filters from settings via the generic
           // databaseId, keeping source-specific config off DataSourceDefinition.
           resolveReadwiseFilters(this.settings.databases, def.databaseId),

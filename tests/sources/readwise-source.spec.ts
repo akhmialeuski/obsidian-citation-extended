@@ -744,23 +744,71 @@ describe('ReadwiseSource', () => {
     it('watch() is idempotent — a second call does not start a second timer', () => {
       const client = createMockClient();
       const worker = createMockWorkerManager();
-      const setIntervalSpy = jest.spyOn(window, 'setInterval');
+      const setTimeoutSpy = jest.spyOn(window, 'setTimeout');
       const source = new ReadwiseSource(
         'src-1',
         client,
         worker as never,
         undefined,
         undefined,
-        60_000,
+        () => 60_000,
       );
 
       source.watch(jest.fn());
       source.watch(jest.fn());
 
-      expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+      expect(setTimeoutSpy).toHaveBeenCalledTimes(1);
 
       source.dispose();
-      setIntervalSpy.mockRestore();
+      setTimeoutSpy.mockRestore();
+    });
+
+    it('does not arm the polling timer when the interval provider returns 0', () => {
+      const client = createMockClient();
+      const worker = createMockWorkerManager();
+      const setTimeoutSpy = jest.spyOn(window, 'setTimeout');
+      const source = new ReadwiseSource(
+        'src-1',
+        client,
+        worker as never,
+        undefined,
+        undefined,
+        () => 0,
+      );
+
+      source.watch(jest.fn());
+
+      expect(setTimeoutSpy).not.toHaveBeenCalled();
+      source.dispose();
+      setTimeoutSpy.mockRestore();
+    });
+
+    it('re-reads the interval provider on every cycle (chained timer)', () => {
+      jest.useFakeTimers();
+      const client = createMockClient();
+      const worker = createMockWorkerManager();
+      let interval = 1000;
+      const source = new ReadwiseSource(
+        'src-1',
+        client,
+        worker as never,
+        undefined,
+        undefined,
+        () => interval,
+      );
+      const callback = jest.fn();
+
+      source.watch(callback);
+      jest.advanceTimersByTime(1000);
+      expect(callback).toHaveBeenCalledTimes(1);
+
+      // Disable via the provider: the chain must stop after the next check.
+      interval = 0;
+      jest.advanceTimersByTime(10_000);
+      expect(callback).toHaveBeenCalledTimes(1);
+
+      source.dispose();
+      jest.useRealTimers();
     });
 
     it('dispose() is safe to call twice', () => {
@@ -772,7 +820,7 @@ describe('ReadwiseSource', () => {
         worker as never,
         undefined,
         undefined,
-        60_000,
+        () => 60_000,
       );
       source.watch(jest.fn());
 
@@ -818,7 +866,11 @@ describe('ReadwiseSource', () => {
       const source = new ReadwiseSource('src-1', client, worker as never);
 
       void source.load();
-      await Promise.resolve();
+      // Flush the microtask chain (load() awaits readCachedState before
+      // fetching, which adds a few hops even when no cache is configured).
+      for (let i = 0; i < 10 && capturedSignal === undefined; i++) {
+        await Promise.resolve();
+      }
 
       expect(capturedSignal).toBeDefined();
       expect(capturedSignal!.aborted).toBe(false);
@@ -1371,7 +1423,7 @@ describe('ReadwiseSource periodic sync', () => {
       worker as never,
       undefined,
       undefined,
-      1000,
+      () => 1000,
     );
     const callback = jest.fn();
 
@@ -1382,5 +1434,232 @@ describe('ReadwiseSource periodic sync', () => {
 
     source.dispose();
     jest.useRealTimers();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Incremental sync (updatedAfter + delta merge)
+// ---------------------------------------------------------------------------
+
+describe('ReadwiseSource incremental sync', () => {
+  const CURSOR = '2024-06-01T00:00:00.000Z';
+
+  function makeV1Cache(
+    entries: ReadwiseEntryData[],
+    lastSyncAt: string | null = CURSOR,
+  ): string {
+    return JSON.stringify({ version: 1, lastSyncAt, entries });
+  }
+
+  function makeCachedFs(cacheRaw: string): IFileSystem {
+    return createMockFileSystem({
+      exists: jest.fn().mockResolvedValue(true),
+      readFile: jest.fn().mockResolvedValue(cacheRaw),
+      writeFile: jest.fn().mockResolvedValue(undefined),
+    });
+  }
+
+  it('passes the cached cursor as updatedAfter to both endpoints', async () => {
+    const fs = makeCachedFs(makeV1Cache([makeReadwiseEntryData()]));
+    const client = createMockClient();
+    const worker = createMockWorkerManager();
+
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      '/c.json',
+    );
+    await source.load();
+
+    expect(client.fetchExportBooks).toHaveBeenCalledWith(
+      expect.objectContaining({ updatedAfter: CURSOR }),
+    );
+    expect(client.fetchReaderDocuments).toHaveBeenCalledWith(
+      expect.objectContaining({ updatedAfter: CURSOR }),
+    );
+  });
+
+  it('does a full fetch when the cache is in the legacy array format', async () => {
+    const fs = makeCachedFs(JSON.stringify([makeReadwiseEntryData()]));
+    const client = createMockClient();
+    const worker = createMockWorkerManager();
+
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      '/c.json',
+    );
+    await source.load();
+
+    expect(client.fetchExportBooks).toHaveBeenCalledWith(
+      expect.objectContaining({ updatedAfter: undefined }),
+    );
+  });
+
+  it('bypasses incremental sync when fullRefresh is requested', async () => {
+    const fs = makeCachedFs(makeV1Cache([makeReadwiseEntryData()]));
+    const client = createMockClient();
+    const worker = createMockWorkerManager();
+
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      '/c.json',
+    );
+    await source.load(undefined, { fullRefresh: true });
+
+    expect(client.fetchExportBooks).toHaveBeenCalledWith(
+      expect.objectContaining({ updatedAfter: undefined }),
+    );
+  });
+
+  it('merges the delta into the cached base instead of replacing it', async () => {
+    // Cache holds book 1 (one old highlight) and book 2 (untouched).
+    const cachedBook1 = makeReadwiseEntryData({
+      rawId: '1',
+      title: 'Book One',
+      highlights: [
+        {
+          id: 'old-h',
+          text: 'old highlight',
+          note: null,
+          location: null,
+          locationType: null,
+          color: null,
+          highlightedAt: null,
+          url: null,
+          tags: [],
+        },
+      ],
+      highlightCount: 1,
+      highlightsText: 'old highlight',
+    });
+    const cachedBook2 = makeReadwiseEntryData({
+      rawId: '2',
+      title: 'Book Two',
+    });
+    const fs = makeCachedFs(makeV1Cache([cachedBook1, cachedBook2]));
+
+    // Delta returns ONLY book 1 with ONLY its new highlight.
+    const client = createMockClient({
+      fetchExportBooks: jest.fn().mockResolvedValue([
+        makeExportBook({
+          user_book_id: 1,
+          title: 'Book One (renamed)',
+          highlights: [
+            {
+              id: 99,
+              text: 'new highlight',
+              note: '',
+              location: 1,
+              location_type: 'page',
+              highlighted_at: '2024-06-02T00:00:00Z',
+              url: null,
+              color: '',
+              updated: '2024-06-02T00:00:00Z',
+              book_id: 1,
+              tags: [],
+            },
+          ],
+          num_highlights: 1,
+        }),
+      ]),
+    } as unknown as Partial<ReadwiseApiClient>);
+    const worker = createMockWorkerManager();
+
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      '/c.json',
+    );
+    const result = await source.load();
+
+    // Both books survive the merge.
+    expect(result.entries).toHaveLength(2);
+    const book1 = result.entries.find(
+      (e) => (e as ReadwiseAdapter).citekey === 'rw-1',
+    ) as ReadwiseAdapter;
+    expect(book1.title).toBe('Book One (renamed)');
+    // Old highlight kept, new one added.
+    const texts = book1.highlights.map((h) => h.text);
+    expect(texts).toContain('old highlight');
+    expect(texts).toContain('new highlight');
+  });
+
+  it('writes the merged set in the v1 cache format with an advanced cursor', async () => {
+    const fs = makeCachedFs(
+      makeV1Cache([makeReadwiseEntryData({ rawId: '2' })]),
+    );
+    const client = createMockClient({
+      fetchExportBooks: jest.fn().mockResolvedValue([makeExportBook()]),
+    } as unknown as Partial<ReadwiseApiClient>);
+    const worker = createMockWorkerManager();
+
+    const before = new Date().toISOString();
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      '/c.json',
+    );
+    await source.load();
+
+    expect(fs.writeFile).toHaveBeenCalledTimes(1);
+    const written = JSON.parse(
+      (fs.writeFile as jest.Mock).mock.calls[0][1] as string,
+    ) as { version: number; lastSyncAt: string; entries: unknown[] };
+    expect(written.version).toBe(1);
+    // Cursor advanced past the old one and not in the future.
+    expect(written.lastSyncAt >= before).toBe(true);
+    // Merged set: cached book 2 + fetched book 1.
+    expect(written.entries).toHaveLength(2);
+  });
+
+  it('folds a delta orphan reader child into its cached parent', async () => {
+    const cachedParent = makeReadwiseEntryData({
+      mode: 'reader-documents',
+      rawId: 'parent-1',
+      title: 'Parent Doc',
+      highlights: [],
+      highlightCount: 0,
+    });
+    const fs = makeCachedFs(makeV1Cache([cachedParent]));
+
+    const client = createMockClient({
+      fetchReaderDocuments: jest.fn().mockResolvedValue([
+        makeReaderDoc({
+          id: 'child-1',
+          parent_id: 'parent-1',
+          content: 'fresh child highlight',
+          category: 'highlight',
+        }),
+      ]),
+    } as unknown as Partial<ReadwiseApiClient>);
+    const worker = createMockWorkerManager();
+
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      '/c.json',
+    );
+    const result = await source.load();
+
+    expect(result.entries).toHaveLength(1);
+    const parent = result.entries[0] as ReadwiseAdapter;
+    expect(parent.citekey).toBe('rd-parent-1');
+    expect(parent.highlights.map((h) => h.text)).toContain(
+      'fresh child highlight',
+    );
   });
 });

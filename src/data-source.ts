@@ -19,6 +19,20 @@ export type DataSourceType =
   | (string & {});
 
 /**
+ * Options accepted by {@link DataSource.load}.
+ */
+export interface DataSourceLoadOptions {
+  /**
+   * Force a full re-fetch, bypassing any incremental-sync state the source
+   * keeps (e.g. the Readwise `updatedAfter` cursor). File-based sources
+   * always read the whole file and may ignore this flag. Used by the manual
+   * "Refresh citation database" command so users can recover from remote
+   * deletions that incremental sync cannot observe.
+   */
+  fullRefresh?: boolean;
+}
+
+/**
  * DataSource interface defines a contract for loading bibliography entries
  * from various sources (local files, vault files, network, etc.)
  */
@@ -30,10 +44,14 @@ export interface DataSource {
 
   /**
    * Load entries from this data source.
-   * @param signal Optional AbortSignal; sources that perform cancellable I/O
-   *               (e.g. network) should stop in-flight work when it aborts.
+   * @param signal  Optional AbortSignal; sources that perform cancellable I/O
+   *                (e.g. network) should stop in-flight work when it aborts.
+   * @param options Optional load behavior flags (see {@link DataSourceLoadOptions}).
    */
-  load(signal?: AbortSignal): Promise<DataSourceLoadResult>;
+  load(
+    signal?: AbortSignal,
+    options?: DataSourceLoadOptions,
+  ): Promise<DataSourceLoadResult>;
 
   /**
    * Watch for changes and call the callback when data changes

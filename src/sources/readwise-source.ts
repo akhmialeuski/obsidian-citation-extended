@@ -1,4 +1,8 @@
-import { DataSource, DataSourceLoadResult } from '../data-source';
+import {
+  DataSource,
+  DataSourceLoadOptions,
+  DataSourceLoadResult,
+} from '../data-source';
 import {
   ReadwiseApiClient,
   ReadwiseExportBook,
@@ -6,11 +10,17 @@ import {
   ReadwiseReaderDocument,
 } from '../core/readwise/readwise-api-client';
 import {
+  isMeaningfulHighlight,
+  mergeReadwiseDelta,
+  readerChildToItem,
+  toEntryDataFromReader,
+} from '../core/readwise/readwise-delta';
+import {
   ReadwiseEntryData,
   ReadwiseHighlightItem,
   READWISE_MODES,
 } from '../core/adapters/readwise-adapter';
-import { DATABASE_FORMATS, convertToEntries } from '../core';
+import { DATABASE_FORMATS, WORKER_TASK_KINDS, convertToEntries } from '../core';
 import type { ParseErrorInfo, ReadwiseFilters } from '../core';
 import type { IFileSystem } from '../platform/platform-adapter';
 import { WorkerManager } from '../util';
@@ -18,11 +28,6 @@ import { WorkerManager } from '../util';
 // ---------------------------------------------------------------------------
 // Conversion helpers
 // ---------------------------------------------------------------------------
-
-/** Whether a structured highlight carries any meaningful content. */
-function isMeaningfulHighlight(item: ReadwiseHighlightItem): boolean {
-  return item.text.trim().length > 0 || (item.note ?? '').trim().length > 0;
-}
 
 /** Convert a v2 Export highlight into a structured {@link ReadwiseHighlightItem}. */
 function exportHighlightToItem(h: ReadwiseHighlight): ReadwiseHighlightItem {
@@ -95,67 +100,22 @@ function toEntryDataFromExport(book: ReadwiseExportBook): ReadwiseEntryData {
   };
 }
 
-/** Convert a Reader v3 document into the normalized entry data shape. */
-function toEntryDataFromReader(doc: ReadwiseReaderDocument): ReadwiseEntryData {
-  return {
-    mode: READWISE_MODES.Reader,
-    rawId: doc.id,
-    title: doc.title,
-    author: doc.author,
-    category: doc.category,
-    sourceUrl: doc.source_url,
-    readwiseUrl: doc.url,
-    coverImageUrl: doc.image_url,
-    summary: doc.summary,
-    highlightsText: doc.notes || null,
-    highlightCount: 0,
-    // Guard against a null/absent tags map (the API type is non-null but the
-    // raw response is not validated per-field), mirroring readerChildToItem.
-    tags: Object.keys(doc.tags ?? {}),
-    publishedDate: doc.published_date,
-    updatedAt: doc.updated_at,
-    // Reader documents have no separate "readable title"; leave empty rather
-    // than duplicating the full title into titleShort.
-    readableTitle: null,
-    source: doc.source || null,
-    asin: null,
-    documentNote: doc.notes || null,
-    siteName: doc.site_name,
-    wordCount: doc.word_count,
-    readingProgress: doc.reading_progress ?? null,
-    readerLocation: doc.location || null,
-  };
-}
-
-/** Convert a Reader child document (highlight/note) into a highlight item. */
-function readerChildToItem(
-  child: ReadwiseReaderDocument,
-): ReadwiseHighlightItem {
-  return {
-    id: child.id,
-    text: child.content ?? '',
-    note: child.notes || null,
-    location: null,
-    locationType: null,
-    color: null,
-    highlightedAt: child.created_at ?? null,
-    url: child.source_url || child.url || null,
-    tags: Object.keys(child.tags ?? {}),
-  };
-}
-
 /** Result of merging Reader child documents into their parents. */
 interface MergedReaderResult {
   entries: ReadwiseEntryData[];
-  /** Number of child documents whose parent was not in the fetched set. */
-  orphanCount: number;
+  /**
+   * Child documents whose parent was not in the fetched set. On a full fetch
+   * these become standalone entries; on an incremental fetch they are folded
+   * into their cached parents by {@link mergeReadwiseDelta}.
+   */
+  orphanChildren: ReadwiseReaderDocument[];
 }
 
 /**
  * Merge Reader v3 child documents (highlights/notes, identified by a non-null
  * `parent_id`) into their parent document's structured highlights, instead of
- * dropping them. Children whose parent is absent from the fetched set are kept
- * as standalone top-level entries so no user data is silently lost.
+ * dropping them. Children whose parent is absent from the fetched set are
+ * returned separately so the caller can decide how to handle them.
  *
  * Deterministic: preserves API result order for parents and children; performs
  * no date-based sorting and uses no non-deterministic APIs.
@@ -170,7 +130,7 @@ function mergeReaderChildren(
   const parentIds = new Set(parents.map((doc) => doc.id));
 
   const childrenByParent = new Map<string, ReadwiseReaderDocument[]>();
-  const orphans: ReadwiseReaderDocument[] = [];
+  const orphanChildren: ReadwiseReaderDocument[] = [];
 
   for (const doc of docs) {
     if (doc.parent_id == null) continue;
@@ -179,7 +139,7 @@ function mergeReaderChildren(
       siblings.push(doc);
       childrenByParent.set(doc.parent_id, siblings);
     } else {
-      orphans.push(doc);
+      orphanChildren.push(doc);
     }
   }
 
@@ -209,11 +169,7 @@ function mergeReaderChildren(
     entries.push(data);
   }
 
-  for (const orphan of orphans) {
-    entries.push(toEntryDataFromReader(orphan));
-  }
-
-  return { entries, orphanCount: orphans.length };
+  return { entries, orphanChildren };
 }
 
 /**
@@ -252,7 +208,7 @@ export function applyReadwiseFilters(
     }
 
     // Guard the `tags` dereference for the same reason as `category` above: a
-    // corrupt/legacy cache entry (read via parseCachedEntries, which does not
+    // corrupt/legacy cache entry (read via readCachedState, which does not
     // validate per-field) may lack the array even though the type is non-null.
     if (
       tags &&
@@ -292,6 +248,36 @@ export function applyReadwiseFilters(
 class ReadwiseOutageError extends Error {}
 
 // ---------------------------------------------------------------------------
+// Cache state
+// ---------------------------------------------------------------------------
+
+/**
+ * Versioned on-disk cache payload. Legacy caches (written before incremental
+ * sync) are a bare `ReadwiseEntryData[]` array; they are readable as a
+ * fallback base but carry no cursor, so the first sync after upgrading is a
+ * full fetch that rewrites the cache in this format.
+ */
+interface ReadwiseCacheStateV1 {
+  version: 1;
+  /**
+   * ISO timestamp captured at the START of the last fully-clean fetch; used
+   * as the next `updatedAfter` cursor. Capturing before the fetch (not after)
+   * means updates racing the fetch window are re-delivered next time instead
+   * of being missed — the merge is idempotent, so re-delivery is safe.
+   */
+  lastSyncAt: string | null;
+  entries: ReadwiseEntryData[];
+}
+
+/** Parsed cache content: entries + cursor, or nulls when missing/corrupt. */
+interface CachedState {
+  entries: ReadwiseEntryData[] | null;
+  lastSyncAt: string | null;
+}
+
+const EMPTY_CACHED_STATE: CachedState = { entries: null, lastSyncAt: null };
+
+// ---------------------------------------------------------------------------
 // DataSource implementation
 // ---------------------------------------------------------------------------
 
@@ -306,8 +292,11 @@ class ReadwiseOutageError extends Error {}
  * API response -> ReadwiseEntryData[] -> JSON.stringify -> Worker ->
  * parseReadwise -> EntryData[] -> convertToEntries -> ReadwiseAdapter[]
  *
- * Unlike file-based sources, this source has no watch/push mechanism;
- * data is loaded on demand when {@link load} is called.
+ * **Incremental sync:** when the offline cache holds a `lastSyncAt` cursor,
+ * only entries updated after it are fetched (`updatedAfter`) and merged into
+ * the cached full set — instead of re-downloading the entire library on every
+ * periodic poll. Deletions are invisible to `updatedAfter`; the manual
+ * "Refresh citation database" command passes `fullRefresh` to recover.
  */
 export class ReadwiseSource implements DataSource {
   private pollingTimer: number | null = null;
@@ -320,7 +309,13 @@ export class ReadwiseSource implements DataSource {
     private loadWorker: WorkerManager,
     private fileSystem?: IFileSystem,
     private cachePath?: string,
-    private syncIntervalMs?: number,
+    /**
+     * Returns the current periodic-sync interval in ms (0 = disabled). A
+     * provider rather than a snapshot, so settings changes take effect on the
+     * next poll cycle without recreating the source (which would reset the
+     * timer and drop incremental-sync continuity).
+     */
+    private syncIntervalProvider?: () => number,
     private filters?: ReadwiseFilters,
   ) {}
 
@@ -331,7 +326,10 @@ export class ReadwiseSource implements DataSource {
    * When a cache file is configured, API results are persisted to disk.
    * If the API is unreachable, the cache is used as a fallback.
    */
-  async load(externalSignal?: AbortSignal): Promise<DataSourceLoadResult> {
+  async load(
+    externalSignal?: AbortSignal,
+    options?: DataSourceLoadOptions,
+  ): Promise<DataSourceLoadResult> {
     // Cancel any previous in-flight fetch and start a fresh cancellation scope.
     this.abortController?.abort();
     const controller = new AbortController();
@@ -350,11 +348,26 @@ export class ReadwiseSource implements DataSource {
     }
 
     try {
+      const cached = await this.readCachedState();
+      // Incremental sync requires BOTH a cached base to merge into and a
+      // cursor; a fullRefresh request bypasses it deliberately.
+      const incremental =
+        !options?.fullRefresh &&
+        cached.entries !== null &&
+        cached.lastSyncAt !== null;
+
+      // Cursor for the NEXT sync, captured before this fetch starts.
+      const fetchStartedAt = new Date().toISOString();
+
       const {
-        entries: entryDataArray,
+        entries: fetchedEntries,
+        orphanChildren,
         errors: fetchErrors,
         allFailed,
-      } = await this.fetchEntryData(signal);
+      } = await this.fetchEntryData(
+        signal,
+        incremental ? (cached.lastSyncAt ?? undefined) : undefined,
+      );
 
       // Total outage (every API endpoint failed): fall back to the cache if
       // present; otherwise THROW so the library surfaces a real failure and
@@ -363,11 +376,10 @@ export class ReadwiseSource implements DataSource {
       // (one endpoint down, the other returning data or a legitimate empty set)
       // is NOT treated as an outage.
       if (allFailed) {
-        const cachedEntries = await this.readCachedEntries();
-        if (cachedEntries) {
+        if (cached.entries) {
           console.warn('ReadwiseSource: API unavailable, using cached data');
           return await this.runPipeline(
-            cachedEntries,
+            cached.entries,
             [
               {
                 message: `Readwise API unavailable (using cache): ${fetchErrors[0].message}`,
@@ -381,14 +393,47 @@ export class ReadwiseSource implements DataSource {
         );
       }
 
-      // Persist the UNFILTERED entries (only on a fully-clean fetch), so the
-      // cache is a full-fidelity backup and later filter changes still apply on
-      // read; a partial outage never clobbers a previously-complete snapshot.
-      if (fetchErrors.length === 0) {
-        await this.writeCache(JSON.stringify(entryDataArray));
+      let fullEntries: ReadwiseEntryData[];
+      if (incremental) {
+        console.debug(
+          `ReadwiseSource: incremental sync since ${cached.lastSyncAt!} ` +
+            `(${fetchedEntries.length} changed entries)`,
+        );
+        fullEntries = mergeReadwiseDelta(cached.entries!, {
+          entries: fetchedEntries,
+          orphanChildren,
+        });
+      } else {
+        // Full fetch: orphan children are kept as standalone top-level
+        // entries (logged), so no user data is silently lost.
+        if (orphanChildren.length > 0) {
+          console.warn(
+            `ReadwiseSource: ${orphanChildren.length} child document(s) had no parent in result set; kept as top-level`,
+          );
+        }
+        fullEntries = [
+          ...fetchedEntries,
+          ...orphanChildren.map(toEntryDataFromReader),
+        ];
       }
 
-      return await this.runPipeline(entryDataArray, fetchErrors, signal);
+      // Persist the UNFILTERED merged set (only on a fully-clean fetch), so
+      // the cache is a full-fidelity backup and later filter changes still
+      // apply on read; a partial outage never clobbers a previously-complete
+      // snapshot. The cursor advances ONLY together with the entries it
+      // matches — a failed write keeps the old cursor+base pair on disk,
+      // and the next sync simply re-merges the same delta (idempotent).
+      if (fetchErrors.length === 0) {
+        await this.writeCache(
+          JSON.stringify({
+            version: 1,
+            lastSyncAt: fetchStartedAt,
+            entries: fullEntries,
+          } satisfies ReadwiseCacheStateV1),
+        );
+      }
+
+      return await this.runPipeline(fullEntries, fetchErrors, signal);
     } catch (error) {
       // Deliberate total-outage failure: surface it without re-probing the
       // cache (the outage branch already consulted it).
@@ -400,11 +445,11 @@ export class ReadwiseSource implements DataSource {
       }
 
       // Unexpected processing failure (e.g. worker error) — last-resort cache.
-      const cachedEntries = await this.readCachedEntries();
-      if (cachedEntries) {
+      const cached = await this.readCachedState();
+      if (cached.entries) {
         console.warn('ReadwiseSource: load failed, using cached data');
         return await this.runPipeline(
-          cachedEntries,
+          cached.entries,
           [
             {
               message: `Readwise load failed (using cache): ${
@@ -446,20 +491,36 @@ export class ReadwiseSource implements DataSource {
   }
 
   /**
-   * Read and parse the cache file. Returns `null` when the cache is missing
-   * OR corrupt (unparseable / not an array) — a corrupt cache must behave
-   * exactly like no cache, so an outage still surfaces as a failure instead
-   * of silently replacing the library with an empty "success". A legitimately
-   * cached empty array (`[]`) is still a valid fallback.
+   * Read and parse the cache file. Returns null fields when the cache is
+   * missing OR corrupt (unparseable / unexpected shape) — a corrupt cache must
+   * behave exactly like no cache, so an outage still surfaces as a failure
+   * instead of silently replacing the library with an empty "success". A
+   * legitimately cached empty array (`[]`) is still a valid fallback.
    */
-  private async readCachedEntries(): Promise<ReadwiseEntryData[] | null> {
+  private async readCachedState(): Promise<CachedState> {
     const raw = await this.readCache();
-    if (raw === null) return null;
+    if (raw === null) return EMPTY_CACHED_STATE;
     try {
       const parsed: unknown = JSON.parse(raw);
-      return Array.isArray(parsed) ? (parsed as ReadwiseEntryData[]) : null;
+      // Legacy format (pre-incremental-sync): bare entry array, no cursor.
+      if (Array.isArray(parsed)) {
+        return { entries: parsed as ReadwiseEntryData[], lastSyncAt: null };
+      }
+      if (
+        parsed !== null &&
+        typeof parsed === 'object' &&
+        (parsed as { version?: unknown }).version === 1 &&
+        Array.isArray((parsed as { entries?: unknown }).entries)
+      ) {
+        const v1 = parsed as ReadwiseCacheStateV1;
+        return {
+          entries: v1.entries,
+          lastSyncAt: typeof v1.lastSyncAt === 'string' ? v1.lastSyncAt : null,
+        };
+      }
+      return EMPTY_CACHED_STATE;
     } catch {
-      return null;
+      return EMPTY_CACHED_STATE;
     }
   }
 
@@ -473,6 +534,7 @@ export class ReadwiseSource implements DataSource {
   ): Promise<DataSourceLoadResult> {
     const result = await this.loadWorker.post(
       {
+        kind: WORKER_TASK_KINDS.Parse,
         databaseRaw: raw,
         databaseType: DATABASE_FORMATS.Readwise,
       },
@@ -516,19 +578,27 @@ export class ReadwiseSource implements DataSource {
    * Fetch data from BOTH Readwise API endpoints in parallel using
    * Promise.allSettled. Merges results and collects errors from
    * any failed endpoint without blocking the other.
+   *
+   * @param updatedAfter  Optional ISO cursor — fetch only entries updated
+   *                      after it (incremental sync).
    */
-  private async fetchEntryData(signal?: AbortSignal): Promise<{
+  private async fetchEntryData(
+    signal?: AbortSignal,
+    updatedAfter?: string,
+  ): Promise<{
     entries: ReadwiseEntryData[];
+    orphanChildren: ReadwiseReaderDocument[];
     errors: ParseErrorInfo[];
     /** True only when EVERY API call failed (a real total outage). */
     allFailed: boolean;
   }> {
     const [booksResult, docsResult] = await Promise.allSettled([
-      this.client.fetchExportBooks({ signal }),
-      this.client.fetchReaderDocuments({ signal }),
+      this.client.fetchExportBooks({ signal, updatedAfter }),
+      this.client.fetchReaderDocuments({ signal, updatedAfter }),
     ]);
 
     const entries: ReadwiseEntryData[] = [];
+    let orphanChildren: ReadwiseReaderDocument[] = [];
     const errors: ParseErrorInfo[] = [];
 
     if (booksResult.status === 'fulfilled') {
@@ -546,15 +616,9 @@ export class ReadwiseSource implements DataSource {
     if (docsResult.status === 'fulfilled') {
       // Merge Reader child documents (highlights/notes) into their parents
       // instead of dropping them.
-      const { entries: merged, orphanCount } = mergeReaderChildren(
-        docsResult.value,
-      );
-      if (orphanCount > 0) {
-        console.warn(
-          `ReadwiseSource: ${orphanCount} child document(s) had no parent in result set; kept as top-level`,
-        );
-      }
-      entries.push(...merged);
+      const merged = mergeReaderChildren(docsResult.value);
+      entries.push(...merged.entries);
+      orphanChildren = merged.orphanChildren;
     } else {
       const msg =
         docsResult.reason instanceof Error
@@ -570,29 +634,53 @@ export class ReadwiseSource implements DataSource {
 
     // Return UNFILTERED entries; filters are applied at read time (runPipeline)
     // so the offline cache stays full-fidelity and current filters always apply.
-    return { entries, errors, allFailed };
+    return { entries, orphanChildren, errors, allFailed };
   }
 
   /**
    * Start periodic polling for Readwise data changes.
    * The callback triggers a library reload, same as file-watcher sources.
+   *
+   * Uses a chained setTimeout (not setInterval) and re-reads the interval
+   * provider on every cycle, so an interval change in settings takes effect
+   * on the next cycle without recreating the source.
    */
   watch(callback: () => void): void {
-    if (this.pollingTimer || !this.syncIntervalMs) return;
+    if (this.pollingTimer !== null || !this.syncIntervalProvider) return;
+    this.scheduleNextSync(callback);
+  }
+
+  private scheduleNextSync(callback: () => void): void {
+    const interval = this.syncIntervalProvider?.() ?? 0;
+    if (interval <= 0) {
+      // Disabled. A later watch() call (after the next library load) re-arms
+      // the chain if the user re-enables periodic sync.
+      this.pollingTimer = null;
+      return;
+    }
 
     console.debug(
-      `ReadwiseSource: Starting periodic sync every ${Math.round(this.syncIntervalMs / 60_000)} min`,
+      `ReadwiseSource: next periodic sync in ${Math.round(interval / 60_000)} min`,
     );
-    this.pollingTimer = window.setInterval(() => {
+    this.pollingTimer = window.setTimeout(() => {
+      // Re-check the provider at fire time: if the user disabled periodic
+      // sync after this cycle was armed, stop silently instead of firing
+      // one extra sync.
+      const current = this.syncIntervalProvider?.() ?? 0;
+      if (current <= 0) {
+        this.pollingTimer = null;
+        return;
+      }
       console.debug('ReadwiseSource: Periodic sync triggered');
       callback();
-    }, this.syncIntervalMs);
+      this.scheduleNextSync(callback);
+    }, interval);
   }
 
   /** Stop the polling timer and cancel any in-flight fetch. */
   dispose(): void {
-    if (this.pollingTimer) {
-      window.clearInterval(this.pollingTimer);
+    if (this.pollingTimer !== null) {
+      window.clearTimeout(this.pollingTimer);
       this.pollingTimer = null;
     }
     this.abortController?.abort();

@@ -3,6 +3,12 @@ import {
   DISALLOWED_FILENAME_CHARACTERS_RE,
   DISALLOWED_SEGMENT_CHARACTERS_RE,
 } from '../src/util';
+import { WORKER_TASK_KINDS } from '../src/core';
+import type {
+  ParseWorkerRequest,
+  WorkerRpcRequest,
+  WorkerRpcResponse,
+} from '../src/core';
 
 jest.mock(
   'obsidian',
@@ -15,118 +21,230 @@ jest.mock(
   { virtual: true },
 );
 
-let mockPostMessage: jest.Mock;
+/**
+ * Fake Worker implementing the id-correlated RPC protocol. The `handler`
+ * decides how each request is answered (sync resolve, error, or never).
+ */
+class FakeRpcWorker {
+  static instances: FakeRpcWorker[] = [];
+  terminated = false;
+  received: WorkerRpcRequest[] = [];
+  private listeners = new Map<string, Set<(ev: unknown) => void>>();
 
-jest.mock('promise-worker', () => {
-  return jest.fn().mockImplementation(() => {
-    mockPostMessage = jest.fn().mockResolvedValue('result');
-    return { postMessage: mockPostMessage };
-  });
-});
+  constructor(
+    private handler: (
+      req: WorkerRpcRequest,
+      respond: (res: WorkerRpcResponse) => void,
+    ) => void,
+  ) {
+    FakeRpcWorker.instances.push(this);
+  }
 
-describe('WorkerManager', () => {
-  let worker: Worker;
-  let manager: WorkerManager;
+  addEventListener(type: string, listener: (ev: unknown) => void): void {
+    const set = this.listeners.get(type) ?? new Set();
+    set.add(listener);
+    this.listeners.set(type, set);
+  }
 
+  removeEventListener(type: string, listener: (ev: unknown) => void): void {
+    this.listeners.get(type)?.delete(listener);
+  }
+
+  postMessage(message: WorkerRpcRequest): void {
+    this.received.push(message);
+    this.handler(message, (res) => this.emit('message', { data: res }));
+  }
+
+  terminate(): void {
+    this.terminated = true;
+  }
+
+  emit(type: string, event: unknown): void {
+    for (const listener of this.listeners.get(type) ?? []) {
+      listener(event);
+    }
+  }
+}
+
+function parseRequest(raw = ''): ParseWorkerRequest {
+  return {
+    kind: WORKER_TASK_KINDS.Parse,
+    databaseRaw: raw,
+    databaseType: 'csl-json',
+  };
+}
+
+/** Handler that resolves every request with an empty parse result. */
+function okHandler(
+  req: WorkerRpcRequest,
+  respond: (res: WorkerRpcResponse) => void,
+): void {
+  // Answer asynchronously, like a real worker.
+  setTimeout(
+    () => respond({ id: req.id, result: { entries: [], parseErrors: [] } }),
+    0,
+  );
+}
+
+describe('WorkerManager (pool + RPC)', () => {
   beforeEach(() => {
-    worker = {
-      terminate: jest.fn(),
-      postMessage: jest.fn(),
-      addEventListener: jest.fn(),
-      removeEventListener: jest.fn(),
-      dispatchEvent: jest.fn(),
-      onmessage: null,
-      onmessageerror: null,
-      onerror: null,
-    } as unknown as Worker;
-    manager = new WorkerManager(worker);
+    FakeRpcWorker.instances = [];
   });
 
-  it('should post message and return result', async () => {
-    const result = await manager.post({
-      databaseRaw: '',
-      databaseType: 'csl-json',
-    });
-    expect(result).toBe('result');
-    expect(mockPostMessage).toHaveBeenCalledWith({
-      databaseRaw: '',
-      databaseType: 'csl-json',
-    });
+  function makeManager(
+    handler: ConstructorParameters<typeof FakeRpcWorker>[0] = okHandler,
+    maxWorkers = 2,
+  ): WorkerManager {
+    return new WorkerManager(
+      () => new FakeRpcWorker(handler) as unknown as Worker,
+      maxWorkers,
+    );
+  }
+
+  it('posts a message and resolves with the worker result', async () => {
+    const manager = makeManager();
+    const result = await manager.post(parseRequest());
+    expect(result).toEqual({ entries: [], parseErrors: [] });
+    expect(FakeRpcWorker.instances).toHaveLength(1);
+    expect(FakeRpcWorker.instances[0].received[0].request).toEqual(
+      parseRequest(),
+    );
   });
 
-  it('should process multiple messages sequentially', async () => {
-    const results = await Promise.all([
-      manager.post({ databaseRaw: 'a', databaseType: 'csl-json' }),
-      manager.post({ databaseRaw: 'b', databaseType: 'csl-json' }),
+  it('runs tasks in parallel across pooled workers', async () => {
+    const manager = makeManager(okHandler, 2);
+    await Promise.all([
+      manager.post(parseRequest('a')),
+      manager.post(parseRequest('b')),
     ]);
-    expect(results).toEqual(['result', 'result']);
-    expect(mockPostMessage).toHaveBeenCalledTimes(2);
+    // Two concurrent tasks -> two workers created
+    expect(FakeRpcWorker.instances).toHaveLength(2);
   });
 
-  it('should reject with AbortError when signal is already aborted', async () => {
+  it('queues tasks beyond the pool cap and drains the queue', async () => {
+    const manager = makeManager(okHandler, 1);
+    const results = await Promise.all([
+      manager.post(parseRequest('a')),
+      manager.post(parseRequest('b')),
+      manager.post(parseRequest('c')),
+    ]);
+    expect(results).toHaveLength(3);
+    // Single worker handled all three sequentially
+    expect(FakeRpcWorker.instances).toHaveLength(1);
+    expect(FakeRpcWorker.instances[0].received).toHaveLength(3);
+  });
+
+  it('rejects with AbortError when signal is already aborted', async () => {
+    const manager = makeManager();
     const controller = new AbortController();
     controller.abort();
 
     await expect(
-      manager.post(
-        { databaseRaw: '', databaseType: 'csl-json' },
-        controller.signal,
-      ),
+      manager.post(parseRequest(), controller.signal),
     ).rejects.toThrow('Aborted');
+    // The task never reached a worker
+    expect(FakeRpcWorker.instances).toHaveLength(0);
   });
 
-  it('should reject with AbortError when signal aborts after worker completes', async () => {
+  it('terminates the executing worker when the signal aborts mid-flight', async () => {
+    // Handler that never responds — simulates a long parse.
+    const manager = makeManager(() => {});
     const controller = new AbortController();
 
-    // Make postMessage resolve, but abort the signal during the await
-    mockPostMessage.mockImplementation(async () => {
-      controller.abort();
-      return 'result';
-    });
+    const promise = manager.post(parseRequest(), controller.signal);
+    // Let the task get posted to the worker
+    await Promise.resolve();
+    controller.abort();
 
-    await expect(
-      manager.post(
-        { databaseRaw: '', databaseType: 'csl-json' },
-        controller.signal,
-      ),
-    ).rejects.toThrow('Aborted');
+    await expect(promise).rejects.toThrow('Aborted');
+    expect(FakeRpcWorker.instances[0].terminated).toBe(true);
   });
 
-  it('should reject with AbortError when worker throws and signal is aborted', async () => {
+  it('replaces a terminated worker for the next task', async () => {
+    let firstCall = true;
+    const manager = makeManager((req, respond) => {
+      if (firstCall) {
+        firstCall = false;
+        return; // never respond — task will be aborted
+      }
+      okHandler(req, respond);
+    }, 1);
+
     const controller = new AbortController();
+    const aborted = manager.post(parseRequest('a'), controller.signal);
+    await Promise.resolve();
+    controller.abort();
+    await expect(aborted).rejects.toThrow('Aborted');
 
-    mockPostMessage.mockImplementation(async () => {
-      controller.abort();
-      throw new Error('worker error');
+    // Next task gets a fresh worker
+    await expect(manager.post(parseRequest('b'))).resolves.toEqual({
+      entries: [],
+      parseErrors: [],
+    });
+    expect(FakeRpcWorker.instances).toHaveLength(2);
+    expect(FakeRpcWorker.instances[0].terminated).toBe(true);
+  });
+
+  it('rejects with the worker-reported error', async () => {
+    const manager = makeManager((req, respond) =>
+      setTimeout(() => respond({ id: req.id, error: 'parse failed' }), 0),
+    );
+
+    await expect(manager.post(parseRequest('bad'))).rejects.toThrow(
+      'parse failed',
+    );
+  });
+
+  it('rejects when the worker emits an error event and discards the worker', async () => {
+    const manager = makeManager(() => {});
+    const promise = manager.post(parseRequest());
+    await Promise.resolve();
+
+    FakeRpcWorker.instances[0].emit('error', { message: 'worker crashed' });
+
+    await expect(promise).rejects.toThrow('worker crashed');
+    expect(FakeRpcWorker.instances[0].terminated).toBe(true);
+  });
+
+  it('ignores responses with a mismatching request id', async () => {
+    const manager = makeManager((req, respond) => {
+      setTimeout(() => {
+        respond({ id: -999, result: { entries: [], parseErrors: [] } });
+        respond({ id: req.id, result: { entries: [], parseErrors: [] } });
+      }, 0);
     });
 
-    await expect(
-      manager.post(
-        { databaseRaw: '', databaseType: 'csl-json' },
-        controller.signal,
-      ),
-    ).rejects.toThrow('Aborted');
+    await expect(manager.post(parseRequest())).resolves.toEqual({
+      entries: [],
+      parseErrors: [],
+    });
   });
 
-  it('should reject with worker error when no signal is provided', async () => {
-    mockPostMessage.mockRejectedValue(new Error('parse failed'));
+  it('dispose() rejects queued tasks and terminates pooled workers', async () => {
+    const manager = makeManager(() => {}, 1);
+    const inFlight = manager.post(parseRequest('a'));
+    const queued = manager.post(parseRequest('b'));
+    await Promise.resolve();
 
-    await expect(
-      manager.post({ databaseRaw: 'bad', databaseType: 'csl-json' }),
-    ).rejects.toThrow('parse failed');
-  });
-
-  it('should wrap non-Error rejections in an Error', async () => {
-    mockPostMessage.mockRejectedValue('string error');
-
-    await expect(
-      manager.post({ databaseRaw: 'bad', databaseType: 'csl-json' }),
-    ).rejects.toThrow('string error');
-  });
-
-  it('should dispose: clear queue and terminate worker', () => {
     manager.dispose();
-    expect(worker.terminate).toHaveBeenCalled();
+
+    await expect(queued).rejects.toThrow('Aborted');
+    expect(FakeRpcWorker.instances[0].terminated).toBe(true);
+    // Avoid unhandled rejection noise for the in-flight task: it never
+    // settles by design (its worker is gone), so stop awaiting it.
+    void inFlight.catch(() => {});
+  });
+
+  it('rejects new posts after dispose()', async () => {
+    const manager = makeManager();
+    manager.dispose();
+    await expect(manager.post(parseRequest())).rejects.toThrow('disposed');
+  });
+
+  it('defaultPoolSize stays within [1, 3]', () => {
+    const size = WorkerManager.defaultPoolSize();
+    expect(size).toBeGreaterThanOrEqual(1);
+    expect(size).toBeLessThanOrEqual(3);
   });
 });
 
