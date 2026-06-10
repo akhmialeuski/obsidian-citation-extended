@@ -306,6 +306,7 @@ describe('LocalFileSource', () => {
           databaseType: DATABASE_FORMATS.BibLaTeX,
           databaseRaw: expect.any(String),
         }),
+        undefined,
       );
     });
 
@@ -328,6 +329,7 @@ describe('LocalFileSource', () => {
         expect.objectContaining({
           databaseType: DATABASE_FORMATS.CslJson,
         }),
+        undefined,
       );
     });
 

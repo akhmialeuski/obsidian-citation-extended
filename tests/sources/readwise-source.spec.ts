@@ -24,6 +24,7 @@ import {
 } from '../../src/core/adapters/readwise-adapter';
 import { DATABASE_FORMATS } from '../../src/core/types/database';
 import type { IFileSystem } from '../../src/platform/platform-adapter';
+import { createMockPlatformAdapter } from '../helpers/mock-platform';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -132,14 +133,10 @@ function createMockClient(
 function createMockFileSystem(
   overrides: Partial<IFileSystem> = {},
 ): IFileSystem {
-  return {
-    readFile: jest.fn().mockResolvedValue(''),
-    writeFile: jest.fn().mockResolvedValue(undefined),
-    exists: jest.fn().mockResolvedValue(false),
-    createFolder: jest.fn().mockResolvedValue(undefined),
-    getBasePath: jest.fn().mockReturnValue('/vault'),
-    ...overrides,
-  } as unknown as IFileSystem;
+  // Reuse the shared platform-adapter mock's fileSystem (tests/helpers/
+  // mock-platform.ts) rather than duplicating the mock factory here.
+  const fileSystem = createMockPlatformAdapter().fileSystem;
+  return { ...fileSystem, ...overrides };
 }
 
 /** Create a mock WorkerManager that returns the data passed to it. */
@@ -585,23 +582,22 @@ describe('ReadwiseSource', () => {
       ).toBe(true);
     });
 
-    it('collects errors from BOTH APIs when both fail (no cache)', async () => {
+    it('throws on a total outage (both APIs fail) with no cache, surfacing both errors', async () => {
       const client = createMockClient({
         fetchExportBooks: jest.fn().mockRejectedValue(new Error('v2 down')),
         fetchReaderDocuments: jest.fn().mockRejectedValue(new Error('v3 down')),
       } as unknown as Partial<ReadwiseApiClient>);
       const worker = createMockWorkerManager();
 
+      const errSpy = jest.spyOn(console, 'error').mockImplementation();
+      // No file system → no cache fallback, so a total outage throws.
       const source = new ReadwiseSource('src-1', client, worker as never);
-      const result = await source.load();
+      const error = await source.load().catch((e: Error) => e);
+      errSpy.mockRestore();
 
-      expect(result.entries).toHaveLength(0);
-      expect(
-        result.parseErrors!.some((e) => e.message.includes('v2 down')),
-      ).toBe(true);
-      expect(
-        result.parseErrors!.some((e) => e.message.includes('v3 down')),
-      ).toBe(true);
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toContain('v2 down');
+      expect((error as Error).message).toContain('v3 down');
     });
   });
 
@@ -654,7 +650,8 @@ describe('ReadwiseSource', () => {
 
       expect(entry.titleShort).toBe('Clean Code');
       expect(entry.source).toBe('kindle');
-      expect(entry.ISBN).toBe('B00AAA');
+      expect(entry.asin).toBe('B00AAA');
+      expect(entry.ISBN).toBeUndefined();
       expect(entry.documentNote).toBe('Doc-level note');
     });
 
@@ -830,6 +827,27 @@ describe('ReadwiseSource', () => {
 
       expect(capturedSignal!.aborted).toBe(true);
     });
+
+    it('honours an already-aborted external signal', async () => {
+      let capturedSignal: AbortSignal | undefined;
+      const client = createMockClient({
+        fetchExportBooks: jest
+          .fn()
+          .mockImplementation((opts?: { signal?: AbortSignal }) => {
+            capturedSignal = opts?.signal;
+            return Promise.resolve([]);
+          }),
+      } as unknown as Partial<ReadwiseApiClient>);
+      const worker = createMockWorkerManager();
+      const source = new ReadwiseSource('src-1', client, worker as never);
+
+      const external = new AbortController();
+      external.abort();
+      await source.load(external.signal);
+
+      // The internal signal is aborted immediately, not only via a later event.
+      expect(capturedSignal?.aborted).toBe(true);
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -965,6 +983,42 @@ describe('applyReadwiseFilters', () => {
     });
     expect(result.map((e) => e.rawId)).toEqual(['keep']);
   });
+
+  it('matches categories case-insensitively', () => {
+    const entries = [makeReadwiseEntryData({ rawId: 'b', category: 'books' })];
+    // Readwise returns lowercase; a "Books" filter must still match.
+    expect(
+      applyReadwiseFilters(entries, { categories: ['Books'] }).map(
+        (e) => e.rawId,
+      ),
+    ).toEqual(['b']);
+  });
+
+  it('does not crash on a null category when a category filter is set', () => {
+    const entries = [
+      makeReadwiseEntryData({
+        rawId: 'nullcat',
+        category: null as unknown as string,
+      }),
+      makeReadwiseEntryData({ rawId: 'b', category: 'books' }),
+    ];
+    const result = applyReadwiseFilters(entries, { categories: ['books'] });
+    // The null-category entry is excluded rather than throwing.
+    expect(result.map((e) => e.rawId)).toEqual(['b']);
+  });
+
+  it('does not crash on missing tags when a tag filter is set', () => {
+    const entries = [
+      makeReadwiseEntryData({
+        rawId: 'notags',
+        tags: undefined as unknown as string[],
+      }),
+      makeReadwiseEntryData({ rawId: 'tagged', tags: ['ml'] }),
+    ];
+    const result = applyReadwiseFilters(entries, { tags: ['ml'] });
+    // The tag-less entry is excluded rather than throwing on a null deref.
+    expect(result.map((e) => e.rawId)).toEqual(['tagged']);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1075,7 +1129,7 @@ describe('ReadwiseSource offline cache', () => {
     expect(fs.writeFile).not.toHaveBeenCalled();
   });
 
-  it('surfaces errors without throwing when both APIs fail and no cache exists', async () => {
+  it('throws on a total outage with no cache (so the prior library is preserved)', async () => {
     const fs = createMockFileSystem({
       exists: jest.fn().mockResolvedValue(false),
     });
@@ -1085,6 +1139,7 @@ describe('ReadwiseSource offline cache', () => {
     } as unknown as Partial<ReadwiseApiClient>);
     const worker = createMockWorkerManager();
 
+    const errSpy = jest.spyOn(console, 'error').mockImplementation();
     const source = new ReadwiseSource(
       's',
       client,
@@ -1092,15 +1147,15 @@ describe('ReadwiseSource offline cache', () => {
       fs,
       '/cache.json',
     );
-    const result = await source.load();
-
-    expect(result.entries).toHaveLength(0);
-    expect(result.parseErrors!.some((e) => e.message.includes('down'))).toBe(
-      true,
+    await expect(source.load()).rejects.toThrow(
+      'Failed to load from Readwise API',
     );
+    // The cache must NOT be overwritten with an empty result.
+    expect(fs.writeFile).not.toHaveBeenCalled();
+    errSpy.mockRestore();
   });
 
-  it('treats a cache read error as no cache', async () => {
+  it('treats a cache read error as no cache (throws on total outage)', async () => {
     const fs = createMockFileSystem({
       exists: jest.fn().mockResolvedValue(true),
       readFile: jest.fn().mockRejectedValue(new Error('read error')),
@@ -1111,6 +1166,85 @@ describe('ReadwiseSource offline cache', () => {
     } as unknown as Partial<ReadwiseApiClient>);
     const worker = createMockWorkerManager();
 
+    const errSpy = jest.spyOn(console, 'error').mockImplementation();
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      '/cache.json',
+    );
+    // readCache swallows the read error and returns null → no cache → throw.
+    await expect(source.load()).rejects.toThrow(
+      'Failed to load from Readwise API',
+    );
+    errSpy.mockRestore();
+  });
+
+  it('treats a corrupt cache as no cache (throws on total outage)', async () => {
+    const fs = createMockFileSystem({
+      exists: jest.fn().mockResolvedValue(true),
+      readFile: jest.fn().mockResolvedValue('not-json{{{'),
+    });
+    const client = createMockClient({
+      fetchExportBooks: jest.fn().mockRejectedValue(new Error('down')),
+      fetchReaderDocuments: jest.fn().mockRejectedValue(new Error('down')),
+    } as unknown as Partial<ReadwiseApiClient>);
+    const worker = createMockWorkerManager();
+
+    const errSpy = jest.spyOn(console, 'error').mockImplementation();
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      '/cache.json',
+    );
+    // An unparseable cache must NOT degrade into an empty "success with
+    // warnings" (which would wipe the in-memory library) — it must fail.
+    await expect(source.load()).rejects.toThrow(
+      'Failed to load from Readwise API',
+    );
+    errSpy.mockRestore();
+  });
+
+  it('still uses a legitimately cached empty array on a total outage', async () => {
+    const fs = createMockFileSystem({
+      exists: jest.fn().mockResolvedValue(true),
+      readFile: jest.fn().mockResolvedValue('[]'),
+    });
+    const client = createMockClient({
+      fetchExportBooks: jest.fn().mockRejectedValue(new Error('down')),
+      fetchReaderDocuments: jest.fn().mockRejectedValue(new Error('down')),
+    } as unknown as Partial<ReadwiseApiClient>);
+    const worker = createMockWorkerManager();
+
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      '/cache.json',
+    );
+    const result = await source.load();
+    warnSpy.mockRestore();
+
+    // An empty array is valid cache content, not corruption.
+    expect(result.entries).toHaveLength(0);
+    expect(
+      result.parseErrors!.some((e) => e.message.includes('using cache')),
+    ).toBe(true);
+  });
+
+  it('does not overwrite the cache on a partial fetch failure', async () => {
+    const fs = createMockFileSystem();
+    const client = createMockClient({
+      fetchExportBooks: jest.fn().mockResolvedValue([makeExportBook()]),
+      fetchReaderDocuments: jest.fn().mockRejectedValue(new Error('v3 down')),
+    } as unknown as Partial<ReadwiseApiClient>);
+    const worker = createMockWorkerManager();
+
     const source = new ReadwiseSource(
       's',
       client,
@@ -1120,11 +1254,47 @@ describe('ReadwiseSource offline cache', () => {
     );
     const result = await source.load();
 
-    // readCache swallows the read error and returns null → errors surfaced.
-    expect(result.entries).toHaveLength(0);
-    expect(result.parseErrors!.some((e) => e.message.includes('down'))).toBe(
+    // Books are still returned for this session...
+    expect(result.entries.length).toBeGreaterThan(0);
+    expect(result.parseErrors!.some((e) => e.message.includes('v3 down'))).toBe(
       true,
     );
+    // ...but the previously-complete cache is preserved (not clobbered).
+    expect(fs.writeFile).not.toHaveBeenCalled();
+  });
+
+  it('applies CURRENT filters to cached data on a total-outage fallback', async () => {
+    // Cache holds two entries of different categories (stored UNFILTERED).
+    const cachedRaw = JSON.stringify([
+      makeReadwiseEntryData({ rawId: 'book', category: 'books' }),
+      makeReadwiseEntryData({ rawId: 'art', category: 'articles' }),
+    ]);
+    const fs = createMockFileSystem({
+      exists: jest.fn().mockResolvedValue(true),
+      readFile: jest.fn().mockResolvedValue(cachedRaw),
+    });
+    const client = createMockClient({
+      fetchExportBooks: jest.fn().mockRejectedValue(new Error('down')),
+      fetchReaderDocuments: jest.fn().mockRejectedValue(new Error('down')),
+    } as unknown as Partial<ReadwiseApiClient>);
+    const worker = createMockWorkerManager();
+
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    // Current filter = articles only; it must apply to the cached (unfiltered) set.
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      '/cache.json',
+      undefined,
+      { categories: ['articles'] },
+    );
+    const result = await source.load();
+    warnSpy.mockRestore();
+
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0].id).toBe('rw-art');
   });
 
   it('throws when worker processing fails and no cache is available', async () => {

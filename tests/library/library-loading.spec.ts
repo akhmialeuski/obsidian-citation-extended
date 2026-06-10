@@ -118,8 +118,13 @@ describe('LibraryService Loading Behavior', () => {
       { name: 'Slow', path: 'slow.json', type: 'csl-json' },
     ];
 
-    // Never resolves — forces the load timeout to fire.
-    const loadMock = jest.fn().mockImplementation(() => new Promise(() => {}));
+    // Never resolves — forces the load timeout to fire. Capture the signal so
+    // we can assert it is aborted when the timeout fires.
+    let capturedSignal: AbortSignal | undefined;
+    const loadMock = jest.fn().mockImplementation((signal?: AbortSignal) => {
+      capturedSignal = signal;
+      return new Promise(() => {});
+    });
     (LocalFileSource as jest.Mock).mockImplementation(() => ({
       id: 'slow-source',
       load: loadMock,
@@ -136,6 +141,8 @@ describe('LibraryService Loading Behavior', () => {
 
     expect(service.state.status).toBe(LoadingStatus.Error);
     expect(service.state.error?.message).toContain('Timeout');
+    // The timeout must abort the threaded signal so sources stop in-flight work.
+    expect(capturedSignal?.aborted).toBe(true);
 
     // A timeout must NOT schedule a retry: the worker is still parsing, so a
     // retry would queue a second parse behind it (a self-worsening storm).

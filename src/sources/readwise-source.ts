@@ -8,6 +8,7 @@ import {
 import {
   ReadwiseEntryData,
   ReadwiseHighlightItem,
+  READWISE_MODES,
 } from '../core/adapters/readwise-adapter';
 import { DATABASE_FORMATS, convertToEntries } from '../core';
 import type { ParseErrorInfo, ReadwiseFilters } from '../core';
@@ -40,15 +41,19 @@ function exportHighlightToItem(h: ReadwiseHighlight): ReadwiseHighlightItem {
 
 /** Convert a Readwise v2 Export book into the normalized entry data shape. */
 function toEntryDataFromExport(book: ReadwiseExportBook): ReadwiseEntryData {
+  // Defensive: the API types declare these arrays non-null, but the raw
+  // response is not validated per-field, so guard against null/absent.
+  const rawHighlights = book.highlights ?? [];
+
   // Structured highlights preserve per-item metadata (note/location/color/tags).
-  const highlights = book.highlights
+  const highlights = rawHighlights
     .map(exportHighlightToItem)
     .filter(isMeaningfulHighlight);
 
   // Aggregated string kept for backward-compat with {{note}} templates.
   // Guard against highlights missing `text` and drop blank entries so the
   // aggregated string never contains stray `undefined`/empty segments.
-  const highlightTexts = book.highlights
+  const highlightTexts = rawHighlights
     .map((h) => h.text ?? '')
     .filter((text) => text.trim().length > 0);
   const highlightsText =
@@ -56,15 +61,15 @@ function toEntryDataFromExport(book: ReadwiseExportBook): ReadwiseEntryData {
 
   // Find the latest highlight update timestamp
   const updatedAt =
-    book.highlights.length > 0
-      ? book.highlights.reduce(
+    rawHighlights.length > 0
+      ? rawHighlights.reduce(
           (latest, h) => (h.updated > latest ? h.updated : latest),
-          book.highlights[0].updated,
+          rawHighlights[0].updated,
         )
       : null;
 
   return {
-    mode: 'readwise-highlights',
+    mode: READWISE_MODES.Highlights,
     rawId: String(book.user_book_id),
     title: book.title,
     author: book.author,
@@ -76,7 +81,7 @@ function toEntryDataFromExport(book: ReadwiseExportBook): ReadwiseEntryData {
     highlightsText,
     highlights,
     highlightCount: book.num_highlights,
-    tags: book.book_tags.map((t) => t.name),
+    tags: (book.book_tags ?? []).map((t) => t.name),
     publishedDate: null,
     updatedAt,
     readableTitle: book.readable_title || null,
@@ -93,7 +98,7 @@ function toEntryDataFromExport(book: ReadwiseExportBook): ReadwiseEntryData {
 /** Convert a Reader v3 document into the normalized entry data shape. */
 function toEntryDataFromReader(doc: ReadwiseReaderDocument): ReadwiseEntryData {
   return {
-    mode: 'reader-documents',
+    mode: READWISE_MODES.Reader,
     rawId: doc.id,
     title: doc.title,
     author: doc.author,
@@ -104,7 +109,9 @@ function toEntryDataFromReader(doc: ReadwiseReaderDocument): ReadwiseEntryData {
     summary: doc.summary,
     highlightsText: doc.notes || null,
     highlightCount: 0,
-    tags: Object.keys(doc.tags),
+    // Guard against a null/absent tags map (the API type is non-null but the
+    // raw response is not validated per-field), mirroring readerChildToItem.
+    tags: Object.keys(doc.tags ?? {}),
     publishedDate: doc.published_date,
     updatedAt: doc.updated_at,
     // Reader documents have no separate "readable title"; leave empty rather
@@ -156,14 +163,17 @@ interface MergedReaderResult {
 function mergeReaderChildren(
   docs: ReadwiseReaderDocument[],
 ): MergedReaderResult {
-  const parents = docs.filter((doc) => doc.parent_id === null);
+  // Treat both null and an absent/undefined parent_id as a top-level document
+  // (loose `== null`), so a document with no parent is never misclassified as
+  // an orphan child.
+  const parents = docs.filter((doc) => doc.parent_id == null);
   const parentIds = new Set(parents.map((doc) => doc.id));
 
   const childrenByParent = new Map<string, ReadwiseReaderDocument[]>();
   const orphans: ReadwiseReaderDocument[] = [];
 
   for (const doc of docs) {
-    if (doc.parent_id === null) continue;
+    if (doc.parent_id == null) continue;
     if (parentIds.has(doc.parent_id)) {
       const siblings = childrenByParent.get(doc.parent_id) ?? [];
       siblings.push(doc);
@@ -221,34 +231,51 @@ export function applyReadwiseFilters(
   if (!filters) return entries;
   const { categories, tags, minHighlights, readerLocations } = filters;
 
+  // Category and Reader-location values are a fixed vocabulary the Readwise API
+  // returns lowercase, so match them case-insensitively — otherwise a user
+  // typing "Books"/"Later" would silently match nothing. Tags are user-defined,
+  // so they stay case-sensitive.
+  const categorySet =
+    categories && categories.length > 0
+      ? new Set(categories.map((c) => c.toLowerCase()))
+      : null;
+  const locationSet =
+    readerLocations && readerLocations.length > 0
+      ? new Set(readerLocations.map((l) => l.toLowerCase()))
+      : null;
+
   return entries.filter((entry) => {
-    if (
-      categories &&
-      categories.length > 0 &&
-      !categories.includes(entry.category)
-    ) {
+    // `category` is non-optional in the type but copied from an unvalidated API
+    // response, so guard the dereference (a null category must not crash load).
+    if (categorySet && !categorySet.has((entry.category ?? '').toLowerCase())) {
       return false;
     }
 
-    if (tags && tags.length > 0 && !entry.tags.some((t) => tags.includes(t))) {
+    // Guard the `tags` dereference for the same reason as `category` above: a
+    // corrupt/legacy cache entry (read via parseCachedEntries, which does not
+    // validate per-field) may lack the array even though the type is non-null.
+    if (
+      tags &&
+      tags.length > 0 &&
+      !(entry.tags ?? []).some((t) => tags.includes(t))
+    ) {
       return false;
     }
 
     if (
       typeof minHighlights === 'number' &&
-      entry.mode === 'readwise-highlights' &&
+      entry.mode === READWISE_MODES.Highlights &&
       entry.highlightCount < minHighlights
     ) {
       return false;
     }
 
     if (
-      readerLocations &&
-      readerLocations.length > 0 &&
-      entry.mode === 'reader-documents' &&
+      locationSet &&
+      entry.mode === READWISE_MODES.Reader &&
       !(
         entry.readerLocation != null &&
-        readerLocations.includes(entry.readerLocation)
+        locationSet.has(entry.readerLocation.toLowerCase())
       )
     ) {
       return false;
@@ -257,6 +284,12 @@ export function applyReadwiseFilters(
     return true;
   });
 }
+
+/**
+ * Marker error for a deliberate total-outage-with-no-cache failure, so the
+ * load() catch can surface it directly without re-probing the cache.
+ */
+class ReadwiseOutageError extends Error {}
 
 // ---------------------------------------------------------------------------
 // DataSource implementation
@@ -298,52 +331,89 @@ export class ReadwiseSource implements DataSource {
    * When a cache file is configured, API results are persisted to disk.
    * If the API is unreachable, the cache is used as a fallback.
    */
-  async load(): Promise<DataSourceLoadResult> {
+  async load(externalSignal?: AbortSignal): Promise<DataSourceLoadResult> {
     // Cancel any previous in-flight fetch and start a fresh cancellation scope.
     this.abortController?.abort();
-    this.abortController = new AbortController();
-    const signal = this.abortController.signal;
+    const controller = new AbortController();
+    this.abortController = controller;
+    const signal = controller.signal;
+    // If the library load is aborted (load timeout, dispose, or a newer load),
+    // cancel ours too so in-flight HTTP work and rate-limit back-offs stop
+    // instead of leaking and burning the Readwise rate-limit budget. Honour an
+    // already-aborted signal too (addEventListener would never fire for it).
+    if (externalSignal?.aborted) {
+      controller.abort();
+    } else {
+      externalSignal?.addEventListener('abort', () => controller.abort(), {
+        once: true,
+      });
+    }
 
     try {
-      const { entries: entryDataArray, errors: fetchErrors } =
-        await this.fetchEntryData(signal);
+      const {
+        entries: entryDataArray,
+        errors: fetchErrors,
+        allFailed,
+      } = await this.fetchEntryData(signal);
 
-      // Total fetch failure (every API errored and nothing was returned): fall
-      // back to the cache instead of caching an empty result, which would clobber
-      // previously-good data on a transient outage.
-      if (entryDataArray.length === 0 && fetchErrors.length > 0) {
-        const cached = await this.readCache();
-        if (cached) {
+      // Total outage (every API endpoint failed): fall back to the cache if
+      // present; otherwise THROW so the library surfaces a real failure and
+      // keeps the prior in-memory library / last-sync date, instead of
+      // reporting a misleading empty "success with warnings". A partial failure
+      // (one endpoint down, the other returning data or a legitimate empty set)
+      // is NOT treated as an outage.
+      if (allFailed) {
+        const cachedEntries = await this.readCachedEntries();
+        if (cachedEntries) {
           console.warn('ReadwiseSource: API unavailable, using cached data');
-          return await this.processRaw(cached, [
-            {
-              message: `Readwise API unavailable (using cache): ${fetchErrors[0].message}`,
-            },
-          ]);
+          return await this.runPipeline(
+            cachedEntries,
+            [
+              {
+                message: `Readwise API unavailable (using cache): ${fetchErrors[0].message}`,
+              },
+            ],
+            signal,
+          );
         }
-        // No cache to fall back to — surface the API errors without overwriting
-        // the cache.
-        return await this.processRaw(JSON.stringify([]), fetchErrors);
+        throw new ReadwiseOutageError(
+          fetchErrors.map((e) => e.message).join('; '),
+        );
       }
 
-      const raw = JSON.stringify(entryDataArray);
+      // Persist the UNFILTERED entries (only on a fully-clean fetch), so the
+      // cache is a full-fidelity backup and later filter changes still apply on
+      // read; a partial outage never clobbers a previously-complete snapshot.
+      if (fetchErrors.length === 0) {
+        await this.writeCache(JSON.stringify(entryDataArray));
+      }
 
-      // Persist to cache for offline/fast startup
-      await this.writeCache(raw);
-
-      return await this.processRaw(raw, fetchErrors);
+      return await this.runPipeline(entryDataArray, fetchErrors, signal);
     } catch (error) {
+      // Deliberate total-outage failure: surface it without re-probing the
+      // cache (the outage branch already consulted it).
+      if (error instanceof ReadwiseOutageError) {
+        console.error(
+          `ReadwiseSource: Readwise API unavailable: ${error.message}`,
+        );
+        throw new Error(`Failed to load from Readwise API: ${error.message}`);
+      }
+
       // Unexpected processing failure (e.g. worker error) — last-resort cache.
-      const cached = await this.readCache();
-      if (cached) {
+      const cachedEntries = await this.readCachedEntries();
+      if (cachedEntries) {
         console.warn('ReadwiseSource: load failed, using cached data');
-        return await this.processRaw(cached, [
-          {
-            message: `Readwise load failed (using cache): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          },
-        ]);
+        return await this.runPipeline(
+          cachedEntries,
+          [
+            {
+              message: `Readwise load failed (using cache): ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            },
+          ],
+          signal,
+        );
       }
 
       const message = error instanceof Error ? error.message : String(error);
@@ -361,16 +431,53 @@ export class ReadwiseSource implements DataSource {
   }
 
   /**
+   * Apply the configured import filters to normalized entries, then run them
+   * through the worker pipeline. Filtering happens here (not at fetch or cache
+   * time) so the offline cache stays full-fidelity and the current filters are
+   * always honoured — including on the cache-fallback path.
+   */
+  private async runPipeline(
+    entries: ReadwiseEntryData[],
+    fetchErrors: ParseErrorInfo[],
+    signal?: AbortSignal,
+  ): Promise<DataSourceLoadResult> {
+    const filtered = applyReadwiseFilters(entries, this.filters);
+    return this.processRaw(JSON.stringify(filtered), fetchErrors, signal);
+  }
+
+  /**
+   * Read and parse the cache file. Returns `null` when the cache is missing
+   * OR corrupt (unparseable / not an array) — a corrupt cache must behave
+   * exactly like no cache, so an outage still surfaces as a failure instead
+   * of silently replacing the library with an empty "success". A legitimately
+   * cached empty array (`[]`) is still a valid fallback.
+   */
+  private async readCachedEntries(): Promise<ReadwiseEntryData[] | null> {
+    const raw = await this.readCache();
+    if (raw === null) return null;
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as ReadwiseEntryData[]) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Run serialized ReadwiseEntryData JSON through the worker pipeline.
    */
   private async processRaw(
     raw: string,
     fetchErrors: ParseErrorInfo[],
+    signal?: AbortSignal,
   ): Promise<DataSourceLoadResult> {
-    const result = await this.loadWorker.post({
-      databaseRaw: raw,
-      databaseType: DATABASE_FORMATS.Readwise,
-    });
+    const result = await this.loadWorker.post(
+      {
+        databaseRaw: raw,
+        databaseType: DATABASE_FORMATS.Readwise,
+      },
+      signal,
+    );
 
     const entries = convertToEntries(DATABASE_FORMATS.Readwise, result.entries);
 
@@ -413,6 +520,8 @@ export class ReadwiseSource implements DataSource {
   private async fetchEntryData(signal?: AbortSignal): Promise<{
     entries: ReadwiseEntryData[];
     errors: ParseErrorInfo[];
+    /** True only when EVERY API call failed (a real total outage). */
+    allFailed: boolean;
   }> {
     const [booksResult, docsResult] = await Promise.allSettled([
       this.client.fetchExportBooks({ signal }),
@@ -454,7 +563,14 @@ export class ReadwiseSource implements DataSource {
       errors.push({ message: `Readwise Reader v3 API error: ${msg}` });
     }
 
-    return { entries: applyReadwiseFilters(entries, this.filters), errors };
+    // A total outage = every endpoint rejected. A single endpoint failing while
+    // the other returns (even empty) is a partial failure, not a total one.
+    const allFailed =
+      booksResult.status === 'rejected' && docsResult.status === 'rejected';
+
+    // Return UNFILTERED entries; filters are applied at read time (runPipeline)
+    // so the offline cache stays full-fidelity and current filters always apply.
+    return { entries, errors, allFailed };
   }
 
   /**

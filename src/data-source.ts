@@ -1,4 +1,4 @@
-import { Entry, DatabaseType, ParseErrorInfo, ReadwiseFilters } from './core';
+import { Entry, DatabaseType, ParseErrorInfo } from './core';
 
 /**
  * Known built-in data source transport types.
@@ -29,9 +29,11 @@ export interface DataSource {
   readonly id: string;
 
   /**
-   * Load entries from this data source
+   * Load entries from this data source.
+   * @param signal Optional AbortSignal; sources that perform cancellable I/O
+   *               (e.g. network) should stop in-flight work when it aborts.
    */
-  load(): Promise<DataSourceLoadResult>;
+  load(signal?: AbortSignal): Promise<DataSourceLoadResult>;
 
   /**
    * Watch for changes and call the callback when data changes
@@ -68,9 +70,11 @@ export interface DataSourceDefinition {
   format: DatabaseType;
 
   /**
-   * Readwise-only client-side import filters. Ignored by non-Readwise sources.
+   * Stable database identifier (DatabaseConfig.id). Source-agnostic — lets a
+   * source resolve its own per-database configuration from settings without
+   * leaking source-specific fields into this generic contract.
    */
-  readwiseFilters?: ReadwiseFilters;
+  databaseId?: string;
 }
 
 /**

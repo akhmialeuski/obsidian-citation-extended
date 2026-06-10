@@ -1,6 +1,6 @@
 {
   "name": "obsidian-citation-extended",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Extended functionality to automatically search and insert citations from a Zotero library.",
   "main": "main.js",
   "scripts": {
@@ -15,7 +15,10 @@
   "standard-version": {
     "bumpFiles": [
       "manifest.json"
-    ]
+    ],
+    "scripts": {
+      "postbump": "node version-bump.mjs && git add manifest.json versions.json"
+    }
   },
   "keywords": [],
   "author": "Anatol Khmialeuski",

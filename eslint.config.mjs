@@ -101,6 +101,7 @@ export default tseslint.config(
             '.agent/**',
             '.claude/**',
             'eslint.config.mjs',
+            'version-bump.mjs',
         ],
     },
     {

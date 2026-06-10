@@ -17,7 +17,7 @@ import type { SourceLoadResult } from './normalization-pipeline';
  */
 export interface ISourceManager {
   syncSources(databases: DatabaseConfig[]): void;
-  loadAll(): Promise<SourceLoadResult[]>;
+  loadAll(signal?: AbortSignal): Promise<SourceLoadResult[]>;
   initWatchers(onChange: () => void): void;
   dispose(): void;
 }
@@ -68,7 +68,7 @@ export class SourceManager implements ISourceManager {
             type: transport,
             path: db.path,
             format: db.type,
-            readwiseFilters: db.readwiseFilters,
+            databaseId: db.id,
           },
           sourceId,
         );
@@ -123,7 +123,7 @@ export class SourceManager implements ISourceManager {
    * does this throw, so the library transitions to the Error state rather than
    * reporting an empty success.
    */
-  async loadAll(): Promise<SourceLoadResult[]> {
+  async loadAll(signal?: AbortSignal): Promise<SourceLoadResult[]> {
     const entries = [...this.sources.values()];
 
     const settled = await Promise.all(
@@ -135,7 +135,7 @@ export class SourceManager implements ISourceManager {
         }): Promise<{ failed: boolean; result: SourceLoadResult }> => {
           try {
             console.debug(`SourceManager: Loading from "${databaseName}"`);
-            const result: DataSourceLoadResult = await source.load();
+            const result: DataSourceLoadResult = await source.load(signal);
             console.debug(
               `SourceManager: Loaded ${result.entries.length} entries from "${databaseName}"`,
             );

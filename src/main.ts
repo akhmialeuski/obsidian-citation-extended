@@ -35,9 +35,14 @@ import { CitationsPluginSettings } from './ui/settings/settings';
 import {
   DEFAULT_SETTINGS,
   validateSettings,
+  resolveSyncIntervalMs,
 } from './ui/settings/settings-schema';
 import { WorkerManager } from './util';
-import { generateDatabaseId, ReadwiseApiClient } from './core';
+import {
+  generateDatabaseId,
+  ReadwiseApiClient,
+  resolveReadwiseFilters,
+} from './core';
 import LoadWorker from 'web-worker:./worker';
 
 export default class CitationPlugin extends Plugin {
@@ -163,10 +168,13 @@ export default class CitationPlugin extends Plugin {
           readwiseCacheDir
             ? `${readwiseCacheDir}/readwise-cache-${id.replace(cacheNameSanitizeRe, '-')}.json`
             : '',
-          this.settings.readwiseSyncIntervalMinutes > 0
-            ? this.settings.readwiseSyncIntervalMinutes * 60_000
-            : undefined,
-          def.readwiseFilters,
+          // Clamp at point of use: a persisted out-of-range value (older build
+          // or hand-edited data.json) bypasses the schema max and would
+          // otherwise overflow window.setInterval.
+          resolveSyncIntervalMs(this.settings.readwiseSyncIntervalMinutes),
+          // Resolve per-database filters from settings via the generic
+          // databaseId, keeping source-specific config off DataSourceDefinition.
+          resolveReadwiseFilters(this.settings.databases, def.databaseId),
         ),
     );
 

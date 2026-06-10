@@ -107,8 +107,9 @@ export class LibraryService implements ILibraryService {
     if (this.abortController) {
       this.abortController.abort();
     }
-    this.abortController = new AbortController();
-    const signal = this.abortController.signal;
+    const controller = new AbortController();
+    this.abortController = controller;
+    const signal = controller.signal;
 
     if (!isRetry) {
       this.retryCount = 0;
@@ -126,7 +127,7 @@ export class LibraryService implements ILibraryService {
     console.debug('Citation plugin: Reloading library from all sources');
 
     try {
-      const results = await this.loadFromSources();
+      const results = await this.loadFromSources(signal);
       if (signal.aborted) return null;
 
       this.buildLibrary(results);
@@ -152,10 +153,15 @@ export class LibraryService implements ILibraryService {
         ],
       });
 
-      // A timeout means the worker is still parsing; retrying would queue a
-      // second parse behind it and make things worse. Only retry transient
-      // failures (e.g. a file briefly locked during Better BibTeX auto-export).
-      if (!(e instanceof LibraryLoadTimeoutError)) {
+      if (e instanceof LibraryLoadTimeoutError) {
+        // The timed-out race abandoned still-running source work (e.g. Readwise
+        // HTTP + rate-limit back-offs). Abort the load signal so the threaded
+        // sources actually stop, instead of leaking work past the timeout. Do
+        // NOT retry — retrying would queue a second parse behind the first.
+        controller.abort();
+      } else {
+        // Retry transient failures (e.g. a file briefly locked during a
+        // Better BibTeX auto-export).
         this.handleErrorRetry();
       }
       return null;
@@ -166,7 +172,9 @@ export class LibraryService implements ILibraryService {
     }
   };
 
-  private async loadFromSources(): Promise<SourceLoadResult[]> {
+  private async loadFromSources(
+    signal: AbortSignal,
+  ): Promise<SourceLoadResult[]> {
     this.sourceManager.syncSources(this.settings.databases);
 
     const timeoutSeconds =
@@ -180,12 +188,19 @@ export class LibraryService implements ILibraryService {
       );
     });
 
+    // Pass the load signal so sources can cancel in-flight work (e.g. Readwise
+    // HTTP + rate-limit back-offs). The signal is aborted on a newer load, on
+    // dispose(), and on timeout (see the LibraryLoadTimeoutError branch in
+    // load()'s catch).
+    const loadPromise = this.sourceManager.loadAll(signal);
+    // If the timeout wins the race, loadPromise keeps running and may later
+    // reject (e.g. every source fails). Attach a no-op handler so that late
+    // rejection is not an unhandled promise rejection — the real failure is
+    // already surfaced via the timeout-driven Error state.
+    loadPromise.catch(() => {});
+
     try {
-      const results = await Promise.race([
-        this.sourceManager.loadAll(),
-        timeoutPromise,
-      ]);
-      return results;
+      return await Promise.race([loadPromise, timeoutPromise]);
     } finally {
       if (timeoutId) window.clearTimeout(timeoutId);
     }

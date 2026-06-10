@@ -1,6 +1,13 @@
 import MiniSearch from 'minisearch';
 import { Entry } from '../core';
 
+// Search field boost weights. Identifier fields (year/id/zoteroId) keep the
+// default weight of 1; note/highlight text is weighted below them so a
+// title or author match always outranks a note-only match.
+const TITLE_BOOST = 2;
+const AUTHOR_BOOST = 1.5;
+const NOTES_BOOST = 0.5;
+
 /**
  * Strip diacritical marks (accents) and convert to lowercase.
  * Uses Unicode NFD decomposition to separate base characters from
@@ -34,7 +41,11 @@ export class SearchService {
       searchOptions: {
         // notesText is weighted below identifier fields so a title/author match
         // always outranks a match found only inside highlight/note text.
-        boost: { title: 2, authorString: 1.5, notesText: 0.5 },
+        boost: {
+          title: TITLE_BOOST,
+          authorString: AUTHOR_BOOST,
+          notesText: NOTES_BOOST,
+        },
         fuzzy: 0.2,
         prefix: true,
         // Normalize diacritics at search time to match indexed terms

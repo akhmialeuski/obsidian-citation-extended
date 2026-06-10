@@ -341,7 +341,7 @@ sequenceDiagram
 
 | Mechanism | Value | Purpose |
 |-----------|-------|---------|
-| **Timeout** | 10 s | Race against `Promise.all` of source loads |
+| **Timeout** | configurable via `libraryLoadTimeoutSeconds` (default 30 s) | Race (`Promise.race`) against `sourceManager.loadAll()`; the load signal is threaded to sources so the in-flight work is cancelled on timeout |
 | **AbortController** | per load | Cancel in-flight load on new `load()` call |
 | **Debounce** | 1 000 ms | Coalesce rapid file change events from watchers |
 | **Retry** | 5 attempts | Exponential backoff: 1 s → 2 s → 4 s → 8 s → 16 s (capped at 30 s) |
@@ -958,10 +958,10 @@ sequenceDiagram
     participant AF as AdapterFactory
     participant NP as NormalizationPipeline
 
-    UI->>Main: syncReadwiseDatabaseConfig()
+    UI->>Main: Add/select Readwise database (settings tab)
     Main->>Main: Add DatabaseConfig (type: 'readwise', sourceType: 'readwise')
     Main->>SM: syncSources(databases)
-    SM->>RWS: new ReadwiseSource(id, client, mode, workerManager)
+    SM->>RWS: new ReadwiseSource(id, apiClient, workerManager, fileSystem, cachePath, syncIntervalMs, filters)
 
     Note over SM: On libraryService.load()
     SM->>RWS: load()
@@ -1004,7 +1004,7 @@ Reader v3 returns highlights/notes as child documents (non-null `parent_id`). `m
 
 ### Import Filters
 
-A Readwise database may carry optional `readwiseFilters` (`categories`, `tags`, `minHighlights`, `readerLocations`), threaded from `DatabaseConfig` → `DataSourceDefinition` → `ReadwiseSource`. `applyReadwiseFilters()` (a pure function) filters normalized entries after fetch/merge, before the worker pipeline. `minHighlights` applies only to highlight-mode entries; `readerLocations` only to Reader documents.
+A Readwise database may carry optional `readwiseFilters` (`categories`, `tags`, `minHighlights`, `readerLocations`) on its `DatabaseConfig`. `DataSourceDefinition` stays source-agnostic — it carries only a generic `databaseId`; `main.ts` resolves the per-database `readwiseFilters` from settings by that id (`resolveReadwiseFilters`) and injects them into `ReadwiseSource`. `applyReadwiseFilters()` (a pure function) filters the normalized entries at read time — after fetch/merge and on the cache-fallback path — so the offline cache stays full-fidelity and current filters always apply. `minHighlights` applies only to highlight-mode entries; `readerLocations` only to Reader documents.
 
 ### Cancellation & Cache
 

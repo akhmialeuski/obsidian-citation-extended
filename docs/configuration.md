@@ -51,6 +51,14 @@ To use more than one bibliography source (e.g. personal library + shared team li
 
 ![Multiple databases](images/settings-multiple-databases.png)
 
+### Library load timeout
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **Library load timeout (seconds)** | Maximum time to wait for all databases to load and parse before aborting. Raise this if you see "Timeout loading citation database" with a large or heavily LaTeX-escaped library. Range `5`–`600` | `30` |
+
+A load that exceeds this timeout is **not** retried automatically — the parse may still be running in the background, and a retry would queue another parse behind it. If you hit the timeout, raise the value and re-run **Refresh library** (or reopen the vault). Out-of-range values typed in the field are clamped to the valid range.
+
 ---
 
 ## Readwise Integration
@@ -72,7 +80,7 @@ Connect the plugin to your Readwise account to import highlights and documents a
 | **Database type** | Must be set to **Readwise** |
 | **API token** | Your Readwise access token (password field). Get it from [readwise.io/access_token](https://readwise.io/access_token). Stored in plugin settings |
 | **Auto-sync interval (minutes)** | How often the plugin automatically fetches new data from Readwise, in minutes. Set to `0` to disable automatic sync. Default: `30`. Maximum: `10080` (1 week) — larger values are clamped to avoid timer overflow |
-| **Advanced filters** | Collapsible section with per-database import filters (see below). Optional |
+| **Advanced filters** | Per-database import filters sub-section (see below). Optional |
 | **Validate token** | Tests the API token against Readwise. Shows "Token is valid" or "Token is invalid" |
 | **Sync now** | Fetches data from both Readwise APIs and reloads the library. On success, updates the "Last sync" timestamp; on failure it reports the error and does **not** update the timestamp |
 
@@ -80,12 +88,12 @@ Connect the plugin to your Readwise account to import highlights and documents a
 
 Each Readwise database can optionally restrict which entries are imported. Filters are applied after fetching and are stored per-database. Leave a field empty to disable that filter.
 
-| Filter | Description |
-| ------ | ----------- |
-| **Categories** | Comma-separated. Import only entries in these categories (e.g. `books, articles`) |
-| **Tags** | Comma-separated. Import only entries that have at least one of these tags |
-| **Reader locations** | Comma-separated. Import only Reader documents in these locations (e.g. `later, archive`) |
-| **Minimum highlights** | Import only books with at least this many highlights (applies to highlight-mode entries only) |
+| Filter                 | Description                                                                                                          |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Categories**         | Comma-separated. Import only entries in these categories (e.g. `books, articles`). Matched case-insensitively        |
+| **Tags**               | Comma-separated. Import only entries that have at least one of these tags. Tags are user-defined and case-sensitive  |
+| **Reader locations**   | Comma-separated. Import only Reader documents in these locations (e.g. `later, archive`). Matched case-insensitively |
+| **Minimum highlights** | Import only books with at least this many highlights (applies to highlight-mode entries only)                        |
 
 ### How It Works
 
@@ -106,7 +114,7 @@ After each successful sync, the plugin saves Readwise data to a local cache file
 
 Your Readwise API token is stored **unencrypted** in the plugin's `data.json` (`.obsidian/plugins/citation-extended/data.json`). Obsidian does not provide a secret store for plugins. Treat the vault accordingly: avoid committing it to a public git repository, and be mindful when syncing the vault through third-party cloud services. Revoke and regenerate the token at [readwise.io/access_token](https://readwise.io/access_token) if it is ever exposed.
 
-The cache file is managed automatically -- you do not need to create or edit it. It is overwritten on every successful sync.
+The cache file is managed automatically -- you do not need to create or edit it. It is overwritten only after a fully successful sync where every Readwise API responds; a partial outage (one API unavailable) leaves the previous cache intact rather than replacing it with an incomplete snapshot.
 
 ---
 

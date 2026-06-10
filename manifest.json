@@ -1,7 +1,7 @@
 {
   "id": "citation-extended",
   "name": "Citation Extended",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "minAppVersion": "1.4.0",
   "description": "Extended functionality to automatically search and insert citations from a Zotero library.",
   "author": "Anatol Khmialeuski",

@@ -85,8 +85,8 @@ The plugin loads data from both Readwise APIs in parallel and merges the results
 | `source_url`          | `URL`                        | Original source URL                                                    |
 | `readwise_url` / `unique_url` | `zoteroSelectURI`    | Opens in Readwise Reader app (see note below)                          |
 | `summary`             | `abstract`                   |                                                                        |
-| `asin`                | `ISBN`                       | Amazon ASIN (v2 Export books only)                                     |
-| `site_name`           | `containerTitle`             | Reader (v3) — e.g. "The New Yorker"                                     |
+| `asin`                | `asin`                       | Amazon ASIN (v2 Export books only); not mapped to ISBN                 |
+| `site_name`           | `containerTitle`             | Reader (v3) — e.g. "The New Yorker"                                    |
 | `book_tags` / `tags`  | `keywords[]`                 |                                                                        |
 | `document_note` / `notes` | `documentNote`           | Document-level note (distinct from highlights)                         |
 | `word_count`          | `wordCount`                  | Reader (v3) entries only                                               |
@@ -104,7 +104,7 @@ The plugin loads data from both Readwise APIs in parallel and merges the results
 
 **Searching highlights:** Full-text search indexes the highlight/note text (truncated per entry), so a query that appears only inside a highlight will still find the entry. Title and author matches always rank above highlight-only matches.
 
-**Offline cache:** After each successful sync, Readwise data is cached locally at `.obsidian/plugins/citation-extended/readwise-cache-<id>.json` — one file per Readwise database, keyed by its stable id, so multiple Readwise databases never collide. If the API is unavailable on the next plugin load, the cached data is used as a fallback and a warning is shown. The cache is overwritten on every successful sync.
+**Offline cache:** After each successful sync, Readwise data is cached locally at `.obsidian/plugins/citation-extended/readwise-cache-<id>.json` — one file per Readwise database, keyed by its stable id, so multiple Readwise databases never collide. If the API is unavailable on the next plugin load, the cached data is used as a fallback and a warning is shown. The cache stores the full unfiltered data and is overwritten only after a fully successful sync (every Readwise API responds); a partial outage leaves the previous cache intact. Import filters are re-applied when the cache is read, so changing filters always takes effect.
 
 ## Multiple Databases
 

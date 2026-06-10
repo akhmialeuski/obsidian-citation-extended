@@ -37,7 +37,7 @@ export class LocalFileSource implements DataSource {
   /**
    * Load entries from the local file
    */
-  async load(): Promise<DataSourceLoadResult> {
+  async load(signal?: AbortSignal): Promise<DataSourceLoadResult> {
     const resolvedPath = this.resolveFilePath();
 
     try {
@@ -53,10 +53,13 @@ export class LocalFileSource implements DataSource {
       const decoder = new TextDecoder('utf8');
       const value = decoder.decode(dataView);
 
-      const result = await this.loadWorker.post({
-        databaseRaw: value,
-        databaseType: this.format,
-      });
+      const result = await this.loadWorker.post(
+        {
+          databaseRaw: value,
+          databaseType: this.format,
+        },
+        signal,
+      );
 
       return {
         sourceId: this.id,
