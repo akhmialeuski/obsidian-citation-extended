@@ -82,45 +82,47 @@ describe('SearchService', () => {
     entries = [entry1, entry2, entry3];
   });
 
-  test('should index and search entries', () => {
-    service.buildIndex(entries);
+  test('should index and search entries', async () => {
+    await service.buildIndex(entries);
 
     const results = service.search('Algorithms');
     expect(results).toContain('1');
     expect(results.length).toBe(1);
   });
 
-  test('should search by author', () => {
-    service.buildIndex(entries);
+  test('should search by author', async () => {
+    await service.buildIndex(entries);
 
     const results = service.search('Martin');
     expect(results).toContain('2');
   });
 
-  test('should search by year', () => {
-    service.buildIndex(entries);
+  test('should search by year', async () => {
+    await service.buildIndex(entries);
 
     const results = service.search('1999');
     expect(results).toContain('3');
   });
 
-  test('should handle empty query', () => {
-    service.buildIndex(entries);
+  test('should handle empty query', async () => {
+    await service.buildIndex(entries);
     expect(service.search('')).toEqual([]);
   });
 
-  test('isReady should return true when not indexing', () => {
-    expect(service.isReady).toBe(true);
-  });
+  test('a newer buildIndex supersedes an in-flight one', async () => {
+    // Start two overlapping builds; only the SECOND may win the swap.
+    const first = service.buildIndex(entries);
+    const second = service.buildIndex([entries[0]]);
+    await Promise.all([first, second]);
 
-  test('isReady should return true after buildIndex completes', () => {
-    service.buildIndex(entries);
-    expect(service.isReady).toBe(true);
+    expect(service.search('Algorithms')).toContain('1');
+    // entry2 exists only in the superseded first build.
+    expect(service.search('Clean')).toEqual([]);
   });
 
   // Regression test for GitHub issue #220:
   // "Insert literature note link won't search by author name"
-  test('should find entries by author name in Insert Literature Note Link (#220)', () => {
+  test('should find entries by author name in Insert Literature Note Link (#220)', async () => {
     const entries = [
       new MockEntry({
         id: 'hopf2020',
@@ -136,7 +138,7 @@ describe('SearchService', () => {
       }),
     ];
 
-    service.buildIndex(entries);
+    await service.buildIndex(entries);
 
     // Search by last name
     const byLastName = service.search('Hopf');
@@ -151,7 +153,7 @@ describe('SearchService', () => {
     expect(byPartial).toContain('hopf2020');
   });
 
-  test('should search by Zotero ID', () => {
+  test('should search by Zotero ID', async () => {
     const zoteroEntries = [
       new MockEntry({
         id: 'smith2020',
@@ -169,13 +171,13 @@ describe('SearchService', () => {
       }),
     ];
 
-    service.buildIndex(zoteroEntries);
+    await service.buildIndex(zoteroEntries);
 
     const results = service.search('W5JRT78A');
     expect(results).toContain('smith2020');
   });
 
-  test('should find entry by partial Zotero ID prefix', () => {
+  test('should find entry by partial Zotero ID prefix', async () => {
     const zoteroEntries = [
       new MockEntry({
         id: 'smith2020',
@@ -186,14 +188,14 @@ describe('SearchService', () => {
       }),
     ];
 
-    service.buildIndex(zoteroEntries);
+    await service.buildIndex(zoteroEntries);
 
     const results = service.search('W5JRT');
     expect(results).toContain('smith2020');
   });
 
   describe('diacritics normalization', () => {
-    test('should find entry with accented author when searching without accents', () => {
+    test('should find entry with accented author when searching without accents', async () => {
       const diacriticEntries = [
         new MockEntry({
           id: 'maria2020',
@@ -203,13 +205,13 @@ describe('SearchService', () => {
         }),
       ];
 
-      service.buildIndex(diacriticEntries);
+      await service.buildIndex(diacriticEntries);
 
       const results = service.search('Maria');
       expect(results).toContain('maria2020');
     });
 
-    test('should find entry with umlauts when searching without diacritics', () => {
+    test('should find entry with umlauts when searching without diacritics', async () => {
       const diacriticEntries = [
         new MockEntry({
           id: 'muller2019',
@@ -219,21 +221,21 @@ describe('SearchService', () => {
         }),
       ];
 
-      service.buildIndex(diacriticEntries);
+      await service.buildIndex(diacriticEntries);
 
       const results = service.search('Muller');
       expect(results).toContain('muller2019');
     });
 
-    test('should still match plain ASCII search terms', () => {
-      service.buildIndex(entries);
+    test('should still match plain ASCII search terms', async () => {
+      await service.buildIndex(entries);
 
       const results = service.search('Algorithms');
       expect(results).toContain('1');
       expect(results.length).toBe(1);
     });
 
-    test('should find entry when query itself contains diacritics', () => {
+    test('should find entry when query itself contains diacritics', async () => {
       const diacriticEntries = [
         new MockEntry({
           id: 'muller2019',
@@ -243,7 +245,7 @@ describe('SearchService', () => {
         }),
       ];
 
-      service.buildIndex(diacriticEntries);
+      await service.buildIndex(diacriticEntries);
 
       // Searching with the accented form should also work
       const results = service.search('M\u00fcller');
@@ -259,17 +261,17 @@ describe('SearchService — note/highlight text', () => {
     service = new SearchService();
   });
 
-  test('finds an entry by a phrase that appears only in its highlights', () => {
+  test('finds an entry by a phrase that appears only in its highlights', async () => {
     const entry = new MockEntry(
       { id: 'h1', title: 'Some Book', authorString: 'Author' },
       'a profound thought about serendipity',
     );
-    service.buildIndex([entry]);
+    await service.buildIndex([entry]);
 
     expect(service.search('serendipity')).toContain('h1');
   });
 
-  test('ranks a title match above a note-only match', () => {
+  test('ranks a title match above a note-only match', async () => {
     const titleMatch = new MockEntry({
       id: 'title',
       title: 'quantum entanglement',
@@ -279,14 +281,14 @@ describe('SearchService — note/highlight text', () => {
       { id: 'note', title: 'Unrelated', authorString: 'Y' },
       'quantum entanglement appears here',
     );
-    service.buildIndex([titleMatch, noteMatch]);
+    await service.buildIndex([titleMatch, noteMatch]);
 
     const results = service.search('quantum');
     expect(results[0]).toBe('title');
     expect(results).toContain('note');
   });
 
-  test('truncates indexed note text at the cap (late tokens are not found)', () => {
+  test('truncates indexed note text at the cap (late tokens are not found)', async () => {
     const early = 'earlysentinel';
     const late = 'latesentinel';
     // ~6000 chars of filler pushes `late` beyond the 5000-char index cap.
@@ -295,7 +297,7 @@ describe('SearchService — note/highlight text', () => {
       { id: 'trunc', title: 'T', authorString: 'A' },
       `${early} ${filler} ${late}`,
     );
-    service.buildIndex([entry]);
+    await service.buildIndex([entry]);
 
     expect(service.search(early)).toContain('trunc');
     expect(service.search(late)).not.toContain('trunc');
@@ -316,23 +318,38 @@ describe('SearchService — note/highlight text', () => {
     expect(withoutNote.toSearchDocument().notesText).toBe('');
   });
 
-  test('matches accented note text via an un-accented query', () => {
+  test('noteExcerpt stops concatenating raw segments once past the cap', () => {
+    const entry = new MockEntry({ id: 'multi', title: 'T', authorString: 'A' });
+    (entry as unknown as { _note: string[] })._note = [
+      'first segment &amp; more',
+      'x'.repeat(12_000),
+      'tail segment that must not be reached',
+    ];
+
+    const text = entry.toSearchDocument().notesText;
+    expect(text.length).toBe(5000);
+    // Entity decoding still applies to the indexed excerpt.
+    expect(text.startsWith('first segment & more')).toBe(true);
+    expect(text).not.toContain('tail segment');
+  });
+
+  test('matches accented note text via an un-accented query', async () => {
     const entry = new MockEntry(
       { id: 'd1', title: 'Doc', authorString: 'A' },
       'le café était bon',
     );
-    service.buildIndex([entry]);
+    await service.buildIndex([entry]);
 
     expect(service.search('cafe')).toContain('d1');
   });
 
-  test('entries without note text still index by title', () => {
+  test('entries without note text still index by title', async () => {
     const entry = new MockEntry({
       id: 'plain',
       title: 'Distinctive Title',
       authorString: 'A',
     });
-    service.buildIndex([entry]);
+    await service.buildIndex([entry]);
 
     expect(service.search('Distinctive')).toContain('plain');
   });

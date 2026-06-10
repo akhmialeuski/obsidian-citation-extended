@@ -45,7 +45,7 @@ describe('LibraryService - Multiple Databases', () => {
     jest.spyOn(console, 'debug').mockImplementation(() => {});
 
     settings = new CitationsPluginSettings();
-    workerManager = new WorkerManager({} as Worker);
+    workerManager = new WorkerManager(() => ({}) as Worker);
 
     (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
       id,

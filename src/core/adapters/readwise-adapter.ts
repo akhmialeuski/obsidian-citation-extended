@@ -206,9 +206,12 @@ export class ReadwiseAdapter extends Entry {
     return this.data.summary ?? undefined;
   }
 
+  /** Memoized structured authors — string parsing runs at most once. */
   get author(): Author[] | undefined {
-    const authors = parseAuthors(this.data.author);
-    return authors.length > 0 ? authors : undefined;
+    return this.memo('author', () => {
+      const authors = parseAuthors(this.data.author);
+      return authors.length > 0 ? authors : undefined;
+    });
   }
 
   get authorString(): string | null {
@@ -230,8 +233,9 @@ export class ReadwiseAdapter extends Entry {
     return undefined;
   }
 
+  /** Memoized issued date — Date parsing runs at most once per entry. */
   get issuedDate(): Date | null {
-    return toDate(this.data.publishedDate);
+    return this.memo('issuedDate', () => toDate(this.data.publishedDate));
   }
 
   get page(): string | undefined {

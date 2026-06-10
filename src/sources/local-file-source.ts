@@ -3,7 +3,7 @@ import * as chokidar from 'chokidar';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DataSource, DataSourceLoadResult } from '../data-source';
-import { DatabaseType, convertToEntries } from '../core';
+import { DatabaseType, convertToEntries, WORKER_TASK_KINDS } from '../core';
 import { WorkerManager } from '../util';
 
 /**
@@ -49,16 +49,18 @@ export class LocalFileSource implements DataSource {
       }
 
       const buffer = await FileSystemAdapter.readLocalFile(resolvedPath);
-      const dataView = new DataView(buffer);
-      const decoder = new TextDecoder('utf8');
-      const value = decoder.decode(dataView);
 
+      // Transfer the raw buffer to the worker zero-copy and decode it THERE:
+      // avoids decoding a potentially huge file on the main thread and then
+      // structured-cloning the resulting string into the worker.
       const result = await this.loadWorker.post(
         {
-          databaseRaw: value,
+          kind: WORKER_TASK_KINDS.Parse,
+          databaseRaw: buffer,
           databaseType: this.format,
         },
         signal,
+        [buffer],
       );
 
       return {

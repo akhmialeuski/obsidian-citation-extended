@@ -1,9 +1,10 @@
 import type { IPlatformAdapter } from '../platform/platform-adapter';
 import { CitationsPluginSettings } from '../ui/settings/settings';
-import { Library, ParseErrorInfo } from '../core';
+import { Entry, Library, ParseErrorInfo } from '../core';
 import { WorkerManager } from '../util';
 import { LoadingStatus, LibraryState } from './library-state';
 import { SearchService } from '../search/search.service';
+import { sortEntries, ReferenceListSortOrder } from './sort-entries';
 import {
   IntrospectionService,
   VariableDefinition,
@@ -51,6 +52,17 @@ export interface SourceMetadata {
   modifiedAt?: Date;
 }
 
+/**
+ * Options for {@link LibraryService.load}.
+ */
+export interface LibraryLoadOptions {
+  /**
+   * Force every source to bypass its incremental-sync state (e.g. Readwise
+   * `updatedAfter`). Set by the manual "Refresh citation database" command.
+   */
+  fullRefresh?: boolean;
+}
+
 export class LibraryService implements ILibraryService {
   library: Library | null = null;
   public searchService: SearchService;
@@ -63,6 +75,15 @@ export class LibraryService implements ILibraryService {
   private loadDebounceTimer: number | null = null;
   private retryTimer: number | null = null;
   private retryCount = 0;
+  /**
+   * Entries sorted per sort order, computed lazily and cached until the next
+   * library build. The search modal asks for the sorted list on every input
+   * event with an empty query — without this cache that is an O(N log N)
+   * sort of the whole library per keystroke.
+   */
+  private sortedEntriesCache = new Map<ReferenceListSortOrder, Entry[]>();
+  /** Source keys with pending watcher events, drained by the debounce timer. */
+  private pendingSourceKeys = new Set<string>();
 
   constructor(
     private settings: CitationsPluginSettings,
@@ -72,7 +93,8 @@ export class LibraryService implements ILibraryService {
     private pipeline: NormalizationPipeline,
   ) {
     this.loadWorker = workerManager;
-    this.searchService = new SearchService();
+    // Index builds run in the shared worker pool (off the main thread).
+    this.searchService = new SearchService(workerManager);
     this.introspectionService = new IntrospectionService();
     this.store = new LibraryStore();
   }
@@ -85,6 +107,22 @@ export class LibraryService implements ILibraryService {
     return this.introspectionService.getTemplateVariables(this.library);
   }
 
+  /**
+   * All library entries sorted by the given order. The sorted array is
+   * computed once per library build and cached, so callers on hot paths
+   * (e.g. the search modal with an empty query) get an O(1) lookup.
+   * Callers must NOT mutate the returned array.
+   */
+  getSortedEntries(order: ReferenceListSortOrder): readonly Entry[] {
+    if (!this.library) return [];
+    let sorted = this.sortedEntriesCache.get(order);
+    if (!sorted) {
+      sorted = sortEntries(Object.values(this.library.entries), order);
+      this.sortedEntriesCache.set(order, sorted);
+    }
+    return sorted;
+  }
+
   resolveLibraryPath(rawPath: string): string {
     return this.platform.resolvePath(rawPath);
   }
@@ -93,7 +131,10 @@ export class LibraryService implements ILibraryService {
     this.store.setState(newState);
   }
 
-  load = async (isRetry = false): Promise<Library | null> => {
+  load = async (
+    isRetry = false,
+    options?: LibraryLoadOptions,
+  ): Promise<Library | null> => {
     if (this.settings.databases.length === 0) {
       console.warn(
         'Citations plugin: No data sources configured. Please update plugin settings.',
@@ -104,6 +145,46 @@ export class LibraryService implements ILibraryService {
       return null;
     }
 
+    console.debug('Citation plugin: Reloading library from all sources');
+    return this.runLoad(isRetry, (signal) => {
+      this.sourceManager.syncSources(this.settings.databases);
+      return this.sourceManager.loadAll(
+        signal,
+        options?.fullRefresh ? { fullRefresh: true } : undefined,
+      );
+    });
+  };
+
+  /**
+   * Incrementally reload only the given sources (identified by their stable
+   * source keys), reusing the cached results of every other source. Triggered
+   * by per-source watcher events; falls back to a full {@link load} when no
+   * library has been built yet.
+   */
+  private reloadSources = async (
+    sourceKeys: string[],
+  ): Promise<Library | null> => {
+    if (!this.library) {
+      return this.load();
+    }
+
+    console.debug(
+      `Citation plugin: Incrementally reloading ${sourceKeys.length} source(s)`,
+    );
+    return this.runLoad(false, (signal) =>
+      this.sourceManager.reloadSources(sourceKeys, signal),
+    );
+  };
+
+  /**
+   * Shared load driver: cancellation, state transitions, timeout race,
+   * library build, and error/retry policy. The `fetchResults` callback
+   * decides WHAT is loaded (all sources vs. an incremental subset).
+   */
+  private async runLoad(
+    isRetry: boolean,
+    fetchResults: (signal: AbortSignal) => Promise<SourceLoadResult[]>,
+  ): Promise<Library | null> {
     if (this.abortController) {
       this.abortController.abort();
     }
@@ -124,13 +205,13 @@ export class LibraryService implements ILibraryService {
       error: undefined,
       parseErrors: [],
     });
-    console.debug('Citation plugin: Reloading library from all sources');
 
     try {
-      const results = await this.loadFromSources(signal);
+      const results = await this.raceWithTimeout(fetchResults(signal));
       if (signal.aborted) return null;
 
-      this.buildLibrary(results);
+      await this.buildLibrary(results, signal);
+      if (signal.aborted) return null;
 
       console.debug(
         `Citation plugin: successfully loaded library with ${this.library!.size} unique entries across ${results.length} sources.`,
@@ -161,7 +242,8 @@ export class LibraryService implements ILibraryService {
         controller.abort();
       } else {
         // Retry transient failures (e.g. a file briefly locked during a
-        // Better BibTeX auto-export).
+        // Better BibTeX auto-export). The retry is always a FULL load: it is
+        // the safest recovery path regardless of what kind of load failed.
         this.handleErrorRetry();
       }
       return null;
@@ -170,13 +252,14 @@ export class LibraryService implements ILibraryService {
         this.abortController = null;
       }
     }
-  };
+  }
 
-  private async loadFromSources(
-    signal: AbortSignal,
+  /**
+   * Race a source-loading promise against the configured library timeout.
+   */
+  private async raceWithTimeout(
+    loadPromise: Promise<SourceLoadResult[]>,
   ): Promise<SourceLoadResult[]> {
-    this.sourceManager.syncSources(this.settings.databases);
-
     const timeoutSeconds =
       this.settings.libraryLoadTimeoutSeconds ?? DEFAULT_LOAD_TIMEOUT_MS / 1000;
 
@@ -188,11 +271,6 @@ export class LibraryService implements ILibraryService {
       );
     });
 
-    // Pass the load signal so sources can cancel in-flight work (e.g. Readwise
-    // HTTP + rate-limit back-offs). The signal is aborted on a newer load, on
-    // dispose(), and on timeout (see the LibraryLoadTimeoutError branch in
-    // load()'s catch).
-    const loadPromise = this.sourceManager.loadAll(signal);
     // If the timeout wins the race, loadPromise keeps running and may later
     // reject (e.g. every source fails). Attach a no-op handler so that late
     // rejection is not an unhandled promise rejection — the real failure is
@@ -206,7 +284,10 @@ export class LibraryService implements ILibraryService {
     }
   }
 
-  private buildLibrary(results: SourceLoadResult[]): void {
+  private async buildLibrary(
+    results: SourceLoadResult[],
+    signal: AbortSignal,
+  ): Promise<void> {
     let totalParseErrors = 0;
     const allParseErrors: ParseErrorInfo[] = [];
 
@@ -226,9 +307,20 @@ export class LibraryService implements ILibraryService {
     });
 
     this.library = this.pipeline.run(results);
+    this.sortedEntriesCache.clear();
 
     console.debug('Citation plugin: Building search index');
-    this.searchService.buildIndex(Object.values(this.library.entries));
+    // Async chunked build: yields to the event loop so the UI never freezes;
+    // searches keep hitting the previous index until the new one is swapped
+    // in. The load signal cancels a superseded worker-side build outright.
+    await this.searchService.buildIndex(
+      Object.values(this.library.entries),
+      signal,
+    );
+
+    // A newer load may have superseded this one while the index was building;
+    // it owns the state transitions from here on.
+    if (signal.aborted) return;
 
     const parseErrorMessages =
       totalParseErrors > 0
@@ -267,16 +359,31 @@ export class LibraryService implements ILibraryService {
   }
 
   initWatcher(): void {
-    this.sourceManager.initWatchers(() => this.triggerLoadWithDebounce());
+    this.sourceManager.initWatchers((sourceKey) =>
+      this.triggerLoadWithDebounce(sourceKey),
+    );
   }
 
-  private triggerLoadWithDebounce(): void {
+  private triggerLoadWithDebounce(sourceKey?: string): void {
+    if (sourceKey) {
+      this.pendingSourceKeys.add(sourceKey);
+    }
+
     if (this.loadDebounceTimer) {
       window.clearTimeout(this.loadDebounceTimer);
     }
 
     this.loadDebounceTimer = window.setTimeout(() => {
-      void this.load();
+      const keys = [...this.pendingSourceKeys];
+      this.pendingSourceKeys.clear();
+      // Changed sources are reloaded incrementally; everything else is
+      // served from the source manager's cached results. A full load runs
+      // only when no specific source was identified.
+      if (keys.length > 0) {
+        void this.reloadSources(keys);
+      } else {
+        void this.load();
+      }
     }, LOAD_DEBOUNCE_MS);
   }
 
@@ -285,6 +392,7 @@ export class LibraryService implements ILibraryService {
       window.clearTimeout(this.loadDebounceTimer);
       this.loadDebounceTimer = null;
     }
+    this.pendingSourceKeys.clear();
 
     if (this.retryTimer) {
       window.clearTimeout(this.retryTimer);

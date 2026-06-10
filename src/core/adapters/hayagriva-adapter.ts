@@ -104,18 +104,28 @@ export class HayagrivaAdapter extends Entry {
     return this.data.abstract;
   }
 
+  /** Memoized structured authors — the per-call map is computed only once. */
   get author(): Author[] | undefined {
-    const authors = this.data.author;
-    if (!authors || !Array.isArray(authors)) return undefined;
-    return authors.map(toAuthor);
+    return this.memo('author', () => {
+      const authors = this.data.author;
+      return !authors || !Array.isArray(authors)
+        ? undefined
+        : authors.map(toAuthor);
+    });
   }
 
+  /** Memoized author string — the map+join is computed only once. */
   get authorString(): string | null {
-    const authors = this.author;
-    if (!authors) return null;
-    return authors
-      .map((a) => a.literal || `${a.given || ''} ${a.family || ''}`.trim())
-      .join(', ');
+    return this.memo('authorString', () => {
+      const authors = this.author;
+      return !authors
+        ? null
+        : authors
+            .map(
+              (a) => a.literal || `${a.given || ''} ${a.family || ''}`.trim(),
+            )
+            .join(', ');
+    });
   }
 
   get containerTitle(): string | undefined {
@@ -130,9 +140,11 @@ export class HayagrivaAdapter extends Entry {
     return this.data.isbn;
   }
 
+  /** Memoized issued date — Date construction runs at most once per entry. */
   get issuedDate(): Date | null {
-    if (!this.data.date) return null;
-    return toDate(this.data.date);
+    return this.memo('issuedDate', () =>
+      this.data.date ? toDate(this.data.date) : null,
+    );
   }
 
   get page(): string | undefined {

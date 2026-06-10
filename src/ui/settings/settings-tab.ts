@@ -31,7 +31,7 @@ import {
   LIBRARY_LOAD_TIMEOUT_MAX_SECONDS,
   LIBRARY_LOAD_TIMEOUT_DEFAULT_SECONDS,
 } from './settings-schema';
-import { ReferenceListSortOrder } from '../modals/sort-entries';
+import { ReferenceListSortOrder } from '../../library/sort-entries';
 import { VariableListModal } from '../modals/variable-list-modal';
 import {
   classifySyncOutcome,

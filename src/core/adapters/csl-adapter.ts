@@ -45,7 +45,12 @@ export class EntryCSLAdapter extends Entry {
   _compositeCitekey?: string;
   private _id?: string;
 
+  /** Memoized year (CSL can carry it directly in `issued.date-parts`). */
   get year(): number | undefined {
+    return this.memo('year', () => this.computeYear());
+  }
+
+  private computeYear(): number | undefined {
     const year = this.data.issued?.['date-parts']?.[0]?.[0];
     if (year !== undefined && year !== null) {
       const y = typeof year === 'string' ? parseInt(year) : year;
@@ -78,7 +83,12 @@ export class EntryCSLAdapter extends Entry {
     return this.data.author;
   }
 
+  /** Memoized author string — the map+join is computed only once. */
   get authorString(): string | null {
+    return this.memo('authorString', () => this.computeAuthorString());
+  }
+
+  private computeAuthorString(): string | null {
     if (this.data.author) {
       return this.data.author
         .map((a) => a.literal || `${a.given || ''} ${a.family || ''}`.trim())
@@ -117,7 +127,12 @@ export class EntryCSLAdapter extends Entry {
     return this.data.source;
   }
 
+  /** Memoized issued date — Date construction runs at most once per entry. */
   get issuedDate(): Date | null {
+    return this.memo('issuedDate', () => this.computeIssuedDate());
+  }
+
+  private computeIssuedDate(): Date | null {
     if (
       !(
         this.data.issued &&

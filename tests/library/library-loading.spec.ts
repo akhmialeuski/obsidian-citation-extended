@@ -56,7 +56,7 @@ describe('LibraryService Loading Behavior', () => {
   beforeEach(() => {
     settings = new CitationsPluginSettings();
     const platform = createMockPlatformAdapter();
-    workerManager = new WorkerManager({} as Worker);
+    workerManager = new WorkerManager(() => ({}) as Worker);
 
     // Wire up SourceManager + pipeline (mirrors production setup)
     const factory = {

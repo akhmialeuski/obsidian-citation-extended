@@ -1,4 +1,4 @@
-import { Entry } from '../../core';
+import { Entry } from '../core';
 
 /**
  * Supported sort orders for the citation reference list modal.
@@ -23,7 +23,10 @@ export function sortEntries(
   order: ReferenceListSortOrder,
 ): Entry[] {
   if (order === 'default') {
-    return entries;
+    // Copy even when not sorting: the contract is "returns a new array", and
+    // callers (LibraryService) cache the result — aliasing the input would
+    // let a later mutation of the caller's array corrupt the cache.
+    return [...entries];
   }
 
   // Shallow copy so we don't mutate the caller's array
@@ -53,7 +56,10 @@ export function sortEntries(
       });
       break;
 
-    case 'author-asc':
+    case 'author-asc': {
+      // A single Collator instance is significantly faster than calling
+      // String.prototype.localeCompare once per comparison.
+      const collator = new Intl.Collator();
       sorted.sort((a, b) => {
         const authorA = a.authorString;
         const authorB = b.authorString;
@@ -61,9 +67,10 @@ export function sortEntries(
         if (!authorA && !authorB) return 0;
         if (!authorA) return 1;
         if (!authorB) return -1;
-        return authorA.localeCompare(authorB);
+        return collator.compare(authorA, authorB);
       });
       break;
+    }
   }
 
   return sorted;

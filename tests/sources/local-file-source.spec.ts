@@ -301,13 +301,23 @@ describe('LocalFileSource', () => {
 
       await source.load();
 
-      expect(workerManager.post).toHaveBeenCalledWith(
-        expect.objectContaining({
-          databaseType: DATABASE_FORMATS.BibLaTeX,
-          databaseRaw: expect.any(String),
-        }),
-        undefined,
-      );
+      // Structural assertions instead of expect.any(ArrayBuffer): the buffer
+      // is created in another realm (node polyfill vs jsdom), so instanceof
+      // checks are unreliable here.
+      const [request, signal, transfer] = (workerManager.post as jest.Mock).mock
+        .calls[0] as [
+        { kind: string; databaseType: string; databaseRaw: unknown },
+        unknown,
+        unknown[],
+      ];
+      expect(request.kind).toBe('parse');
+      expect(request.databaseType).toBe(DATABASE_FORMATS.BibLaTeX);
+      // The raw buffer (not a decoded string) is sent and listed as a
+      // transferable, so it moves zero-copy into the worker.
+      expect(typeof request.databaseRaw).not.toBe('string');
+      expect(signal).toBeUndefined();
+      expect(transfer).toHaveLength(1);
+      expect(transfer[0]).toBe(request.databaseRaw);
     });
 
     it('sends correct databaseType to worker for CSL-JSON', async () => {
@@ -325,12 +335,11 @@ describe('LocalFileSource', () => {
 
       await source.load();
 
-      expect(cslWorker.post).toHaveBeenCalledWith(
-        expect.objectContaining({
-          databaseType: DATABASE_FORMATS.CslJson,
-        }),
-        undefined,
-      );
+      const [request] = (cslWorker.post as jest.Mock).mock.calls[0] as [
+        { kind: string; databaseType: string },
+      ];
+      expect(request.kind).toBe('parse');
+      expect(request.databaseType).toBe(DATABASE_FORMATS.CslJson);
     });
 
     it('propagates parse errors from worker', async () => {

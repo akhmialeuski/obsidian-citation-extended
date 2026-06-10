@@ -6,7 +6,7 @@ import {
   CITATION_STYLE_PRESETS,
 } from './settings-schema';
 import { DatabaseType } from '../../core';
-import { ReferenceListSortOrder } from '../modals/sort-entries';
+import { ReferenceListSortOrder } from '../../library/sort-entries';
 
 export class CitationsPluginSettings {
   public citationExportPath: string = DEFAULT_SETTINGS.citationExportPath;

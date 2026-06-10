@@ -72,9 +72,9 @@ describe('@article with BibLaTeX fields (#60)', () => {
     expect(entry.DOI).toBe('10.2307/2084686');
   });
 
-  it('is discoverable by search', () => {
+  it('is discoverable by search', async () => {
     const searchService = new SearchService();
-    searchService.buildIndex([entry]);
+    await searchService.buildIndex([entry]);
 
     const byCitekey = searchService.search(
       'merton_1938_social-structure-anomie',

@@ -4,12 +4,12 @@ The plugin supports loading bibliography data from multiple sources and formats.
 
 ## Supported Formats
 
-| Format | Extension | Description |
-|--------|-----------|-------------|
-| **Better CSL JSON** | `.json` | Standard citation format, fast loading |
-| **Better BibTeX** | `.bib` | Rich format with PDF paths, keywords, notes. Slower to parse but more data available |
-| **Hayagriva** | `.yml` / `.yaml` | YAML-based bibliography format used by [Typst](https://typst.app). Supports basic fields: title, author, date, DOI, URL, parent (container) |
-| **Readwise** | API | Highlights and documents from Readwise (v2 Export + v3 Reader APIs, loaded together) |
+| Format              | Extension        | Description                                                                                                                                 |
+| ------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Better CSL JSON** | `.json`          | Standard citation format, fast loading                                                                                                      |
+| **Better BibTeX**   | `.bib`           | Rich format with PDF paths, keywords, notes. Slower to parse but more data available                                                        |
+| **Hayagriva**       | `.yml` / `.yaml` | YAML-based bibliography format used by [Typst](https://typst.app). Supports basic fields: title, author, date, DOI, URL, parent (container) |
+| **Readwise**        | API              | Highlights and documents from Readwise (v2 Export + v3 Reader APIs, loaded together)                                                        |
 
 ### Choosing a Format
 
@@ -52,10 +52,10 @@ Loads highlights and documents directly from the Readwise API. No file export ne
 
 The plugin loads data from both Readwise APIs in parallel and merges the results into a single database:
 
-| API | What it loads | Citekey format |
-|-----|---------------|----------------|
-| **v2 Export** | Books with nested highlights from Kindle, Instapaper, etc. | `rw-{id}` |
-| **v3 Reader** | Documents, articles, PDFs saved in Readwise Reader | `rd-{id}` |
+| API           | What it loads                                              | Citekey format |
+| ------------- | ---------------------------------------------------------- | -------------- |
+| **v2 Export** | Books with nested highlights from Kindle, Instapaper, etc. | `rw-{id}`      |
+| **v3 Reader** | Documents, articles, PDFs saved in Readwise Reader         | `rd-{id}`      |
 
 **Setup:**
 1. Go to **Settings** > **Citation plugin** > **Citation databases**
@@ -68,33 +68,38 @@ The plugin loads data from both Readwise APIs in parallel and merges the results
 **How it works:**
 - Readwise is a regular database type -- you add it the same way you add a BibLaTeX or CSL-JSON database
 - Data is fetched on each sync (manual "Sync now", plugin reload, or automatic periodic sync)
-- By default, the plugin automatically syncs Readwise data every 30 minutes. You can change the interval in the **Auto-sync interval (minutes)** field on the database card, or set it to `0` to disable automatic sync
+- By default, the plugin automatically syncs Readwise data every 30 minutes. You can change the interval in the **Auto-sync interval (minutes)** field on the database card, or set it to `0` to disable automatic sync. Interval changes take effect on the next sync cycle
 - The automatic sync timer starts when the plugin loads and stops when the plugin unloads
 - Readwise entries appear in the search modal alongside your other databases
 - All standard features work: citation insertion, literature note creation, templates
 
+**Incremental sync:** After the first full download, periodic and manual syncs fetch only the entries updated since the last successful sync (using the Readwise `updatedAfter` API cursor) and merge them into the locally cached set. This makes background syncs fast and cheap even for large libraries. Two consequences to be aware of:
+
+- **Deletions are not detected incrementally.** If you delete a book or document in Readwise, it stays in the library until the next full re-fetch. Run **Citations: Refresh citation database** from the command palette to force a full re-download.
+- The sync cursor is stored inside the offline cache file. Deleting the cache file simply causes the next sync to be a full download.
+
 **Field mapping:**
 
-| Readwise field        | Entry field                  | Notes                                                                  |
-| --------------------- | ---------------------------- | ---------------------------------------------------------------------- |
-| `title`               | `title`                      |                                                                        |
-| `readable_title`      | `titleShort`                 | Cleaned title (v2 Export books only)                                   |
-| `author`              | `authorString`, `author[]`   | Parsed into structured authors                                         |
-| `category`            | `type`                       | Mapped: books→book, articles→article, tweets→webpage, etc.             |
-| `source`              | `source`                     | e.g. `kindle`, `instapaper`, Reader source                             |
-| `source_url`          | `URL`                        | Original source URL                                                    |
-| `readwise_url` / `unique_url` | `zoteroSelectURI`    | Opens in Readwise Reader app (see note below)                          |
-| `summary`             | `abstract`                   |                                                                        |
-| `asin`                | `asin`                       | Amazon ASIN (v2 Export books only); not mapped to ISBN                 |
-| `site_name`           | `containerTitle`             | Reader (v3) — e.g. "The New Yorker"                                    |
-| `book_tags` / `tags`  | `keywords[]`                 |                                                                        |
-| `document_note` / `notes` | `documentNote`           | Document-level note (distinct from highlights)                         |
-| `word_count`          | `wordCount`                  | Reader (v3) entries only                                               |
-| `reading_progress`    | `readingProgress`            | Reader (v3) — fraction 0..1                                            |
-| `location`            | `readerLocation`             | Reader (v3) — new/later/shortlist/archive/feed                         |
-| `highlights[].text`   | `note`                       | Aggregated with `---` separator (backward-compatible)                  |
-| `highlights[]`        | `highlights[]`               | Structured per-highlight metadata (see below)                          |
-| `published_date`      | `issuedDate`                 | Reader (v3) entries only                                               |
+| Readwise field                | Entry field                | Notes                                                      |
+| ----------------------------- | -------------------------- | ---------------------------------------------------------- |
+| `title`                       | `title`                    |                                                            |
+| `readable_title`              | `titleShort`               | Cleaned title (v2 Export books only)                       |
+| `author`                      | `authorString`, `author[]` | Parsed into structured authors                             |
+| `category`                    | `type`                     | Mapped: books→book, articles→article, tweets→webpage, etc. |
+| `source`                      | `source`                   | e.g. `kindle`, `instapaper`, Reader source                 |
+| `source_url`                  | `URL`                      | Original source URL                                        |
+| `readwise_url` / `unique_url` | `zoteroSelectURI`          | Opens in Readwise Reader app (see note below)              |
+| `summary`                     | `abstract`                 |                                                            |
+| `asin`                        | `asin`                     | Amazon ASIN (v2 Export books only); not mapped to ISBN     |
+| `site_name`                   | `containerTitle`           | Reader (v3) — e.g. "The New Yorker"                        |
+| `book_tags` / `tags`          | `keywords[]`               |                                                            |
+| `document_note` / `notes`     | `documentNote`             | Document-level note (distinct from highlights)             |
+| `word_count`                  | `wordCount`                | Reader (v3) entries only                                   |
+| `reading_progress`            | `readingProgress`          | Reader (v3) — fraction 0..1                                |
+| `location`                    | `readerLocation`           | Reader (v3) — new/later/shortlist/archive/feed             |
+| `highlights[].text`           | `note`                     | Aggregated with `---` separator (backward-compatible)      |
+| `highlights[]`                | `highlights[]`             | Structured per-highlight metadata (see below)              |
+| `published_date`              | `issuedDate`               | Reader (v3) entries only                                   |
 
 **Structured highlights:** In addition to the aggregated `note` string, each Readwise entry exposes a structured `highlights` array via `entry.highlights`, where each item has `text`, `note`, `location`, `locationType`, `color`, `highlightedAt`, `url`, and `tags`. Iterate it in templates with `{{#each entry.highlights}}` to render highlights as a list or table. The aggregated `{{note}}` string is still available for backward compatibility.
 
@@ -104,7 +109,7 @@ The plugin loads data from both Readwise APIs in parallel and merges the results
 
 **Searching highlights:** Full-text search indexes the highlight/note text (truncated per entry), so a query that appears only inside a highlight will still find the entry. Title and author matches always rank above highlight-only matches.
 
-**Offline cache:** After each successful sync, Readwise data is cached locally at `.obsidian/plugins/citation-extended/readwise-cache-<id>.json` — one file per Readwise database, keyed by its stable id, so multiple Readwise databases never collide. If the API is unavailable on the next plugin load, the cached data is used as a fallback and a warning is shown. The cache stores the full unfiltered data and is overwritten only after a fully successful sync (every Readwise API responds); a partial outage leaves the previous cache intact. Import filters are re-applied when the cache is read, so changing filters always takes effect.
+**Offline cache:** After each successful sync, Readwise data is cached locally at `.obsidian/plugins/citation-extended/readwise-cache-<id>.json` — one file per Readwise database, keyed by its stable id, so multiple Readwise databases never collide. If the API is unavailable on the next plugin load, the cached data is used as a fallback and a warning is shown. The cache stores the full unfiltered data plus the incremental-sync cursor (`lastSyncAt`) and is overwritten only after a fully successful sync (every Readwise API responds); a partial outage leaves the previous cache intact. Import filters are re-applied when the cache is read, so changing filters always takes effect. Caches written by older plugin versions (a bare entry array) are still readable; the first sync after upgrading is a full download that rewrites the cache in the new format.
 
 ## Multiple Databases
 
@@ -124,8 +129,8 @@ When the same citekey appears in multiple databases:
 
 ### Merge Strategies
 
-| Strategy | Behavior |
-|----------|----------|
+| Strategy                | Behavior                                                                                                      |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------- |
 | **Last wins** (default) | The last database in the list provides the canonical entry. Reorder databases in settings to control priority |
 
 **Example:** You have a personal library (`My Library`) and a shared team library (`Team`). With "Last wins", entries from `Team` (listed second) override `My Library` when both have the same citekey. To reverse this, drag `My Library` below `Team` in the settings list.

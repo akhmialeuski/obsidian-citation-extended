@@ -55,14 +55,14 @@ describe('Special characters in entries (#119)', () => {
     expect(entry.authorString).toContain('Müller');
   });
 
-  it('entries with Unicode are found by search', () => {
+  it('entries with Unicode are found by search', async () => {
     const result = loadEntries(unicodeBib, 'biblatex');
     const entries = result.entries.map(
       (e) => new EntryBibLaTeXAdapter(e as EntryDataBibLaTeX),
     );
 
     const searchService = new SearchService();
-    searchService.buildIndex(entries);
+    await searchService.buildIndex(entries);
 
     // Search by citekey
     const byKey = searchService.search('Turinetto2012');

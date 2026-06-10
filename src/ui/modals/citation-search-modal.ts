@@ -4,7 +4,7 @@ import { LibraryState, LoadingStatus } from '../../library/library-state';
 import type { SearchModalAction } from '../../application/actions/action.types';
 import type { ILibraryService } from '../../container';
 import type { CitationsPluginSettings } from '../settings/settings';
-import { sortEntries } from './sort-entries';
+import { sortEntries } from '../../library/sort-entries';
 
 // Stub some methods we know are there..
 interface SuggestModalExt<T> extends SuggestModal<T> {
@@ -91,10 +91,16 @@ export class CitationSearchModal extends SuggestModal<Entry> {
   }
 
   updateState(state: LibraryState) {
-    if (state.status === LoadingStatus.Loading) {
+    // Stale-while-revalidate: when a previously loaded library is available,
+    // keep the modal fully usable during background reloads (and transient
+    // reload errors) instead of blanking the results and disabling input.
+    // The blocking loading/error UI is shown only before the FIRST successful
+    // load, when there is genuinely nothing to search.
+    const hasData = this.libraryService.library !== null;
+    if (state.status === LoadingStatus.Loading && !hasData) {
       this.setLoading(true);
       this.showError(null);
-    } else if (state.status === LoadingStatus.Error) {
+    } else if (state.status === LoadingStatus.Error && !hasData) {
       this.setLoading(false);
       this.showError(state.error?.message || 'Unknown error');
     } else {
@@ -139,23 +145,25 @@ export class CitationSearchModal extends SuggestModal<Entry> {
   }
 
   getSuggestions(query: string): Entry[] {
+    // Search the last loaded library even while a background reload is in
+    // progress (stale-while-revalidate); block only before the first load.
     const library = this.libraryService.library;
-    if (this.libraryService.isLibraryLoading || !library) {
+    if (!library) {
       return [];
     }
 
     const sortOrder = this.settings.referenceListSortOrder;
 
     if (!query) {
-      const entries = Object.values(library.entries);
-      return sortEntries(entries, sortOrder).slice(0, this.limit);
+      // Sorted once per library build and cached in the service — this runs
+      // on every input event, so it must not sort the whole library here.
+      return this.libraryService
+        .getSortedEntries(sortOrder)
+        .slice(0, this.limit);
     }
 
-    const ids = this.libraryService.searchService.search(query);
-    const entries = ids
-      .slice(0, this.limit)
-      .map((id) => library.entries[id])
-      .filter(Boolean);
+    const ids = this.libraryService.searchService.search(query, this.limit);
+    const entries = ids.map((id) => library.entries[id]).filter(Boolean);
     return sortEntries(entries, sortOrder);
   }
 
