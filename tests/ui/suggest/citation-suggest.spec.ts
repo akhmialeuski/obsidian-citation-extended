@@ -106,6 +106,38 @@ describe('CitationEditorSuggest.onTrigger', () => {
       suggest.onTrigger({ line: 0, ch: 17 }, editor as any, null),
     ).toBeNull();
   });
+
+  it('captures the bracket when [@ follows a word with no space', () => {
+    // Regression: the boundary alternative used to consume the '[', dropping
+    // it from the replaced range and producing a double bracket on insert.
+    const { suggest } = makeSuggest({});
+    const editor = makeEditor('networks[@smi');
+    const info = suggest.onTrigger({ line: 0, ch: 13 }, editor as any, null);
+    expect(info).not.toBeNull();
+    expect(info!.query).toBe('smi');
+    // Start sits on the '[' (column 8), so '[@smi' is replaced as a whole.
+    expect(info!.start).toEqual({ line: 0, ch: 8 });
+  });
+
+  it('does not double-bracket when inserting into word[@ context', () => {
+    const { suggest, entry } = makeSuggest({});
+    const editor = makeEditor('networks[@smi');
+    suggest.context = {
+      editor,
+      start: { line: 0, ch: 8 },
+      end: { line: 0, ch: 13 },
+      query: 'smi',
+    } as any;
+
+    suggest.selectSuggestion(entry, { shiftKey: false } as KeyboardEvent);
+
+    // The full '[@smi' range (cols 8–13) is replaced by '[@smith2023]'.
+    expect(editor.replaceRange).toHaveBeenCalledWith(
+      '[@smith2023]',
+      { line: 0, ch: 8 },
+      { line: 0, ch: 13 },
+    );
+  });
 });
 
 describe('CitationEditorSuggest.getSuggestions', () => {

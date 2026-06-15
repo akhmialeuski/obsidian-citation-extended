@@ -222,22 +222,20 @@ export class CitationSettingTab extends PluginSettingTab {
       dropdown.addOptions(DATABASE_TYPE_LABELS);
       dropdown.setValue(db.type);
       dropdown.onChange(async (value) => {
-        this.plugin.settings.databases[index].type = value as DatabaseType;
+        const db = this.plugin.settings.databases[index];
+        db.type = value as DatabaseType;
         if (value === DATABASE_FORMATS.Readwise) {
-          this.plugin.settings.databases[index].sourceType =
-            DATA_SOURCE_TYPES.Readwise;
-          this.plugin.settings.databases[index].path = '';
-        } else if (
-          // Preserve a live Zotero connection across CSL-JSON <-> BibLaTeX
-          // switches (both are formats Zotero can export); clear it otherwise.
-          this.plugin.settings.databases[index].sourceType ===
-            DATA_SOURCE_TYPES.Zotero &&
-          (value === DATABASE_FORMATS.CslJson ||
-            value === DATABASE_FORMATS.BibLaTeX)
-        ) {
-          // keep sourceType = zotero
+          db.sourceType = DATA_SOURCE_TYPES.Readwise;
+          db.path = '';
         } else {
-          delete this.plugin.settings.databases[index].sourceType;
+          // Preserve a live Zotero connection only across the CSL-JSON <->
+          // BibLaTeX switch (both are formats Zotero can export); clear it for
+          // any other format.
+          const keepZotero =
+            db.sourceType === DATA_SOURCE_TYPES.Zotero &&
+            (value === DATABASE_FORMATS.CslJson ||
+              value === DATABASE_FORMATS.BibLaTeX);
+          if (!keepZotero) delete db.sourceType;
         }
         await this.plugin.saveSettings();
         this.display();
@@ -257,7 +255,11 @@ export class CitationSettingTab extends PluginSettingTab {
       const zoteroCapable =
         db.type === DATABASE_FORMATS.CslJson ||
         db.type === DATABASE_FORMATS.BibLaTeX;
-      const isZotero = db.sourceType === DATA_SOURCE_TYPES.Zotero;
+      // Treat a Zotero sourceType as live only on a capable format, so a stale
+      // flag on an incompatible format degrades to the file path field (which
+      // matches how resolveTransport then routes the source).
+      const isZotero =
+        zoteroCapable && db.sourceType === DATA_SOURCE_TYPES.Zotero;
 
       // In file mode the path field comes first (keeps the file workflow
       // front-and-centre); the live-Zotero toggle follows it.

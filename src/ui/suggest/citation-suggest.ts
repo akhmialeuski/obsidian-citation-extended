@@ -12,24 +12,25 @@ import type { ICitationService } from '../../container';
 import type { ILibraryService } from '../../container';
 import type { CitationsPluginSettings } from '../settings/settings';
 import { sortEntries } from '../../library/sort-entries';
-
-/** Maximum number of authors shown before truncation with "et al." */
-const AUTHOR_DISPLAY_LIMIT = 3;
+import { AUTHOR_DISPLAY_LIMIT, renderEntrySuggestion } from '../render-entry';
 
 /** Maximum number of suggestions surfaced in the popover. */
 const SUGGESTION_LIMIT = 20;
 
 /**
- * Matches a citation trigger at the end of the text before the cursor:
- * an optional opening bracket, an `@`, then the (possibly empty) query.
+ * Matches a citation trigger at the end of the text before the cursor, in one
+ * of two forms, so the whole trigger (including any leading `[`) is captured as
+ * `match[0]`:
  *
- * A leading boundary (start of line or a non-word, non-`@` character) is
- * required so the suggester does not fire inside e-mail addresses such as
- * `john@example.com` — there the character before `@` is a word character.
+ * - `[@query` — an explicit Pandoc bracket. Always a citation, regardless of
+ *   the preceding character, so `word[@` works without dropping the `[`
+ *   (which would otherwise produce a double bracket on insertion).
+ * - bare `@query` — only when NOT preceded by a word character or another `@`,
+ *   so it never fires inside an e-mail address (`john@example.com`).
  *
- * Capture groups: 1 = optional `[`, 2 = query text after `@`.
+ * Capture group 1 is the query text after `@`; `match[0]` is the full trigger.
  */
-const TRIGGER_RE = /(?:^|[^\w@])(\[?)@([\p{L}\d:.\-_+?#$%&/~<>]*)$/u;
+const TRIGGER_RE = /(?:\[@|(?<![\w@])@)([\p{L}\d:.\-_+?#$%&/~<>]*)$/u;
 
 /** Dependencies the suggester needs, kept free of the concrete plugin class. */
 export interface CitationSuggestDeps {
@@ -71,12 +72,12 @@ export class CitationEditorSuggest extends EditorSuggest<Entry> {
     const match = TRIGGER_RE.exec(before);
     if (!match) return null;
 
-    const bracket = match[1];
-    const query = match[2];
-    // The trigger text (`[?@query`) is exactly the suffix of `before` because
-    // the regex is anchored at the end, so its start column is unambiguous.
-    const triggerText = `${bracket}@${query}`;
-    const startCh = cursor.ch - triggerText.length;
+    const query = match[1];
+    // `match[0]` is the full trigger (`[@query` or `@query`) and, being anchored
+    // at the end, is exactly the suffix of `before`. Replacing the whole range
+    // — including a leading `[` — is what prevents a `[@key]` template from
+    // double-bracketing a `[@` the user already typed.
+    const startCh = cursor.ch - match[0].length;
 
     return {
       start: { line: cursor.line, ch: startCh },
@@ -108,21 +109,7 @@ export class CitationEditorSuggest extends EditorSuggest<Entry> {
 
   renderSuggestion(entry: Entry, el: HTMLElement): void {
     el.addClass('zoteroResult');
-    el.createSpan({ cls: 'zoteroTitle', text: entry.title || '' });
-    el.createSpan({ cls: 'zoteroCitekey', text: entry.displayKey() });
-
-    const yearString = entry.yearString();
-    if (yearString) {
-      el.createSpan({ cls: 'zoteroYear', text: yearString });
-    }
-
-    const authors = entry.displayAuthors(AUTHOR_DISPLAY_LIMIT);
-    el.createSpan({
-      cls: entry.authorString
-        ? 'zoteroAuthors'
-        : 'zoteroAuthors zoteroAuthorsEmpty',
-      text: authors,
-    });
+    renderEntrySuggestion(el, entry, AUTHOR_DISPLAY_LIMIT);
   }
 
   selectSuggestion(entry: Entry, evt: MouseEvent | KeyboardEvent): void {

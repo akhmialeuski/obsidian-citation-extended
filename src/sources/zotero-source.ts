@@ -12,6 +12,7 @@ import type {
 import type { ZoteroConnectorClient } from '../core';
 import type { IFileSystem } from '../platform/platform-adapter';
 import { WorkerManager } from '../util';
+import { createLinkedAbortController, PeriodicSync } from './source-utils';
 
 /**
  * Versioned on-disk cache: the raw export body plus the format it was fetched
@@ -43,8 +44,8 @@ interface ZoteroCacheStateV1 {
  * each cycle so settings changes apply without recreating the source).
  */
 export class ZoteroSource implements DataSource {
-  private pollingTimer: number | null = null;
   private abortController: AbortController | null = null;
+  private readonly poller: PeriodicSync | null;
 
   constructor(
     public readonly id: string,
@@ -55,24 +56,21 @@ export class ZoteroSource implements DataSource {
     private fileSystem?: IFileSystem,
     private cachePath?: string,
     /** Current periodic-sync interval in ms (0 = disabled); read each cycle. */
-    private syncIntervalProvider?: () => number,
-  ) {}
+    syncIntervalProvider?: () => number,
+  ) {
+    this.poller = syncIntervalProvider
+      ? new PeriodicSync(syncIntervalProvider, 'ZoteroSource')
+      : null;
+  }
 
   async load(
     externalSignal?: AbortSignal,
     _options?: DataSourceLoadOptions,
   ): Promise<DataSourceLoadResult> {
     this.abortController?.abort();
-    const controller = new AbortController();
+    const controller = createLinkedAbortController(externalSignal);
     this.abortController = controller;
     const signal = controller.signal;
-    if (externalSignal?.aborted) {
-      controller.abort();
-    } else {
-      externalSignal?.addEventListener('abort', () => controller.abort(), {
-        once: true,
-      });
-    }
 
     try {
       let raw: string;
@@ -187,37 +185,11 @@ export class ZoteroSource implements DataSource {
   }
 
   watch(callback: () => void): void {
-    if (this.pollingTimer !== null || !this.syncIntervalProvider) return;
-    this.scheduleNextSync(callback);
-  }
-
-  private scheduleNextSync(callback: () => void): void {
-    const interval = this.syncIntervalProvider?.() ?? 0;
-    if (interval <= 0) {
-      this.pollingTimer = null;
-      return;
-    }
-
-    console.debug(
-      `ZoteroSource: next periodic sync in ${Math.round(interval / 60_000)} min`,
-    );
-    this.pollingTimer = window.setTimeout(() => {
-      const current = this.syncIntervalProvider?.() ?? 0;
-      if (current <= 0) {
-        this.pollingTimer = null;
-        return;
-      }
-      console.debug('ZoteroSource: Periodic sync triggered');
-      callback();
-      this.scheduleNextSync(callback);
-    }, interval);
+    this.poller?.start(callback);
   }
 
   dispose(): void {
-    if (this.pollingTimer !== null) {
-      window.clearTimeout(this.pollingTimer);
-      this.pollingTimer = null;
-    }
+    this.poller?.stop();
     this.abortController?.abort();
     this.abortController = null;
   }

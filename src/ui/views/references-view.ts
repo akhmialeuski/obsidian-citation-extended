@@ -9,6 +9,7 @@ import type { Entry } from '../../core';
 import type { ILibraryService, ITemplateService } from '../../container';
 import type { CitationsPluginSettings } from '../settings/settings';
 import { extractCitekeysFromText } from '../../application/citekey-extractor';
+import { LoadingStatus } from '../../library/library-state';
 
 /** Stable identifier used to register and reveal the references leaf. */
 export const REFERENCES_VIEW_TYPE = 'citation-extended-references';
@@ -65,9 +66,15 @@ export class ReferencesView extends ItemView {
     this.registerEvent(
       this.app.workspace.on('editor-change', () => this.scheduleRefresh()),
     );
-    this.unsubscribe = this.deps.libraryService.store.subscribe(
-      () => void this.refresh(),
-    );
+    // The store fires on every transition (e.g. Loading → Success). Only a
+    // completed load changes what we render, so refresh on Success only — and
+    // through the debounce, so several quick reloads coalesce into one pass
+    // instead of re-reading the note and re-scanning it each time.
+    this.unsubscribe = this.deps.libraryService.store.subscribe((state) => {
+      if (state.status === LoadingStatus.Success) {
+        this.scheduleRefresh();
+      }
+    });
 
     await this.refresh();
   }

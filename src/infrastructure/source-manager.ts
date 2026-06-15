@@ -310,13 +310,24 @@ export class SourceManager implements ISourceManager {
    * API-based formats (Readwise) use their own transport; file-based
    * formats fall back to the explicit sourceType or LocalFile.
    */
+  /** Formats Better BibTeX can export, hence valid for the Zotero transport. */
+  private static readonly ZOTERO_CAPABLE_FORMATS: ReadonlySet<string> = new Set(
+    [DATABASE_FORMATS.CslJson, DATABASE_FORMATS.BibLaTeX],
+  );
+
   private resolveTransport(db: DatabaseConfig): string {
     if (db.type === DATABASE_FORMATS.Readwise) {
       return DATA_SOURCE_TYPES.Readwise;
     }
     // Zotero uses a file FORMAT (CSL JSON / BibLaTeX) but an HTTP transport, so
-    // it is selected by the explicit sourceType rather than the format.
-    if (db.sourceType === DATA_SOURCE_TYPES.Zotero) {
+    // it is selected by the explicit sourceType. Honour it only for a format
+    // Better BibTeX can export — a stale/hand-edited `sourceType` on an
+    // incompatible format (e.g. Hayagriva) falls back to a file source, which
+    // is exactly what the settings UI then renders.
+    if (
+      db.sourceType === DATA_SOURCE_TYPES.Zotero &&
+      SourceManager.ZOTERO_CAPABLE_FORMATS.has(db.type)
+    ) {
       return DATA_SOURCE_TYPES.Zotero;
     }
     return db.sourceType ?? DATA_SOURCE_TYPES.LocalFile;
@@ -331,26 +342,29 @@ export class SourceManager implements ISourceManager {
       );
     }
     const id = db.id ?? db.name;
+    return `${transport}:${db.type}:${id}:${this.identitySuffix(db, transport)}`;
+  }
+
+  /**
+   * The transport-specific part of the source key — what, beyond id/type,
+   * makes two configs the same source. Kept here so adding a transport touches
+   * one cohesive place rather than scattering conditionals through makeKey.
+   */
+  private identitySuffix(db: DatabaseConfig, transport: string): string {
     if (transport === DATA_SOURCE_TYPES.Readwise) {
-      // For API-based sources the path holds the token: never put it in the
-      // key verbatim (it would leak into debug logs). Fold token + filters
-      // into a fingerprint instead, so changing either recreates the source
-      // (the factory snapshots both at creation time) while an unchanged
-      // config keeps the source — and its polling timer and incremental
-      // sync state — alive across reloads.
-      const fp = configFingerprint(
+      // The path holds the API token: never key on it verbatim (it would leak
+      // into debug logs). Fingerprint token + filters so changing either
+      // recreates the source while an unchanged config keeps it (and its
+      // polling timer / incremental-sync state) alive across reloads.
+      return `fp-${configFingerprint(
         `${db.path}|${JSON.stringify(db.readwiseFilters ?? null)}`,
-      );
-      return `${transport}:${db.type}:${id}:fp-${fp}`;
+      )}`;
     }
     if (transport === DATA_SOURCE_TYPES.Zotero) {
-      // Fold the export-notes flag into the key so toggling it recreates the
-      // source (the factory snapshots it at creation time). The URL is not a
-      // secret, so it is kept verbatim like a file path.
-      return `${transport}:${db.type}:${id}:${db.path}:notes-${
-        db.zoteroExportNotes ? 1 : 0
-      }`;
+      // Fold the export-notes flag in so toggling it recreates the source (the
+      // factory snapshots it). The URL is not a secret, kept verbatim.
+      return `${db.path}:notes-${db.zoteroExportNotes ? 1 : 0}`;
     }
-    return `${transport}:${db.type}:${id}:${db.path}`;
+    return db.path;
   }
 }

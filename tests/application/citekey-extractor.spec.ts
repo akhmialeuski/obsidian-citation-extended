@@ -102,8 +102,19 @@ describe('extractCitekeysFromText', () => {
     ]);
   });
 
-  it('scans across multiple lines', () => {
+  it('scans across multiple lines in document order', () => {
     const text = 'First [@a2020].\nSecond line @b2021 here.\n[[@c2022]]';
-    expect(extractCitekeysFromText(text)).toEqual(['c2022', 'a2020', 'b2021']);
+    expect(extractCitekeysFromText(text)).toEqual(['a2020', 'b2021', 'c2022']);
+  });
+
+  it('preserves document order across mixed citation forms', () => {
+    // wiki, then bare, then group — must come back in that positional order.
+    const text = '[[@first]] then @second and [@third; @fourth]';
+    expect(extractCitekeysFromText(text)).toEqual([
+      'first',
+      'second',
+      'third',
+      'fourth',
+    ]);
   });
 });
