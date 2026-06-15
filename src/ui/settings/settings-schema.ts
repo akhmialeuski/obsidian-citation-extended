@@ -97,6 +97,14 @@ export const SettingsSchema = z.object({
     .default('_'),
   autoCreateNoteOnCitation: z.boolean().default(false),
   literatureNoteLinkDisplayTemplate: z.string().default(''),
+  // Inline editor autocomplete: when enabled, typing `@`/`[@` shows a citekey
+  // suggestion popover backed by the same search index as the search modal.
+  enableInlineSuggestions: z.boolean().default(true),
+  // Handlebars template used to render each reference in the "References"
+  // sidebar view for the active note.
+  bibliographyEntryTemplate: z
+    .string()
+    .default('{{authorString}}{{#if year}} ({{year}}){{/if}}. {{title}}.'),
   // Multi-source configuration
   databases: z
     .array(
@@ -181,6 +189,9 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   filenameSanitizationReplacement: '_',
   autoCreateNoteOnCitation: false,
   literatureNoteLinkDisplayTemplate: '',
+  enableInlineSuggestions: true,
+  bibliographyEntryTemplate:
+    '{{authorString}}{{#if year}} ({{year}}){{/if}}. {{title}}.',
   databases: [],
   disableAutomaticNoteCreation: false,
   templateProfiles: [],

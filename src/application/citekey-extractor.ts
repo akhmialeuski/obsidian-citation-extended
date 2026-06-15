@@ -34,3 +34,57 @@ export function extractCitekeyAtCursor(editor: IEditorProxy): string | null {
   }
   return null;
 }
+
+/**
+ * Splits a Pandoc citation group body (the text inside `[...]`) into the
+ * individual citekeys it references, e.g. `@a; @b, p. 3` → `['a', 'b']`.
+ */
+const GROUP_CITEKEY_RE = /@([\w:.#$%&\-+?<>~/]+)/g;
+
+/**
+ * Extract every distinct citekey referenced anywhere in a block of text,
+ * preserving first-occurrence order. Recognizes the same forms as
+ * {@link extractCitekeyAtCursor} — `[[@key]]`, `[@key]` (including multi-cite
+ * groups like `[@a; @b]`), and bare `@key` — across the whole document.
+ *
+ * Pure function with no editor dependency, so it can scan file contents read
+ * from the vault as well as live editor text.
+ */
+export function extractCitekeysFromText(text: string): string[] {
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+
+  const add = (key: string): void => {
+    if (!seen.has(key)) {
+      seen.add(key);
+      ordered.push(key);
+    }
+  };
+
+  // Wiki-style links: [[@key]] or [[@key|alias]]
+  const wikiRe = /\[\[@([^\]|]+)(?:\|[^\]]+)?\]\]/g;
+  let m: RegExpExecArray | null;
+  while ((m = wikiRe.exec(text)) !== null) {
+    add(m[1].trim());
+  }
+
+  // Pandoc groups: [@a; @b, p. 3] — expand each citekey in the group.
+  const groupRe = /\[([^\]]*@[^\]]*)\]/g;
+  while ((m = groupRe.exec(text)) !== null) {
+    const body = m[1];
+    GROUP_CITEKEY_RE.lastIndex = 0;
+    let inner: RegExpExecArray | null;
+    while ((inner = GROUP_CITEKEY_RE.exec(body)) !== null) {
+      add(inner[1]);
+    }
+  }
+
+  // Bare citekeys: @key not preceded by `[` (those are handled above) or by a
+  // word character (avoids matching e-mail addresses like name@example.com).
+  const bareRe = /(?:^|[^[\w@])@([\w:.#$%&\-+?<>~/]+)/g;
+  while ((m = bareRe.exec(text)) !== null) {
+    add(m[1]);
+  }
+
+  return ordered;
+}

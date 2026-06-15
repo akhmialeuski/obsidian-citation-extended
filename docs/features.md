@@ -1,6 +1,6 @@
 # Features
 
-The plugin provides eight commands, accessible via the Command Palette (`Ctrl+P`) or custom hotkeys. No hotkeys are assigned by default — configure them in **Settings** > **Hotkeys** > search for "Citations". See [Configuration: Hotkeys](configuration.md#hotkeys) for recommended bindings.
+The plugin provides commands accessible via the Command Palette (`Ctrl+P`) or custom hotkeys, plus an inline autocomplete and a references sidebar. No hotkeys are assigned by default — configure them in **Settings** > **Hotkeys** > search for "Citations". See [Configuration: Hotkeys](configuration.md#hotkeys) for recommended bindings.
 
 Commands that require an active editor (Insert citation, Insert note link, Insert note content, Insert subsequent citation, Insert multiple citations, Open note for citation at cursor) are automatically greyed out in the Command Palette when no editor pane is open.
 
@@ -58,6 +58,31 @@ Inserts a formatted citation string (e.g. `[@smith2023]`) at the cursor position
 - Cursor moves to end of inserted citation for easy chaining
 
 **How it works:** Open the search modal, pick a reference, and the citation string is inserted at your cursor. Hold Shift when pressing Enter to use the alternative format — e.g. switch between `[@smith2023]` (primary) and `@smith2023` (secondary).
+
+## Inline Citation Autocomplete
+
+Suggests matching references as you type a citation directly in the editor — no modal required.
+
+- Trigger by typing `@` or `[@` followed by your query (title, author, year, or citekey)
+- Suggestions are ranked by the same fuzzy, accent-insensitive search index used by the search modal
+- Press **Enter** to insert the primary Markdown citation format; **Shift+Enter** for the alternative format
+- The typed trigger (including a leading `[`) is replaced by the rendered citation, so a `[@citekey]` template never double-brackets
+- Enable or disable in **Settings** > **Inline citation autocomplete** (on by default)
+
+**How it works:** Start typing `@smit` mid-sentence; a popover lists matching references. Select one and the configured citation (e.g. `[@smith2023]`) is inserted in place of what you typed.
+
+## References Sidebar
+
+A side panel that lists every reference cited in the active note.
+
+- **Command**: `Citations: Show references for current note` (also available from the ribbon)
+- Scans the active note for `[@citekey]`, `[@a; @b]` multi-cite groups, `[[@citekey]]`, and bare `@citekey`
+- Each entry is rendered with the configurable **Bibliography entry template** (see [Configuration](configuration.md))
+- Click an entry to open (or create) its literature note
+- Use the **copy** button in the panel header to copy the formatted bibliography to the clipboard
+- Updates automatically as you switch notes or edit citations; references not found in the library are shown as missing
+
+**How it works:** Open the panel from the ribbon or command palette. It reads the current note, resolves each citekey against your library, and renders a live bibliography you can navigate or copy.
 
 ## Open Literature Note for Citation at Cursor
 

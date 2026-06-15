@@ -20,6 +20,7 @@ import {
 import { obsidianHttpGet } from '../../platform/obsidian-http';
 import { DATA_SOURCE_TYPES } from '../../data-source';
 import {
+  DEFAULT_SETTINGS,
   SettingsSchema,
   CitationsPluginSettingsType,
   CitationStylePreset,
@@ -782,6 +783,21 @@ export class CitationSettingTab extends PluginSettingTab {
             }, 500),
           );
       });
+
+    new Setting(containerEl)
+      .setName('Inline citation autocomplete')
+      .setDesc(
+        'Suggest matching references while typing @ or [@ in the editor. ' +
+          'Press Enter to insert the primary citation, Shift+Enter for the alternative format.',
+      )
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.enableInlineSuggestions)
+          .onChange(async (value) => {
+            this.plugin.settings.enableInlineSuggestions = value;
+            await this.plugin.saveSettings();
+          });
+      });
   }
 
   // ---------------------------------------------------------------------------
@@ -804,6 +820,25 @@ export class CitationSettingTab extends PluginSettingTab {
             value as ReferenceListSortOrder;
           await this.plugin.saveSettings();
         });
+      });
+
+    new Setting(containerEl)
+      .setName('Bibliography entry template')
+      .setDesc(
+        'Handlebars template used to render each reference in the References ' +
+          'sidebar view. Example: {{authorString}} ({{year}}). {{title}}.',
+      )
+      .addText((text) => {
+        text
+          .setPlaceholder('{{authorString}} ({{year}}). {{title}}.')
+          .setValue(this.plugin.settings.bibliographyEntryTemplate)
+          .onChange(
+            debounce(async (value: string) => {
+              this.plugin.settings.bibliographyEntryTemplate =
+                value || DEFAULT_SETTINGS.bibliographyEntryTemplate;
+              await this.plugin.saveSettings();
+            }, 500),
+          );
       });
   }
 

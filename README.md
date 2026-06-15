@@ -21,6 +21,8 @@ For detailed setup instructions, see [Getting Started](docs/getting-started.md).
 - **Insert literature note link** — insert a wiki-link or markdown link
 - **Insert literature note content** — insert rendered template content at cursor
 - **Insert markdown citation** — insert [Pandoc-style citations][3] with presets (textcite, parencite)
+- **Inline citation autocomplete** — type `@` or `[@` to get a suggestion popover backed by the same fuzzy search index
+- **References sidebar** — a side panel listing every reference cited in the active note, with one-click navigation and "copy bibliography"
 - **Readwise integration** — import highlights and documents from Readwise as citable entries
 - **Refresh citation database** — manually reload all sources
 

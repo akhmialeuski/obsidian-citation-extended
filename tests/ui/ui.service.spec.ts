@@ -10,6 +10,10 @@ jest.mock(
     App: class {},
     Notice: jest.fn(),
     MarkdownView: class {},
+    ItemView: class {},
+    EditorSuggest: class {},
+    WorkspaceLeaf: class {},
+    setIcon: jest.fn(),
     SuggestModal: class {
       open() {}
       close() {}
@@ -76,6 +80,9 @@ function makePlugin(initialState: LibraryState) {
     addCommand: jest.fn((cmd: CommandDef) => {
       commands.push(cmd);
     }),
+    registerEditorSuggest: jest.fn(),
+    registerView: jest.fn(),
+    addRibbonIcon: jest.fn(),
     libraryService: {
       store: {
         subscribe: jest.fn((fn: (state: LibraryState) => void) => {
@@ -424,7 +431,7 @@ describe('UIService', () => {
   });
 
   describe('registerCommands', () => {
-    it('registers 8 commands', () => {
+    it('registers 10 commands', () => {
       const { plugin, commands } = makePlugin({
         status: LoadingStatus.Idle,
         parseErrors: [],
@@ -433,8 +440,9 @@ describe('UIService', () => {
       const service = new UIService(plugin as never);
       service.init();
 
-      expect(commands).toHaveLength(9);
-      expect(plugin.addCommand).toHaveBeenCalledTimes(9);
+      // 9 action commands from the registry + the references view command.
+      expect(commands).toHaveLength(10);
+      expect(plugin.addCommand).toHaveBeenCalledTimes(10);
     });
 
     it('open-literature-note command opens search modal with OpenNoteAction', () => {

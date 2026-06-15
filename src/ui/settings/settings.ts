@@ -32,6 +32,11 @@ export class CitationsPluginSettings {
   public literatureNoteLinkDisplayTemplate: string =
     DEFAULT_SETTINGS.literatureNoteLinkDisplayTemplate;
 
+  public enableInlineSuggestions: boolean =
+    DEFAULT_SETTINGS.enableInlineSuggestions;
+  public bibliographyEntryTemplate: string =
+    DEFAULT_SETTINGS.bibliographyEntryTemplate;
+
   public referenceListSortOrder: ReferenceListSortOrder =
     DEFAULT_SETTINGS.referenceListSortOrder;
 

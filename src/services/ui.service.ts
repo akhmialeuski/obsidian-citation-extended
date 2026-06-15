@@ -4,6 +4,12 @@ import { IUIService } from '../container';
 import { IStatusBarItem } from '../platform/platform-adapter';
 import { CommandRegistry } from './command-registry';
 import { ContextMenuHandler } from './context-menu-handler';
+import { WorkspaceLeaf } from 'obsidian';
+import { CitationEditorSuggest } from '../ui/suggest/citation-suggest';
+import {
+  ReferencesView,
+  REFERENCES_VIEW_TYPE,
+} from '../ui/views/references-view';
 import {
   ActionRegistry,
   ActionContext,
@@ -90,6 +96,74 @@ export class UIService implements IUIService {
 
     this.commandRegistry.registerAll();
     this.contextMenuHandler.register();
+
+    this.registerInlineSuggest();
+    this.registerReferencesView();
+  }
+
+  /** Registers the inline citekey autocomplete popover. */
+  private registerInlineSuggest(): void {
+    this.plugin.registerEditorSuggest(
+      new CitationEditorSuggest(this.plugin.app, {
+        libraryService: this.plugin.libraryService,
+        citationService: this.plugin.citationService,
+        settings: this.plugin.settings,
+      }),
+    );
+  }
+
+  /**
+   * Registers the references sidebar view plus the command and ribbon icon
+   * that reveal it.
+   */
+  private registerReferencesView(): void {
+    const onOpenCitekey = (citekey: string): void => {
+      const library = this.plugin.libraryService.library;
+      if (!library) return;
+      void this.plugin.noteService
+        .openLiteratureNote(citekey, library, false)
+        .catch((e: unknown) => console.error(e));
+    };
+
+    this.plugin.registerView(
+      REFERENCES_VIEW_TYPE,
+      (leaf) =>
+        new ReferencesView(leaf, {
+          libraryService: this.plugin.libraryService,
+          templateService: this.plugin.templateService,
+          settings: this.plugin.settings,
+          onOpenCitekey,
+        }),
+    );
+
+    this.plugin.addRibbonIcon(
+      'quote-glyph',
+      'Show references for current note',
+      () => void this.activateReferencesView(),
+    );
+
+    this.plugin.addCommand({
+      id: 'show-references-view',
+      name: 'Show references for current note',
+      callback: () => void this.activateReferencesView(),
+    });
+  }
+
+  /** Reveals the references view, creating it in the right sidebar if needed. */
+  private async activateReferencesView(): Promise<void> {
+    const { workspace } = this.plugin.app;
+    let leaf: WorkspaceLeaf | null =
+      workspace.getLeavesOfType(REFERENCES_VIEW_TYPE)[0] ?? null;
+    if (!leaf) {
+      leaf = workspace.getRightLeaf(false);
+      if (!leaf) return;
+      await leaf.setViewState({ type: REFERENCES_VIEW_TYPE, active: true });
+    }
+    // revealLeaf has existed since early Obsidian; only its Promise return type
+    // was added in 1.7.2, which the lint rule keys on. `void` is safe on both,
+    // so we keep minAppVersion at 1.4.0 rather than bump it for a return type.
+    // eslint-disable-next-line obsidianmd/no-unsupported-api
+    void workspace.revealLeaf(leaf);
   }
 
   /** Updates the status bar text and CSS class to reflect current library loading state. */

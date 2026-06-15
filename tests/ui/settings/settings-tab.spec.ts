@@ -1297,11 +1297,13 @@ describe('CitationSettingTab', () => {
         allTexts.push(...setting.getTextComponents());
       }
 
-      // The link display template is the last text field before the display section
+      // The link display template is the last text field in the citations
+      // section; the display section adds one further text field (the
+      // bibliography entry template), so link-display is now second-to-last.
       // Fields: db-name(0), db-path(1), lit-note-folder(2), lit-note-title(3),
       //         lit-note-content-path(4), primary-citation(5), alt-citation(6),
-      //         link-display(7)
-      const lastText = allTexts[allTexts.length - 1];
+      //         link-display(7), bibliography-entry(8)
+      const lastText = allTexts[allTexts.length - 2];
       lastText.triggerChange('{{authorString}} ({{year}})');
       await Promise.resolve();
 
