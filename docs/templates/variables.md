@@ -34,6 +34,8 @@ These shortcuts are mapped from each bibliography entry at render time. Every en
 | `{{eprint}}` | E-print identifier (BibLaTeX only) | `2001.12345` |
 | `{{eprinttype}}` | E-print service (BibLaTeX only) | `arxiv` |
 | `{{keywords}}` | Keywords array — use `{{join keywords ", "}}` to render | `["machine learning", "AI"]` |
+| `{{tags}}` | Alias for `keywords` using Zotero terminology (Zotero tags) | `["machine learning", "AI"]` |
+| `{{collections}}` | Zotero collection names (Better BibTeX with "Export collections" enabled) | `["Dissertation", "Reading group"]` |
 | `{{note}}` | Notes from reference manager (HTML decoded, links converted to Markdown) | `Important paper` |
 | `{{zoteroSelectURI}}` | URI to open the reference in Zotero client | `zotero://select/items/@smith2020` |
 | `{{zoteroId}}` | Zotero internal item key (from `zotero-key` BibLaTeX field) | `ABC12345` |

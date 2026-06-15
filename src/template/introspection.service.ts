@@ -11,6 +11,11 @@ const KNOWN_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   eprinttype: '',
   eventPlace: 'Location of event',
   ISBN: 'International Standard Book Number',
+  keywords:
+    'List of keywords/tags for the entry. Iterate with {{#each keywords}} or join with {{join keywords ", "}}',
+  tags: 'Alias for keywords using Zotero terminology (Zotero tags). Iterate with {{#each tags}}',
+  collections:
+    'Zotero collection names the entry belongs to (Better BibTeX with "Export collections" enabled). Iterate with {{#each collections}}',
   language: 'Language code (e.g. en, ru)',
   lastname: 'Family name of the first author',
   note: '',
