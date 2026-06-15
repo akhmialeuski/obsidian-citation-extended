@@ -8,6 +8,7 @@ export const DATA_SOURCE_TYPES = {
   LocalFile: 'local-file',
   VaultFile: 'vault-file',
   Readwise: 'readwise',
+  Zotero: 'zotero',
 } as const;
 
 /**

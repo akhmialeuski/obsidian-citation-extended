@@ -1,5 +1,9 @@
 import { FileSystemAdapter, Notice, Plugin } from 'obsidian';
-import { obsidianHttpGet } from './platform/obsidian-http';
+import {
+  obsidianHttpGet,
+  obsidianZoteroGet,
+  obsidianZoteroPost,
+} from './platform/obsidian-http';
 
 import { TemplateService } from './template/template.service';
 import { NoteService } from './notes/note.service';
@@ -13,6 +17,7 @@ import { DATA_SOURCE_TYPES } from './data-source';
 import { LocalFileSource } from './sources/local-file-source';
 import { VaultFileSource } from './sources/vault-file-source';
 import { ReadwiseSource } from './sources/readwise-source';
+import { ZoteroSource } from './sources/zotero-source';
 import { SourceManager } from './infrastructure/source-manager';
 import { TemplateProfileRegistry } from './domain/template-profile-registry';
 import {
@@ -42,6 +47,8 @@ import {
   generateDatabaseId,
   ReadwiseApiClient,
   resolveReadwiseFilters,
+  resolveZoteroExportNotes,
+  ZoteroConnectorClient,
 } from './core';
 import LoadWorker from 'web-worker:./worker';
 
@@ -181,6 +188,33 @@ export default class CitationPlugin extends Plugin {
           // Resolve per-database filters from settings via the generic
           // databaseId, keeping source-specific config off DataSourceDefinition.
           resolveReadwiseFilters(this.settings.databases, def.databaseId),
+        ),
+    );
+
+    // Register Zotero (Better BibTeX) source type — def.path holds the pull
+    // export URL; def.format selects the parser (CSL JSON or BibLaTeX). Each
+    // gets its own offline cache keyed by the stable source id.
+    registry.register(
+      DATA_SOURCE_TYPES.Zotero,
+      (def, id) =>
+        new ZoteroSource(
+          id,
+          new ZoteroConnectorClient(
+            def.path,
+            obsidianZoteroGet,
+            obsidianZoteroPost,
+          ),
+          workerManager,
+          def.format,
+          resolveZoteroExportNotes(this.settings.databases, def.databaseId),
+          platformAdapter.fileSystem,
+          readwiseCacheDir
+            ? `${readwiseCacheDir}/zotero-cache-${id.replace(cacheNameSanitizeRe, '-')}.json`
+            : '',
+          // Interval provider (not a snapshot): re-read every poll cycle so a
+          // settings change applies without recreating the source.
+          () =>
+            resolveSyncIntervalMs(this.settings.zoteroSyncIntervalMinutes) ?? 0,
         ),
     );
 

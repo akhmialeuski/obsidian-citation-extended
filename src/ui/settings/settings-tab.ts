@@ -16,8 +16,13 @@ import {
   DATABASE_FORMATS,
   generateDatabaseId,
   ReadwiseApiClient,
+  ZoteroConnectorClient,
 } from '../../core';
-import { obsidianHttpGet } from '../../platform/obsidian-http';
+import {
+  obsidianHttpGet,
+  obsidianZoteroGet,
+  obsidianZoteroPost,
+} from '../../platform/obsidian-http';
 import { DATA_SOURCE_TYPES } from '../../data-source';
 import {
   DEFAULT_SETTINGS,
@@ -222,6 +227,15 @@ export class CitationSettingTab extends PluginSettingTab {
           this.plugin.settings.databases[index].sourceType =
             DATA_SOURCE_TYPES.Readwise;
           this.plugin.settings.databases[index].path = '';
+        } else if (
+          // Preserve a live Zotero connection across CSL-JSON <-> BibLaTeX
+          // switches (both are formats Zotero can export); clear it otherwise.
+          this.plugin.settings.databases[index].sourceType ===
+            DATA_SOURCE_TYPES.Zotero &&
+          (value === DATABASE_FORMATS.CslJson ||
+            value === DATABASE_FORMATS.BibLaTeX)
+        ) {
+          // keep sourceType = zotero
         } else {
           delete this.plugin.settings.databases[index].sourceType;
         }
@@ -238,8 +252,183 @@ export class CitationSettingTab extends PluginSettingTab {
     if (db.type === DATABASE_FORMATS.Readwise) {
       this.renderReadwiseFields(card, db, index);
     } else {
-      this.renderFilePathField(card, db, index);
+      // Live Zotero connection is offered for the formats Better BibTeX can
+      // export on demand (CSL JSON / BibLaTeX).
+      const zoteroCapable =
+        db.type === DATABASE_FORMATS.CslJson ||
+        db.type === DATABASE_FORMATS.BibLaTeX;
+      const isZotero = db.sourceType === DATA_SOURCE_TYPES.Zotero;
+
+      // In file mode the path field comes first (keeps the file workflow
+      // front-and-centre); the live-Zotero toggle follows it.
+      if (!isZotero) {
+        this.renderFilePathField(card, db, index);
+      }
+      if (zoteroCapable) {
+        this.renderZoteroToggle(card, db, index);
+      }
+      if (isZotero) {
+        this.renderZoteroFields(card, db, index);
+      }
     }
+  }
+
+  /** Toggle that switches a CSL-JSON/BibLaTeX database to a live Zotero pull. */
+  private renderZoteroToggle(
+    card: HTMLElement,
+    db: DatabaseConfig,
+    index: number,
+  ): void {
+    new Setting(card)
+      // "Better BibTeX" is a product name, not a sentence to lower-case.
+      // eslint-disable-next-line obsidianmd/ui/sentence-case
+      .setName('Load live from Zotero (Better BibTeX)')
+      .setDesc(
+        'Fetch directly from a running Zotero via Better BibTeX instead of ' +
+          'reading an exported file — no manual re-export needed.',
+      )
+      .addToggle((toggle) => {
+        toggle
+          .setValue(db.sourceType === DATA_SOURCE_TYPES.Zotero)
+          .onChange(async (value) => {
+            if (value) {
+              this.plugin.settings.databases[index].sourceType =
+                DATA_SOURCE_TYPES.Zotero;
+            } else {
+              delete this.plugin.settings.databases[index].sourceType;
+            }
+            await this.plugin.saveSettings();
+            this.display();
+          });
+      });
+  }
+
+  /**
+   * Fields for a live Zotero (Better BibTeX) source: the pull-export URL, an
+   * "import notes/annotations" toggle, a polling interval, and a test/sync
+   * pair. The URL is stored in `db.path` (the generic connection string).
+   */
+  private renderZoteroFields(
+    card: HTMLElement,
+    db: DatabaseConfig,
+    index: number,
+  ): void {
+    new Setting(card)
+      .setName('Better BibTeX export URL')
+      .setDesc(
+        'In Zotero, right-click a library or collection → "Download Better ' +
+          'BibTeX export…" and paste the URL here. Pick the CSL JSON or ' +
+          'BibLaTeX variant to match the database format above.',
+      )
+      .addText((text) => {
+        text
+          .setPlaceholder(
+            'http://127.0.0.1:23119/better-bibtex/collection?/0/ABCD1234.json',
+          )
+          .setValue(db.path)
+          .onChange(
+            debounce(async (value: string) => {
+              this.plugin.settings.databases[index].path = value.trim();
+              await this.plugin.saveSettings();
+            }, 500),
+          );
+      });
+
+    new Setting(card)
+      .setName('Import notes & annotations')
+      .setDesc(
+        'Include Zotero notes and PDF annotations in the export ' +
+          '(exportNotes=true). They become available via the {{note}} template variable.',
+      )
+      .addToggle((toggle) => {
+        toggle
+          .setValue(db.zoteroExportNotes ?? false)
+          .onChange(async (value) => {
+            this.plugin.settings.databases[index].zoteroExportNotes = value;
+            await this.plugin.saveSettings();
+            // Recreating the source (key includes this flag) happens on reload.
+            void this.plugin.libraryService.load();
+          });
+      });
+
+    new Setting(card)
+      .setName('Auto-sync interval (minutes)')
+      .setDesc(
+        'How often to re-fetch from Zotero. Set to 0 to disable (refresh manually).',
+      )
+      .addText((text) => {
+        text
+          .setValue(String(this.plugin.settings.zoteroSyncIntervalMinutes))
+          .onChange(
+            debounce(async (value: string) => {
+              const num = parseInt(value, 10);
+              if (!isNaN(num) && num >= READWISE_SYNC_INTERVAL_MIN_MINUTES) {
+                this.plugin.settings.zoteroSyncIntervalMinutes = Math.min(
+                  num,
+                  READWISE_SYNC_INTERVAL_MAX_MINUTES,
+                );
+                await this.plugin.saveSettings();
+              }
+            }, 500),
+          );
+        text.inputEl.type = 'number';
+        text.inputEl.min = String(READWISE_SYNC_INTERVAL_MIN_MINUTES);
+        text.inputEl.max = String(READWISE_SYNC_INTERVAL_MAX_MINUTES);
+        text.inputEl.setCssProps({ width: '80px' });
+      });
+
+    const statusEl = card.createDiv('zotero-status');
+    statusEl.setCssProps({ fontSize: '0.8em', marginTop: '5px' });
+
+    new Setting(card)
+      .addButton((button) => {
+        button.setButtonText('Test connection').onClick(() => {
+          void (async () => {
+            const url = this.plugin.settings.databases[index].path;
+            if (!url) {
+              // eslint-disable-next-line obsidianmd/ui/sentence-case -- "Better BibTeX" is a product name
+              new Notice('Please enter the Better BibTeX export URL first.');
+              return;
+            }
+            statusEl.setText('Connecting…');
+            statusEl.setCssProps({ color: 'var(--text-muted)' });
+            try {
+              const client = new ZoteroConnectorClient(
+                url,
+                obsidianZoteroGet,
+                obsidianZoteroPost,
+              );
+              const versions = await client.ping();
+              statusEl.setText(
+                `Connected — Zotero ${versions.zotero}, Better BibTeX ${versions.betterbibtex}.`,
+              );
+              statusEl.setCssProps({ color: 'var(--text-success)' });
+            } catch (e) {
+              statusEl.setText(
+                e instanceof Error ? e.message : 'Connection failed.',
+              );
+              statusEl.setCssProps({ color: 'var(--text-error)' });
+            }
+          })();
+        });
+      })
+      .addButton((button) => {
+        button
+          .setButtonText('Sync now')
+          .setCta()
+          .onClick(() => {
+            void (async () => {
+              const url = this.plugin.settings.databases[index].path;
+              if (!url) {
+                // eslint-disable-next-line obsidianmd/ui/sentence-case -- "Better BibTeX" is a product name
+                new Notice('Please enter the Better BibTeX export URL first.');
+                return;
+              }
+              new Notice('Fetching from Zotero…');
+              await this.plugin.libraryService.load();
+            })();
+          });
+      });
   }
 
   private async checkDatabasePath(

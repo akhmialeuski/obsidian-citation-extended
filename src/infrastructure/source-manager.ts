@@ -314,6 +314,11 @@ export class SourceManager implements ISourceManager {
     if (db.type === DATABASE_FORMATS.Readwise) {
       return DATA_SOURCE_TYPES.Readwise;
     }
+    // Zotero uses a file FORMAT (CSL JSON / BibLaTeX) but an HTTP transport, so
+    // it is selected by the explicit sourceType rather than the format.
+    if (db.sourceType === DATA_SOURCE_TYPES.Zotero) {
+      return DATA_SOURCE_TYPES.Zotero;
+    }
     return db.sourceType ?? DATA_SOURCE_TYPES.LocalFile;
   }
 
@@ -337,6 +342,14 @@ export class SourceManager implements ISourceManager {
         `${db.path}|${JSON.stringify(db.readwiseFilters ?? null)}`,
       );
       return `${transport}:${db.type}:${id}:fp-${fp}`;
+    }
+    if (transport === DATA_SOURCE_TYPES.Zotero) {
+      // Fold the export-notes flag into the key so toggling it recreates the
+      // source (the factory snapshots it at creation time). The URL is not a
+      // secret, so it is kept verbatim like a file path.
+      return `${transport}:${db.type}:${id}:${db.path}:notes-${
+        db.zoteroExportNotes ? 1 : 0
+      }`;
     }
     return `${transport}:${db.type}:${id}:${db.path}`;
   }

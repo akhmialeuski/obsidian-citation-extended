@@ -57,6 +57,10 @@ export class CitationsPluginSettings {
   public readwiseSyncIntervalMinutes: number =
     DEFAULT_SETTINGS.readwiseSyncIntervalMinutes;
 
+  // Zotero integration
+  public zoteroSyncIntervalMinutes: number =
+    DEFAULT_SETTINGS.zoteroSyncIntervalMinutes;
+
   // Performance
   public libraryLoadTimeoutSeconds: number =
     DEFAULT_SETTINGS.libraryLoadTimeoutSeconds;

@@ -244,6 +244,23 @@ Deep learning allows computational models...
 
 ## Variations
 
+### Live connection (no file export)
+
+Instead of exporting a file and watching it, the plugin can fetch the library **directly from a running Zotero** via Better BibTeX's pull-export endpoint. This removes the export step entirely — when you cite, the data comes straight from Zotero.
+
+1. In Zotero, right-click a library or collection → **Download Better BibTeX export…** and copy the URL (choose the **Better CSL JSON** or **BibLaTeX** variant).
+2. In plugin settings, add a database, set its **type** to match, and enable **Load live from Zotero (Better BibTeX)**.
+3. Paste the URL into **Better BibTeX export URL** and click **Test connection** — it reports the Zotero and Better BibTeX versions on success.
+4. Optionally enable **Import notes & annotations** to pull Zotero notes and PDF annotations into `{{note}}`, and set an **Auto-sync interval** to re-fetch periodically.
+
+Requirements and trade-offs:
+
+- Zotero must be running with Better BibTeX on the same machine (the connection is local-only, `127.0.0.1`).
+- When Zotero is closed, the plugin serves the last successful export from an offline cache.
+- There is no file to watch, so updates arrive on the auto-sync interval or when you run **Sync now** / **Refresh citation database** (rather than instantly on change).
+
+See [Data Sources: Zotero (Better BibTeX) live connection](../data-sources.md#zotero-better-bibtex-live-connection) for details.
+
 ### CSL-JSON Export
 
 If you prefer CSL-JSON:

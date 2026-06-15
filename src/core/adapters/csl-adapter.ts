@@ -24,6 +24,11 @@ export interface EntryDataCSL {
   'zotero-key'?: string;
   'collection-title'?: string;
   volume?: string;
+  /**
+   * Free-text note. Better CSL JSON populates this from Zotero child notes
+   * and PDF annotations when the export is run with notes enabled.
+   */
+  note?: string;
 }
 
 export function isEntryDataCSL(
@@ -35,6 +40,12 @@ export function isEntryDataCSL(
 export class EntryCSLAdapter extends Entry {
   constructor(private data: EntryDataCSL) {
     super();
+    // Surface a CSL `note` (Zotero child notes / PDF annotations, present when
+    // exported with notes enabled) through the base `note` getter, which
+    // decodes entities and converts links — same path as BibLaTeX `note`.
+    if (data.note) {
+      this._note = [data.note];
+    }
   }
 
   eprint: string | null = null;

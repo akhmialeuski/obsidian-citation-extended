@@ -52,6 +52,11 @@ export interface DatabaseConfig {
   sourceType?: string;
   /** Readwise-only client-side import filters. */
   readwiseFilters?: ReadwiseFilters;
+  /**
+   * Zotero-only: include Zotero notes and PDF annotations in the pull export
+   * (`&exportNotes=true`). Surfaced in templates via `{{note}}`.
+   */
+  zoteroExportNotes?: boolean;
 }
 
 /**
@@ -78,4 +83,20 @@ export function resolveReadwiseFilters(
 ): ReadwiseFilters | undefined {
   if (!databaseId) return undefined;
   return databases.find((db) => db.id === databaseId)?.readwiseFilters;
+}
+
+/**
+ * Resolve the "export notes" flag for a Zotero database by id.
+ *
+ * Returns `false` when the id is missing or not found — so an absent id never
+ * inherits another database's setting (mirrors {@link resolveReadwiseFilters}).
+ */
+export function resolveZoteroExportNotes(
+  databases: DatabaseConfig[],
+  databaseId: string | undefined,
+): boolean {
+  if (!databaseId) return false;
+  return (
+    databases.find((db) => db.id === databaseId)?.zoteroExportNotes ?? false
+  );
 }

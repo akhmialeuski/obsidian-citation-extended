@@ -4,7 +4,7 @@ This plugin for [Obsidian](https://obsidian.md) integrates your academic referen
 
 ![](docs/images/screenshot.png)
 
-The plugin supports reading bibliographies in [BibTeX / BibLaTeX `.bib` format][4], [CSL-JSON format][1], [Hayagriva YAML][5], and directly from the [Readwise](https://readwise.io) API.
+The plugin supports reading bibliographies in [BibTeX / BibLaTeX `.bib` format][4], [CSL-JSON format][1], [Hayagriva YAML][5], directly from the [Readwise](https://readwise.io) API, and **live from a running Zotero** via the [Better BibTeX][2] pull-export endpoint (no manual file export).
 
 ## Quick Start
 
