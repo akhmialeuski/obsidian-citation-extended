@@ -323,6 +323,16 @@ When a template is set, it is rendered with all template variables (just like ci
 | Setting | Description | Default |
 |---------|-------------|---------|
 | Sort order | How references are sorted in the search modal | `Default (file order)` |
+| Inline citation autocomplete | Suggest matching references while typing `@`/`[@` in the editor | `On` |
+| Bibliography entry template | Handlebars template used to render each reference in the References sidebar | `{{authorString}} ({{year}}). {{title}}.` |
+
+### Inline citation autocomplete
+
+When enabled, typing `@` or `[@` in the editor opens a suggestion popover backed by the same fuzzy search index as the search modal. Press **Enter** to insert the primary citation format, **Shift+Enter** for the alternative format. The typed trigger (including a leading `[`) is replaced by the rendered citation. Disable this setting if you prefer to insert citations only through the search modal.
+
+### Bibliography entry template
+
+Controls how each reference is displayed in the **References** sidebar view (see [Features: References Sidebar](features.md#references-sidebar)). It is a standard Handlebars template with access to all [template variables](templates/variables.md). For example, `{{authorString}} ({{year}}). {{title}}.` renders as `Jane Smith (2023). A Study.` Leave empty to fall back to the default.
 
 ### Sort order options
 

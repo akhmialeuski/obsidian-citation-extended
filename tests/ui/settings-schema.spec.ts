@@ -73,6 +73,44 @@ describe('SettingsSchema', () => {
         expect(result.data.databases[0].sourceType).toBeUndefined();
       }
     });
+
+    it('preserves the Zotero export-notes flag on a database', () => {
+      const settings = {
+        ...DEFAULT_SETTINGS,
+        databases: [
+          {
+            name: 'Zotero',
+            type: 'csl-json',
+            path: 'http://127.0.0.1:23119/better-bibtex/collection?/0/A.json',
+            sourceType: 'zotero',
+            zoteroExportNotes: true,
+          },
+        ],
+      };
+      const result = validateSettings(settings);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.databases[0].zoteroExportNotes).toBe(true);
+      }
+    });
+  });
+
+  describe('zoteroSyncIntervalMinutes', () => {
+    it('defaults to 0 (manual refresh) when missing', () => {
+      const result = validateSettings({ ...DEFAULT_SETTINGS });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.zoteroSyncIntervalMinutes).toBe(0);
+      }
+    });
+
+    it('rejects values above the shared interval maximum', () => {
+      const result = validateSettings({
+        ...DEFAULT_SETTINGS,
+        zoteroSyncIntervalMinutes: 999999,
+      });
+      expect(result.success).toBe(false);
+    });
   });
 
   describe('filenameSanitizationReplacement validation', () => {

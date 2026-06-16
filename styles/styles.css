@@ -169,3 +169,60 @@
   width: 100%;
   display: block;
 }
+/** References sidebar view **/
+
+.citation-extended-ref-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0 8px 0;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.citation-extended-ref-count {
+  color: var(--text-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.citation-extended-ref-copy {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px;
+  cursor: pointer;
+}
+
+.citation-extended-ref-item {
+  padding: 8px;
+  border-radius: var(--radius-s);
+  cursor: pointer;
+}
+
+.citation-extended-ref-item:hover {
+  background-color: var(--background-modifier-hover);
+}
+
+.citation-extended-ref-item.is-missing {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.citation-extended-ref-text {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.citation-extended-ref-key {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-monospace);
+  margin-top: 2px;
+}
+
+.citation-extended-ref-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 8px 0;
+}

@@ -32,6 +32,11 @@ export class CitationsPluginSettings {
   public literatureNoteLinkDisplayTemplate: string =
     DEFAULT_SETTINGS.literatureNoteLinkDisplayTemplate;
 
+  public enableInlineSuggestions: boolean =
+    DEFAULT_SETTINGS.enableInlineSuggestions;
+  public bibliographyEntryTemplate: string =
+    DEFAULT_SETTINGS.bibliographyEntryTemplate;
+
   public referenceListSortOrder: ReferenceListSortOrder =
     DEFAULT_SETTINGS.referenceListSortOrder;
 
@@ -51,6 +56,10 @@ export class CitationsPluginSettings {
   public readwiseLastSyncDate: string = DEFAULT_SETTINGS.readwiseLastSyncDate;
   public readwiseSyncIntervalMinutes: number =
     DEFAULT_SETTINGS.readwiseSyncIntervalMinutes;
+
+  // Zotero integration
+  public zoteroSyncIntervalMinutes: number =
+    DEFAULT_SETTINGS.zoteroSyncIntervalMinutes;
 
   // Performance
   public libraryLoadTimeoutSeconds: number =

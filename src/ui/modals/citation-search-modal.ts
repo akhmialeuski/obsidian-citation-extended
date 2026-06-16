@@ -5,6 +5,7 @@ import type { SearchModalAction } from '../../application/actions/action.types';
 import type { ILibraryService } from '../../container';
 import type { CitationsPluginSettings } from '../settings/settings';
 import { sortEntries } from '../../library/sort-entries';
+import { AUTHOR_DISPLAY_LIMIT, renderEntrySuggestion } from '../render-entry';
 
 // Stub some methods we know are there..
 interface SuggestModalExt<T> extends SuggestModal<T> {
@@ -16,9 +17,6 @@ interface ChooserExt {
 interface SuggestModalWithUpdate<T> extends SuggestModal<T> {
   updateSuggestions(): void;
 }
-
-/** Maximum number of authors shown before truncation with "et al." */
-const AUTHOR_DISPLAY_LIMIT = 3;
 
 export class CitationSearchModal extends SuggestModal<Entry> {
   limit = 50;
@@ -207,36 +205,10 @@ export class CitationSearchModal extends SuggestModal<Entry> {
       return;
     }
 
-    // Default rendering logic — uses Entry domain methods for encapsulation
+    // Default rendering logic — shared with the inline editor suggester.
     el.empty();
-    const entryTitle = entry.title || '';
-    const displayedAuthorString = entry.displayAuthors(AUTHOR_DISPLAY_LIMIT);
-    const yearString = entry.yearString();
-
     const container = el.createDiv({ cls: 'zoteroResult' });
-    container.createSpan({
-      cls: 'zoteroTitle',
-      text: entryTitle,
-    });
-    container.createSpan({
-      cls: 'zoteroCitekey',
-      text: entry.displayKey(),
-    });
-
-    if (yearString) {
-      container.createSpan({
-        cls: 'zoteroYear',
-        text: yearString,
-      });
-    }
-
-    const authorsCls = entry.authorString
-      ? 'zoteroAuthors'
-      : 'zoteroAuthors zoteroAuthorsEmpty';
-    container.createSpan({
-      cls: authorsCls,
-      text: displayedAuthorString,
-    });
+    renderEntrySuggestion(container, entry, AUTHOR_DISPLAY_LIMIT);
   }
 
   onInputKeydown(ev: KeyboardEvent) {

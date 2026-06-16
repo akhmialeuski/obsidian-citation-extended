@@ -9,6 +9,8 @@ export interface TemplateContext {
   eventPlace?: string;
   ISBN?: string;
   keywords?: string[];
+  tags?: string[];
+  collections?: string[];
   lastname?: string;
   language?: string;
   note?: string;

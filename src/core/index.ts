@@ -10,6 +10,7 @@ export {
   DATABASE_TYPE_LABELS,
   generateDatabaseId,
   resolveReadwiseFilters,
+  resolveZoteroExportNotes,
 } from './types/database';
 export type { TemplateContext } from './types/template-context';
 export { WORKER_TASK_KINDS } from './types/worker-protocol';
@@ -48,6 +49,19 @@ export {
   ReadwiseApiClient,
   ReadwiseApiError,
 } from './readwise/readwise-api-client';
+
+// Zotero (Better BibTeX) connector client
+export {
+  ZoteroConnectorClient,
+  ZoteroApiError,
+  ZoteroAbortError,
+} from './zotero';
+export type {
+  ZoteroHttpResponse,
+  ZoteroHttpGetFn,
+  ZoteroHttpPostFn,
+  ZoteroVersions,
+} from './zotero';
 
 // Readwise incremental sync (delta merge)
 export {

@@ -97,6 +97,14 @@ export const SettingsSchema = z.object({
     .default('_'),
   autoCreateNoteOnCitation: z.boolean().default(false),
   literatureNoteLinkDisplayTemplate: z.string().default(''),
+  // Inline editor autocomplete: when enabled, typing `@`/`[@` shows a citekey
+  // suggestion popover backed by the same search index as the search modal.
+  enableInlineSuggestions: z.boolean().default(true),
+  // Handlebars template used to render each reference in the "References"
+  // sidebar view for the active note.
+  bibliographyEntryTemplate: z
+    .string()
+    .default('{{authorString}}{{#if year}} ({{year}}){{/if}}. {{title}}.'),
   // Multi-source configuration
   databases: z
     .array(
@@ -118,6 +126,8 @@ export const SettingsSchema = z.object({
             readerLocations: z.array(z.string()).optional(),
           })
           .optional(),
+        // Zotero-only: include Zotero notes/PDF annotations in the pull export.
+        zoteroExportNotes: z.boolean().optional(),
       }),
     )
     .default([]),
@@ -145,6 +155,15 @@ export const SettingsSchema = z.object({
     .min(READWISE_SYNC_INTERVAL_MIN_MINUTES)
     .max(READWISE_SYNC_INTERVAL_MAX_MINUTES)
     .default(READWISE_SYNC_INTERVAL_DEFAULT_MINUTES),
+  // ---- Zotero integration --------------------------------------------------
+  // Periodic re-fetch interval for Zotero (Better BibTeX) sources, in minutes.
+  // 0 disables polling (the default — refresh manually). Shares the Readwise
+  // bounds since both feed `setInterval`.
+  zoteroSyncIntervalMinutes: z
+    .number()
+    .min(READWISE_SYNC_INTERVAL_MIN_MINUTES)
+    .max(READWISE_SYNC_INTERVAL_MAX_MINUTES)
+    .default(0),
   // ---- Performance ---------------------------------------------------------
   // Max seconds to wait for all databases to load + parse before aborting.
   // Large or LaTeX-escaped (e.g. Cyrillic \cyrchar) BibTeX libraries can take
@@ -181,6 +200,9 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   filenameSanitizationReplacement: '_',
   autoCreateNoteOnCitation: false,
   literatureNoteLinkDisplayTemplate: '',
+  enableInlineSuggestions: true,
+  bibliographyEntryTemplate:
+    '{{authorString}}{{#if year}} ({{year}}){{/if}}. {{title}}.',
   databases: [],
   disableAutomaticNoteCreation: false,
   templateProfiles: [],
@@ -189,6 +211,8 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   // Readwise defaults
   readwiseLastSyncDate: '',
   readwiseSyncIntervalMinutes: READWISE_SYNC_INTERVAL_DEFAULT_MINUTES,
+  // Zotero defaults
+  zoteroSyncIntervalMinutes: 0,
   // Performance
   libraryLoadTimeoutSeconds: LIBRARY_LOAD_TIMEOUT_DEFAULT_SECONDS,
 };

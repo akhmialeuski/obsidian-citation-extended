@@ -102,6 +102,15 @@ export abstract class Entry {
 
   public abstract keywords?: string[];
 
+  /**
+   * Zotero collection names the entry belongs to. Populated only by formats
+   * that carry this information (e.g. Better BibTeX with "Export collections"
+   * enabled, which emits a `collections` field). Left undefined otherwise, so
+   * it is a concrete optional field on the base rather than an abstract member
+   * every adapter must declare.
+   */
+  public collections?: string[];
+
   public abstract eventPlace?: string;
 
   public abstract language?: string;
@@ -195,6 +204,16 @@ export abstract class Entry {
    */
   public get zoteroSelectURI(): string {
     return `zotero://select/items/@${this.citekey}`;
+  }
+
+  /**
+   * Zotero tags for the entry. Tags are exported as the `keywords` field by
+   * Better BibTeX and as `keyword` in CSL-JSON, so `tags` is exposed as a
+   * convenience alias over {@link keywords} for templates that prefer the
+   * Zotero terminology.
+   */
+  public get tags(): string[] | undefined {
+    return this.keywords;
   }
 
   // ---------------------------------------------------------------------------
@@ -326,6 +345,8 @@ export abstract class Entry {
       eventPlace: this.eventPlace,
       ISBN: this.ISBN,
       keywords: this.keywords,
+      tags: this.tags,
+      collections: this.collections,
       lastname: this.lastname(),
       language: this.language,
       note: this.note,

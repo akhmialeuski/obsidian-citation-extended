@@ -52,6 +52,10 @@ jest.mock(
     },
     SuggestModal: class {},
     Modal: class {},
+    ItemView: class {},
+    EditorSuggest: class {},
+    WorkspaceLeaf: class {},
+    setIcon: jest.fn(),
     Notice: jest.fn(),
     TFile: class {},
     Events: class {

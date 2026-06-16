@@ -24,6 +24,7 @@ import { DATABASE_FORMATS, WORKER_TASK_KINDS, convertToEntries } from '../core';
 import type { ParseErrorInfo, ReadwiseFilters } from '../core';
 import type { IFileSystem } from '../platform/platform-adapter';
 import { WorkerManager } from '../util';
+import { createLinkedAbortController, PeriodicSync } from './source-utils';
 
 // ---------------------------------------------------------------------------
 // Conversion helpers
@@ -320,9 +321,9 @@ function overlappedCursor(lastSyncAt: string): string | null {
  * "Refresh citation database" command passes `fullRefresh` to recover.
  */
 export class ReadwiseSource implements DataSource {
-  private pollingTimer: number | null = null;
   /** Cancels the in-flight fetch on a new load() or on dispose(). */
   private abortController: AbortController | null = null;
+  private readonly poller: PeriodicSync | null;
 
   constructor(
     public readonly id: string,
@@ -336,9 +337,13 @@ export class ReadwiseSource implements DataSource {
      * next poll cycle without recreating the source (which would reset the
      * timer and drop incremental-sync continuity).
      */
-    private syncIntervalProvider?: () => number,
+    syncIntervalProvider?: () => number,
     private filters?: ReadwiseFilters,
-  ) {}
+  ) {
+    this.poller = syncIntervalProvider
+      ? new PeriodicSync(syncIntervalProvider, 'ReadwiseSource')
+      : null;
+  }
 
   /**
    * Fetch entries from the Readwise API, serialize them, and process
@@ -351,22 +356,14 @@ export class ReadwiseSource implements DataSource {
     externalSignal?: AbortSignal,
     options?: DataSourceLoadOptions,
   ): Promise<DataSourceLoadResult> {
-    // Cancel any previous in-flight fetch and start a fresh cancellation scope.
+    // Cancel any previous in-flight fetch and start a fresh cancellation scope
+    // linked to the library load's signal, so in-flight HTTP work and
+    // rate-limit back-offs stop when the load is aborted instead of leaking
+    // and burning the Readwise rate-limit budget.
     this.abortController?.abort();
-    const controller = new AbortController();
+    const controller = createLinkedAbortController(externalSignal);
     this.abortController = controller;
     const signal = controller.signal;
-    // If the library load is aborted (load timeout, dispose, or a newer load),
-    // cancel ours too so in-flight HTTP work and rate-limit back-offs stop
-    // instead of leaking and burning the Readwise rate-limit budget. Honour an
-    // already-aborted signal too (addEventListener would never fire for it).
-    if (externalSignal?.aborted) {
-      controller.abort();
-    } else {
-      externalSignal?.addEventListener('abort', () => controller.abort(), {
-        once: true,
-      });
-    }
 
     try {
       const cached = await this.readCachedState();
@@ -660,51 +657,18 @@ export class ReadwiseSource implements DataSource {
   }
 
   /**
-   * Start periodic polling for Readwise data changes.
-   * The callback triggers a library reload, same as file-watcher sources.
-   *
-   * Uses a chained setTimeout (not setInterval) and re-reads the interval
-   * provider on every cycle, so an interval change in settings takes effect
-   * on the next cycle without recreating the source.
+   * Start periodic polling for Readwise data changes. The callback triggers a
+   * library reload, same as file-watcher sources. Delegated to
+   * {@link PeriodicSync}, which re-reads the interval provider each cycle so an
+   * interval change in settings applies without recreating the source.
    */
   watch(callback: () => void): void {
-    if (this.pollingTimer !== null || !this.syncIntervalProvider) return;
-    this.scheduleNextSync(callback);
-  }
-
-  private scheduleNextSync(callback: () => void): void {
-    const interval = this.syncIntervalProvider?.() ?? 0;
-    if (interval <= 0) {
-      // Disabled. A later watch() call (after the next library load) re-arms
-      // the chain if the user re-enables periodic sync.
-      this.pollingTimer = null;
-      return;
-    }
-
-    console.debug(
-      `ReadwiseSource: next periodic sync in ${Math.round(interval / 60_000)} min`,
-    );
-    this.pollingTimer = window.setTimeout(() => {
-      // Re-check the provider at fire time: if the user disabled periodic
-      // sync after this cycle was armed, stop silently instead of firing
-      // one extra sync.
-      const current = this.syncIntervalProvider?.() ?? 0;
-      if (current <= 0) {
-        this.pollingTimer = null;
-        return;
-      }
-      console.debug('ReadwiseSource: Periodic sync triggered');
-      callback();
-      this.scheduleNextSync(callback);
-    }, interval);
+    this.poller?.start(callback);
   }
 
   /** Stop the polling timer and cancel any in-flight fetch. */
   dispose(): void {
-    if (this.pollingTimer !== null) {
-      window.clearTimeout(this.pollingTimer);
-      this.pollingTimer = null;
-    }
+    this.poller?.stop();
     this.abortController?.abort();
     this.abortController = null;
   }

@@ -111,6 +111,25 @@ The plugin loads data from both Readwise APIs in parallel and merges the results
 
 **Offline cache:** After each successful sync, Readwise data is cached locally at `.obsidian/plugins/citation-extended/readwise-cache-<id>.json` — one file per Readwise database, keyed by its stable id, so multiple Readwise databases never collide. If the API is unavailable on the next plugin load, the cached data is used as a fallback and a warning is shown. The cache stores the full unfiltered data plus the incremental-sync cursor (`lastSyncAt`) and is overwritten only after a fully successful sync (every Readwise API responds); a partial outage leaves the previous cache intact. Import filters are re-applied when the cache is read, so changing filters always takes effect. Caches written by older plugin versions (a bare entry array) are still readable; the first sync after upgrading is a full download that rewrites the cache in the new format.
 
+### Zotero (Better BibTeX) live connection
+
+Loads the bibliography **directly from a running Zotero** via the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) pull-export endpoint — no manual file export needed. The plugin fetches the library over the local loopback connection and parses it through the same pipeline as a file source.
+
+**When to use:** You run Zotero with Better BibTeX on the same machine as Obsidian and want the library to stay current without re-exporting a file.
+
+**Requirements:** Zotero must be running with the Better BibTeX extension installed. The connection is local-only (`127.0.0.1`); nothing leaves your machine.
+
+**Setup:**
+1. In Zotero, right-click a library or collection → **Download Better BibTeX export…** and copy the URL. Choose the **Better CSL JSON** (`.json`) or **BibLaTeX** (`.bib`) variant.
+2. In plugin settings, add a database and set its **type** to match (Better CSL JSON or Better BibTeX).
+3. Toggle **Load live from Zotero (Better BibTeX)** on, paste the URL into **Better BibTeX export URL**, and click **Test connection** to confirm Zotero answers (it reports the Zotero and BBT versions).
+
+**Notes & annotations:** Enable **Import notes & annotations** to append `&exportNotes=true` to the export, so Zotero child notes and PDF annotations are included and surfaced via the `{{note}}` template variable.
+
+**Auto-sync:** There is no file to watch, so the source can poll Zotero on a configurable **Auto-sync interval (minutes)** (0 = manual only, the default). Use **Sync now** or the **Refresh citation database** command for an immediate fetch.
+
+**Offline cache:** The last successful export is cached at `.obsidian/plugins/citation-extended/zotero-cache-<id>.json`. If Zotero is closed or unreachable on a later load, the cached export is used so the library stays usable (with a warning).
+
 ## Multiple Databases
 
 You can configure up to 20 databases in settings. All entries are loaded and merged into a single searchable library.
@@ -166,4 +185,4 @@ jones2022:
 
 ## Coming Soon
 
-- **HTTP/Network sources** — fetch bibliography from a URL
+- **Generic HTTP/Network sources** — fetch a bibliography from an arbitrary URL (the Zotero/Better BibTeX live connection above already covers the local-Zotero case)

@@ -77,6 +77,10 @@ export class EntryBibLaTeXAdapter extends Entry {
     this._year = this.getField('year');
     this._note = this.getArrayField('note');
     this.keywords = this.getArrayField('keywords');
+    // Better BibTeX emits a comma-separated `collections` field when
+    // "Export collections" is enabled. The parser may hand it back as a single
+    // string or an array; normalize to a trimmed, non-empty string list.
+    this.collections = this.getCommaSeparatedField('collections');
     this.zoteroId = this.getField('zotero-key');
   }
 
@@ -90,6 +94,22 @@ export class EntryBibLaTeXAdapter extends Entry {
     if (!(key in this.data.fields)) return undefined;
     const val = this.data.fields[key];
     return Array.isArray(val) ? val : [val];
+  }
+
+  /**
+   * Read a field that may arrive either as an array or as a single
+   * comma-separated string (e.g. Better BibTeX's `collections`), returning a
+   * flat list of trimmed, non-empty values. Returns undefined when the field
+   * is absent or yields no values.
+   */
+  private getCommaSeparatedField(key: string): string[] | undefined {
+    const raw = this.getArrayField(key);
+    if (!raw) return undefined;
+    const values = raw
+      .flatMap((v) => v.split(','))
+      .map((v) => v.trim())
+      .filter((v) => v.length > 0);
+    return values.length > 0 ? values : undefined;
   }
 
   get id(): string {

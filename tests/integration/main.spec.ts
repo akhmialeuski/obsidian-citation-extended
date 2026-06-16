@@ -26,6 +26,9 @@ jest.mock(
         };
       }
       addCommand() {}
+      registerEditorSuggest() {}
+      registerView() {}
+      addRibbonIcon() {}
     },
     FileSystemAdapter: class {},
     debounce: (fn: (...args: unknown[]) => unknown) => fn,
@@ -37,6 +40,10 @@ jest.mock(
     },
     TFile: class {},
     MarkdownView: class {},
+    ItemView: class {},
+    EditorSuggest: class {},
+    WorkspaceLeaf: class {},
+    setIcon: jest.fn(),
     PluginSettingTab: class {},
     Setting: class {},
     SuggestModal: class {},
