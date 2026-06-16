@@ -657,6 +657,90 @@ describe('CitationSettingTab', () => {
   });
 
   // -----------------------------------------------------------------------
+  // Zotero (Better BibTeX) live connection fields
+  // -----------------------------------------------------------------------
+
+  describe('renderDatabaseCard — Zotero live connection', () => {
+    function zoteroPlugin(): CitationPlugin {
+      return createMockPlugin({
+        databases: [
+          {
+            id: 'z1',
+            name: 'Zotero',
+            type: 'csl-json',
+            path: 'http://127.0.0.1:23119/better-bibtex/collection?/0/AB.json',
+            sourceType: 'zotero',
+            zoteroExportNotes: false,
+          },
+        ],
+      });
+    }
+
+    function allComponents(selector: (s: MockSettingInstance) => unknown[]) {
+      return getSettings().flatMap((s) => selector(s));
+    }
+
+    it('renders the Zotero fields for a live-Zotero database without throwing', () => {
+      plugin = zoteroPlugin();
+      tab = new CitationSettingTab({} as never, plugin);
+      expect(() => tab.display()).not.toThrow();
+      // The export-URL placeholder text appears in one of the text inputs.
+      const hasUrlField =
+        allComponents((s) => s.getTextComponents()).length > 0;
+      expect(hasUrlField).toBe(true);
+    });
+
+    it('shows the live-Zotero toggle and disabling it clears the sourceType', () => {
+      plugin = zoteroPlugin();
+      tab = new CitationSettingTab({} as never, plugin);
+      tab.display();
+
+      const toggles = allComponents((s) => s.getToggleComponents()) as Array<{
+        triggerChange(v: boolean): void;
+      }>;
+      // First toggle on the card is the "Load live from Zotero" switch.
+      toggles[0].triggerChange(false);
+      expect(plugin.settings.databases[0].sourceType).toBeUndefined();
+    });
+
+    it('saves the export-notes flag and the URL, and exercises the buttons', () => {
+      plugin = zoteroPlugin();
+      tab = new CitationSettingTab({} as never, plugin);
+      tab.display();
+
+      const toggles = allComponents((s) => s.getToggleComponents()) as Array<{
+        triggerChange(v: boolean): void;
+      }>;
+      // The second toggle is "Import notes & annotations".
+      toggles[1].triggerChange(true);
+      expect(plugin.settings.databases[0].zoteroExportNotes).toBe(true);
+
+      const texts = allComponents((s) => s.getTextComponents()) as Array<{
+        triggerChange(v: string): void;
+      }>;
+      // Text fields on this single Zotero card, in render order: database name
+      // (0), export URL (1), sync interval (2). The URL is trimmed on save.
+      texts[1].triggerChange(' http://127.0.0.1:23119/x.json ');
+      expect(plugin.settings.databases[0].path).toBe(
+        'http://127.0.0.1:23119/x.json',
+      );
+      texts[2].triggerChange('15');
+      expect(plugin.settings.zoteroSyncIntervalMinutes).toBe(15);
+
+      // Test connection + Sync now buttons (the first two on the page) — firing
+      // their handlers covers the async branches; network is mocked and errors
+      // are caught inside the handlers.
+      const buttons = allComponents((s) => s.getButtonComponents()) as Array<{
+        triggerClick(): void;
+      }>;
+      expect(() => {
+        buttons[0].triggerClick();
+        buttons[1].triggerClick();
+      }).not.toThrow();
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // checkDatabasePath
   // -----------------------------------------------------------------------
 
