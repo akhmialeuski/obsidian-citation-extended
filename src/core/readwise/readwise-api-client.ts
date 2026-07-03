@@ -106,6 +106,8 @@ export interface ReadwiseReaderDocument {
   image_url: string | null;
   content: string | null;
   html: string | null;
+  /** Scraped HTML; the documented `withHtmlContent=true` response field. */
+  html_content?: string | null;
   parent_id: string | null;
   reading_progress: number;
   notes: string;
@@ -129,6 +131,14 @@ const READWISE_API_V2 = 'https://readwise.io/api/v2';
 const READER_API_V3 = 'https://readwise.io/api/v3';
 const MAX_RETRIES = 3;
 const DEFAULT_RETRY_SECONDS = 60;
+/**
+ * Base delay for retrying transient failures (HTTP 5xx and network-level
+ * errors), doubled on each attempt: 1s → 2s → 4s. Readwise sits behind a
+ * CDN, so isolated 502/503/504 responses and dropped connections are routine;
+ * without a retry a single hiccup mid-pagination fails the whole endpoint
+ * fetch. Rate-limit (429) waits use the server-supplied Retry-After instead.
+ */
+const TRANSIENT_RETRY_BASE_MS = 1_000;
 /**
  * Upper bound on a server-supplied Retry-After (seconds). Caps how long a
  * single 429 can block so a misconfigured/hostile header cannot stall a load
@@ -315,16 +325,34 @@ export class ReadwiseApiClient {
 
     const typed = body as { nextPageCursor?: unknown; results: T[] };
     return {
-      nextPageCursor:
-        typeof typed.nextPageCursor === 'string' ? typed.nextPageCursor : null,
+      nextPageCursor: this.coerceCursor(typed.nextPageCursor),
       results: typed.results,
     };
   }
 
   /**
-   * Perform a GET request with the Readwise authorization header,
-   * automatically retrying on HTTP 429 (rate limit) up to
-   * {@link MAX_RETRIES} times.
+   * Normalize a `nextPageCursor` value. The documentation shows string
+   * cursors, but v2 Export responses have been observed with numeric ones —
+   * treating those as "no cursor" would silently truncate pagination to the
+   * first page (loading only part of the library, with no error). Accept both
+   * and stringify; any other shape ends pagination so garbage cannot loop.
+   */
+  private coerceCursor(cursor: unknown): string | null {
+    if (typeof cursor === 'string') return cursor;
+    if (typeof cursor === 'number' && Number.isFinite(cursor)) {
+      return String(cursor);
+    }
+    return null;
+  }
+
+  /**
+   * Perform a GET request with the Readwise authorization header, retrying
+   * up to {@link MAX_RETRIES} times (shared budget per request) on:
+   * - HTTP 429 — waits the server-supplied Retry-After (rate limit);
+   * - HTTP 5xx and network-level failures — exponential backoff, since
+   *   these are transient far more often than not.
+   * Client errors (4xx other than 429) are never retried: they indicate a
+   * bad request/token and retrying would only burn the rate-limit budget.
    */
   private async fetchWithRateLimit(
     url: string,
@@ -337,9 +365,26 @@ export class ReadwiseApiClient {
         throw signal.reason as Error;
       }
 
-      const response = await this.httpGet(url, {
-        Authorization: `Token ${this.token}`,
-      });
+      let response: HttpResponse;
+      try {
+        response = await this.httpGet(url, {
+          Authorization: `Token ${this.token}`,
+        });
+      } catch (error) {
+        // The transport may surface an abort as a rejection — never retry it.
+        if (signal?.aborted) {
+          throw signal.reason as Error;
+        }
+        if (attempt >= MAX_RETRIES) {
+          const msg = error instanceof Error ? error.message : String(error);
+          throw new ReadwiseApiError(
+            `Readwise API network error: ${msg} (${url})`,
+          );
+        }
+        attempt++;
+        await this.backoff('network error', attempt, signal);
+        continue;
+      }
 
       const { status } = response;
       if ((status >= 200 && status < 300) || status === 204) {
@@ -356,12 +401,31 @@ export class ReadwiseApiClient {
         continue;
       }
 
+      if (status >= 500 && attempt < MAX_RETRIES) {
+        attempt++;
+        await this.backoff(`HTTP ${status}`, attempt, signal);
+        continue;
+      }
+
       throw new ReadwiseApiError(
         `Readwise API request failed: ${status} (${url})`,
         status,
         status === 429 ? this.parseRetryAfter(response) : undefined,
       );
     }
+  }
+
+  /** Wait out one exponential-backoff step before a transient-failure retry. */
+  private async backoff(
+    cause: string,
+    attempt: number,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const delayMs = TRANSIENT_RETRY_BASE_MS * 2 ** (attempt - 1);
+    console.warn(
+      `Readwise API transient failure (${cause}). Retry ${attempt}/${MAX_RETRIES} after ${delayMs}ms.`,
+    );
+    await this.sleep(delayMs, signal);
   }
 
   /** Build a URL with optional query parameters. */
@@ -380,12 +444,18 @@ export class ReadwiseApiClient {
     return url.toString();
   }
 
-  /** Parse the Retry-After header from a 429 response (case-insensitive). */
+  /**
+   * Parse the Retry-After header from a 429 response (case-insensitive).
+   * RFC 7231 allows both delay-seconds and an HTTP-date; handle both so a
+   * date-form header does not silently fall back to the 60s default.
+   */
   private parseRetryAfter(response: HttpResponse): number {
     const header =
       response.headers['Retry-After'] ?? response.headers['retry-after'];
     if (header) {
-      const seconds = parseInt(header, 10);
+      const seconds = /^\d+$/.test(header.trim())
+        ? parseInt(header, 10)
+        : Math.ceil((Date.parse(header) - Date.now()) / 1000);
       if (!isNaN(seconds) && seconds > 0) {
         // Clamp so a single 429 cannot block far beyond the load timeout.
         return Math.min(seconds, MAX_RETRY_AFTER_SECONDS);

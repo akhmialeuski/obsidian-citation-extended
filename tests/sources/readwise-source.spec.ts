@@ -895,7 +895,8 @@ describe('ReadwiseSource', () => {
 
       const external = new AbortController();
       external.abort();
-      await source.load(external.signal);
+      // An aborted load surfaces as a rejection, never a bogus "success".
+      await expect(source.load(external.signal)).rejects.toThrow();
 
       // The internal signal is aborted immediately, not only via a later event.
       expect(capturedSignal?.aborted).toBe(true);
@@ -1405,6 +1406,53 @@ describe('ReadwiseSource offline cache', () => {
     expect(
       result.parseErrors!.some((e) => e.message.includes('using cache')),
     ).toBe(true);
+  });
+
+  it('does not fall back to cache when the load was aborted', async () => {
+    const cachedRaw = JSON.stringify([
+      makeReadwiseEntryData({ rawId: 'cached' }),
+    ]);
+    const fs = createMockFileSystem({
+      exists: jest.fn().mockResolvedValue(true),
+      readFile: jest.fn().mockResolvedValue(cachedRaw),
+    });
+    const external = new AbortController();
+    const abortError = new Error('load cancelled');
+    // Both fetches reject on abort — immediately when the signal is already
+    // aborted (mirroring the real client's aborted-check before each request).
+    const rejectOnAbort = jest.fn().mockImplementation(
+      (opts: { signal?: AbortSignal }) =>
+        new Promise((_, reject) => {
+          if (opts.signal?.aborted) {
+            reject(abortError);
+            return;
+          }
+          opts.signal?.addEventListener('abort', () => reject(abortError), {
+            once: true,
+          });
+        }),
+    );
+    const client = createMockClient({
+      fetchExportBooks: rejectOnAbort,
+      fetchReaderDocuments: rejectOnAbort,
+    } as unknown as Partial<ReadwiseApiClient>);
+    const worker = { post: jest.fn() };
+
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      '/cache.json',
+    );
+    const promise = source.load(external.signal);
+    external.abort();
+
+    // The abort surfaces as a failure without a cache-fallback pipeline run:
+    // the discarded result must not cost a second cache read + worker parse.
+    await expect(promise).rejects.toThrow();
+    expect(worker.post).not.toHaveBeenCalled();
+    expect(fs.readFile).toHaveBeenCalledTimes(1);
   });
 });
 

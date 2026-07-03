@@ -169,7 +169,7 @@ You do not rise to the level of your goals. You fall to the level of your system
 
 - By default, Readwise data syncs automatically every 30 minutes. You can change this interval in the **Auto-sync interval (minutes)** field on the database card, or set it to `0` to disable automatic sync entirely
 - To pull the latest data immediately, click **Sync now** in the database card
-- Rate limiting is handled automatically -- the plugin respects Readwise's API rate limits
+- Rate limiting is handled automatically -- the plugin respects Readwise's API rate limits (waiting out the server's `Retry-After` interval), and transient server or network errors are retried with exponential backoff before the sync is reported as failed
 - You can use Readwise alongside file-based databases (Zotero, BibTeX, etc.) -- all entries are merged into a single searchable library
 - The plugin loads data from both Readwise APIs automatically; there is no mode selector
 - **Import filters:** Expand **Advanced filters** on the database card to limit what gets imported -- by category, tag, Reader location, or a minimum highlight count. This is useful if you have thousands of items but only want a subset in Obsidian
