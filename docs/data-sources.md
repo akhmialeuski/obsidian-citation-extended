@@ -73,6 +73,12 @@ The plugin loads data from both Readwise APIs in parallel and merges the results
 - Readwise entries appear in the search modal alongside your other databases
 - All standard features work: citation insertion, literature note creation, templates
 
+**Resilience:** API requests handle the failure modes the Readwise API documents, without user intervention:
+
+- **Rate limits (HTTP 429):** the plugin waits the server-supplied `Retry-After` interval (both the seconds and HTTP-date forms) and retries automatically, up to 3 times per request.
+- **Transient failures (HTTP 5xx, dropped connections):** retried automatically with exponential backoff (1s, 2s, 4s). Client errors such as an invalid token are *not* retried and surface immediately.
+- **Pagination:** cursor-paginated responses are followed to the last page, with guards against repeated or malformed cursors, so large libraries load completely.
+
 **Incremental sync:** After the first full download, periodic and manual syncs fetch only the entries updated since the last successful sync (using the Readwise `updatedAfter` API cursor) and merge them into the locally cached set. This makes background syncs fast and cheap even for large libraries. Two consequences to be aware of:
 
 - **Deletions are not detected incrementally.** If you delete a book or document in Readwise, it stays in the library until the next full re-fetch. Run **Citations: Refresh citation database** from the command palette to force a full re-download.

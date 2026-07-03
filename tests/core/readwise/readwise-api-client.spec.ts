@@ -159,9 +159,11 @@ describe('ReadwiseApiClient', () => {
     });
 
     it('throws ReadwiseApiError for other non-OK statuses', async () => {
-      mockHttpGet.mockResolvedValue(mockHttpResponse(null, 500));
+      mockHttpGet.mockResolvedValue(mockHttpResponse(null, 400));
 
       await expect(client.validateToken()).rejects.toThrow(ReadwiseApiError);
+      // 4xx client errors are not retried.
+      expect(mockHttpGet).toHaveBeenCalledTimes(1);
     });
 
     it('throws when AbortSignal is already aborted', async () => {
@@ -376,6 +378,147 @@ describe('ReadwiseApiClient', () => {
       const result = await promise;
       expect(result).toBe(true);
     });
+
+    it('parses an HTTP-date Retry-After header (RFC 7231 date form)', async () => {
+      // Modern fake timers also fake Date.now, so the delta is deterministic.
+      const retryAt = new Date(Date.now() + 2000).toUTCString();
+      mockHttpGet
+        .mockResolvedValueOnce(
+          mockHttpResponse(null, 429, { 'Retry-After': retryAt }),
+        )
+        .mockResolvedValueOnce(mockHttpResponse(null, 204));
+
+      const promise = client.validateToken();
+      // Well before the 60s default — the date form must be honoured.
+      await jest.advanceTimersByTimeAsync(3000);
+
+      await expect(promise).resolves.toBe(true);
+      expect(mockHttpGet).toHaveBeenCalledTimes(2);
+    });
+
+    it('falls back to the 60s default for an unparseable Retry-After', async () => {
+      mockHttpGet
+        .mockResolvedValueOnce(
+          mockHttpResponse(null, 429, { 'Retry-After': 'soonish' }),
+        )
+        .mockResolvedValueOnce(mockHttpResponse(null, 204));
+
+      const promise = client.validateToken();
+      await jest.advanceTimersByTimeAsync(61000);
+
+      await expect(promise).resolves.toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Transient failures (5xx / network)
+  // -------------------------------------------------------------------------
+
+  describe('transient failures', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('retries a 5xx response and succeeds', async () => {
+      mockHttpGet
+        .mockResolvedValueOnce(mockHttpResponse(null, 502))
+        .mockResolvedValueOnce(mockHttpResponse(null, 204));
+
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      const promise = client.validateToken();
+      // First backoff step is 1s.
+      await jest.advanceTimersByTimeAsync(1500);
+
+      await expect(promise).resolves.toBe(true);
+      expect(mockHttpGet).toHaveBeenCalledTimes(2);
+      warnSpy.mockRestore();
+    });
+
+    it('retries a network-level failure and succeeds', async () => {
+      mockHttpGet
+        .mockRejectedValueOnce(new Error('socket hang up'))
+        .mockResolvedValueOnce(mockHttpResponse(null, 204));
+
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      const promise = client.validateToken();
+      await jest.advanceTimersByTimeAsync(1500);
+
+      await expect(promise).resolves.toBe(true);
+      expect(mockHttpGet).toHaveBeenCalledTimes(2);
+      warnSpy.mockRestore();
+    });
+
+    it('throws ReadwiseApiError after MAX_RETRIES persistent 5xx responses', async () => {
+      mockHttpGet.mockResolvedValue(mockHttpResponse(null, 503));
+
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      const promise = client.fetchExportBooks();
+      // Swallow the eventual rejection so it is not "unhandled" while the
+      // fake clock advances past the 1s + 2s + 4s backoff steps.
+      const settled = promise.catch((e: unknown) => e);
+      await jest.advanceTimersByTimeAsync(8000);
+
+      const error = await settled;
+      expect(error).toBeInstanceOf(ReadwiseApiError);
+      expect((error as ReadwiseApiError).statusCode).toBe(503);
+      // Initial call + 3 retries.
+      expect(mockHttpGet).toHaveBeenCalledTimes(4);
+      warnSpy.mockRestore();
+    });
+
+    it('throws ReadwiseApiError after MAX_RETRIES persistent network failures', async () => {
+      mockHttpGet.mockRejectedValue(new Error('Network error'));
+
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      const promise = client.validateToken();
+      const settled = promise.catch((e: unknown) => e);
+      await jest.advanceTimersByTimeAsync(8000);
+
+      const error = await settled;
+      expect(error).toBeInstanceOf(ReadwiseApiError);
+      expect((error as ReadwiseApiError).message).toContain('Network error');
+      expect(mockHttpGet).toHaveBeenCalledTimes(4);
+      warnSpy.mockRestore();
+    });
+
+    it('does not retry non-429 4xx client errors', async () => {
+      mockHttpGet.mockResolvedValue(mockHttpResponse(null, 404));
+
+      await expect(client.fetchExportBooks()).rejects.toThrow(ReadwiseApiError);
+      expect(mockHttpGet).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects with the abort reason when aborted during a backoff wait', async () => {
+      const controller = new AbortController();
+      mockHttpGet.mockResolvedValue(mockHttpResponse(null, 500));
+
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      const promise = client.fetchExportBooks({ signal: controller.signal });
+      const settled = promise.catch((e: unknown) => e);
+      controller.abort(new Error('aborted during backoff'));
+      await jest.advanceTimersByTimeAsync(100);
+
+      const error = await settled;
+      expect((error as Error).message).toBe('aborted during backoff');
+      warnSpy.mockRestore();
+    });
+
+    it('does not retry a transport rejection caused by an abort', async () => {
+      const controller = new AbortController();
+      mockHttpGet.mockImplementation(() => {
+        controller.abort(new Error('aborted mid-request'));
+        return Promise.reject(new Error('request destroyed'));
+      });
+
+      await expect(client.validateToken(controller.signal)).rejects.toThrow(
+        'aborted mid-request',
+      );
+      expect(mockHttpGet).toHaveBeenCalledTimes(1);
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -383,23 +526,17 @@ describe('ReadwiseApiClient', () => {
   // -------------------------------------------------------------------------
 
   describe('error handling', () => {
-    it('throws ReadwiseApiError with status code for non-OK responses', async () => {
-      mockHttpGet.mockResolvedValue(mockHttpResponse(null, 503));
+    it('throws ReadwiseApiError with status code for non-retryable responses', async () => {
+      mockHttpGet.mockResolvedValue(mockHttpResponse(null, 403));
 
       try {
         await client.fetchExportBooks();
         fail('Expected error to be thrown');
       } catch (error) {
         expect(error).toBeInstanceOf(ReadwiseApiError);
-        expect((error as ReadwiseApiError).statusCode).toBe(503);
-        expect((error as ReadwiseApiError).message).toContain('503');
+        expect((error as ReadwiseApiError).statusCode).toBe(403);
+        expect((error as ReadwiseApiError).message).toContain('403');
       }
-    });
-
-    it('throws on network failure', async () => {
-      mockHttpGet.mockRejectedValue(new Error('Network error'));
-
-      await expect(client.validateToken()).rejects.toThrow('Network error');
     });
   });
 
@@ -433,11 +570,37 @@ describe('ReadwiseApiClient', () => {
       );
     });
 
-    it('treats a non-string nextPageCursor as the end of pagination', async () => {
+    it('follows a numeric nextPageCursor instead of truncating pagination', async () => {
+      const book1 = makeExportBook({ user_book_id: 1 });
+      const book2 = makeExportBook({ user_book_id: 2 });
+      // v2 Export responses have been observed with numeric cursors; dropping
+      // them would silently load only the first page of the library.
+      mockHttpGet
+        .mockResolvedValueOnce(
+          mockHttpResponse({ count: 2, nextPageCursor: 42, results: [book1] }),
+        )
+        .mockResolvedValueOnce(
+          mockHttpResponse({
+            count: 2,
+            nextPageCursor: null,
+            results: [book2],
+          }),
+        );
+
+      const result = await client.fetchExportBooks();
+      expect(result).toEqual([book1, book2]);
+      expect(mockHttpGet).toHaveBeenCalledTimes(2);
+      expect(mockHttpGet.mock.calls[1][0]).toContain('pageCursor=42');
+    });
+
+    it('treats a garbage nextPageCursor as the end of pagination', async () => {
       const book = makeExportBook();
-      // A numeric/garbage cursor must not cause another page request.
       mockHttpGet.mockResolvedValue(
-        mockHttpResponse({ count: 1, nextPageCursor: 42, results: [book] }),
+        mockHttpResponse({
+          count: 1,
+          nextPageCursor: { bogus: true },
+          results: [book],
+        }),
       );
 
       const result = await client.fetchExportBooks();

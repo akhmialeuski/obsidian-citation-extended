@@ -388,6 +388,14 @@ export class ReadwiseSource implements DataSource {
         allFailed,
       } = await this.fetchEntryData(signal, updatedAfter ?? undefined);
 
+      // Promise.allSettled makes an aborted fetch look like a total outage
+      // (both endpoints "rejected"). Surface it as a cancellation instead, so
+      // a superseded load fails fast rather than running a cache-fallback
+      // pipeline whose result the caller will discard anyway.
+      if (signal.aborted) {
+        throw (signal.reason ?? new Error('Readwise load aborted')) as Error;
+      }
+
       // Total outage (every API endpoint failed): fall back to the cache if
       // present; otherwise THROW so the library surfaces a real failure and
       // keeps the prior in-memory library / last-sync date, instead of
@@ -454,6 +462,13 @@ export class ReadwiseSource implements DataSource {
 
       return await this.runPipeline(fullEntries, fetchErrors, signal);
     } catch (error) {
+      // A cancelled/superseded load must fail fast: re-probing the cache and
+      // re-running the pipeline against an already-aborted signal is wasted
+      // work whose result the caller will discard anyway.
+      if (signal.aborted) {
+        throw error;
+      }
+
       // Deliberate total-outage failure: surface it without re-probing the
       // cache (the outage branch already consulted it).
       if (error instanceof ReadwiseOutageError) {

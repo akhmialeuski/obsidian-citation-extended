@@ -29,13 +29,36 @@ export function isMeaningfulHighlight(item: ReadwiseHighlightItem): boolean {
   return item.text.trim().length > 0 || (item.note ?? '').trim().length > 0;
 }
 
+/**
+ * Reduce an HTML fragment to plain text: strip tags, decode the handful of
+ * entities Reader emits, collapse whitespace. Deliberately regex-based — this
+ * runs inside the parse worker, where no DOM is available.
+ */
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /** Convert a Reader child document (highlight/note) into a highlight item. */
 export function readerChildToItem(
   child: ReadwiseReaderDocument,
 ): ReadwiseHighlightItem {
+  // The highlighted text normally arrives in `content`; be tolerant of
+  // responses that only carry an HTML variant (`html_content` is the
+  // documented withHtmlContent field) so the highlight is kept, not dropped.
+  const html = child.html_content ?? child.html;
+  const text = child.content ?? (html ? htmlToPlainText(html) : '');
   return {
     id: child.id,
-    text: child.content ?? '',
+    text,
     note: child.notes || null,
     location: null,
     locationType: null,

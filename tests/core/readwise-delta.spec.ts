@@ -335,6 +335,45 @@ describe('readwise-delta helpers', () => {
     });
   });
 
+  it('readerChildToItem falls back to tag-stripped HTML when content is absent', () => {
+    const fromHtmlContent = readerChildToItem(
+      makeReaderDoc({
+        id: 'c-html',
+        content: null,
+        html_content: '<p>First &amp; second&nbsp;part</p>\n<p>tail</p>',
+      }),
+    );
+    expect(fromHtmlContent.text).toBe('First & second part tail');
+
+    const fromHtml = readerChildToItem(
+      makeReaderDoc({
+        id: 'c-html2',
+        content: null,
+        html: '<blockquote>quoted &lt;text&gt;</blockquote>',
+      }),
+    );
+    expect(fromHtml.text).toBe('quoted <text>');
+  });
+
+  it('readerChildToItem prefers content over the HTML variants', () => {
+    const item = readerChildToItem(
+      makeReaderDoc({
+        id: 'c-both',
+        content: 'plain content',
+        html_content: '<p>html content</p>',
+      }),
+    );
+    expect(item.text).toBe('plain content');
+  });
+
+  it('readerChildToItem yields empty text when no content variant exists', () => {
+    const item = readerChildToItem(
+      makeReaderDoc({ id: 'c-none', content: null, html: null }),
+    );
+    expect(item.text).toBe('');
+    expect(isMeaningfulHighlight(item)).toBe(false);
+  });
+
   it('toEntryDataFromReader maps document fields and guards null tags', () => {
     const data = toEntryDataFromReader(
       makeReaderDoc({
