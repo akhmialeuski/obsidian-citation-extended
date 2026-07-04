@@ -207,6 +207,65 @@ describe('planNoteSync', () => {
       expect(plan.baseline.deletedBlocks).toContain('annots');
     });
 
+    it('keeps the tombstone when the render temporarily omits the block', () => {
+      // User deleted 'annots'; this sync's render does not emit the block at
+      // all (e.g. a template conditional is false). The tombstone must be
+      // carried forward — otherwise the next render that includes the block
+      // would resurrect content the user deliberately deleted.
+      const current = render(2023)
+        .replace(
+          buildSyncBlock('annots', 'first highlight', { title: 'Annotations' }),
+          '',
+        )
+        .replace(/\n{3,}/g, '\n\n');
+      const renderedWithout = render(2024).replace(
+        buildSyncBlock('annots', 'first highlight', { title: 'Annotations' }),
+        '',
+      );
+      const baseline: NoteBaseline = {
+        ...baselineFor(2023),
+        blocks: { meta: baselineFor(2023).blocks.meta },
+        deletedBlocks: ['annots'],
+      };
+
+      const middle = planNoteSync({
+        rendered: renderedWithout,
+        current,
+        baseline,
+      });
+      expect(middle.baseline.deletedBlocks).toContain('annots');
+
+      // Next sync renders the block again: still honoured, not re-appended.
+      const after = planNoteSync({
+        rendered: render(2024),
+        current: middle.content,
+        baseline: middle.baseline,
+      });
+      expect(after.content).not.toContain('^zc-annots');
+      expect(after.baseline.deletedBlocks).toContain('annots');
+    });
+
+    it('releases the tombstone when the user re-adds the block manually', () => {
+      // Note contains the block again (user brought it back) while the render
+      // omits it — the deletion no longer reflects user intent.
+      const current = render(2023);
+      const renderedWithout = render(2023).replace(
+        buildSyncBlock('annots', 'first highlight', { title: 'Annotations' }),
+        '',
+      );
+      const baseline: NoteBaseline = {
+        ...baselineFor(2023),
+        deletedBlocks: ['annots'],
+      };
+
+      const plan = planNoteSync({
+        rendered: renderedWithout,
+        current,
+        baseline,
+      });
+      expect(plan.baseline.deletedBlocks ?? []).not.toContain('annots');
+    });
+
     it('removes a pristine block that the render dropped', () => {
       const rendered = render(2023).replace(
         buildSyncBlock('annots', 'first highlight', { title: 'Annotations' }),
@@ -342,13 +401,13 @@ describe('planNoteSync', () => {
     });
   });
 
-  describe('frontmatterOnly mode', () => {
+  describe('frontmatter mode', () => {
     it('updates frontmatter but leaves body blocks untouched', () => {
       const plan = planNoteSync({
         rendered: render(2024, 'NEW ANNOTATION'),
         current: render(2023),
         baseline: baselineFor(2023),
-        frontmatterOnly: true,
+        mode: 'frontmatter',
       });
 
       expect(plan.content).toContain('year: 2024');
@@ -362,7 +421,7 @@ describe('planNoteSync', () => {
         rendered: render(2024),
         current: render(2023),
         baseline,
-        frontmatterOnly: true,
+        mode: 'frontmatter',
       });
 
       expect(plan.baseline.blocks).toEqual(baseline.blocks);

@@ -99,8 +99,6 @@ export interface NoteSyncInput {
    * `overwrite` replaces the whole note with the render.
    */
   mode?: NoteUpdateMode;
-  /** @deprecated use `mode: 'frontmatter'`. */
-  frontmatterOnly?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -114,9 +112,12 @@ export interface NoteSyncInput {
  * Normalizing here means an updated note is rewritten with LF endings —
  * consistent with how Obsidian saves its own edits.
  */
-function toLf(content: string): string {
+export function normalizeLineEndings(content: string): string {
   return content.replace(/\r\n?/g, '\n');
 }
+
+/** Internal alias — the planner normalizes both inputs at its boundary. */
+const toLf = normalizeLineEndings;
 
 // ---------------------------------------------------------------------------
 // Baseline from a render
@@ -166,8 +167,7 @@ interface BlockResolution {
 export function planNoteSync(input: NoteSyncInput): NoteSyncPlan {
   const renderedRaw = toLf(input.rendered);
   const currentRaw = toLf(input.current);
-  const mode: NoteUpdateMode =
-    input.mode ?? (input.frontmatterOnly ? 'frontmatter' : 'sync');
+  const mode: NoteUpdateMode = input.mode ?? 'sync';
 
   // --- Overwrite: wholesale replace, baseline derived from the render ---
   if (mode === 'overwrite') {
@@ -271,6 +271,18 @@ export function planNoteSync(input: NoteSyncInput): NoteSyncPlan {
         });
         resolutions.set(name, { ours: currentBlock.text, theirs: null });
         hasBlockConflict = true;
+      }
+    }
+
+    // Carry tombstones forward for blocks the render omitted THIS time (e.g.
+    // a template conditional is temporarily false). Without this, one sync
+    // cycle without the block in the render drops the tombstone, and the next
+    // cycle that renders it re-appends content the user deliberately deleted.
+    // A tombstoned name present in the note again means the user re-added it —
+    // then the tombstone is intentionally released.
+    for (const name of previouslyDeleted) {
+      if (!renderedBlocks.has(name) && !currentBlocks.has(name)) {
+        baselineOut.deletedBlocks!.push(name);
       }
     }
 

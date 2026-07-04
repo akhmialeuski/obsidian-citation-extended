@@ -46,6 +46,27 @@ describe('buildSyncBlock', () => {
       ['> [!note] m', '> a', '>', '> b', '> ^zc-m'].join('\n'),
     );
   });
+
+  it('escapes inner lines that would misparse as a callout header', () => {
+    // Content starting with '[!…]' would otherwise become the block's header
+    // on re-parse, truncating its span and corrupting later re-syncs.
+    const block = buildSyncBlock('ann', 'first\n[!image] figure ref\nlast');
+    expect(block).toContain('> \\[!image] figure ref');
+
+    const parsed = parseSyncBlocks(`intro\n${block}\noutro`);
+    expect(parsed.get('ann')!.text).toBe(block); // exact round-trip
+  });
+
+  it('escapes inner lines that would misparse as a block terminator', () => {
+    // A literal '^zc-…' line inside content would otherwise end the block
+    // early and create a phantom block shadowing a real one of that name.
+    const block = buildSyncBlock('quote', 'see ref\n^zc-summary\ntail');
+    expect(block).toContain('> \\^zc-summary');
+
+    const parsed = parseSyncBlocks(block);
+    expect([...parsed.keys()]).toEqual(['quote']);
+    expect(parsed.get('quote')!.text).toBe(block);
+  });
 });
 
 describe('parseSyncBlocks', () => {
@@ -135,6 +156,21 @@ describe('parseSyncBlocks', () => {
     );
     expect(meta.text).not.toContain('user callout');
     expect(meta.text).not.toContain('hand-written line');
+  });
+
+  it('recognizes a callout indented by up to three spaces', () => {
+    // Markdown/Obsidian render '  > …' as a blockquote; if the parser missed
+    // it, the visibly-present block would be tombstoned as user-deleted and
+    // silently stop receiving updates forever.
+    const content = ['  > [!note] a', '  > body', '  > ^zc-a'].join('\n');
+    const blocks = parseSyncBlocks(content);
+    expect(blocks.get('a')).toBeDefined();
+    expect(hasSyncBlocks(content)).toBe(true);
+  });
+
+  it('does not treat 4-space-indented (code block) lines as callouts', () => {
+    const content = ['    > [!note] a', '    > ^zc-a'].join('\n');
+    expect(parseSyncBlocks(content).size).toBe(0);
   });
 
   it('keeps two adjacent plugin blocks separate (no blank line between)', () => {

@@ -229,6 +229,17 @@ export function syncFrontmatter(
     }
   }
 
+  // Carry tombstones forward for keys the render omitted THIS time — a
+  // template conditional that is temporarily false must not erase the user's
+  // deletion, or the key would be resurrected when the render produces it
+  // again. A tombstoned key present in the note again means the user re-added
+  // it, releasing the tombstone.
+  for (const key of tombstoned) {
+    if (!rendered.raw.has(key) && !current.raw.has(key)) {
+      deletedKeys.push(key);
+    }
+  }
+
   const emit = (side: 'ours' | 'theirs'): string[] => {
     const out: string[] = [...current.prelude];
     // Walk the note's own key order, preserving user keys and layout.

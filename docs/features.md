@@ -129,8 +129,9 @@ Re-syncs every existing literature note with the current library data and conten
   - **Update frontmatter only** — merges frontmatter keys, never touches the body
   - **Overwrite notes completely** — replaces the whole note with the fresh render
 - When you and the library changed the same thing, the note goes through the **review dialog**: a diff of the pending change with *Apply* (keep your version), *Use library version*, *Skip*, and *Apply/Skip all* choices (see the **Review changes before writing** setting)
-- Scans, plans, and writes in a single pass, reporting progress notifications as it goes
-- Deleted sync blocks stay deleted; new blocks are appended; untouched notes are skipped
+- The **first sync of a pre-existing note** that would append new blocks also goes through the review dialog — on notes created before sync blocks existed, appends may duplicate older unmarked text, so they need your consent
+- Scans, plans, and writes in a single pass, reporting progress notifications as it goes; if two entries resolve to the same note file, only the first is written and the second is reported (never silently merged)
+- Deleted sync blocks stay deleted (even across syncs where the template temporarily omits them); new blocks are appended; untouched notes are skipped
 - Summary notice: `Updated · Conflicts skipped · Skipped · Errors`
 
 **When to use:** After changing your content template, or after reference data changed in Zotero/Readwise. Safe to run at any time — user content outside sync blocks can never be lost. See [Updating Literature Notes](use-cases/updating-literature-notes.md) for the full guide.

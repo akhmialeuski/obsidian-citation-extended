@@ -33,11 +33,16 @@ function escapeRegExp(literal: string): string {
  * of truth (the builder below uses it too).
  */
 const SYNC_BLOCK_ID_LINE_RE = new RegExp(
-  `^>\\s*\\^${escapeRegExp(SYNC_BLOCK_ID_PREFIX)}([A-Za-z0-9_-]+)\\s*\\r?$`,
+  `^ {0,3}>\\s*\\^${escapeRegExp(SYNC_BLOCK_ID_PREFIX)}([A-Za-z0-9_-]+)\\s*\\r?$`,
 );
 
-/** Matches any callout/quote line. */
-const QUOTE_LINE_RE = /^>/;
+/**
+ * Matches any callout/quote line. Markdown (and Obsidian) treat a `>` indented
+ * by up to three spaces as a blockquote, so the parser must too — otherwise an
+ * indented plugin block would be invisible and misclassified as user-deleted
+ * (a permanent tombstone that silently stops all future updates).
+ */
+const QUOTE_LINE_RE = /^ {0,3}>/;
 
 /**
  * Matches a callout header line (`> [!type]`, optional fold marker `-`/`+`).
@@ -45,7 +50,17 @@ const QUOTE_LINE_RE = /^>/;
  * so it is used to bound the block start precisely instead of greedily
  * absorbing preceding user callout lines.
  */
-const CALLOUT_HEADER_RE = /^>\s*\[![^\]]+\][-+]?/;
+const CALLOUT_HEADER_RE = /^ {0,3}>\s*\[![^\]]+\][-+]?/;
+
+/**
+ * Inner content lines that would be misparsed once quoted with `> `: a line
+ * starting with `[!…]` would read as a callout header (truncating the block
+ * span), and a line starting with `^zc-` would read as a block terminator
+ * (splitting the block and shadowing a real block of that name).
+ * {@link buildSyncBlock} escapes them with a leading backslash, which Markdown
+ * renders as the literal text the author wrote.
+ */
+const AMBIGUOUS_INNER_LINE_RE = /^(\s*)(\[!|\^zc-)/;
 
 /** Type guard: is `name` a valid sync-block name? */
 export function isValidSyncBlockName(name: unknown): name is string {
@@ -157,6 +172,11 @@ export function buildSyncBlock(
     .replace(/^\n+/, '')
     .replace(/\n+$/, '')
     .split('\n')
+    // Escape content that would be misparsed as a callout header or a block
+    // terminator once quoted (see AMBIGUOUS_INNER_LINE_RE) — otherwise such a
+    // line corrupts the block's span on the next parse and every re-sync
+    // duplicates or truncates the block.
+    .map((line) => line.replace(AMBIGUOUS_INNER_LINE_RE, '$1\\$2'))
     .map((line) => (line.length > 0 ? `> ${line}` : '>'));
 
   const body = inner.trim().length > 0 ? innerLines : [];

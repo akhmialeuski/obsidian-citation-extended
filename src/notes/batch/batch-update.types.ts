@@ -8,6 +8,7 @@
  */
 
 import type { NoteUpdateMode, UpdateConfirmationMode } from '../../core';
+import type { IVaultFile } from '../../platform/platform-adapter';
 
 export type {
   NoteReviewItem,
@@ -38,6 +39,14 @@ export interface BatchUpdateRequest {
 
   /** When the review dialog is required before writing. */
   confirmation: UpdateConfirmationMode;
+
+  /**
+   * Pre-resolved target files by citekey. When the caller already knows WHICH
+   * file to update (e.g. "Update literature note for current file" acts on
+   * the active file), passing it here pins the write to that exact file —
+   * re-resolving by rendered title could bind a different one.
+   */
+  files?: Record<string, IVaultFile>;
 }
 
 /** Outcome of a single batch update run. */
@@ -68,11 +77,12 @@ export interface BatchUpdateProgress {
   currentCitekey: string;
 }
 
-/** Orchestrates note updates with review, progress, and dry-run support. */
+/**
+ * Orchestrates note updates with review, progress, and dry-run support.
+ * There is deliberately a single entry point: previewing is `execute` with
+ * `dryRun: true`, not a second method whose semantics could drift.
+ */
 export interface IBatchNoteOrchestrator {
-  /** Compute a preview of what would change without writing. */
-  preview(request: BatchUpdateRequest): Promise<BatchUpdateResult>;
-
   /** Execute the update, optionally reporting progress. */
   execute(
     request: BatchUpdateRequest,

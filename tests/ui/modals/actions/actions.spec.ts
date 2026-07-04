@@ -878,7 +878,9 @@ describe('BatchUpdateNotesAction', () => {
     expect(orchestrator.execute).toHaveBeenCalledTimes(1);
   });
 
-  it('shows "up to date" when execute reports no changes', async () => {
+  it('shows "up to date" with a syncBlock hint when the template has none', async () => {
+    // Default mode is 'sync' and the mocked template has no {{#syncBlock}}:
+    // the notice must explain that bodies are never modified in this setup.
     orchestrator.execute.mockResolvedValue({ ...EMPTY });
 
     await action.execute({});
@@ -886,6 +888,17 @@ describe('BatchUpdateNotesAction', () => {
     expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
       'Citations: Updating literature notes…',
     );
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      expect.stringContaining('All notes are already up to date. Note:'),
+    );
+  });
+
+  it('shows the plain "up to date" notice when the template has syncBlocks', async () => {
+    resolver.resolve.mockResolvedValue('{{#syncBlock "meta"}}x{{/syncBlock}}');
+    orchestrator.execute.mockResolvedValue({ ...EMPTY });
+
+    await action.execute({});
+
     expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
       'Citations: All notes are already up to date.',
     );
@@ -1095,6 +1108,9 @@ describe('UpdateCurrentNoteAction', () => {
       dryRun: false,
       mode: 'sync',
       confirmation: 'conflicts',
+      // The active file is pinned so the orchestrator cannot re-resolve the
+      // citekey to a different file than the one on screen.
+      files: { test2024: activeFile },
     });
     expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
       'Citations: Updated note for "test2024".',

@@ -4,7 +4,7 @@ import type {
   ITemplateService,
 } from '../../container';
 import type { IVaultAccess, IVaultFile } from '../../platform/platform-adapter';
-import { lineDiff, planNoteSync } from '../../core';
+import { lineDiff, normalizeLineEndings, planNoteSync } from '../../core';
 import type { NoteSyncPlan, NoteUpdateMode } from '../../core';
 import type { IBaselineStore } from '../baseline-store';
 import type {
@@ -40,11 +40,20 @@ interface QueuedNote {
  *    - `frontmatter` — same, but body blocks are left alone entirely.
  *    - `overwrite`   — the fresh render replaces the note.
  * 3. Applies the plan directly, or routes it through the review presenter
- *    (diff dialog) according to the confirmation policy.
+ *    (diff dialog) according to the confirmation policy. A first sync that
+ *    would append blocks into a non-empty note also goes through review —
+ *    on legacy notes the appended content often duplicates unmarked body
+ *    text, so it needs user consent.
  * 4. Persists the new baseline; the whole batch flushes the store once.
  *
- * Before writing a reviewed note, the file is re-read and re-planned so edits
- * made during the (user-paced) review are not silently clobbered.
+ * Safety invariants:
+ * - Each target FILE is written at most once per run — two citekeys whose
+ *   titles render to the same path would otherwise chimera-merge or overwrite
+ *   each other with no dialog.
+ * - Before writing a reviewed note, the file is re-read and re-planned so
+ *   edits made during the (user-paced) review are not silently clobbered.
+ *   In overwrite mode a re-plan can never conflict, so a stale note is
+ *   skipped and reported instead.
  */
 export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
   constructor(
@@ -56,21 +65,9 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
     private readonly presenter?: IUpdateReviewPresenter,
   ) {}
 
-  preview(request: BatchUpdateRequest): Promise<BatchUpdateResult> {
-    return this.run(request, undefined, true);
-  }
-
-  execute(
+  async execute(
     request: BatchUpdateRequest,
     onProgress?: (progress: BatchUpdateProgress) => void,
-  ): Promise<BatchUpdateResult> {
-    return this.run(request, onProgress, request.dryRun);
-  }
-
-  private async run(
-    request: BatchUpdateRequest,
-    onProgress: ((progress: BatchUpdateProgress) => void) | undefined,
-    dryRun: boolean,
   ): Promise<BatchUpdateResult> {
     const library = this.libraryService.library;
     if (!library) {
@@ -96,7 +93,9 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
       errors: [],
     };
     const reviewQueue: QueuedNote[] = [];
-    let wrote = false;
+    /** Files already targeted this run — a second citekey resolving to the
+     *  same path must not write over the first one's result. */
+    const seenPaths = new Set<string>();
 
     for (let i = 0; i < citekeys.length; i++) {
       const citekey = citekeys[i];
@@ -113,14 +112,23 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
         continue;
       }
 
-      const file = this.noteService.findExistingLiteratureNoteFile(
-        citekey,
-        library,
-      );
+      const file =
+        request.files?.[citekey] ??
+        this.noteService.findExistingLiteratureNoteFile(citekey, library);
       if (!file) {
         result.skipped.push(citekey);
         continue;
       }
+      if (seenPaths.has(file.path)) {
+        result.errors.push({
+          citekey,
+          error:
+            `note file "${file.path}" is already targeted by another entry ` +
+            'in this update — skipped to avoid overwriting it',
+        });
+        continue;
+      }
+      seenPaths.add(file.path);
 
       try {
         const variables = this.templateService.getTemplateVariables(entry);
@@ -135,27 +143,43 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
 
         const rendered = contentResult.value;
         const current = await this.vault.read(file);
-        const plan = await this.buildPlan(
-          request.mode,
-          citekey,
+        const priorBaseline =
+          request.mode === 'overwrite'
+            ? null
+            : await this.baselines.get(citekey);
+        const plan = planNoteSync({
           rendered,
           current,
-        );
+          baseline: priorBaseline,
+          mode: request.mode,
+        });
 
         if (!plan.changed && plan.conflicts.length === 0) {
           result.skipped.push(citekey);
           continue;
         }
 
+        // First sync of a pre-existing, non-empty note that would APPEND
+        // blocks: on legacy notes the appended content usually duplicates
+        // unmarked body text, so it needs the user's eyes even though it is
+        // not a merge conflict.
+        const firstSyncAppend =
+          request.mode === 'sync' &&
+          priorBaseline === null &&
+          plan.summary.blocksAppended.length > 0 &&
+          current.trim() !== '';
+
         const needsReview =
-          plan.conflicts.length > 0 || request.confirmation === 'always';
+          plan.conflicts.length > 0 ||
+          request.confirmation === 'always' ||
+          firstSyncAppend;
 
         // Direct write path: no review needed, or review is impossible
         // (dry-run / 'never' / no presenter). We only write when there is a
         // clean, applicable change; conflicts without a decision are reported.
         if (
           !needsReview ||
-          dryRun ||
+          request.dryRun ||
           request.confirmation === 'never' ||
           !this.presenter
         ) {
@@ -167,12 +191,11 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
             });
             continue;
           }
-          if (dryRun) {
+          if (request.dryRun) {
             result.updated.push(citekey);
             continue;
           }
           await this.write(citekey, file, plan.content, plan);
-          wrote = true;
           result.updated.push(citekey);
           continue;
         }
@@ -193,11 +216,12 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
       }
     }
 
-    if (reviewQueue.length > 0 && this.presenter && !dryRun) {
-      wrote = (await this.reviewAndApply(reviewQueue, result)) || wrote;
+    if (reviewQueue.length > 0 && this.presenter && !request.dryRun) {
+      await this.reviewAndApply(reviewQueue, result);
     }
 
-    if (wrote) await this.baselines.flush();
+    // No-op when nothing was recorded; the store tracks its own dirty state.
+    await this.baselines.flush();
 
     return result;
   }
@@ -220,14 +244,13 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
   /**
    * Sequentially present queued notes and apply the decisions. Each note is
    * re-read and re-planned immediately before writing so edits made during the
-   * review are respected. Returns whether anything was written.
+   * review are respected.
    */
   private async reviewAndApply(
     queue: QueuedNote[],
     result: BatchUpdateResult,
-  ): Promise<boolean> {
+  ): Promise<void> {
     let blanket: 'apply' | 'skip' | null = null;
-    let wrote = false;
 
     for (let i = 0; i < queue.length; i++) {
       const item = queue[i];
@@ -236,15 +259,18 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
       if (blanket) {
         decision = blanket;
       } else {
+        // Diff against the LF-normalized current text: the plan's output is
+        // always LF, and diffing raw CRLF lines against it would render the
+        // whole note as removed+added, hiding the actual change.
+        const currentLf = normalizeLineEndings(item.current);
         const reviewItem: NoteReviewItem = {
           citekey: item.citekey,
           filePath: item.file.path,
-          hunks: lineDiff(item.current, item.plan.content),
+          hunks: lineDiff(currentLf, item.plan.content),
           hunksTakeTheirs:
             item.plan.conflicts.length > 0
-              ? lineDiff(item.current, item.plan.contentTakeTheirs)
+              ? lineDiff(currentLf, item.plan.contentTakeTheirs)
               : undefined,
-          conflictCount: item.plan.conflicts.length,
           conflictIds: item.plan.conflicts.map((c) => c.id),
         };
         decision = await this.presenter!.review(
@@ -269,7 +295,7 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
       }
 
       try {
-        if (await this.applyReviewed(item, decision, result)) wrote = true;
+        await this.applyReviewed(item, decision, result);
       } catch (e) {
         result.errors.push({
           citekey: item.citekey,
@@ -277,7 +303,6 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
         });
       }
     }
-    return wrote;
   }
 
   /**
@@ -289,10 +314,20 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
     item: QueuedNote,
     decision: 'apply' | 'take-theirs',
     result: BatchUpdateResult,
-  ): Promise<boolean> {
+  ): Promise<void> {
     const fresh = await this.vault.read(item.file);
     let plan = item.plan;
     if (fresh !== item.current) {
+      if (item.mode === 'overwrite') {
+        // An overwrite re-plan can never surface a conflict (it has none by
+        // construction), so the generic guard below would silently clobber
+        // whatever the user typed while the dialog was open. Skip instead.
+        result.conflicts.push({
+          citekey: item.citekey,
+          conflictIds: ['edited-during-review'],
+        });
+        return;
+      }
       // The file moved under us during review — re-plan against reality.
       plan = await this.buildPlan(
         item.mode,
@@ -302,7 +337,7 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
       );
       if (!plan.changed && plan.conflicts.length === 0) {
         result.skipped.push(item.citekey);
-        return false;
+        return;
       }
       if (plan.conflicts.length > 0) {
         // New conflicts appeared since the reviewed diff — don't apply a stale
@@ -311,7 +346,7 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
           citekey: item.citekey,
           conflictIds: plan.conflicts.map((c) => c.id),
         });
-        return false;
+        return;
       }
     }
 
@@ -319,7 +354,6 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
       decision === 'take-theirs' ? plan.contentTakeTheirs : plan.content;
     await this.write(item.citekey, item.file, content, plan);
     result.updated.push(item.citekey);
-    return true;
   }
 
   /** Write the resolved content and record the new baseline (not yet flushed). */

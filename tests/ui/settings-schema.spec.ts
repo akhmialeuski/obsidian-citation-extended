@@ -455,6 +455,25 @@ describe('note update settings', () => {
     }
   });
 
+  it('clamps every top-level enum independently of the others', () => {
+    // One stale enum value must never fail the whole parse — that would
+    // silently reset EVERY user setting to defaults.
+    const result = validateSettings({
+      ...DEFAULT_SETTINGS,
+      citationExportFormat: 'nonsense',
+      referenceListSortOrder: 'nonsense',
+      citationStylePreset: 'nonsense',
+      literatureNoteFolder: 'Kept',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.citationExportFormat).toBe('csl-json');
+      expect(result.data.referenceListSortOrder).toBe('default');
+      expect(result.data.citationStylePreset).toBe('custom');
+      expect(result.data.literatureNoteFolder).toBe('Kept');
+    }
+  });
+
   it('migrates the legacy "preserve" mode to "sync"', () => {
     const result = validateSettings({
       ...DEFAULT_SETTINGS,

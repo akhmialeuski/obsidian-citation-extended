@@ -124,6 +124,7 @@ export {
   syncFrontmatter,
   planNoteSync,
   baselineFromRender,
+  normalizeLineEndings,
   NOTE_UPDATE_MODES,
   NOTE_UPDATE_MODE_LABELS,
   DEFAULT_NOTE_UPDATE_MODE,

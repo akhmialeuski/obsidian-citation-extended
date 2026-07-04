@@ -124,4 +124,22 @@ describe('syncFrontmatter', () => {
     expect(result.deletedKeys).toContain('title');
     expect(result.lines.join('\n')).not.toContain('title:');
   });
+
+  it('keeps the tombstone when the render temporarily omits the key', () => {
+    // Render has no 'title' this cycle (conditional false) — the user's
+    // deletion must survive, or the next render re-adds the key.
+    const result = syncFrontmatter(['year: 2024'], ['year: 2024'], null, [
+      'title',
+    ]);
+
+    expect(result.deletedKeys).toContain('title');
+  });
+
+  it('releases the tombstone when the user re-adds the key manually', () => {
+    // Key present in the note again while omitted from the render.
+    const result = syncFrontmatter([], ['title: back again'], null, ['title']);
+
+    expect(result.deletedKeys).not.toContain('title');
+    expect(result.lines).toEqual(['title: back again']);
+  });
 });

@@ -273,3 +273,8 @@
   margin: 10px 0 2px;
   color: var(--text-muted);
 }
+
+.citation-update-review .citation-diff-expand {
+  cursor: pointer;
+  text-decoration: underline;
+}

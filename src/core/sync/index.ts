@@ -20,7 +20,11 @@ export type {
   FrontmatterConflict,
   FrontmatterSyncResult,
 } from './frontmatter-sync';
-export { planNoteSync, baselineFromRender } from './note-sync';
+export {
+  planNoteSync,
+  baselineFromRender,
+  normalizeLineEndings,
+} from './note-sync';
 export type {
   NoteBaseline,
   SyncConflict,

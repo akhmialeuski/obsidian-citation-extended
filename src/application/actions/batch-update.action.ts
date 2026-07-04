@@ -70,6 +70,18 @@ export class BatchUpdateNotesAction extends ApplicationAction {
       result.conflicts.length === 0 &&
       result.errors.length === 0
     ) {
+      // Smart sync only manages {{#syncBlock}} callouts and frontmatter keys.
+      // A template with no syncBlock section can never change note bodies —
+      // say so, or a user who just edited their template body would read
+      // "up to date" as the update having happened.
+      if (request.mode === 'sync' && !templateStr.includes('{{#syncBlock')) {
+        platform.notifications.show(
+          'Citations: All notes are already up to date. Note: Smart sync ' +
+            'only updates {{#syncBlock}} callouts and frontmatter keys — ' +
+            'your template has none, so note bodies are never modified.',
+        );
+        return;
+      }
       platform.notifications.show(
         'Citations: All notes are already up to date.',
       );

@@ -148,7 +148,11 @@ describe('BatchNoteOrchestrator', () => {
       makeBaselineStore(),
     );
 
-    const result = await orchestrator.preview({ ...REQUEST, citekeys: ['*'] });
+    const result = await orchestrator.execute({
+      ...REQUEST,
+      citekeys: ['*'],
+      dryRun: true,
+    });
 
     expect(result).toEqual({
       updated: [],
@@ -237,7 +241,7 @@ describe('BatchNoteOrchestrator', () => {
       store,
     );
 
-    const result = await orchestrator.preview(REQUEST);
+    const result = await orchestrator.execute({ ...REQUEST, dryRun: true });
 
     expect(result.updated).toEqual(['key1']);
     expect(modify).not.toHaveBeenCalled();
@@ -363,7 +367,7 @@ describe('BatchNoteOrchestrator', () => {
         presenter,
       );
 
-      const result = await orchestrator.preview(REQUEST);
+      const result = await orchestrator.execute({ ...REQUEST, dryRun: true });
 
       expect(result.conflicts).toHaveLength(1);
       expect(presenter.review).not.toHaveBeenCalled();
@@ -388,7 +392,6 @@ describe('BatchNoteOrchestrator', () => {
       expect(written).toContain('MY REWRITE');
       expect(presenter.items[0]).toMatchObject({
         citekey: 'key1',
-        conflictCount: 1,
         conflictIds: ['meta'],
       });
       expect(presenter.items[0].hunks.length).toBeGreaterThan(0);
@@ -472,7 +475,7 @@ describe('BatchNoteOrchestrator', () => {
       });
 
       expect(presenter.review).toHaveBeenCalledTimes(1);
-      expect(presenter.items[0].conflictCount).toBe(0);
+      expect(presenter.items[0].conflictIds).toEqual([]);
       expect(result.updated).toEqual(['key1']);
       expect(modify).toHaveBeenCalledTimes(1);
     });
@@ -568,6 +571,162 @@ describe('BatchNoteOrchestrator', () => {
     });
   });
 
+  describe('data-protection guards', () => {
+    it('skips a second citekey whose note resolves to the same file', async () => {
+      // Two entries with identical rendered titles → one file. Writing both
+      // would chimera-merge or overwrite the first result with no dialog.
+      const modify = jest.fn().mockResolvedValue(undefined);
+      const shared = makeFile('n/shared.md');
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(makeLibrary({ a: {}, b: {} })),
+        makeNoteService({ a: shared, b: shared }),
+        makeTemplateService(() => ({ ok: true, value: note(2024) })),
+        makeVault({ 'n/shared.md': note(2023) }, modify),
+        makeBaselineStore({ a: baselineFor(2023), b: baselineFor(2023) }),
+      );
+
+      const result = await orchestrator.execute({
+        ...REQUEST,
+        citekeys: ['a', 'b'],
+      });
+
+      expect(result.updated).toEqual(['a']);
+      expect(modify).toHaveBeenCalledTimes(1);
+      expect(result.errors).toEqual([
+        {
+          citekey: 'b',
+          error: expect.stringContaining('already targeted by another entry'),
+        },
+      ]);
+    });
+
+    it('skips an overwrite whose note was edited during review', async () => {
+      // Overwrite re-plans can never conflict, so the generic staleness guard
+      // cannot fire — the note must be skipped, not clobbered.
+      const presenter = makePresenter(['apply']);
+      const modify = jest.fn();
+      const read = jest
+        .fn()
+        .mockResolvedValueOnce(note(2023)) // scan
+        .mockResolvedValueOnce(note(2023, 'typed during review')); // re-read
+      const vault = { read, modify } as unknown as IVaultAccess;
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(makeLibrary({ key1: {} })),
+        makeNoteService({ key1: makeFile('n/key1.md') }),
+        makeTemplateService(() => ({ ok: true, value: note(2024) })),
+        vault,
+        makeBaselineStore(),
+        presenter,
+      );
+
+      const result = await orchestrator.execute({
+        ...REQUEST,
+        mode: 'overwrite',
+        confirmation: 'always',
+      });
+
+      expect(modify).not.toHaveBeenCalled();
+      expect(result.conflicts).toEqual([
+        { citekey: 'key1', conflictIds: ['edited-during-review'] },
+      ]);
+    });
+
+    it('diffs a CRLF note against normalized text in the review item', async () => {
+      // Raw-CRLF vs LF diffing would render the whole note as removed+added,
+      // hiding the real change from the user.
+      const presenter = makePresenter(['skip']);
+      const crlfNote = note(2023).replace(/\n/g, '\r\n');
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(makeLibrary({ key1: {} })),
+        makeNoteService({ key1: makeFile('n/key1.md') }),
+        makeTemplateService(() => ({ ok: true, value: note(2024) })),
+        makeVault({ 'n/key1.md': crlfNote }),
+        makeBaselineStore({ key1: baselineFor(2023) }),
+        presenter,
+      );
+
+      await orchestrator.execute({ ...REQUEST, confirmation: 'always' });
+
+      const item = presenter.items[0];
+      // Unchanged lines must appear as 'same' hunks — with raw CRLF input
+      // every single line would read as removed+added.
+      expect(item.hunks.some((h) => h.kind === 'same')).toBe(true);
+      const removed = item.hunks
+        .filter((h) => h.kind === 'removed')
+        .flatMap((h) => h.lines);
+      expect(removed.join('\n')).not.toContain('\r');
+    });
+
+    it('uses the pre-resolved file from request.files instead of re-resolving', async () => {
+      const modify = jest.fn().mockResolvedValue(undefined);
+      const pinned = makeFile('Essays/active-note.md');
+      const noteService = makeNoteService({
+        key1: makeFile('n/canonical.md'),
+      });
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(makeLibrary({ key1: {} })),
+        noteService,
+        makeTemplateService(() => ({ ok: true, value: note(2024) })),
+        makeVault({ 'Essays/active-note.md': note(2023) }, modify),
+        makeBaselineStore({ key1: baselineFor(2023) }),
+      );
+
+      const result = await orchestrator.execute({
+        ...REQUEST,
+        files: { key1: pinned },
+      });
+
+      expect(result.updated).toEqual(['key1']);
+      // The write went to the pinned file — never to the re-resolved path.
+      expect((modify.mock.calls[0] as [IVaultFile, string])[0]).toBe(pinned);
+      expect(noteService.findExistingLiteratureNoteFile).not.toHaveBeenCalled();
+    });
+
+    it('routes a first-sync append into a non-empty note through review', async () => {
+      // Legacy migration: no baseline, note already has body text, template
+      // now renders blocks. Appending silently would duplicate content on
+      // every legacy note in one pass.
+      const presenter = makePresenter(['skip']);
+      const modify = jest.fn();
+      const legacyNote = '# My note\n\nOld unmarked metadata text.';
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(makeLibrary({ key1: {} })),
+        makeNoteService({ key1: makeFile('n/key1.md') }),
+        makeTemplateService(() => ({ ok: true, value: note(2024) })),
+        makeVault({ 'n/key1.md': legacyNote }, modify),
+        makeBaselineStore(), // no baseline: first sync
+        presenter,
+      );
+
+      const result = await orchestrator.execute(REQUEST);
+
+      expect(presenter.review).toHaveBeenCalledTimes(1);
+      expect(modify).not.toHaveBeenCalled(); // user chose skip
+      expect(result.updated).toEqual([]);
+    });
+
+    it('applies a first-sync append when the user consents', async () => {
+      const presenter = makePresenter(['apply']);
+      const modify = jest.fn().mockResolvedValue(undefined);
+      const legacyNote = '# My note\n\nOld unmarked metadata text.';
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(makeLibrary({ key1: {} })),
+        makeNoteService({ key1: makeFile('n/key1.md') }),
+        makeTemplateService(() => ({ ok: true, value: note(2024) })),
+        makeVault({ 'n/key1.md': legacyNote }, modify),
+        makeBaselineStore(),
+        presenter,
+      );
+
+      const result = await orchestrator.execute(REQUEST);
+
+      expect(result.updated).toEqual(['key1']);
+      const written = (modify.mock.calls[0] as [IVaultFile, string])[1];
+      expect(written).toContain('Old unmarked metadata text.');
+      expect(written).toContain('^zc-meta');
+    });
+  });
+
   describe('baseline flushing', () => {
     it('flushes the store exactly once after a batch that wrote', async () => {
       const store = makeBaselineStore({
@@ -587,7 +746,9 @@ describe('BatchNoteOrchestrator', () => {
       expect(store.flush).toHaveBeenCalledTimes(1);
     });
 
-    it('does not flush when nothing was written', async () => {
+    it('records no baselines when nothing was written', async () => {
+      // flush() is called unconditionally (the store's own dirty check makes
+      // it a no-op); what matters is that nothing was recorded to persist.
       const store = makeBaselineStore({ key1: baselineFor(2023) });
       orchestrator = new BatchNoteOrchestrator(
         makeLibraryService(makeLibrary({ key1: {} })),
@@ -599,10 +760,10 @@ describe('BatchNoteOrchestrator', () => {
 
       await orchestrator.execute(REQUEST);
 
-      expect(store.flush).not.toHaveBeenCalled();
+      expect(store.set).not.toHaveBeenCalled();
     });
 
-    it('does not flush in a dry-run', async () => {
+    it('records no baselines in a dry-run', async () => {
       const store = makeBaselineStore({ key1: baselineFor(2023) });
       orchestrator = new BatchNoteOrchestrator(
         makeLibraryService(makeLibrary({ key1: {} })),
@@ -612,9 +773,9 @@ describe('BatchNoteOrchestrator', () => {
         store,
       );
 
-      await orchestrator.preview(REQUEST);
+      await orchestrator.execute({ ...REQUEST, dryRun: true });
 
-      expect(store.flush).not.toHaveBeenCalled();
+      expect(store.set).not.toHaveBeenCalled();
     });
   });
 });

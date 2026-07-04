@@ -76,6 +76,11 @@ export class UpdateCurrentNoteAction extends ApplicationAction {
       dryRun: false,
       mode: this.ctx.settings.noteUpdateMode,
       confirmation: this.ctx.settings.updateConfirmation,
+      // Pin the write to the file the user is actually looking at.
+      // Re-resolving the citekey by rendered title could bind a different
+      // file (e.g. a stale note at the canonical path) and modify a file the
+      // user never had open.
+      files: { [citekey]: file },
     });
 
     if (result.libraryNotReady) {

@@ -101,7 +101,6 @@ function makeItem(overrides: Partial<NoteReviewItem> = {}): NoteReviewItem {
       { kind: 'removed', lines: ['old line'] },
       { kind: 'added', lines: ['new line'] },
     ],
-    conflictCount: 1,
     conflictIds: ['meta'],
     ...overrides,
   };
@@ -160,9 +159,7 @@ describe('UpdateReviewModal', () => {
   });
 
   it('hides the library-version button for clean changes', () => {
-    const { modal } = openModal(
-      makeItem({ conflictCount: 0, conflictIds: [] }),
-    );
+    const { modal } = openModal(makeItem({ conflictIds: [] }));
     expect(buttons(modal).map((b) => b.textContent)).not.toContain(
       'Use library version',
     );
@@ -191,9 +188,7 @@ describe('UpdateReviewModal', () => {
   });
 
   it('renders a single diff (no headings) for a clean change', () => {
-    const { modal } = openModal(
-      makeItem({ conflictCount: 0, conflictIds: [] }),
-    );
+    const { modal } = openModal(makeItem({ conflictIds: [] }));
     expect(
       modal.contentEl.querySelectorAll('.citation-review-heading'),
     ).toHaveLength(0);
@@ -219,6 +214,36 @@ describe('UpdateReviewModal', () => {
     const { modal, decision } = openModal(makeItem());
     modal.close();
     await expect(decision).resolves.toBe('skip');
+  });
+
+  it('caps long diffs with a click-to-expand control', () => {
+    // The hidden tail may be exactly what a destructive resolution rewrites,
+    // so the user must be able to reveal all of it before deciding.
+    const { modal } = openModal(
+      makeItem({
+        hunks: [
+          {
+            kind: 'added',
+            lines: Array.from({ length: 450 }, (_, i) => `line ${i}`),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      modal.contentEl.querySelectorAll('.citation-diff-line.is-added'),
+    ).toHaveLength(400);
+    const expand = modal.contentEl.querySelector(
+      '.citation-diff-expand',
+    ) as HTMLElement;
+    expect(expand.textContent).toContain('50 more lines');
+
+    expand.click();
+
+    expect(
+      modal.contentEl.querySelectorAll('.citation-diff-line.is-added'),
+    ).toHaveLength(450);
+    expect(modal.contentEl.querySelector('.citation-diff-expand')).toBeNull();
   });
 
   it('folds long unchanged runs in the diff', () => {

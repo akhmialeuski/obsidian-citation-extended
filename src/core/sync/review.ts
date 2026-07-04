@@ -19,9 +19,10 @@ export interface NoteReviewItem {
    * preview exactly what each button writes.
    */
   hunksTakeTheirs?: DiffHunk[];
-  /** Number of conflicting units (0 = clean change under 'always' mode). */
-  conflictCount: number;
-  /** Conflicting block names / frontmatter keys, for display. */
+  /**
+   * Conflicting block names / frontmatter keys, for display.
+   * Empty = a clean change routed to review by policy, not by conflict.
+   */
   conflictIds: string[];
 }
 

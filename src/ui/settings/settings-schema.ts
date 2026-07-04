@@ -80,6 +80,10 @@ export function resolveSyncIntervalMs(minutes: number): number | undefined {
   return Math.min(minutes, READWISE_SYNC_INTERVAL_MAX_MINUTES) * 60_000;
 }
 
+// Top-level enum fields carry `.catch(<default>)`: one stale or unknown value
+// (older build, hand-edited data.json) must clamp to its default instead of
+// failing the whole safeParse — which would discard EVERY other user setting.
+
 export const SettingsSchema = z.object({
   citationExportPath: z.string(),
   citationExportFormat: z
@@ -90,13 +94,17 @@ export const SettingsSchema = z.object({
   // Legacy: kept for migration. New installs use only the path field.
   literatureNoteContentTemplate: z.string().optional().default(''),
   literatureNoteContentTemplatePath: z.string().default(''),
-  citationStylePreset: z.enum(CITATION_STYLE_PRESET_OPTIONS).default('custom'),
+  citationStylePreset: z
+    .enum(CITATION_STYLE_PRESET_OPTIONS)
+    .default('custom')
+    .catch('custom'),
   markdownCitationTemplate: z.string().min(1),
   alternativeMarkdownCitationTemplate: z.string().min(1),
   // Reference list sorting
   referenceListSortOrder: z
     .enum(['default', 'year-desc', 'year-asc', 'author-asc'])
-    .default('default'),
+    .default('default')
+    .catch('default'),
   // Character used to replace disallowed filename characters during sanitization.
   // Must not itself contain any disallowed filename characters or forward slashes.
   filenameSanitizationReplacement: z
@@ -110,11 +118,17 @@ export const SettingsSchema = z.object({
   autoCreateNoteOnCitation: z.boolean().default(false),
   // How "Update literature note(s)" treats existing notes: smart sync
   // (callout blocks + 3-way merge), frontmatter-only, or full overwrite.
-  noteUpdateMode: z.enum(NOTE_UPDATE_MODES).default(DEFAULT_NOTE_UPDATE_MODE),
+  // `.catch` also migrates the pre-release `preserve` mode (persist-marker
+  // model) to its successor `sync`, which is the default.
+  noteUpdateMode: z
+    .enum(NOTE_UPDATE_MODES)
+    .default(DEFAULT_NOTE_UPDATE_MODE)
+    .catch(DEFAULT_NOTE_UPDATE_MODE),
   // When the diff review dialog is required before writing an update.
   updateConfirmation: z
     .enum(UPDATE_CONFIRMATION_MODES)
-    .default(DEFAULT_UPDATE_CONFIRMATION),
+    .default(DEFAULT_UPDATE_CONFIRMATION)
+    .catch(DEFAULT_UPDATE_CONFIRMATION),
   literatureNoteLinkDisplayTemplate: z.string().default(''),
   // Inline editor autocomplete: when enabled, typing `@`/`[@` shows a citekey
   // suggestion popover backed by the same search index as the search modal.
@@ -244,45 +258,9 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
 };
 
 export function validateSettings(settings: unknown) {
-  return SettingsSchema.safeParse(normalizeLegacySettings(settings));
-}
-
-/**
- * Map values written by older builds onto the current schema before
- * validation, and clamp the note-update enums so a single stale/unknown value
- * cannot fail the whole `safeParse` (which would discard every other setting).
- *
- * - The pre-release `preserve` note update mode (persist-marker model) becomes
- *   `sync` (its successor).
- * - Any `noteUpdateMode` / `updateConfirmation` outside the current enum is
- *   reset to its default. `undefined` is left as-is so the schema default
- *   applies.
- */
-export function normalizeLegacySettings(settings: unknown): unknown {
-  if (settings === null || typeof settings !== 'object') {
-    return settings;
-  }
-
-  const source = settings as Record<string, unknown>;
-  const patch: Record<string, unknown> = {};
-
-  const mode = source.noteUpdateMode;
-  if (mode === 'preserve') {
-    patch.noteUpdateMode = DEFAULT_NOTE_UPDATE_MODE;
-  } else if (
-    mode !== undefined &&
-    !(NOTE_UPDATE_MODES as readonly unknown[]).includes(mode)
-  ) {
-    patch.noteUpdateMode = DEFAULT_NOTE_UPDATE_MODE;
-  }
-
-  const confirmation = source.updateConfirmation;
-  if (
-    confirmation !== undefined &&
-    !(UPDATE_CONFIRMATION_MODES as readonly unknown[]).includes(confirmation)
-  ) {
-    patch.updateConfirmation = DEFAULT_UPDATE_CONFIRMATION;
-  }
-
-  return Object.keys(patch).length > 0 ? { ...source, ...patch } : settings;
+  // Per-field resilience lives in the schema itself (`.catch` on every
+  // top-level enum), so no pre-normalization pass is needed: a stale value —
+  // including the pre-release `preserve` note update mode — clamps to the
+  // field's default instead of failing the whole parse.
+  return SettingsSchema.safeParse(settings);
 }
