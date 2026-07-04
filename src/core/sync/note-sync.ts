@@ -26,6 +26,7 @@ import {
   syncFrontmatter,
   FrontmatterConflict,
 } from './frontmatter-sync';
+import type { NoteUpdateMode } from './note-update-mode';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -33,12 +34,14 @@ import {
 
 /** Snapshot of what the plugin last wrote into a note. */
 export interface NoteBaseline {
-  /** Plugin-owned frontmatter keys → rendered key block. */
+  /** Plugin-owned frontmatter keys → normalized rendered key block. */
   frontmatter: Record<string, string>;
   /** Sync block name → full rendered block text. */
   blocks: Record<string, string>;
   /** Block names the user deleted from the note — never re-appended. */
   deletedBlocks?: string[];
+  /** Frontmatter keys the user deleted — never re-added. */
+  deletedKeys?: string[];
 }
 
 /** One unit (block or frontmatter key) where both sides changed. */
@@ -91,8 +94,61 @@ export interface NoteSyncInput {
   current: string;
   /** Stored baseline from the previous sync, or null on first sync. */
   baseline: NoteBaseline | null;
-  /** Restrict the sync to frontmatter (body untouched). */
+  /**
+   * Update mode. Defaults to `sync`. `frontmatter` leaves the body untouched;
+   * `overwrite` replaces the whole note with the render.
+   */
+  mode?: NoteUpdateMode;
+  /** @deprecated use `mode: 'frontmatter'`. */
   frontmatterOnly?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Line-ending normalization
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalize CRLF / lone CR to LF. All sync comparisons are LF-based (the
+ * render and stored baseline are always LF), so a CRLF note read from disk
+ * would otherwise never equal its baseline and every unit would look changed.
+ * Normalizing here means an updated note is rewritten with LF endings —
+ * consistent with how Obsidian saves its own edits.
+ */
+function toLf(content: string): string {
+  return content.replace(/\r\n?/g, '\n');
+}
+
+// ---------------------------------------------------------------------------
+// Baseline from a render
+// ---------------------------------------------------------------------------
+
+/** Empty change summary. */
+function emptySummary(): SyncSummary {
+  return {
+    blocksReplaced: [],
+    blocksMerged: [],
+    blocksAppended: [],
+    blocksRemoved: [],
+    blocksDeletedByUser: [],
+    frontmatterKeysUpdated: [],
+  };
+}
+
+/**
+ * Derive the baseline that a freshly rendered note establishes: the normalized
+ * plugin-owned frontmatter keys plus the sync blocks. Shared by the planner's
+ * overwrite path and {@link ../../notes/baseline-store} so the baseline shape
+ * has a single definition.
+ */
+export function baselineFromRender(rendered: string): NoteBaseline {
+  const normalized = toLf(rendered);
+  const { frontmatter } = splitFrontmatter(normalized);
+  const fm = syncFrontmatter(frontmatter, [], null);
+  const blocks: Record<string, string> = {};
+  for (const [name, block] of parseSyncBlocks(normalized)) {
+    blocks[name] = block.text;
+  }
+  return { frontmatter: fm.baseline, blocks };
 }
 
 // ---------------------------------------------------------------------------
@@ -108,24 +164,35 @@ interface BlockResolution {
 
 /** Compute the update plan for a single note. Pure function. */
 export function planNoteSync(input: NoteSyncInput): NoteSyncPlan {
-  const rendered = splitFrontmatter(input.rendered);
-  const current = splitFrontmatter(input.current);
+  const renderedRaw = toLf(input.rendered);
+  const currentRaw = toLf(input.current);
+  const mode: NoteUpdateMode =
+    input.mode ?? (input.frontmatterOnly ? 'frontmatter' : 'sync');
+
+  // --- Overwrite: wholesale replace, baseline derived from the render ---
+  if (mode === 'overwrite') {
+    return {
+      changed: renderedRaw !== currentRaw,
+      content: renderedRaw,
+      contentTakeTheirs: renderedRaw,
+      conflicts: [],
+      baseline: baselineFromRender(renderedRaw),
+      summary: emptySummary(),
+    };
+  }
+
+  const rendered = splitFrontmatter(renderedRaw);
+  const current = splitFrontmatter(currentRaw);
 
   const conflicts: SyncConflict[] = [];
-  const summary: SyncSummary = {
-    blocksReplaced: [],
-    blocksMerged: [],
-    blocksAppended: [],
-    blocksRemoved: [],
-    blocksDeletedByUser: [],
-    frontmatterKeysUpdated: [],
-  };
+  const summary = emptySummary();
 
   // --- Frontmatter -----------------------------------------------------
   const fm = syncFrontmatter(
     rendered.frontmatter,
     current.frontmatter,
     input.baseline ? input.baseline.frontmatter : null,
+    input.baseline?.deletedKeys ?? [],
   );
   summary.frontmatterKeysUpdated = fm.updatedKeys;
   for (const c of fm.conflicts) {
@@ -135,21 +202,24 @@ export function planNoteSync(input: NoteSyncInput): NoteSyncPlan {
   // --- Body blocks -------------------------------------------------------
   const currentBody = current.body.join('\n');
   let bodyOurs = currentBody;
-  let bodyTheirs = currentBody;
   const baselineOut: NoteBaseline = {
     frontmatter: fm.baseline,
     blocks: {},
     deletedBlocks: [],
+    deletedKeys: fm.deletedKeys,
   };
+  let hasBlockConflict = false;
+  let currentBlocks = new Map<string, SyncBlock>();
+  let resolutions = new Map<string, BlockResolution>();
+  let appends: string[] = [];
 
-  if (!input.frontmatterOnly) {
-    const renderedBlocks = parseSyncBlocks(input.rendered);
-    const currentBlocks = parseSyncBlocks(currentBody);
+  if (mode === 'sync') {
+    const renderedBlocks = parseSyncBlocks(renderedRaw);
+    currentBlocks = parseSyncBlocks(currentBody);
     const baseBlocks = input.baseline?.blocks ?? null;
     const previouslyDeleted = new Set(input.baseline?.deletedBlocks ?? []);
-
-    const resolutions = new Map<string, BlockResolution>();
-    const appends: string[] = [];
+    resolutions = new Map<string, BlockResolution>();
+    appends = [];
 
     for (const [name, renderBlock] of renderedBlocks) {
       baselineOut.blocks[name] = renderBlock.text;
@@ -170,13 +240,12 @@ export function planNoteSync(input: NoteSyncInput): NoteSyncPlan {
         continue;
       }
 
-      resolutions.set(
-        name,
-        resolveBlock(name, currentBlock, renderBlock.text, baseText, {
-          conflicts,
-          summary,
-        }),
-      );
+      const res = resolveBlock(name, currentBlock, renderBlock.text, baseText, {
+        conflicts,
+        summary,
+      });
+      if (res.ours !== res.theirs) hasBlockConflict = true;
+      resolutions.set(name, res);
     }
 
     // Blocks the render no longer produces (e.g. annotation deleted in the
@@ -201,41 +270,43 @@ export function planNoteSync(input: NoteSyncInput): NoteSyncPlan {
           theirs: '',
         });
         resolutions.set(name, { ours: currentBlock.text, theirs: null });
+        hasBlockConflict = true;
       }
     }
 
     bodyOurs = spliceBlocks(currentBody, currentBlocks, resolutions, 'ours');
-    bodyTheirs = spliceBlocks(
-      currentBody,
-      currentBlocks,
-      resolutions,
-      'theirs',
-    );
     if (appends.length > 0) {
       bodyOurs = appendBlocks(bodyOurs, appends);
-      bodyTheirs = appendBlocks(bodyTheirs, appends);
     }
   } else {
-    // Frontmatter-only mode still carries the previous body baseline forward
-    // so switching modes later keeps deletion detection intact.
+    // Frontmatter-only mode: carry the previous body baseline forward so
+    // switching modes later keeps deletion detection intact.
     baselineOut.blocks = input.baseline?.blocks ?? {};
     baselineOut.deletedBlocks = input.baseline?.deletedBlocks ?? [];
   }
 
-  if (baselineOut.deletedBlocks!.length === 0) {
-    delete baselineOut.deletedBlocks;
-  }
+  if (baselineOut.deletedBlocks!.length === 0) delete baselineOut.deletedBlocks;
+  if (baselineOut.deletedKeys!.length === 0) delete baselineOut.deletedKeys;
 
   // --- Assembly ----------------------------------------------------------
-  const content = assemble(fm.lines, rendered.found || current.found, bodyOurs);
-  const contentTakeTheirs = assemble(
-    fm.linesTakeTheirs,
-    rendered.found || current.found,
-    bodyTheirs,
-  );
+  const hasFm = rendered.found || current.found;
+  const content = assemble(fm.lines, hasFm, bodyOurs);
+
+  // The take-theirs variant only differs when there are conflicts; recompute
+  // the body's theirs side only when a BLOCK conflict actually diverges.
+  let contentTakeTheirs = content;
+  if (conflicts.length > 0) {
+    const bodyTheirs = hasBlockConflict
+      ? appendBlocks(
+          spliceBlocks(currentBody, currentBlocks, resolutions, 'theirs'),
+          appends,
+        )
+      : bodyOurs;
+    contentTakeTheirs = assemble(fm.linesTakeTheirs, hasFm, bodyTheirs);
+  }
 
   return {
-    changed: content !== input.current,
+    changed: content !== currentRaw,
     content,
     contentTakeTheirs,
     conflicts,
@@ -318,7 +389,9 @@ function spliceBlocks(
   if (resolutions.size === 0) return body;
   const lines = body.split('\n');
   const out: string[] = [];
-  // Map line index → block for O(1) lookup of span starts.
+  // Map line index → block for O(1) lookup of span starts. Starts are distinct
+  // (parseSyncBlocks bounds each block to its own callout header), so no
+  // collision between adjacent blocks.
   const startToBlock = new Map<number, SyncBlock>();
   for (const block of currentBlocks.values()) {
     if (resolutions.has(block.name)) startToBlock.set(block.startLine, block);
@@ -347,6 +420,7 @@ function spliceBlocks(
 
 /** Append new blocks at the end of the body, separated by blank lines. */
 function appendBlocks(body: string, blocks: string[]): string {
+  if (blocks.length === 0) return body;
   const trimmed = body.replace(/\n+$/, '');
   const parts = trimmed.length > 0 ? [trimmed] : [];
   parts.push(...blocks);

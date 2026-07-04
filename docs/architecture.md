@@ -947,9 +947,8 @@ flowchart TD
     START --> CHECK{"library loaded?"}
     CHECK -->|No| EARLY["return { libraryNotReady: true }\n→ Notice: 'Library is not loaded yet'"]
     CHECK -->|Yes| RESOLVE["ContentTemplateResolver.resolve()\n→ templateStr"]
-    RESOLVE --> PREVIEW["orchestrator.preview(request)\n— dry-run, count changes"]
-    PREVIEW --> NOTIFY["Notice: 'N notes will be updated'"]
-    NOTIFY --> EXEC["orchestrator.execute(request, onProgress)"]
+    RESOLVE --> NOTIFY["Notice: 'Updating literature notes…'"]
+    NOTIFY --> EXEC["orchestrator.execute(request, onProgress)\n— single pass: plan, review, write"]
 
     subgraph Loop["For each citekey"]
         ENTRY["Look up entry in Library"]
@@ -966,21 +965,24 @@ flowchart TD
     end
 
     EXEC --> Loop
-    Loop --> RESULT["BatchUpdateResult\n{ updated[], skipped[], errors[], libraryNotReady? }"]
+    Loop --> RESULT["BatchUpdateResult\n{ updated[], skipped[], conflicts[], errors[], libraryNotReady? }"]
 ```
 
 ### Request / Result Types
 
 ```typescript
 interface BatchUpdateRequest {
-  citekeys: string[];     // ['key1', 'key2'] or ['*'] for all
-  templateStr: string;    // Content template to render
-  dryRun: boolean;        // Preview mode — no file writes
+  citekeys: string[];              // ['key1', 'key2'] or ['*'] for all
+  templateStr: string;            // Content template to render
+  dryRun: boolean;                // Preview mode — no file writes
+  mode: NoteUpdateMode;           // 'sync' | 'frontmatter' | 'overwrite'
+  confirmation: UpdateConfirmationMode; // 'conflicts' | 'always' | 'never'
 }
 
 interface BatchUpdateResult {
   updated: string[];
   skipped: string[];
+  conflicts: Array<{ citekey: string; conflictIds: string[] }>;
   errors: Array<{ citekey: string; error: string }>;
   libraryNotReady?: boolean;
 }

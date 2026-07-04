@@ -112,4 +112,49 @@ describe('parseSyncBlocks', () => {
   it('does not treat an inline ^zc mention as a block', () => {
     expect(hasSyncBlocks('text about ^zc-meta ids')).toBe(false);
   });
+
+  // --- walk-back precision (regression) ------------------------------------
+
+  it('does not absorb a user callout stacked directly above the block', () => {
+    // No blank line between the user callout and the plugin block: the plugin
+    // block must still start at its OWN header, leaving the user callout whole.
+    const content = [
+      '> [!warning] user callout',
+      '> hand-written line',
+      '> [!note] Metadata',
+      '> **Year:** 2023',
+      '> ^zc-meta',
+    ].join('\n');
+
+    const blocks = parseSyncBlocks(content);
+    const meta = blocks.get('meta')!;
+
+    expect(meta.startLine).toBe(2); // the "> [!note] Metadata" header, not line 0
+    expect(meta.text).toBe(
+      ['> [!note] Metadata', '> **Year:** 2023', '> ^zc-meta'].join('\n'),
+    );
+    expect(meta.text).not.toContain('user callout');
+    expect(meta.text).not.toContain('hand-written line');
+  });
+
+  it('keeps two adjacent plugin blocks separate (no blank line between)', () => {
+    const content = [
+      '> [!note] A',
+      '> alpha',
+      '> ^zc-a',
+      '> [!note] B',
+      '> beta',
+      '> ^zc-b',
+    ].join('\n');
+
+    const blocks = parseSyncBlocks(content);
+
+    expect([...blocks.keys()]).toEqual(['a', 'b']);
+    expect(blocks.get('a')!.text).toBe(
+      ['> [!note] A', '> alpha', '> ^zc-a'].join('\n'),
+    );
+    expect(blocks.get('b')!.text).toBe(
+      ['> [!note] B', '> beta', '> ^zc-b'].join('\n'),
+    );
+  });
 });

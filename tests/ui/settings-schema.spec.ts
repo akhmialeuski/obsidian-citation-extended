@@ -428,12 +428,31 @@ describe('note update settings', () => {
     }
   });
 
-  it('rejects unknown mode values', () => {
+  it('clamps an unknown mode to the default without failing validation', () => {
+    // A single stale/unknown enum must not fail the whole safeParse (which
+    // would discard every other setting) — it is reset to the default instead.
     const result = validateSettings({
       ...DEFAULT_SETTINGS,
+      literatureNoteFolder: 'Kept',
       noteUpdateMode: 'yolo',
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.noteUpdateMode).toBe('sync');
+      // Unrelated settings survive the clamp.
+      expect(result.data.literatureNoteFolder).toBe('Kept');
+    }
+  });
+
+  it('clamps an unknown confirmation to the default without failing validation', () => {
+    const result = validateSettings({
+      ...DEFAULT_SETTINGS,
+      updateConfirmation: 'whenever',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.updateConfirmation).toBe('conflicts');
+    }
   });
 
   it('migrates the legacy "preserve" mode to "sync"', () => {

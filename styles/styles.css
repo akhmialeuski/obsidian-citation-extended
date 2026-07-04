@@ -266,3 +266,10 @@
   color: var(--text-warning, var(--text-accent));
   font-size: 13px;
 }
+
+.citation-update-review .citation-review-heading {
+  font-weight: var(--font-semibold);
+  font-size: 12px;
+  margin: 10px 0 2px;
+  color: var(--text-muted);
+}

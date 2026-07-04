@@ -49,7 +49,19 @@ export class UpdateCurrentNoteAction extends ApplicationAction {
       return;
     }
 
-    const citekey = this.ctx.noteService.findCitekeyForFile(file, library);
+    // findCitekeyForFile renders the title template for every entry to match
+    // the path; a broken template throws TemplateRenderError. The command is
+    // invoked fire-and-forget, so surface the failure as a notice instead of
+    // letting the rejection vanish.
+    let citekey: string | null;
+    try {
+      citekey = this.ctx.noteService.findCitekeyForFile(file, library);
+    } catch (e) {
+      platform.notifications.show(
+        `Citations: Could not match "${file.name}" — ${(e as Error).message}`,
+      );
+      return;
+    }
     if (!citekey) {
       platform.notifications.show(
         `Citations: "${file.name}" does not match any library entry.`,
@@ -66,6 +78,10 @@ export class UpdateCurrentNoteAction extends ApplicationAction {
       confirmation: this.ctx.settings.updateConfirmation,
     });
 
+    if (result.libraryNotReady) {
+      platform.notifications.show('Citations: Library is not loaded yet.');
+      return;
+    }
     if (result.errors.length > 0) {
       platform.notifications.show(
         `Citations: Failed to update "${citekey}": ${result.errors[0].error}`,

@@ -1,8 +1,5 @@
 import { App, Modal, Setting } from 'obsidian';
-import type {
-  NoteReviewItem,
-  ReviewDecision,
-} from '../../notes/batch/batch-update.types';
+import type { DiffHunk, NoteReviewItem, ReviewDecision } from '../../core';
 
 /** Cap on rendered diff lines so huge notes don't freeze the modal. */
 const MAX_DIFF_LINES = 400;
@@ -11,9 +8,9 @@ const CONTEXT_LINES = 2;
 
 /**
  * Review dialog shown before a note update is written: renders the line diff
- * (current note → proposed content), lists conflicting units, and offers the
- * decision buttons. Resolves with {@link ReviewDecision}; closing the dialog
- * without choosing counts as "skip".
+ * (current note → proposed content) for each resolution the user can pick, so
+ * whatever button they click was previewed. Resolves with
+ * {@link ReviewDecision}; closing the dialog without choosing counts as "skip".
  */
 export class UpdateReviewModal extends Modal {
   private decision: ReviewDecision = 'skip';
@@ -38,7 +35,8 @@ export class UpdateReviewModal extends Modal {
       text: this.item.filePath,
     });
 
-    if (this.item.conflictCount > 0) {
+    const hasConflicts = this.item.conflictCount > 0;
+    if (hasConflicts) {
       contentEl.createEl('p', {
         cls: 'citation-review-conflicts',
         text:
@@ -50,7 +48,30 @@ export class UpdateReviewModal extends Modal {
       });
     }
 
-    this.renderDiff(contentEl.createDiv('citation-review-diff'));
+    // Preview the diff of the DEFAULT resolution ("Apply" / keep-my-edits).
+    if (hasConflicts) {
+      contentEl.createEl('p', {
+        cls: 'citation-review-heading',
+        text: 'Apply (keep your edits):',
+      });
+    }
+    this.renderDiff(
+      contentEl.createDiv('citation-review-diff'),
+      this.item.hunks,
+    );
+
+    // When there are conflicts, also preview what "Use library version" writes
+    // — otherwise that button would apply content the user never saw.
+    if (hasConflicts && this.item.hunksTakeTheirs) {
+      contentEl.createEl('p', {
+        cls: 'citation-review-heading',
+        text: 'Use library version:',
+      });
+      this.renderDiff(
+        contentEl.createDiv('citation-review-diff'),
+        this.item.hunksTakeTheirs,
+      );
+    }
 
     const buttons = new Setting(contentEl);
     buttons.addButton((b) =>
@@ -59,7 +80,7 @@ export class UpdateReviewModal extends Modal {
         .setCta()
         .onClick(() => this.finish('apply')),
     );
-    if (this.item.conflictCount > 0) {
+    if (hasConflicts) {
       buttons.addButton((b) =>
         b
           .setButtonText('Use library version')
@@ -83,7 +104,7 @@ export class UpdateReviewModal extends Modal {
   }
 
   /** Render the diff hunks with context folding and a hard line cap. */
-  private renderDiff(container: HTMLElement): void {
+  private renderDiff(container: HTMLElement, hunks: DiffHunk[]): void {
     const pre = container.createEl('pre', { cls: 'citation-review-pre' });
     let printed = 0;
 
@@ -93,7 +114,6 @@ export class UpdateReviewModal extends Modal {
       pre.createDiv({ cls: `citation-diff-line ${cls}`, text });
     };
 
-    const hunks = this.item.hunks;
     for (let i = 0; i < hunks.length; i++) {
       const hunk = hunks[i];
       if (hunk.kind === 'same') {

@@ -1121,6 +1121,7 @@ describe('NoteService baseline recording on creation', () => {
 
     const baselineStore = {
       recordFromRender: jest.fn().mockResolvedValue(undefined),
+      flush: jest.fn().mockResolvedValue(undefined),
     };
     const noteService = new NoteService(
       platform,
@@ -1137,6 +1138,9 @@ describe('NoteService baseline recording on creation', () => {
       'smith2020',
       'rendered note body',
     );
+    // recordFromRender only mutates memory; note creation must flush it so the
+    // first sync has a baseline on disk.
+    expect(baselineStore.flush).toHaveBeenCalledTimes(1);
   });
 
   it('creation survives a failing baseline store', async () => {

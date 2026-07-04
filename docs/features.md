@@ -129,7 +129,7 @@ Re-syncs every existing literature note with the current library data and conten
   - **Update frontmatter only** — merges frontmatter keys, never touches the body
   - **Overwrite notes completely** — replaces the whole note with the fresh render
 - When you and the library changed the same thing, the note goes through the **review dialog**: a diff of the pending change with *Apply* (keep your version), *Use library version*, *Skip*, and *Apply/Skip all* choices (see the **Review changes before writing** setting)
-- Runs a dry-run preview first to count pending changes, then executes with progress notifications
+- Scans, plans, and writes in a single pass, reporting progress notifications as it goes
 - Deleted sync blocks stay deleted; new blocks are appended; untouched notes are skipped
 - Summary notice: `Updated · Conflicts skipped · Skipped · Errors`
 

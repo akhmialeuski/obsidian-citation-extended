@@ -1,6 +1,6 @@
 import type { IFileSystem } from '../platform/platform-adapter';
 import type { NoteBaseline } from '../core';
-import { parseSyncBlocks, splitFrontmatter, syncFrontmatter } from '../core';
+import { baselineFromRender } from '../core';
 
 /**
  * Persistent store of per-note baselines (the last content the plugin
@@ -10,14 +10,22 @@ import { parseSyncBlocks, splitFrontmatter, syncFrontmatter } from '../core';
  * Storage: one JSON file in the plugin directory mapping citekey → baseline.
  * All operations are best-effort — a missing or corrupt store degrades to
  * "no baseline" (first-sync semantics), never to an error.
+ *
+ * Writes are decoupled from mutation: {@link set}/{@link recordFromRender}
+ * update the in-memory map and mark it dirty; the caller persists once via
+ * {@link flush}. This avoids re-serializing the whole map after every note in
+ * a batch (which would be O(N²) writes). Concurrent first-loads share a single
+ * in-flight read so an empty snapshot can never overwrite the file on disk.
  */
 export interface IBaselineStore {
   /** Baseline for a citekey, or null when none was recorded. */
   get(citekey: string): Promise<NoteBaseline | null>;
-  /** Record the baseline after a successful write. */
+  /** Record the baseline in memory (persist later with {@link flush}). */
   set(citekey: string, baseline: NoteBaseline): Promise<void>;
   /** Record a baseline directly from freshly rendered note content. */
   recordFromRender(citekey: string, rendered: string): Promise<void>;
+  /** Persist pending changes to disk (no-op when nothing changed). */
+  flush(): Promise<void>;
 }
 
 interface BaselineFileV1 {
@@ -27,6 +35,9 @@ interface BaselineFileV1 {
 
 export class BaselineStore implements IBaselineStore {
   private cache: Record<string, NoteBaseline> | null = null;
+  /** In-flight load, shared by concurrent callers to avoid a torn snapshot. */
+  private loading: Promise<Record<string, NoteBaseline>> | null = null;
+  private dirty = false;
 
   constructor(
     private fileSystem: IFileSystem | undefined,
@@ -41,23 +52,51 @@ export class BaselineStore implements IBaselineStore {
   async set(citekey: string, baseline: NoteBaseline): Promise<void> {
     const all = await this.load();
     all[citekey] = baseline;
-    await this.save(all);
+    this.dirty = true;
   }
 
   async recordFromRender(citekey: string, rendered: string): Promise<void> {
-    const { frontmatter } = splitFrontmatter(rendered);
-    const fm = syncFrontmatter(frontmatter, [], null);
-    const blocks: Record<string, string> = {};
-    for (const [name, block] of parseSyncBlocks(rendered)) {
-      blocks[name] = block.text;
-    }
-    await this.set(citekey, { frontmatter: fm.baseline, blocks });
+    await this.set(citekey, baselineFromRender(rendered));
   }
 
-  private async load(): Promise<Record<string, NoteBaseline>> {
-    if (this.cache) return this.cache;
-    this.cache = {};
-    if (!this.fileSystem || !this.filePath) return this.cache;
+  async flush(): Promise<void> {
+    if (!this.dirty) return;
+    const all = await this.load();
+    this.dirty = false;
+    if (!this.fileSystem || !this.filePath) return;
+    try {
+      await this.fileSystem.writeFile(
+        this.filePath,
+        JSON.stringify({ version: 1, baselines: all } satisfies BaselineFileV1),
+      );
+    } catch (e) {
+      // Re-mark dirty so a later flush can retry.
+      this.dirty = true;
+      console.warn('Citations: could not persist note baselines', e);
+    }
+  }
+
+  /**
+   * Load the baseline map, memoizing the in-flight read so a second caller
+   * that arrives mid-load awaits the SAME promise instead of seeing an empty
+   * map (which would then be persisted over the real on-disk data).
+   */
+  private load(): Promise<Record<string, NoteBaseline>> {
+    if (this.cache) return Promise.resolve(this.cache);
+    if (this.loading) return this.loading;
+    this.loading = this.readFromDisk()
+      .then((loaded) => {
+        this.cache = loaded;
+        return loaded;
+      })
+      .finally(() => {
+        this.loading = null;
+      });
+    return this.loading;
+  }
+
+  private async readFromDisk(): Promise<Record<string, NoteBaseline>> {
+    if (!this.fileSystem || !this.filePath) return {};
     try {
       if (await this.fileSystem.exists(this.filePath)) {
         const parsed: unknown = JSON.parse(
@@ -69,7 +108,7 @@ export class BaselineStore implements IBaselineStore {
           (parsed as BaselineFileV1).version === 1 &&
           typeof (parsed as BaselineFileV1).baselines === 'object'
         ) {
-          this.cache = (parsed as BaselineFileV1).baselines ?? {};
+          return (parsed as BaselineFileV1).baselines ?? {};
         }
       }
     } catch (e) {
@@ -78,19 +117,6 @@ export class BaselineStore implements IBaselineStore {
         e,
       );
     }
-    return this.cache;
-  }
-
-  private async save(all: Record<string, NoteBaseline>): Promise<void> {
-    this.cache = all;
-    if (!this.fileSystem || !this.filePath) return;
-    try {
-      await this.fileSystem.writeFile(
-        this.filePath,
-        JSON.stringify({ version: 1, baselines: all } satisfies BaselineFileV1),
-      );
-    } catch (e) {
-      console.warn('Citations: could not persist note baselines', e);
-    }
+    return {};
   }
 }

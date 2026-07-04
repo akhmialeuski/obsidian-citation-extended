@@ -858,32 +858,40 @@ describe('BatchUpdateNotesAction', () => {
   });
 
   it('passes mode and confirmation from settings to the orchestrator', async () => {
-    orchestrator.preview.mockResolvedValue({ ...EMPTY });
+    orchestrator.execute.mockResolvedValue({ ...EMPTY });
 
     await action.execute({});
 
-    expect(orchestrator.preview).toHaveBeenCalledWith(
+    expect(orchestrator.execute).toHaveBeenCalledWith(
       expect.objectContaining({ mode: 'sync', confirmation: 'conflicts' }),
+      expect.any(Function),
     );
   });
 
-  it('shows "up to date" when preview returns 0 changes', async () => {
-    orchestrator.preview.mockResolvedValue({ ...EMPTY });
+  it('does a single execute pass (no separate preview scan)', async () => {
+    orchestrator.execute.mockResolvedValue({ ...EMPTY });
 
     await action.execute({});
 
     expect(resolver.resolve).toHaveBeenCalled();
+    expect(orchestrator.preview).not.toHaveBeenCalled();
+    expect(orchestrator.execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows "up to date" when execute reports no changes', async () => {
+    orchestrator.execute.mockResolvedValue({ ...EMPTY });
+
+    await action.execute({});
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'Citations: Updating literature notes…',
+    );
     expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
       'Citations: All notes are already up to date.',
     );
-    expect(orchestrator.execute).not.toHaveBeenCalled();
   });
 
-  it('executes the batch update when preview finds changes', async () => {
-    orchestrator.preview.mockResolvedValue({
-      ...EMPTY,
-      updated: ['a', 'b', 'c'],
-    });
+  it('shows the completion summary when execute finds changes', async () => {
     orchestrator.execute.mockResolvedValue({
       ...EMPTY,
       updated: ['a', 'b', 'c'],
@@ -892,7 +900,7 @@ describe('BatchUpdateNotesAction', () => {
     await action.execute({});
 
     expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
-      'Citations: Updating 3 notes…',
+      'Citations: Updating literature notes…',
     );
     expect(orchestrator.execute).toHaveBeenCalled();
     expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
@@ -900,27 +908,24 @@ describe('BatchUpdateNotesAction', () => {
     );
   });
 
-  it('counts pending conflicts as work in the preview notice', async () => {
-    orchestrator.preview.mockResolvedValue({
-      ...EMPTY,
-      conflicts: [{ citekey: 'a', conflictIds: ['meta'] }],
-    });
+  it('reports a summary even when only conflicts were found', async () => {
+    const debugSpy = jest.spyOn(console, 'debug').mockImplementation();
     orchestrator.execute.mockResolvedValue({
       ...EMPTY,
-      updated: ['a'],
+      conflicts: [{ citekey: 'a', conflictIds: ['meta'] }],
     });
 
     await action.execute({});
 
     expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
-      'Citations: Updating 1 note…',
+      'Citations: Batch update complete. Updated: 0 · Conflicts skipped: 1',
     );
+    debugSpy.mockRestore();
   });
 
   it('reports conflicts, skips, and errors in the summary', async () => {
     const debugSpy = jest.spyOn(console, 'debug').mockImplementation();
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
-    orchestrator.preview.mockResolvedValue({ ...EMPTY, updated: ['a'] });
     orchestrator.execute.mockResolvedValue({
       updated: ['a'],
       skipped: ['b'],
@@ -942,7 +947,7 @@ describe('BatchUpdateNotesAction', () => {
   });
 
   it('shows library-not-ready and stops', async () => {
-    orchestrator.preview.mockResolvedValue({
+    orchestrator.execute.mockResolvedValue({
       ...EMPTY,
       libraryNotReady: true,
     });
@@ -952,19 +957,17 @@ describe('BatchUpdateNotesAction', () => {
     expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
       'Citations: Library is not loaded yet.',
     );
-    expect(orchestrator.execute).not.toHaveBeenCalled();
   });
 
   it('reports scan progress at milestones only', async () => {
-    orchestrator.preview.mockResolvedValue({ ...EMPTY, updated: ['a'] });
     orchestrator.execute.mockImplementation(
       async (
         _req: unknown,
         onProgress: (p: { current: number; total: number }) => void,
       ) => {
-        onProgress({ current: 3, total: 20 });
-        onProgress({ current: 10, total: 20 });
-        onProgress({ current: 20, total: 20 });
+        onProgress({ current: 3, total: 50 });
+        onProgress({ current: 25, total: 50 });
+        onProgress({ current: 50, total: 50 });
         return { ...EMPTY, updated: ['a'] };
       },
     );
@@ -974,9 +977,9 @@ describe('BatchUpdateNotesAction', () => {
     const messages = (
       ctx.platform.notifications.show as jest.Mock
     ).mock.calls.map((c: string[]) => c[0]);
-    expect(messages).toContain('Citations: Scanned 10/20 notes…');
-    expect(messages).toContain('Citations: Scanned 20/20 notes…');
-    expect(messages).not.toContain('Citations: Scanned 3/20 notes…');
+    expect(messages).toContain('Citations: Scanned 25/50 notes…');
+    expect(messages).toContain('Citations: Scanned 50/50 notes…');
+    expect(messages).not.toContain('Citations: Scanned 3/50 notes…');
   });
 });
 
@@ -1052,6 +1055,33 @@ describe('UpdateCurrentNoteAction', () => {
       expect.stringContaining('does not match any library entry'),
     );
     expect(orchestrator.execute).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a thrown match error as a notice instead of rejecting', async () => {
+    // findCitekeyForFile renders the title template for every entry; a broken
+    // template throws. The command runs fire-and-forget, so it must not reject.
+    (
+      ctx.noteService as unknown as Record<string, jest.Mock>
+    ).findCitekeyForFile.mockImplementation(() => {
+      throw new Error('bad title template');
+    });
+
+    await expect(action.execute({})).resolves.toBeUndefined();
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      expect.stringContaining('bad title template'),
+    );
+    expect(orchestrator.execute).not.toHaveBeenCalled();
+  });
+
+  it('reports library-not-ready from the orchestrator result', async () => {
+    orchestrator.execute.mockResolvedValue({ ...EMPTY, libraryNotReady: true });
+
+    await action.execute({});
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'Citations: Library is not loaded yet.',
+    );
   });
 
   it('updates the matched note with the configured mode and confirmation', async () => {

@@ -73,7 +73,10 @@ function makeVault(
 
 function makeBaselineStore(
   initial: Record<string, NoteBaseline> = {},
-): IBaselineStore & { saved: Record<string, NoteBaseline> } {
+): IBaselineStore & {
+  saved: Record<string, NoteBaseline>;
+  flush: jest.Mock;
+} {
   const saved: Record<string, NoteBaseline> = { ...initial };
   return {
     saved,
@@ -83,6 +86,7 @@ function makeBaselineStore(
       return Promise.resolve();
     }),
     recordFromRender: jest.fn().mockResolvedValue(undefined),
+    flush: jest.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -471,6 +475,146 @@ describe('BatchNoteOrchestrator', () => {
       expect(presenter.items[0].conflictCount).toBe(0);
       expect(result.updated).toEqual(['key1']);
       expect(modify).toHaveBeenCalledTimes(1);
+    });
+
+    it('previews the take-theirs resolution alongside the default', async () => {
+      const presenter = makePresenter(['apply']);
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(makeLibrary({ key1: {} })),
+        makeNoteService({ key1: makeFile('n/key1.md') }),
+        makeTemplateService(() => ({ ok: true, value: note(2024) })),
+        makeVault({ 'n/key1.md': conflicted }),
+        makeBaselineStore({ key1: baselineFor(2023) }),
+        presenter,
+      );
+
+      await orchestrator.execute(REQUEST);
+
+      // A conflicted item must carry BOTH diffs so the modal can preview the
+      // "Use library version" button too.
+      const item = presenter.items[0];
+      expect(item.hunks.length).toBeGreaterThan(0);
+      expect(item.hunksTakeTheirs).toBeDefined();
+      expect(item.hunksTakeTheirs!.length).toBeGreaterThan(0);
+    });
+
+    // --- TOCTOU: the note changes while the modal is open (regression) -------
+
+    it('re-reads and re-plans before writing a reviewed note', async () => {
+      const presenter = makePresenter(['apply']);
+      const modify = jest.fn().mockResolvedValue(undefined);
+      // read() returns the conflicted note first (scan), then a version the
+      // user edited during review (a clean, resolvable change).
+      const editedDuringReview = note(2023, 'user typed this during review');
+      const read = jest
+        .fn()
+        .mockResolvedValueOnce(conflicted) // scan
+        .mockResolvedValueOnce(editedDuringReview); // re-read before write
+      const vault = {
+        read,
+        modify,
+      } as unknown as IVaultAccess;
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(makeLibrary({ key1: {} })),
+        makeNoteService({ key1: makeFile('n/key1.md') }),
+        makeTemplateService(() => ({ ok: true, value: note(2024) })),
+        vault,
+        makeBaselineStore({ key1: baselineFor(2023) }),
+        presenter,
+      );
+
+      const result = await orchestrator.execute(REQUEST);
+
+      // The write reflects the re-read content (user's review-time edit kept),
+      // not the stale scan snapshot.
+      expect(read).toHaveBeenCalledTimes(2);
+      expect(result.updated).toEqual(['key1']);
+      const written = (modify.mock.calls[0] as [IVaultFile, string])[1];
+      expect(written).toContain('user typed this during review');
+    });
+
+    it('skips a reviewed note that gained a new conflict during review', async () => {
+      const presenter = makePresenter(['apply']);
+      const modify = jest.fn();
+      // During review the user rewrote the block in a way that now conflicts
+      // with the library change — the stale "apply" decision must not clobber it.
+      const nowConflicting = note(2023).replace(
+        '**Year:** 2023',
+        'A BRAND NEW USER REWRITE',
+      );
+      const read = jest
+        .fn()
+        .mockResolvedValueOnce(note(2023)) // scan: clean, needs review only via 'always'
+        .mockResolvedValueOnce(nowConflicting); // re-read: conflict appeared
+      const vault = { read, modify } as unknown as IVaultAccess;
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(makeLibrary({ key1: {} })),
+        makeNoteService({ key1: makeFile('n/key1.md') }),
+        makeTemplateService(() => ({ ok: true, value: note(2024) })),
+        vault,
+        makeBaselineStore({ key1: baselineFor(2023) }),
+        presenter,
+      );
+
+      const result = await orchestrator.execute({
+        ...REQUEST,
+        confirmation: 'always',
+      });
+
+      expect(modify).not.toHaveBeenCalled();
+      expect(result.conflicts).toEqual([
+        { citekey: 'key1', conflictIds: ['meta'] },
+      ]);
+    });
+  });
+
+  describe('baseline flushing', () => {
+    it('flushes the store exactly once after a batch that wrote', async () => {
+      const store = makeBaselineStore({
+        a: baselineFor(2023),
+        b: baselineFor(2023),
+      });
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(makeLibrary({ a: {}, b: {} })),
+        makeNoteService({ a: makeFile('n/a.md'), b: makeFile('n/b.md') }),
+        makeTemplateService(() => ({ ok: true, value: note(2024) })),
+        makeVault({ 'n/a.md': note(2023), 'n/b.md': note(2023) }),
+        store,
+      );
+
+      await orchestrator.execute({ ...REQUEST, citekeys: ['a', 'b'] });
+
+      expect(store.flush).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not flush when nothing was written', async () => {
+      const store = makeBaselineStore({ key1: baselineFor(2023) });
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(makeLibrary({ key1: {} })),
+        makeNoteService({ key1: makeFile('n/key1.md') }),
+        makeTemplateService(() => ({ ok: true, value: note(2023) })),
+        makeVault({ 'n/key1.md': note(2023) }),
+        store,
+      );
+
+      await orchestrator.execute(REQUEST);
+
+      expect(store.flush).not.toHaveBeenCalled();
+    });
+
+    it('does not flush in a dry-run', async () => {
+      const store = makeBaselineStore({ key1: baselineFor(2023) });
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(makeLibrary({ key1: {} })),
+        makeNoteService({ key1: makeFile('n/key1.md') }),
+        makeTemplateService(() => ({ ok: true, value: note(2024) })),
+        makeVault({ 'n/key1.md': note(2023) }),
+        store,
+      );
+
+      await orchestrator.preview(REQUEST);
+
+      expect(store.flush).not.toHaveBeenCalled();
     });
   });
 });

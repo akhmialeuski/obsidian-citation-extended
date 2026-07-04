@@ -1,12 +1,18 @@
 /**
  * Type definitions for literature note update operations (batch and single).
  * See {@link BatchNoteOrchestrator} for the runtime implementation.
+ *
+ * The review port (`NoteReviewItem`, `ReviewDecision`, `IUpdateReviewPresenter`)
+ * lives in core (`../../core`) so the UI and notes layers share it without
+ * depending on each other; it is re-exported here for convenience.
  */
 
-import type {
-  DiffHunk,
-  NoteUpdateMode,
-  UpdateConfirmationMode,
+import type { NoteUpdateMode, UpdateConfirmationMode } from '../../core';
+
+export type {
+  NoteReviewItem,
+  ReviewDecision,
+  IUpdateReviewPresenter,
 } from '../../core';
 
 /** Describes which notes to update and how. */
@@ -34,31 +40,6 @@ export interface BatchUpdateRequest {
   confirmation: UpdateConfirmationMode;
 }
 
-/** A note queued for interactive review before writing. */
-export interface NoteReviewItem {
-  citekey: string;
-  filePath: string;
-  /** Line diff current → proposed content (safe resolution). */
-  hunks: DiffHunk[];
-  /** Number of conflicting units (0 = clean change under 'always' mode). */
-  conflictCount: number;
-  /** Conflicting block names / frontmatter keys, for display. */
-  conflictIds: string[];
-}
-
-/** What the user decided for a reviewed note. */
-export type ReviewDecision =
-  | 'apply' // write the safe (keep-my-edits) resolution
-  | 'take-theirs' // write the library-wins resolution
-  | 'skip' // leave the note untouched
-  | 'apply-all' // apply, and stop asking for the remaining notes
-  | 'skip-all'; // skip, and stop asking for the remaining notes
-
-/** UI hook that presents a review item and resolves with the decision. */
-export interface IUpdateReviewPresenter {
-  review(item: NoteReviewItem, remaining: number): Promise<ReviewDecision>;
-}
-
 /** Outcome of a single batch update run. */
 export interface BatchUpdateResult {
   /** Citekeys whose notes were written (including reviewed ones). */
@@ -69,7 +50,7 @@ export interface BatchUpdateResult {
 
   /**
    * Citekeys whose changes were NOT applied because conflicts were left
-   * unresolved (confirmation 'never', or the user chose to skip).
+   * unresolved (confirmation 'never', no presenter, or the user chose to skip).
    */
   conflicts: Array<{ citekey: string; conflictIds: string[] }>;
 

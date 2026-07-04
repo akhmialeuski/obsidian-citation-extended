@@ -47,33 +47,34 @@ export class BatchUpdateNotesAction extends ApplicationAction {
       confirmation: this.ctx.settings.updateConfirmation,
     };
 
-    // Dry-run preview to count changes before writing anything.
-    const preview = await this.orchestrator.preview(request);
+    platform.notifications.show('Citations: Updating literature notes…');
 
-    if (preview.libraryNotReady) {
-      platform.notifications.show('Citations: Library is not loaded yet.');
-      return;
-    }
-
-    const pending = preview.updated.length + preview.conflicts.length;
-    if (pending === 0) {
-      platform.notifications.show(
-        'Citations: All notes are already up to date.',
-      );
-      return;
-    }
-
-    platform.notifications.show(
-      `Citations: Updating ${pending} note${pending === 1 ? '' : 's'}…`,
-    );
-
+    // Single scan: execute() plans, reviews, and writes in one pass — no
+    // separate count-only preview (which would double the render+read+plan
+    // work over every note).
     const result = await this.orchestrator.execute(request, (progress) => {
-      if (progress.current % 10 === 0 || progress.current === progress.total) {
+      if (progress.current % 25 === 0 || progress.current === progress.total) {
         platform.notifications.show(
           `Citations: Scanned ${progress.current}/${progress.total} notes…`,
         );
       }
     });
+
+    if (result.libraryNotReady) {
+      platform.notifications.show('Citations: Library is not loaded yet.');
+      return;
+    }
+
+    if (
+      result.updated.length === 0 &&
+      result.conflicts.length === 0 &&
+      result.errors.length === 0
+    ) {
+      platform.notifications.show(
+        'Citations: All notes are already up to date.',
+      );
+      return;
+    }
 
     platform.notifications.show(
       `Citations: Batch update complete. ${BatchUpdateNotesAction.summarize(result)}`,

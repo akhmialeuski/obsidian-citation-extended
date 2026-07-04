@@ -123,6 +123,7 @@ export {
   splitFrontmatter,
   syncFrontmatter,
   planNoteSync,
+  baselineFromRender,
   NOTE_UPDATE_MODES,
   NOTE_UPDATE_MODE_LABELS,
   DEFAULT_NOTE_UPDATE_MODE,
@@ -141,6 +142,9 @@ export type {
   NoteSyncInput,
   NoteUpdateMode,
   UpdateConfirmationMode,
+  NoteReviewItem,
+  ReviewDecision,
+  IUpdateReviewPresenter,
 } from './sync';
 
 // Existing core modules

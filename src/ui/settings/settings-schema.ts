@@ -249,16 +249,40 @@ export function validateSettings(settings: unknown) {
 
 /**
  * Map values written by older builds onto the current schema before
- * validation. Currently: the pre-release `preserve` note update mode
- * (persist-marker model) becomes `sync` (its successor).
+ * validation, and clamp the note-update enums so a single stale/unknown value
+ * cannot fail the whole `safeParse` (which would discard every other setting).
+ *
+ * - The pre-release `preserve` note update mode (persist-marker model) becomes
+ *   `sync` (its successor).
+ * - Any `noteUpdateMode` / `updateConfirmation` outside the current enum is
+ *   reset to its default. `undefined` is left as-is so the schema default
+ *   applies.
  */
 export function normalizeLegacySettings(settings: unknown): unknown {
-  if (
-    settings !== null &&
-    typeof settings === 'object' &&
-    (settings as { noteUpdateMode?: unknown }).noteUpdateMode === 'preserve'
-  ) {
-    return { ...settings, noteUpdateMode: DEFAULT_NOTE_UPDATE_MODE };
+  if (settings === null || typeof settings !== 'object') {
+    return settings;
   }
-  return settings;
+
+  const source = settings as Record<string, unknown>;
+  const patch: Record<string, unknown> = {};
+
+  const mode = source.noteUpdateMode;
+  if (mode === 'preserve') {
+    patch.noteUpdateMode = DEFAULT_NOTE_UPDATE_MODE;
+  } else if (
+    mode !== undefined &&
+    !(NOTE_UPDATE_MODES as readonly unknown[]).includes(mode)
+  ) {
+    patch.noteUpdateMode = DEFAULT_NOTE_UPDATE_MODE;
+  }
+
+  const confirmation = source.updateConfirmation;
+  if (
+    confirmation !== undefined &&
+    !(UPDATE_CONFIRMATION_MODES as readonly unknown[]).includes(confirmation)
+  ) {
+    patch.updateConfirmation = DEFAULT_UPDATE_CONFIRMATION;
+  }
+
+  return Object.keys(patch).length > 0 ? { ...source, ...patch } : settings;
 }

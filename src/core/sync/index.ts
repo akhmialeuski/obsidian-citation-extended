@@ -20,7 +20,7 @@ export type {
   FrontmatterConflict,
   FrontmatterSyncResult,
 } from './frontmatter-sync';
-export { planNoteSync } from './note-sync';
+export { planNoteSync, baselineFromRender } from './note-sync';
 export type {
   NoteBaseline,
   SyncConflict,
@@ -28,6 +28,11 @@ export type {
   NoteSyncPlan,
   NoteSyncInput,
 } from './note-sync';
+export type {
+  NoteReviewItem,
+  ReviewDecision,
+  IUpdateReviewPresenter,
+} from './review';
 export {
   NOTE_UPDATE_MODES,
   NOTE_UPDATE_MODE_LABELS,

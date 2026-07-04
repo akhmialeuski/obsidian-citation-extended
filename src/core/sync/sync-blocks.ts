@@ -21,14 +21,31 @@ export const SYNC_BLOCK_ID_PREFIX = 'zc-';
 /** Valid sync-block names: letters, digits, underscore, dash. */
 export const SYNC_BLOCK_NAME_RE = /^[A-Za-z0-9_-]+$/;
 
+/** Escape a string for safe interpolation into a RegExp. */
+function escapeRegExp(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * Matches the ID line that terminates a sync block inside a callout:
  * `> ^zc-<name>` (leading quote marker, optional whitespace, trailing CR).
+ * Derived from {@link SYNC_BLOCK_ID_PREFIX} so the prefix has a single source
+ * of truth (the builder below uses it too).
  */
-const SYNC_BLOCK_ID_LINE_RE = /^>\s*\^zc-([A-Za-z0-9_-]+)\s*\r?$/;
+const SYNC_BLOCK_ID_LINE_RE = new RegExp(
+  `^>\\s*\\^${escapeRegExp(SYNC_BLOCK_ID_PREFIX)}([A-Za-z0-9_-]+)\\s*\\r?$`,
+);
 
-/** Matches any callout/quote line (used to find the start of the block). */
+/** Matches any callout/quote line. */
 const QUOTE_LINE_RE = /^>/;
+
+/**
+ * Matches a callout header line (`> [!type]`, optional fold marker `-`/`+`).
+ * A plugin sync block always starts with such a header (see {@link buildSyncBlock}),
+ * so it is used to bound the block start precisely instead of greedily
+ * absorbing preceding user callout lines.
+ */
+const CALLOUT_HEADER_RE = /^>\s*\[![^\]]+\][-+]?/;
 
 /** Type guard: is `name` a valid sync-block name? */
 export function isValidSyncBlockName(name: unknown): name is string {
@@ -50,10 +67,19 @@ export interface SyncBlock {
 /**
  * Find every sync block in `content`.
  *
- * A block is a contiguous run of `>`-prefixed lines whose last line is a
- * `> ^zc-<name>` ID line. Anything else — including callouts without a
- * plugin ID — is ignored (user-owned). Duplicate names keep the first
- * occurrence (later duplicates are ignored, never merged).
+ * A block ends at a `> ^zc-<name>` ID line. Its start is bounded precisely so
+ * it never absorbs neighbouring user content or an adjacent plugin block:
+ *
+ * 1. Walk back over the contiguous run of `>`-quoted lines, but STOP at a
+ *    previous block's `^zc-…` ID line (so two adjacent plugin blocks stay
+ *    separate).
+ * 2. Within that run, the block starts at the LAST callout header (`> [!…]`)
+ *    at or before the ID line. A user callout stacked directly above (with no
+ *    blank separator) keeps its own earlier header and is therefore left
+ *    untouched.
+ *
+ * Anything without a `^zc-…` ID is user-owned and ignored. Duplicate names
+ * keep the first occurrence (later duplicates are ignored, never merged).
  */
 export function parseSyncBlocks(content: string): Map<string, SyncBlock> {
   const lines = content.split('\n');
@@ -63,10 +89,26 @@ export function parseSyncBlocks(content: string): Map<string, SyncBlock> {
     const idMatch = lines[i].match(SYNC_BLOCK_ID_LINE_RE);
     if (!idMatch) continue;
 
-    // Walk back to the start of the contiguous quote group.
-    let start = i;
-    while (start > 0 && QUOTE_LINE_RE.test(lines[start - 1])) {
-      start--;
+    // (1) Extent of the contiguous quote run, stopping before a previous
+    // block's ID line so adjacent plugin blocks do not merge.
+    let runStart = i;
+    while (
+      runStart > 0 &&
+      QUOTE_LINE_RE.test(lines[runStart - 1]) &&
+      !SYNC_BLOCK_ID_LINE_RE.test(lines[runStart - 1])
+    ) {
+      runStart--;
+    }
+
+    // (2) The block begins at its own callout header — the last header line at
+    // or before the ID line — never earlier, so a stacked user callout above
+    // is not absorbed. Fall back to the run start if (unexpectedly) no header.
+    let start = runStart;
+    for (let j = i; j >= runStart; j--) {
+      if (CALLOUT_HEADER_RE.test(lines[j])) {
+        start = j;
+        break;
+      }
     }
 
     const name = idMatch[1];
@@ -121,6 +163,6 @@ export function buildSyncBlock(
   return [
     `> [!${type}]${fold} ${title}`.trimEnd(),
     ...body,
-    `> ^zc-${name}`,
+    `> ^${SYNC_BLOCK_ID_PREFIX}${name}`,
   ].join('\n');
 }

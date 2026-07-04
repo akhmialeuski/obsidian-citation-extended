@@ -168,6 +168,40 @@ describe('UpdateReviewModal', () => {
     );
   });
 
+  it('previews BOTH resolutions when a take-theirs diff is provided', () => {
+    const { modal } = openModal(
+      makeItem({
+        hunks: [{ kind: 'added', lines: ['my version wins'] }],
+        hunksTakeTheirs: [{ kind: 'added', lines: ['library version wins'] }],
+      }),
+    );
+
+    const headings = [
+      ...modal.contentEl.querySelectorAll('.citation-review-heading'),
+    ].map((h) => h.textContent);
+    expect(headings).toContain('Apply (keep your edits):');
+    expect(headings).toContain('Use library version:');
+
+    // Two separate diff containers, one per resolution.
+    expect(
+      modal.contentEl.querySelectorAll('.citation-review-diff'),
+    ).toHaveLength(2);
+    expect(modal.contentEl.textContent).toContain('+ my version wins');
+    expect(modal.contentEl.textContent).toContain('+ library version wins');
+  });
+
+  it('renders a single diff (no headings) for a clean change', () => {
+    const { modal } = openModal(
+      makeItem({ conflictCount: 0, conflictIds: [] }),
+    );
+    expect(
+      modal.contentEl.querySelectorAll('.citation-review-heading'),
+    ).toHaveLength(0);
+    expect(
+      modal.contentEl.querySelectorAll('.citation-review-diff'),
+    ).toHaveLength(1);
+  });
+
   it('offers bulk decisions only when more notes are waiting', async () => {
     const single = openModal(makeItem(), 0);
     expect(buttons(single.modal).map((b) => b.textContent)).not.toContain(

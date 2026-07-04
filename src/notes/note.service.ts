@@ -229,9 +229,12 @@ export class NoteService implements INoteService {
       contentResult.value,
     );
     // Best-effort: the baseline lets later updates tell user edits apart
-    // from library changes from the very first sync.
+    // from library changes from the very first sync. recordFromRender only
+    // mutates the in-memory map, so flush it to disk here — unlike the batch
+    // orchestrator, note creation has no later flush to piggyback on.
     try {
       await this.baselineStore?.recordFromRender(citekey, contentResult.value);
+      await this.baselineStore?.flush();
     } catch (e) {
       console.warn('Citations: could not record note baseline', e);
     }
@@ -343,7 +346,7 @@ export class NoteService implements INoteService {
       if (notePath === filePath) {
         return citekey;
       }
-      if (notePath.split('/').pop() === fileName) {
+      if (path.posix.basename(notePath) === fileName) {
         basenameMatches.push(citekey);
       }
     }

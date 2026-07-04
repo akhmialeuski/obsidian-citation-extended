@@ -5,7 +5,7 @@ import type {
 } from '../../container';
 import type { IVaultAccess, IVaultFile } from '../../platform/platform-adapter';
 import { lineDiff, planNoteSync } from '../../core';
-import type { NoteSyncPlan } from '../../core';
+import type { NoteSyncPlan, NoteUpdateMode } from '../../core';
 import type { IBaselineStore } from '../baseline-store';
 import type {
   IBatchNoteOrchestrator,
@@ -16,6 +16,17 @@ import type {
   NoteReviewItem,
   ReviewDecision,
 } from './batch-update.types';
+
+/** A note whose write needs a user decision, reviewed after the scan. */
+interface QueuedNote {
+  citekey: string;
+  file: IVaultFile;
+  rendered: string;
+  mode: NoteUpdateMode;
+  plan: NoteSyncPlan;
+  /** Note content captured at scan time (for staleness detection). */
+  current: string;
+}
 
 /**
  * Orchestrates literature note updates (batch and single-note).
@@ -30,7 +41,10 @@ import type {
  *    - `overwrite`   — the fresh render replaces the note.
  * 3. Applies the plan directly, or routes it through the review presenter
  *    (diff dialog) according to the confirmation policy.
- * 4. Persists the new baseline after every successful write.
+ * 4. Persists the new baseline; the whole batch flushes the store once.
+ *
+ * Before writing a reviewed note, the file is re-read and re-planned so edits
+ * made during the (user-paced) review are not silently clobbered.
  */
 export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
   constructor(
@@ -81,13 +95,8 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
       conflicts: [],
       errors: [],
     };
-    /** Notes whose write needs a user decision, reviewed after the scan. */
-    const reviewQueue: Array<{
-      citekey: string;
-      file: IVaultFile;
-      plan: NoteSyncPlan;
-      current: string;
-    }> = [];
+    const reviewQueue: QueuedNote[] = [];
+    let wrote = false;
 
     for (let i = 0; i < citekeys.length; i++) {
       const citekey = citekeys[i];
@@ -141,31 +150,41 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
         const needsReview =
           plan.conflicts.length > 0 || request.confirmation === 'always';
 
-        if (!needsReview) {
-          if (!dryRun) {
-            await this.write(citekey, file, plan.content, plan);
-          }
-          result.updated.push(citekey);
-          continue;
-        }
-
-        if (dryRun || request.confirmation === 'never' || !this.presenter) {
+        // Direct write path: no review needed, or review is impossible
+        // (dry-run / 'never' / no presenter). We only write when there is a
+        // clean, applicable change; conflicts without a decision are reported.
+        if (
+          !needsReview ||
+          dryRun ||
+          request.confirmation === 'never' ||
+          !this.presenter
+        ) {
           if (plan.conflicts.length > 0) {
+            // Cannot resolve without the user — leave the note untouched.
             result.conflicts.push({
               citekey,
               conflictIds: plan.conflicts.map((c) => c.id),
             });
-            // 'never' + conflicts: the safe resolution may still carry
-            // non-conflicting updates, but writing silently would hide the
-            // decision — leave the note untouched.
-          } else {
-            // dryRun/'always' without presenter: count as pending change.
-            result.updated.push(citekey);
+            continue;
           }
+          if (dryRun) {
+            result.updated.push(citekey);
+            continue;
+          }
+          await this.write(citekey, file, plan.content, plan);
+          wrote = true;
+          result.updated.push(citekey);
           continue;
         }
 
-        reviewQueue.push({ citekey, file, plan, current });
+        reviewQueue.push({
+          citekey,
+          file,
+          rendered,
+          mode: request.mode,
+          plan,
+          current,
+        });
       } catch (e) {
         result.errors.push({
           citekey,
@@ -175,79 +194,63 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
     }
 
     if (reviewQueue.length > 0 && this.presenter && !dryRun) {
-      await this.reviewAndApply(reviewQueue, result);
+      wrote = (await this.reviewAndApply(reviewQueue, result)) || wrote;
     }
+
+    if (wrote) await this.baselines.flush();
 
     return result;
   }
 
   /** Build the sync plan for the requested mode. */
   private async buildPlan(
-    mode: BatchUpdateRequest['mode'],
+    mode: NoteUpdateMode,
     citekey: string,
     rendered: string,
     current: string,
   ): Promise<NoteSyncPlan> {
-    switch (mode) {
-      case 'overwrite': {
-        // Wholesale replace; the plan is trivial and its baseline is simply
-        // a parse of the fresh render (rendered vs itself → no conflicts).
-        const plan = planNoteSync({
-          rendered,
-          current: rendered,
-          baseline: null,
-        });
-        return {
-          ...plan,
-          changed: rendered !== current,
-          content: rendered,
-          contentTakeTheirs: rendered,
-          conflicts: [],
-        };
-      }
-      case 'frontmatter':
-        return planNoteSync({
-          rendered,
-          current,
-          baseline: await this.baselines.get(citekey),
-          frontmatterOnly: true,
-        });
-      case 'sync':
-        return planNoteSync({
-          rendered,
-          current,
-          baseline: await this.baselines.get(citekey),
-        });
-    }
+    return planNoteSync({
+      rendered,
+      current,
+      baseline: mode === 'overwrite' ? null : await this.baselines.get(citekey),
+      mode,
+    });
   }
 
-  /** Sequentially present queued notes and apply the decisions. */
+  /**
+   * Sequentially present queued notes and apply the decisions. Each note is
+   * re-read and re-planned immediately before writing so edits made during the
+   * review are respected. Returns whether anything was written.
+   */
   private async reviewAndApply(
-    queue: Array<{
-      citekey: string;
-      file: IVaultFile;
-      plan: NoteSyncPlan;
-      current: string;
-    }>,
+    queue: QueuedNote[],
     result: BatchUpdateResult,
-  ): Promise<void> {
+  ): Promise<boolean> {
     let blanket: 'apply' | 'skip' | null = null;
+    let wrote = false;
 
     for (let i = 0; i < queue.length; i++) {
-      const { citekey, file, plan, current } = queue[i];
+      const item = queue[i];
       let decision: ReviewDecision;
 
       if (blanket) {
         decision = blanket;
       } else {
-        const item: NoteReviewItem = {
-          citekey,
-          filePath: file.path,
-          hunks: lineDiff(current, plan.content),
-          conflictCount: plan.conflicts.length,
-          conflictIds: plan.conflicts.map((c) => c.id),
+        const reviewItem: NoteReviewItem = {
+          citekey: item.citekey,
+          filePath: item.file.path,
+          hunks: lineDiff(item.current, item.plan.content),
+          hunksTakeTheirs:
+            item.plan.conflicts.length > 0
+              ? lineDiff(item.current, item.plan.contentTakeTheirs)
+              : undefined,
+          conflictCount: item.plan.conflicts.length,
+          conflictIds: item.plan.conflicts.map((c) => c.id),
         };
-        decision = await this.presenter!.review(item, queue.length - i - 1);
+        decision = await this.presenter!.review(
+          reviewItem,
+          queue.length - i - 1,
+        );
         if (decision === 'apply-all') {
           blanket = 'apply';
           decision = 'apply';
@@ -257,29 +260,69 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
         }
       }
 
+      if (decision === 'skip') {
+        result.conflicts.push({
+          citekey: item.citekey,
+          conflictIds: item.plan.conflicts.map((c) => c.id),
+        });
+        continue;
+      }
+
       try {
-        if (decision === 'apply') {
-          await this.write(citekey, file, plan.content, plan);
-          result.updated.push(citekey);
-        } else if (decision === 'take-theirs') {
-          await this.write(citekey, file, plan.contentTakeTheirs, plan);
-          result.updated.push(citekey);
-        } else {
-          result.conflicts.push({
-            citekey,
-            conflictIds: plan.conflicts.map((c) => c.id),
-          });
-        }
+        if (await this.applyReviewed(item, decision, result)) wrote = true;
       } catch (e) {
         result.errors.push({
-          citekey,
+          citekey: item.citekey,
           error: (e as Error).message ?? String(e),
         });
       }
     }
+    return wrote;
   }
 
-  /** Write the resolved content and persist the new baseline. */
+  /**
+   * Re-read the note, re-plan against the fresh content, and write the chosen
+   * resolution. If the note changed during review in a way that reintroduces
+   * conflicts, skip it and report rather than clobber the new edits.
+   */
+  private async applyReviewed(
+    item: QueuedNote,
+    decision: 'apply' | 'take-theirs',
+    result: BatchUpdateResult,
+  ): Promise<boolean> {
+    const fresh = await this.vault.read(item.file);
+    let plan = item.plan;
+    if (fresh !== item.current) {
+      // The file moved under us during review — re-plan against reality.
+      plan = await this.buildPlan(
+        item.mode,
+        item.citekey,
+        item.rendered,
+        fresh,
+      );
+      if (!plan.changed && plan.conflicts.length === 0) {
+        result.skipped.push(item.citekey);
+        return false;
+      }
+      if (plan.conflicts.length > 0) {
+        // New conflicts appeared since the reviewed diff — don't apply a stale
+        // decision to content the user never saw.
+        result.conflicts.push({
+          citekey: item.citekey,
+          conflictIds: plan.conflicts.map((c) => c.id),
+        });
+        return false;
+      }
+    }
+
+    const content =
+      decision === 'take-theirs' ? plan.contentTakeTheirs : plan.content;
+    await this.write(item.citekey, item.file, content, plan);
+    result.updated.push(item.citekey);
+    return true;
+  }
+
+  /** Write the resolved content and record the new baseline (not yet flushed). */
   private async write(
     citekey: string,
     file: IVaultFile,

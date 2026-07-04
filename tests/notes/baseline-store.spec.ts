@@ -33,15 +33,72 @@ describe('BaselineStore', () => {
     expect(await store.get('nope')).toBeNull();
   });
 
-  it('persists and reloads baselines across instances', async () => {
+  it('persists and reloads baselines across instances after flush', async () => {
     const { fs, written } = makeFileSystem();
     const store = new BaselineStore(fs, '/plugin/baselines.json');
 
     await store.set('smith2023', BASELINE);
+    await store.flush();
 
     const reloaded = new BaselineStore(fs, '/plugin/baselines.json');
     expect(await reloaded.get('smith2023')).toEqual(BASELINE);
     expect(JSON.parse(written.value!)).toMatchObject({ version: 1 });
+  });
+
+  it('does not write to disk until flush is called', async () => {
+    const { fs } = makeFileSystem();
+    const store = new BaselineStore(fs, '/plugin/baselines.json');
+
+    await store.set('a', BASELINE);
+    await store.set('b', BASELINE);
+    expect(fs.writeFile).not.toHaveBeenCalled();
+
+    await store.flush();
+    // The whole map is serialized once, not once per set().
+    expect(fs.writeFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('flush is a no-op when nothing changed', async () => {
+    const { fs } = makeFileSystem();
+    const store = new BaselineStore(fs, '/plugin/baselines.json');
+
+    await store.get('anything');
+    await store.flush();
+
+    expect(fs.writeFile).not.toHaveBeenCalled();
+  });
+
+  it('re-marks dirty and retries on a failed flush', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation();
+    const { fs } = makeFileSystem();
+    (fs.writeFile as jest.Mock)
+      .mockRejectedValueOnce(new Error('disk full'))
+      .mockResolvedValueOnce(undefined);
+    const store = new BaselineStore(fs, '/plugin/baselines.json');
+
+    await store.set('smith2023', BASELINE);
+    await store.flush(); // fails, stays dirty
+    await store.flush(); // retries, succeeds
+
+    expect(fs.writeFile).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
+  });
+
+  it('shares a single in-flight read between concurrent first loads', async () => {
+    const { fs } = makeFileSystem(
+      JSON.stringify({ version: 1, baselines: { smith2023: BASELINE } }),
+    );
+    const store = new BaselineStore(fs, '/plugin/baselines.json');
+
+    const [a, b] = await Promise.all([
+      store.get('smith2023'),
+      store.get('smith2023'),
+    ]);
+
+    expect(a).toEqual(BASELINE);
+    expect(b).toEqual(BASELINE);
+    // Both callers awaited the same read; the file was only opened once.
+    expect(fs.readFile).toHaveBeenCalledTimes(1);
   });
 
   it('records a baseline from rendered note content', async () => {

@@ -369,6 +369,140 @@ describe('planNoteSync', () => {
     });
   });
 
+  describe('line endings (CRLF)', () => {
+    it('does not flag a CRLF note as changed when nothing differs', () => {
+      const lf = render(2023);
+      const crlf = lf.replace(/\n/g, '\r\n');
+      const plan = planNoteSync({
+        rendered: lf,
+        current: crlf,
+        baseline: baselineFor(2023),
+      });
+
+      // The only difference is the line endings; that must not read as a
+      // library/user change, and the rewrite normalizes to LF.
+      expect(plan.conflicts).toEqual([]);
+      expect(plan.changed).toBe(false);
+      expect(plan.content).toBe(lf);
+      expect(plan.content).not.toContain('\r');
+    });
+
+    it('still applies a real change to a CRLF note (normalized to LF)', () => {
+      const crlf = render(2023).replace(/\n/g, '\r\n');
+      const plan = planNoteSync({
+        rendered: render(2024),
+        current: crlf,
+        baseline: baselineFor(2023),
+      });
+
+      expect(plan.changed).toBe(true);
+      expect(plan.content).toContain('**Year:** 2024');
+      expect(plan.content).not.toContain('\r');
+    });
+  });
+
+  describe('explicit modes', () => {
+    it('overwrite replaces the whole note and derives the baseline', () => {
+      const plan = planNoteSync({
+        rendered: render(2024),
+        current: render(2023).replace('## My notes', '## My notes\n\nkeep?'),
+        baseline: baselineFor(2023),
+        mode: 'overwrite',
+      });
+
+      expect(plan.changed).toBe(true);
+      expect(plan.conflicts).toEqual([]);
+      expect(plan.content).toBe(render(2024));
+      expect(plan.content).not.toContain('keep?');
+      // Baseline reflects the fresh render so the next sync has a reference.
+      expect(plan.baseline.blocks.meta).toContain('**Year:** 2024');
+    });
+
+    it('overwrite reports no change when render equals the note', () => {
+      const content = render(2023);
+      const plan = planNoteSync({
+        rendered: content,
+        current: content,
+        baseline: null,
+        mode: 'overwrite',
+      });
+
+      expect(plan.changed).toBe(false);
+    });
+
+    it('frontmatter mode works with no baseline (empty block carry-forward)', () => {
+      // Same frontmatter on both sides (no conflict), body differs. Frontmatter
+      // mode must leave the body untouched and carry an empty block baseline.
+      const plan = planNoteSync({
+        rendered: render(2023, 'NEW ANNOTATION'),
+        current: render(2023),
+        baseline: null,
+        mode: 'frontmatter',
+      });
+
+      expect(plan.conflicts).toEqual([]);
+      expect(plan.content).toContain('first highlight');
+      expect(plan.content).not.toContain('NEW ANNOTATION');
+      expect(plan.baseline.blocks).toEqual({});
+    });
+  });
+
+  describe('take-theirs gating', () => {
+    it('reuses the ours body when the only conflict is in frontmatter', () => {
+      // A frontmatter conflict but NO block conflict: the take-theirs variant
+      // must differ only in the frontmatter, reusing the merged body verbatim.
+      const rendered = render(2024).replace(
+        'title: "A Study"',
+        'title: "A Study — 2nd ed"',
+      );
+      const current = render(2023).replace(
+        'title: "A Study"',
+        'title: "my own title"',
+      );
+
+      const plan = planNoteSync({
+        rendered,
+        current,
+        baseline: baselineFor(2023),
+      });
+
+      expect(plan.conflicts).toHaveLength(1);
+      expect(plan.conflicts[0].kind).toBe('frontmatter');
+      // Both variants updated the (pristine) meta block to 2024…
+      expect(plan.content).toContain('**Year:** 2024');
+      expect(plan.contentTakeTheirs).toContain('**Year:** 2024');
+      // …and differ only in the conflicted title.
+      expect(plan.content).toContain('my own title');
+      expect(plan.contentTakeTheirs).toContain('2nd ed');
+    });
+  });
+
+  describe('deleted frontmatter keys', () => {
+    it('records a user-deleted key in the baseline and honours it later', () => {
+      const current = render(2023).replace('title: "A Study"\n', '');
+      const first = planNoteSync({
+        rendered: render(2023),
+        current,
+        baseline: baselineFor(2023),
+      });
+
+      expect(first.content).not.toContain('title:');
+      expect(first.baseline.deletedKeys).toContain('title');
+
+      // Next sync (library bumps the year): the deletion tombstone keeps title
+      // out even though the render still produces it.
+      const second = planNoteSync({
+        rendered: render(2024),
+        current: first.content,
+        baseline: first.baseline,
+      });
+
+      expect(second.content).toContain('year: 2024');
+      expect(second.content).not.toContain('title:');
+      expect(second.baseline.deletedKeys).toContain('title');
+    });
+  });
+
   it('is idempotent: applying a plan and re-planning yields no change', () => {
     const current = render(2023).replace(
       '## My notes\n',

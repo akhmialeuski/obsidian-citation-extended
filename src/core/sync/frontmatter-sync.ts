@@ -10,14 +10,19 @@
  * - both changed to the same value     → fine                  → take either
  * - both changed differently           → conflict (surfaced for review)
  * - no baseline: equal values pass through; differing values conflict
+ *
+ * The reconstruction preserves the note's ACTUAL frontmatter layout: the
+ * prelude (comments / blank lines before the first key), key order, and each
+ * kept key's exact formatting are emitted verbatim. Only plugin-owned key
+ * values are refreshed, and only genuinely new plugin keys are appended.
  */
 
 const FRONTMATTER_FENCE = '---';
 
 /**
  * A top-level YAML mapping key line: `key:` with no leading whitespace.
- * Lines starting with `-` (list items) or `#` (comments) attach to the
- * preceding key.
+ * Lines starting with `-` (list items), `#` (comments) or whitespace attach to
+ * the preceding key (or the prelude when no key has been seen yet).
  */
 const TOP_LEVEL_KEY_RE = /^([^\s:#-][^:]*):(.*)$/;
 
@@ -50,52 +55,68 @@ export function splitFrontmatter(content: string): FrontmatterSplit {
   return { frontmatter: [], body: lines, found: false };
 }
 
-/** Frontmatter grouped into per-key blocks. */
+/** Frontmatter grouped into per-key blocks, preserving layout. */
 export interface KeyBlocks {
+  /** Lines before the first top-level key (comments, blank lines). */
+  prelude: string[];
   /** Key names in their original order. */
   order: string[];
-  /** Key name → the lines that make up the key's block, `\n`-joined. */
-  blocks: Map<string, string>;
+  /** Key name → the key's block lines exactly as written (`\n`-joined). */
+  raw: Map<string, string>;
+  /**
+   * Key name → normalized block (trailing blank lines trimmed) used ONLY for
+   * equality decisions, so cosmetic trailing whitespace never flips a merge.
+   */
+  norm: Map<string, string>;
+}
+
+/** Trim trailing blank lines from a block (comparison-only normalization). */
+function normalizeBlock(blockLines: string[]): string {
+  const copy = [...blockLines];
+  while (copy.length > 0 && copy[copy.length - 1].trim() === '') copy.pop();
+  return copy.join('\n');
 }
 
 /**
  * Group frontmatter lines into per-key blocks. A block is the `key: …` line
  * plus any following lines that are not themselves top-level keys (indented
- * continuations, `- item` list entries, blank lines, comments).
+ * continuations, `- item` list entries, blank lines, comments). Lines before
+ * the first key are kept in {@link KeyBlocks.prelude}.
  */
 export function parseKeyBlocks(lines: string[]): KeyBlocks {
+  const prelude: string[] = [];
   const order: string[] = [];
-  const blocks = new Map<string, string[]>();
+  const rawLines = new Map<string, string[]>();
   let current: string[] | null = null;
 
   for (const line of lines) {
     const match = line.match(TOP_LEVEL_KEY_RE);
     if (match) {
       const key = match[1].trim();
-      if (!blocks.has(key)) {
+      if (!rawLines.has(key)) {
         current = [line];
         order.push(key);
-        blocks.set(key, current);
+        rawLines.set(key, current);
       } else {
         // Duplicate key: append to the existing block so nothing is lost.
-        current = blocks.get(key)!;
+        current = rawLines.get(key)!;
         current.push(line);
       }
     } else if (current) {
       current.push(line);
+    } else {
+      // Before the first key: preserve verbatim (comments, blank lines).
+      prelude.push(line);
     }
-    // Lines before the first key (comments) are dropped from key blocks but
-    // re-emitted only for the render side, which controls layout.
   }
 
-  const joined = new Map<string, string>();
-  for (const [key, blockLines] of blocks) {
-    // Trailing blank lines are cosmetic; trimming keeps comparisons stable.
-    const copy = [...blockLines];
-    while (copy.length > 0 && copy[copy.length - 1].trim() === '') copy.pop();
-    joined.set(key, copy.join('\n'));
+  const raw = new Map<string, string>();
+  const norm = new Map<string, string>();
+  for (const [key, blockLines] of rawLines) {
+    raw.set(key, blockLines.join('\n'));
+    norm.set(key, normalizeBlock(blockLines));
   }
-  return { order, blocks: joined };
+  return { prelude, order, raw, norm };
 }
 
 /** A frontmatter key whose plugin and user edits collide. */
@@ -117,93 +138,128 @@ export interface FrontmatterSyncResult {
   conflicts: FrontmatterConflict[];
   /** Plugin-owned keys whose values were refreshed from the render. */
   updatedKeys: string[];
-  /** Key → rendered block, to store as the new baseline. */
+  /** Key → normalized rendered block, to store as the new baseline. */
   baseline: Record<string, string>;
+  /** Plugin-owned keys the user deleted — recorded so they stay deleted. */
+  deletedKeys: string[];
+}
+
+/** Per-key resolution for the two output variants. */
+interface KeyResolution {
+  ours: string;
+  theirs: string;
 }
 
 /**
  * Merge rendered frontmatter into current frontmatter with per-key three-way
- * semantics (see module docs). User-only keys are appended after the
- * template-owned keys in their original order.
+ * semantics (see module docs). The note's layout is preserved: prelude and
+ * kept keys are emitted verbatim, only plugin key values change, and new
+ * plugin keys are appended in render order.
+ *
+ * @param baselineDeletedKeys Plugin keys the user previously deleted (tombstone).
  */
 export function syncFrontmatter(
   renderedFmLines: string[],
   currentFmLines: string[],
   baselineKeys: Record<string, string> | null,
+  baselineDeletedKeys: readonly string[] = [],
 ): FrontmatterSyncResult {
   const rendered = parseKeyBlocks(renderedFmLines);
   const current = parseKeyBlocks(currentFmLines);
+  const tombstoned = new Set(baselineDeletedKeys);
 
   const conflicts: FrontmatterConflict[] = [];
   const updatedKeys: string[] = [];
   const baseline: Record<string, string> = {};
-  const ours: string[] = [];
-  const theirsResolved: string[] = [];
+  const deletedKeys: string[] = [];
+  /** Chosen output blocks per plugin key, keyed by name. */
+  const resolutions = new Map<string, KeyResolution>();
 
   for (const key of rendered.order) {
-    const renderBlock = rendered.blocks.get(key)!;
-    baseline[key] = renderBlock;
-    const currentBlock = current.blocks.get(key);
-    const baseBlock = baselineKeys ? (baselineKeys[key] ?? null) : null;
+    const renderRaw = rendered.raw.get(key)!;
+    const renderNorm = rendered.norm.get(key)!;
+    baseline[key] = renderNorm;
+    const currentRaw = current.raw.get(key);
+    const currentNorm = current.norm.get(key);
+    const baseNorm = baselineKeys ? (baselineKeys[key] ?? null) : null;
 
-    let chosen: string;
-    if (currentBlock === undefined) {
-      // Key not in the note (new key, or user deleted it). Baseline tells us
-      // which: if the user deleted a key the plugin previously wrote, honour
-      // the deletion; otherwise it is a brand-new key — add it.
-      if (baseBlock !== null && baselineKeys && baseBlock === renderBlock) {
-        continue; // user deleted, data unchanged → stay deleted
+    if (currentNorm === undefined) {
+      // Key absent from the note. Respect a deletion the same way blocks do:
+      // if the plugin previously wrote this key (baseline had it) or it is
+      // tombstoned, the user removed it — keep it removed unconditionally,
+      // regardless of whether the library value changed.
+      if (baseNorm !== null || tombstoned.has(key)) {
+        deletedKeys.push(key);
+        delete baseline[key];
+      } else {
+        // Brand-new plugin key → add it.
+        resolutions.set(key, { ours: renderRaw, theirs: renderRaw });
+        updatedKeys.push(key);
       }
-      chosen = renderBlock;
-      if (baseBlock !== renderBlock) updatedKeys.push(key);
-    } else if (currentBlock === renderBlock) {
-      chosen = currentBlock;
-    } else if (baseBlock === null) {
+      continue;
+    }
+
+    if (currentNorm === renderNorm) {
+      resolutions.set(key, { ours: currentRaw!, theirs: currentRaw! });
+    } else if (baseNorm === null) {
       // No baseline knowledge — cannot tell user edit from data change.
       conflicts.push({
         key,
         base: null,
-        ours: currentBlock,
-        theirs: renderBlock,
+        ours: currentRaw!,
+        theirs: renderRaw,
       });
-      chosen = currentBlock;
-    } else if (renderBlock === baseBlock) {
-      chosen = currentBlock; // user edited, data unchanged → keep user's value
-    } else if (currentBlock === baseBlock) {
-      chosen = renderBlock; // data changed, user didn't touch it → refresh
+      resolutions.set(key, { ours: currentRaw!, theirs: renderRaw });
+    } else if (renderNorm === baseNorm) {
+      // User edited, data unchanged → keep the user's value.
+      resolutions.set(key, { ours: currentRaw!, theirs: currentRaw! });
+    } else if (currentNorm === baseNorm) {
+      // Data changed, user didn't touch it → refresh.
+      resolutions.set(key, { ours: renderRaw, theirs: renderRaw });
       updatedKeys.push(key);
     } else {
+      // Both sides changed differently → conflict.
       conflicts.push({
         key,
-        base: baseBlock,
-        ours: currentBlock,
-        theirs: renderBlock,
+        base: baseNorm,
+        ours: currentRaw!,
+        theirs: renderRaw,
       });
-      chosen = currentBlock;
-    }
-
-    ours.push(chosen);
-    theirsResolved.push(
-      conflicts.length > 0 && conflicts[conflicts.length - 1].key === key
-        ? renderBlock
-        : chosen,
-    );
-  }
-
-  // User-only keys: never touched, appended in their original order.
-  for (const key of current.order) {
-    if (!rendered.blocks.has(key)) {
-      const block = current.blocks.get(key)!;
-      ours.push(block);
-      theirsResolved.push(block);
+      resolutions.set(key, { ours: currentRaw!, theirs: renderRaw });
     }
   }
+
+  const emit = (side: 'ours' | 'theirs'): string[] => {
+    const out: string[] = [...current.prelude];
+    // Walk the note's own key order, preserving user keys and layout.
+    for (const key of current.order) {
+      const res = resolutions.get(key);
+      if (res) {
+        out.push(res[side]);
+      } else {
+        // User-only key (not plugin-owned) — emit verbatim.
+        out.push(current.raw.get(key)!);
+      }
+    }
+    // Append genuinely new plugin keys (present in render, absent from note)
+    // in render order.
+    for (const key of rendered.order) {
+      if (!current.raw.has(key) && resolutions.has(key)) {
+        out.push(resolutions.get(key)![side]);
+      }
+    }
+    return out.join('\n').split('\n');
+  };
+
+  const lines = emit('ours');
+  const linesTakeTheirs = conflicts.length > 0 ? emit('theirs') : lines;
 
   return {
-    lines: ours.join('\n').split('\n'),
-    linesTakeTheirs: theirsResolved.join('\n').split('\n'),
+    lines,
+    linesTakeTheirs,
     conflicts,
     updatedKeys,
     baseline,
+    deletedKeys,
   };
 }
