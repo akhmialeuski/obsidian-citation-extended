@@ -90,6 +90,23 @@ describe('NoteService', () => {
     expect(result).not.toContain('>');
   });
 
+  test('getPathForCitekey collapses newlines from a multi-line title render', () => {
+    // A block helper (or multi-line variable) misused in the TITLE template
+    // must not smuggle line breaks into the path — that would break lookups
+    // and create duplicate notes on every sync.
+    jest.spyOn(templateService, 'getTitle').mockReturnValue({
+      ok: true,
+      value: 'Line one\nLine two\r\nLine three',
+    });
+
+    const result = noteService.getPathForCitekey('citekey1', library);
+    expect(result).not.toContain('\n');
+    expect(result).not.toContain('\r');
+    expect(result.replace(/\\/g, '/')).toBe(
+      'Reading notes/Line one Line two Line three.md',
+    );
+  });
+
   test('getPathForCitekey throws EntryNotFoundError for unknown citekey', () => {
     expect(() => noteService.getPathForCitekey('nonexistent', library)).toThrow(
       EntryNotFoundError,

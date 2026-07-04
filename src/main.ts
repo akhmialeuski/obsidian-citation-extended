@@ -70,6 +70,7 @@ export default class CitationPlugin extends Plugin {
   citationService!: ICitationService;
   contentTemplateResolver!: IContentTemplateResolver;
   batchOrchestrator!: BatchNoteOrchestrator;
+  private baselineStore?: BaselineStore;
 
   async loadSettings(): Promise<void> {
     this.settings = new CitationsPluginSettings();
@@ -309,6 +310,7 @@ export default class CitationPlugin extends Plugin {
       platformAdapter.fileSystem,
       readwiseCacheDir ? `${readwiseCacheDir}/note-baselines.json` : '',
     );
+    this.baselineStore = baselineStore;
 
     this.noteService = new NoteService(
       platformAdapter,
@@ -360,6 +362,9 @@ export default class CitationPlugin extends Plugin {
   onunload(): void {
     this.uiService.dispose();
     this.libraryService.dispose();
+    // Best-effort: persist any baseline changes a failed flush left pending
+    // (flush() is a no-op when nothing is dirty).
+    void this.baselineStore?.flush();
   }
 
   init(): void {

@@ -48,6 +48,11 @@ export class NoteService implements INoteService {
     rendered: string,
     hasPathSegments: boolean,
   ): string {
+    // Collapse line breaks first: a multi-line render (e.g. a block helper
+    // accidentally used in the TITLE template) must never smuggle newlines
+    // into a file path — such a path would break note lookup and cause
+    // duplicate notes to be created on every sync.
+    rendered = rendered.replace(/[\r\n]+/g, ' ');
     if (hasPathSegments) {
       return rendered
         .split('/')
