@@ -39,6 +39,12 @@ This section controls where the plugin reads your bibliography data from.
 - **Advantages:** Richer metadata (PDF paths, keywords, notes), seamless LaTeX integration, full Cyrillic support via `\cyrchar` commands
 - **Limitations:** Slower to parse on large libraries (5000+ entries), larger file size
 
+**Zotero (local API)** — Not a file format: reads a running Zotero (7 or later) directly through the local HTTP API built into Zotero itself. No Better BibTeX and no export file needed; enable one checkbox in Zotero's Advanced settings. Citation keys come from Zotero's native Citation Key field (with Extra-field and generated fallbacks).
+
+- **Best for:** users without Better BibTeX, group libraries, maximum resilience to Zotero updates
+- **Advantages:** zero extensions, live data, collection/group scoping, native citekeys
+- **Limitations:** requires Zotero 7+, no Zotero notes import, custom BBT citekey formulas only via pinned/native keys — see [Data Sources: Zotero (local API)](data-sources.md#zotero-local-api--no-better-bibtex-required)
+
 ### Setting Up Multiple Databases
 
 To use more than one bibliography source (e.g. personal library + shared team library):

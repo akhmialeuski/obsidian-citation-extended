@@ -10,6 +10,7 @@ The plugin supports loading bibliography data from multiple sources and formats.
 | **Better BibTeX**   | `.bib`           | Rich format with PDF paths, keywords, notes. Slower to parse but more data available                                                        |
 | **Hayagriva**       | `.yml` / `.yaml` | YAML-based bibliography format used by [Typst](https://typst.app). Supports basic fields: title, author, date, DOI, URL, parent (container) |
 | **Readwise**        | API              | Highlights and documents from Readwise (v2 Export + v3 Reader APIs, loaded together)                                                        |
+| **Zotero (local API)** | API           | Reads a running Zotero (7+) directly via its built-in local HTTP API — no Better BibTeX, no export file. See [Zotero (local API)](#zotero-local-api--no-better-bibtex-required) |
 
 ### Choosing a Format
 
@@ -137,6 +138,46 @@ Loads the bibliography **directly from a running Zotero** via the [Better BibTeX
 **Auto-sync:** There is no file to watch, so the source can poll Zotero on a configurable **Auto-sync interval (minutes)** (0 = manual only, the default). Use **Sync now** or the **Refresh citation database** command for an immediate fetch.
 
 **Offline cache:** The last successful export — including the annotation payload — is cached at `.obsidian/plugins/citation-extended/zotero-cache-<id>.json`. If Zotero is closed or unreachable on a later load, the cached export is used so the library stays usable (with a warning).
+
+### Zotero (local API) — no Better BibTeX required
+
+Loads the bibliography from the **native local HTTP API built into Zotero 7 and later** (`http://127.0.0.1:23119/api/`). No Better BibTeX, no file export — just Zotero itself. Because the connection uses only APIs shipped with Zotero, it is the most update-resilient way to connect: nothing breaks when an extension lags behind a new Zotero release.
+
+**When to use:**
+- You don't use Better BibTeX (or don't want to depend on it).
+- You want a connection that keeps working across Zotero major updates.
+- You want group libraries or a single collection without configuring exports.
+
+**Requirements:** Zotero 7 or later running on the same machine, with **Settings → Advanced → "Allow other applications on this computer to communicate with Zotero"** enabled (one checkbox, off by default). The connection is local-only (`127.0.0.1`); nothing leaves your machine.
+
+**Setup:**
+1. In plugin settings, add a database and set its **Database type** to **Zotero (local API)**.
+2. Leave the **Zotero API base URL** empty (default `http://127.0.0.1:23119`), or point it at a non-standard port.
+3. Optionally set a **Group library ID** (numeric Zotero group id) and/or a **Collection key** to restrict the import.
+4. Click **Test connection** — it reports how many items are visible.
+
+**Citation keys** resolve in this order:
+1. Zotero's **native Citation Key field** (Zotero 7.0.31+; in Zotero 8+ Better BibTeX keys are migrated into it automatically) — your existing citekeys keep working.
+2. A legacy `Citation Key: xxx` line in the item's **Extra** field (the old Better BibTeX pinning convention).
+3. A generated `lastnameYear` fallback (e.g. `smith2023`, deduplicated as `smith2023a`, `smith2023b`, …) for items with no pinned key.
+
+**What you get:** full bibliographic metadata via Zotero's own CSL mapping, tags (`{{keywords}}`/`{{tags}}`), collection names (`{{collections}}`), attachment paths compatible with the `pdfLink`/`zoteroPdfURI` template helpers, and `{{entry.zotero.key}}` / `{{entry.zotero.dateAdded}}` / `{{entry.zotero.dateModified}}` extras. Zotero child notes and PDF annotations are not fetched by this source.
+
+**Auto-sync:** shares the Zotero **Auto-sync interval (minutes)** setting (0 = manual). Use **Sync now** or **Refresh citation database** for an immediate fetch.
+
+**Offline cache:** the last successful fetch is cached at `.obsidian/plugins/citation-extended/zotero-api-cache-<id>.json` and used when Zotero is closed (with a warning).
+
+**Better BibTeX vs local API — which live connection?**
+
+| | Better BibTeX live connection | Zotero local API |
+|---|---|---|
+| Extensions required | Better BibTeX | none |
+| Zotero version | 6/7 with BBT | 7+ |
+| Citekeys | BBT-managed | native field → Extra → generated |
+| Custom BBT citekey formulas | yes | only via native/pinned keys |
+| Zotero notes (`{{note}}`) | yes (exportNotes) | no |
+| Collections / group libraries | via export URL | built-in fields |
+| Survives Zotero major updates | depends on BBT | yes (built-in API) |
 
 ## Multiple Databases
 

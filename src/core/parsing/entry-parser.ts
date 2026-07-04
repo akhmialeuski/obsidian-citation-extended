@@ -142,6 +142,21 @@ function parseReadwise(raw: string): ParseResult {
 }
 
 /**
+ * Parse a JSON array of pre-built ZoteroApiEntryData DTOs (mirrors the
+ * Readwise flow: the source constructs DTOs, serialization is trivial).
+ */
+function parseZoteroApi(raw: string): ParseResult {
+  const data: unknown = JSON.parse(raw);
+  if (!Array.isArray(data)) {
+    return {
+      entries: [],
+      parseErrors: [{ message: 'Zotero API data is not an array' }],
+    };
+  }
+  return { entries: data as EntryData[], parseErrors: [] };
+}
+
+/**
  * Maps each DatabaseType to its parser function.
  *
  * Strict `Record<DatabaseType, ...>` — the compiler enforces that every
@@ -153,6 +168,7 @@ const FORMAT_PARSERS: Record<DatabaseType, (raw: string) => ParseResult> = {
   [DATABASE_FORMATS.BibLaTeX]: parseBibLaTeX,
   [DATABASE_FORMATS.Hayagriva]: parseHayagriva,
   [DATABASE_FORMATS.Readwise]: parseReadwise,
+  [DATABASE_FORMATS.ZoteroApi]: parseZoteroApi,
 };
 
 /**

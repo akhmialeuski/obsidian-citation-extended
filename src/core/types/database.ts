@@ -7,6 +7,7 @@ export const DATABASE_FORMATS = {
   BibLaTeX: 'biblatex',
   Hayagriva: 'hayagriva',
   Readwise: 'readwise',
+  ZoteroApi: 'zotero-api',
 } as const;
 
 /**
@@ -23,6 +24,7 @@ export const DATABASE_TYPE_LABELS: Record<DatabaseType, string> = {
   [DATABASE_FORMATS.BibLaTeX]: 'Better BibTeX',
   [DATABASE_FORMATS.Hayagriva]: 'Hayagriva (YAML)',
   [DATABASE_FORMATS.Readwise]: 'Readwise',
+  [DATABASE_FORMATS.ZoteroApi]: 'Zotero (local API)',
 };
 
 /**
@@ -63,6 +65,16 @@ export interface DatabaseConfig {
    * method. Surfaced in templates via `{{annotations}}` / `{{attachments}}`.
    */
   zoteroImportAnnotations?: boolean;
+  /**
+   * Zotero local API only: numeric group library id. Empty/absent = the
+   * personal library (`users/0`).
+   */
+  zoteroApiGroupId?: string;
+  /**
+   * Zotero local API only: collection key to restrict the fetch to.
+   * Empty/absent = the whole library.
+   */
+  zoteroApiCollection?: string;
 }
 
 /**
@@ -116,4 +128,27 @@ export function resolveZoteroImportAnnotations(
   return (
     findDatabaseById(databases, databaseId)?.zoteroImportAnnotations ?? false
   );
+}
+
+/** Scope options for a Zotero local API database. */
+export interface ZoteroApiScopeConfig {
+  groupId?: string;
+  collectionKey?: string;
+}
+
+/**
+ * Resolve the Zotero local API scope (group / collection) for a database by
+ * id. Empty strings are treated as absent (mirrors the other resolvers).
+ */
+export function resolveZoteroApiScope(
+  databases: DatabaseConfig[],
+  databaseId: string | undefined,
+): ZoteroApiScopeConfig {
+  if (!databaseId) return {};
+  const db = databases.find((d) => d.id === databaseId);
+  if (!db) return {};
+  return {
+    groupId: db.zoteroApiGroupId?.trim() || undefined,
+    collectionKey: db.zoteroApiCollection?.trim() || undefined,
+  };
 }

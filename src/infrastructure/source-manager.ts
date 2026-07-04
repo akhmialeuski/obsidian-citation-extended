@@ -319,6 +319,11 @@ export class SourceManager implements ISourceManager {
     if (db.type === DATABASE_FORMATS.Readwise) {
       return DATA_SOURCE_TYPES.Readwise;
     }
+    // The native Zotero local API is both a format (pre-built DTOs) and a
+    // transport — like Readwise, the type implies the transport.
+    if (db.type === DATABASE_FORMATS.ZoteroApi) {
+      return DATA_SOURCE_TYPES.ZoteroApi;
+    }
     // Zotero uses a file FORMAT (CSL JSON / BibLaTeX) but an HTTP transport, so
     // it is selected by the explicit sourceType. Honour it only for a format
     // Better BibTeX can export — a stale/hand-edited `sourceType` on an
@@ -366,6 +371,12 @@ export class SourceManager implements ISourceManager {
       // not a secret, kept verbatim.
       return `${db.path}:notes-${db.zoteroExportNotes ? 1 : 0}:annot-${
         db.zoteroImportAnnotations ? 1 : 0
+      }`;
+    }
+    if (transport === DATA_SOURCE_TYPES.ZoteroApi) {
+      // Fold the scope in so changing group/collection recreates the source.
+      return `${db.path}:group-${db.zoteroApiGroupId ?? ''}:coll-${
+        db.zoteroApiCollection ?? ''
       }`;
     }
     return db.path;

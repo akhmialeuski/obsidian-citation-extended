@@ -16,3 +16,13 @@ export {
   normalizeZoteroAttachments,
 } from './zotero-annotations';
 export type { NormalizedAttachments } from './zotero-annotations';
+export {
+  ZoteroLocalApiClient,
+  ZOTERO_LOCAL_API_DEFAULT_BASE,
+} from './zotero-local-api-client';
+export type {
+  ZoteroApiItem,
+  ZoteroApiLibraryData,
+  ZoteroApiScope,
+  ZoteroApiPingResult,
+} from './zotero-local-api-client';

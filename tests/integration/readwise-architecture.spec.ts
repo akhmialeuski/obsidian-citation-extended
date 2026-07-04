@@ -53,6 +53,7 @@ describe('Invariant 1: Strict Record coverage', () => {
       biblatex: '',
       hayagriva: '',
       readwise: '[]',
+      'zotero-api': '[]',
     };
 
     for (const format of allFormats) {

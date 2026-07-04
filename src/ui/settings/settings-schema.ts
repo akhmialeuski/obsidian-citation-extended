@@ -124,6 +124,10 @@ export const SettingsSchema = z.object({
         zoteroExportNotes: z.boolean().optional(),
         // Zotero-only: fetch native PDF annotations via BBT JSON-RPC.
         zoteroImportAnnotations: z.boolean().optional(),
+        // Zotero local API only: group library id ('' = personal library).
+        zoteroApiGroupId: z.string().optional(),
+        // Zotero local API only: collection key ('' = whole library).
+        zoteroApiCollection: z.string().optional(),
       }),
     )
     .default([]),

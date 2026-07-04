@@ -19,6 +19,7 @@ import { VaultFileSource } from './sources/vault-file-source';
 import { ReadwiseSource } from './sources/readwise-source';
 import { ZoteroSource } from './sources/zotero-source';
 import { sourceCacheFilePath } from './sources/source-utils';
+import { ZoteroApiSource } from './sources/zotero-api-source';
 import { SourceManager } from './infrastructure/source-manager';
 import { TemplateProfileRegistry } from './domain/template-profile-registry';
 import {
@@ -50,7 +51,9 @@ import {
   resolveReadwiseFilters,
   resolveZoteroExportNotes,
   resolveZoteroImportAnnotations,
+  resolveZoteroApiScope,
   ZoteroConnectorClient,
+  ZoteroLocalApiClient,
 } from './core';
 import LoadWorker from 'web-worker:./worker';
 
@@ -239,6 +242,26 @@ export default class CitationPlugin extends Plugin {
           // Legacy cache path (keyed by the volatile source key) so a
           // pre-upgrade cache is still read after the switch to databaseId.
           sourceCacheFilePath(readwiseCacheDir, 'zotero-cache', undefined, id),
+        ),
+    );
+
+    // Register the native Zotero local API source (Zotero 7+, no Better
+    // BibTeX needed) — def.path holds the base URL (empty = default
+    // http://127.0.0.1:23119); group/collection scope comes from settings.
+    registry.register(
+      DATA_SOURCE_TYPES.ZoteroApi,
+      (def, id) =>
+        new ZoteroApiSource(
+          id,
+          new ZoteroLocalApiClient(def.path, obsidianZoteroGet),
+          resolveZoteroApiScope(this.settings.databases, def.databaseId),
+          platformAdapter.fileSystem,
+          readwiseCacheDir
+            ? `${readwiseCacheDir}/zotero-api-cache-${id.replace(cacheNameSanitizeRe, '-')}.json`
+            : '',
+          // Shares the Zotero auto-sync interval setting.
+          () =>
+            resolveSyncIntervalMs(this.settings.zoteroSyncIntervalMinutes) ?? 0,
         ),
     );
 

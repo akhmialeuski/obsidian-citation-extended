@@ -17,6 +17,8 @@ import {
   generateDatabaseId,
   ReadwiseApiClient,
   ZoteroConnectorClient,
+  ZoteroLocalApiClient,
+  ZOTERO_LOCAL_API_DEFAULT_BASE,
 } from '../../core';
 import {
   obsidianHttpGet,
@@ -223,6 +225,11 @@ export class CitationSettingTab extends PluginSettingTab {
         if (value === DATABASE_FORMATS.Readwise) {
           db.sourceType = DATA_SOURCE_TYPES.Readwise;
           db.path = '';
+        } else if (value === DATABASE_FORMATS.ZoteroApi) {
+          // Transport is implied by the type; path holds the base URL
+          // (empty = default http://127.0.0.1:23119).
+          delete db.sourceType;
+          db.path = '';
         } else {
           // Preserve a live Zotero connection only across the CSL-JSON <->
           // BibLaTeX switch (both are formats Zotero can export); clear it for
@@ -245,6 +252,8 @@ export class CitationSettingTab extends PluginSettingTab {
 
     if (db.type === DATABASE_FORMATS.Readwise) {
       this.renderReadwiseFields(card, db, index);
+    } else if (db.type === DATABASE_FORMATS.ZoteroApi) {
+      this.renderZoteroApiFields(card, db, index);
     } else {
       // Live Zotero connection is offered for the formats Better BibTeX can
       // export on demand (CSL JSON / BibLaTeX).
@@ -452,6 +461,155 @@ export class CitationSettingTab extends PluginSettingTab {
                 new Notice('Please enter the Better BibTeX export URL first.');
                 return;
               }
+              new Notice('Fetching from Zotero…');
+              await this.plugin.libraryService.load();
+            })();
+          });
+      });
+  }
+
+  /**
+   * Fields for a native Zotero local API source (Zotero 7+, no Better
+   * BibTeX): base URL, optional group/collection scope, the shared sync
+   * interval, and a test/sync button pair. The base URL is stored in
+   * `db.path` — empty means the default `http://127.0.0.1:23119`.
+   */
+  private renderZoteroApiFields(
+    card: HTMLElement,
+    db: DatabaseConfig,
+    index: number,
+  ): void {
+    const hint = card.createEl('p', { cls: 'setting-item-description' });
+    hint.setText(
+      'Reads your library straight from a running Zotero (7 or later) — no ' +
+        'Better BibTeX or file export required. In Zotero, enable Settings → ' +
+        'Advanced → "Allow other applications on this computer to ' +
+        'communicate with Zotero".',
+    );
+
+    new Setting(card)
+      .setName('Zotero API base URL')
+      .setDesc(
+        // eslint-disable-next-line obsidianmd/ui/sentence-case -- the URL is a literal, not prose
+        'Leave empty for the default local server (http://127.0.0.1:23119).',
+      )
+      .addText((text) => {
+        text
+          .setPlaceholder(ZOTERO_LOCAL_API_DEFAULT_BASE)
+          .setValue(db.path)
+          .onChange(
+            debounce(async (value: string) => {
+              this.plugin.settings.databases[index].path = value.trim();
+              await this.plugin.saveSettings();
+            }, 500),
+          );
+      });
+
+    new Setting(card)
+      .setName('Group library ID')
+      .setDesc(
+        'Numeric Zotero group id to load a group library. Leave empty for ' +
+          'your personal library.',
+      )
+      .addText((text) => {
+        text
+          .setPlaceholder('123456')
+          .setValue(db.zoteroApiGroupId ?? '')
+          .onChange(
+            debounce(async (value: string) => {
+              this.plugin.settings.databases[index].zoteroApiGroupId =
+                value.trim();
+              await this.plugin.saveSettings();
+            }, 500),
+          );
+      });
+
+    new Setting(card)
+      .setName('Collection key')
+      .setDesc(
+        'Restrict the import to one collection (the 8-character key from ' +
+          'the collection URL). Leave empty for the whole library.',
+      )
+      .addText((text) => {
+        text
+          .setPlaceholder('ABCD1234')
+          .setValue(db.zoteroApiCollection ?? '')
+          .onChange(
+            debounce(async (value: string) => {
+              this.plugin.settings.databases[index].zoteroApiCollection =
+                value.trim();
+              await this.plugin.saveSettings();
+            }, 500),
+          );
+      });
+
+    new Setting(card)
+      .setName('Auto-sync interval (minutes)')
+      .setDesc(
+        // eslint-disable-next-line obsidianmd/ui/sentence-case -- "Better BibTeX" is a product name
+        'How often to re-fetch from Zotero. Set to 0 to disable (refresh manually). Shared with the Better BibTeX live connection.',
+      )
+      .addText((text) => {
+        text
+          .setValue(String(this.plugin.settings.zoteroSyncIntervalMinutes))
+          .onChange(
+            debounce(async (value: string) => {
+              const num = parseInt(value, 10);
+              if (!isNaN(num) && num >= READWISE_SYNC_INTERVAL_MIN_MINUTES) {
+                this.plugin.settings.zoteroSyncIntervalMinutes = Math.min(
+                  num,
+                  READWISE_SYNC_INTERVAL_MAX_MINUTES,
+                );
+                await this.plugin.saveSettings();
+              }
+            }, 500),
+          );
+        text.inputEl.type = 'number';
+        text.inputEl.min = String(READWISE_SYNC_INTERVAL_MIN_MINUTES);
+        text.inputEl.max = String(READWISE_SYNC_INTERVAL_MAX_MINUTES);
+        text.inputEl.setCssProps({ width: '80px' });
+      });
+
+    const statusEl = card.createDiv('zotero-api-status');
+    statusEl.setCssProps({ fontSize: '0.8em', marginTop: '5px' });
+
+    new Setting(card)
+      .addButton((button) => {
+        button.setButtonText('Test connection').onClick(() => {
+          void (async () => {
+            statusEl.setText('Connecting…');
+            statusEl.setCssProps({ color: 'var(--text-muted)' });
+            try {
+              const dbNow = this.plugin.settings.databases[index];
+              const client = new ZoteroLocalApiClient(
+                dbNow.path,
+                obsidianZoteroGet,
+              );
+              const result = await client.ping({
+                groupId: dbNow.zoteroApiGroupId?.trim() || undefined,
+                collectionKey: dbNow.zoteroApiCollection?.trim() || undefined,
+              });
+              statusEl.setText(
+                `Connected — ${result.totalItems} item${
+                  result.totalItems === 1 ? '' : 's'
+                } visible${result.apiVersion ? ` (API v${result.apiVersion})` : ''}.`,
+              );
+              statusEl.setCssProps({ color: 'var(--text-success)' });
+            } catch (e) {
+              statusEl.setText(
+                e instanceof Error ? e.message : 'Connection failed.',
+              );
+              statusEl.setCssProps({ color: 'var(--text-error)' });
+            }
+          })();
+        });
+      })
+      .addButton((button) => {
+        button
+          .setButtonText('Sync now')
+          .setCta()
+          .onClick(() => {
+            void (async () => {
               new Notice('Fetching from Zotero…');
               await this.plugin.libraryService.load();
             })();

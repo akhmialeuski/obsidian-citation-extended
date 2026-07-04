@@ -294,6 +294,17 @@ Notes:
 - Clicking an annotation link opens Zotero's PDF reader on the right page with the annotation selected.
 - The full field list is in [Template Variables: Zotero PDF Annotations](../templates/variables.md#annotations-source-agnostic).
 
+### Native local API (no Better BibTeX at all)
+
+If you don't use Better BibTeX — or want a connection that survives every Zotero update — the plugin can read a running Zotero (7 or later) through **Zotero's own local API**:
+
+1. In Zotero: **Settings → Advanced** → enable **"Allow other applications on this computer to communicate with Zotero"**.
+2. In plugin settings, add a database and set **Database type** to **Zotero (local API)**. Leave the base URL empty.
+3. Optionally enter a **Group library ID** or a **Collection key** to narrow the import.
+4. Click **Test connection**.
+
+Citation keys use Zotero's native Citation Key field when present (Zotero 8+ migrates Better BibTeX keys into it automatically), fall back to a `Citation Key:` line in Extra, and are generated (`lastnameYear`) otherwise. See [Data Sources: Zotero (local API)](../data-sources.md#zotero-local-api--no-better-bibtex-required) for the full comparison with the Better BibTeX connection.
+
 ### CSL-JSON Export
 
 If you prefer CSL-JSON:

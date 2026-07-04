@@ -734,6 +734,68 @@ describe('CitationSettingTab', () => {
     });
   });
 
+  // Zotero local API card
+  describe('renderDatabaseCard — Zotero local API', () => {
+    function apiPlugin(): CitationPlugin {
+      return createMockPlugin({
+        databases: [
+          {
+            id: 'za1',
+            name: 'Zotero API',
+            type: 'zotero-api',
+            path: '',
+            zoteroApiGroupId: '',
+            zoteroApiCollection: '',
+          },
+        ],
+      });
+    }
+
+    function allComponents(selector: (s: MockSettingInstance) => unknown[]) {
+      return getSettings().flatMap((s) => selector(s));
+    }
+
+    it('renders the local API fields without throwing', () => {
+      plugin = apiPlugin();
+      tab = new CitationSettingTab({} as never, plugin);
+      expect(() => tab.display()).not.toThrow();
+    });
+
+    it('saves base URL, group id, and collection key', () => {
+      plugin = apiPlugin();
+      tab = new CitationSettingTab({} as never, plugin);
+      tab.display();
+
+      const texts = allComponents((s) => s.getTextComponents()) as Array<{
+        triggerChange(v: string): void;
+      }>;
+      // Text fields in render order: database name (0), base URL (1),
+      // group id (2), collection key (3), sync interval (4).
+      texts[1].triggerChange(' http://127.0.0.1:23119 ');
+      expect(plugin.settings.databases[0].path).toBe('http://127.0.0.1:23119');
+      texts[2].triggerChange(' 4242 ');
+      expect(plugin.settings.databases[0].zoteroApiGroupId).toBe('4242');
+      texts[3].triggerChange('ABCD1234');
+      expect(plugin.settings.databases[0].zoteroApiCollection).toBe('ABCD1234');
+      texts[4].triggerChange('30');
+      expect(plugin.settings.zoteroSyncIntervalMinutes).toBe(30);
+    });
+
+    it('exercises the test-connection and sync buttons without throwing', () => {
+      plugin = apiPlugin();
+      tab = new CitationSettingTab({} as never, plugin);
+      tab.display();
+
+      const buttons = allComponents((s) => s.getButtonComponents()) as Array<{
+        triggerClick(): void;
+      }>;
+      expect(() => {
+        buttons[0].triggerClick();
+        buttons[1].triggerClick();
+      }).not.toThrow();
+    });
+  });
+
   describe('checkDatabasePath', () => {
     it('shows "Path verified." on success', async () => {
       mockReadLocalFile.mockResolvedValue(new ArrayBuffer(0));

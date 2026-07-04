@@ -113,6 +113,27 @@ describe('SettingsSchema', () => {
         expect(result.data.databases[0].zoteroImportAnnotations).toBe(true);
       }
     });
+
+    it('preserves the Zotero local API scope fields on a database', () => {
+      const settings = {
+        ...DEFAULT_SETTINGS,
+        databases: [
+          {
+            name: 'Zotero API',
+            type: 'zotero-api',
+            path: '',
+            zoteroApiGroupId: '4242',
+            zoteroApiCollection: 'ABCD1234',
+          },
+        ],
+      };
+      const result = validateSettings(settings);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.databases[0].zoteroApiGroupId).toBe('4242');
+        expect(result.data.databases[0].zoteroApiCollection).toBe('ABCD1234');
+      }
+    });
   });
 
   describe('zoteroSyncIntervalMinutes', () => {

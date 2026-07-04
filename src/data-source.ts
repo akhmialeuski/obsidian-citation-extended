@@ -9,6 +9,7 @@ export const DATA_SOURCE_TYPES = {
   VaultFile: 'vault-file',
   Readwise: 'readwise',
   Zotero: 'zotero',
+  ZoteroApi: 'zotero-api',
 } as const;
 
 /**
