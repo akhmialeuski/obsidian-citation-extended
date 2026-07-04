@@ -130,11 +130,13 @@ Loads the bibliography **directly from a running Zotero** via the [Better BibTeX
 2. In plugin settings, add a database and set its **type** to match (Better CSL JSON or Better BibTeX).
 3. Toggle **Load live from Zotero (Better BibTeX)** on, paste the URL into **Better BibTeX export URL**, and click **Test connection** to confirm Zotero answers (it reports the Zotero and BBT versions).
 
-**Notes & annotations:** Enable **Import notes & annotations** to append `&exportNotes=true` to the export, so Zotero child notes and PDF annotations are included and surfaced via the `{{note}}` template variable.
+**Notes:** Enable **Import notes** to append `&exportNotes=true` to the export, so Zotero child notes are included and surfaced via the `{{note}}` template variable.
+
+**PDF annotations:** Enable **Import PDF annotations** to additionally fetch the **native Zotero PDF annotations** (highlights, underlines, comments, image annotations) for every entry via the Better BibTeX JSON-RPC API. Annotations arrive as structured data — text, comment, hex color + palette name, page number, tags, and a `zotero://open-pdf/...?page=N&annotation=KEY` deep link that opens the PDF in Zotero **at the exact annotation**. They are exposed to templates as `{{annotations}}`, `{{attachments}}`, and `{{annotationCount}}` — see [Template Variables](templates/variables.md#zotero-pdf-annotations). The fetch is batched (one JSON-RPC request per 50 entries) and best-effort: if it fails, the library still loads and a warning is reported.
 
 **Auto-sync:** There is no file to watch, so the source can poll Zotero on a configurable **Auto-sync interval (minutes)** (0 = manual only, the default). Use **Sync now** or the **Refresh citation database** command for an immediate fetch.
 
-**Offline cache:** The last successful export is cached at `.obsidian/plugins/citation-extended/zotero-cache-<id>.json`. If Zotero is closed or unreachable on a later load, the cached export is used so the library stays usable (with a warning).
+**Offline cache:** The last successful export — including the annotation payload — is cached at `.obsidian/plugins/citation-extended/zotero-cache-<id>.json`. If Zotero is closed or unreachable on a later load, the cached export is used so the library stays usable (with a warning).
 
 ## Multiple Databases
 

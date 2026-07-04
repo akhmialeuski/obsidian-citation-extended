@@ -147,3 +147,186 @@ describe('ZoteroConnectorClient.ping', () => {
     await expect(client.ping()).rejects.toBeInstanceOf(ZoteroApiError);
   });
 });
+
+// ---------------------------------------------------------------------------
+// fetchAttachmentsForCitekeys
+// ---------------------------------------------------------------------------
+
+describe('ZoteroConnectorClient.fetchAttachmentsForCitekeys', () => {
+  const ATTACHMENT = {
+    open: 'zotero://open-pdf/library/items/ATTKEY01',
+    path: '/z/storage/ATTKEY01/paper.pdf',
+    annotations: [{ key: 'A1', annotationType: 'highlight' }],
+  };
+
+  function makeClient(post: ZoteroHttpPostFn) {
+    return new ZoteroConnectorClient(PULL_URL, jest.fn(), post);
+  }
+
+  it('returns an empty result without any request for no citekeys', async () => {
+    const post = jest.fn();
+    const client = makeClient(post);
+
+    const result = await client.fetchAttachmentsForCitekeys([]);
+
+    expect(result.attachmentsByCitekey.size).toBe(0);
+    expect(result.errors).toEqual([]);
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('POSTs a JSON-RPC batch and maps results back to citekeys', async () => {
+    const post = jest.fn((_url: string, body: string) => {
+      const requests = JSON.parse(body) as Array<{
+        id: number;
+        method: string;
+        params: [string];
+      }>;
+      expect(requests.every((r) => r.method === 'item.attachments')).toBe(true);
+      return Promise.resolve(
+        jsonResponse(
+          200,
+          requests.map((r) => ({
+            jsonrpc: '2.0',
+            id: r.id,
+            result: r.params[0] === 'noatt2024' ? [] : [ATTACHMENT],
+          })),
+        ),
+      );
+    }) as unknown as jest.MockedFunction<ZoteroHttpPostFn>;
+    const client = makeClient(post);
+
+    const result = await client.fetchAttachmentsForCitekeys([
+      'smith2023',
+      'noatt2024',
+    ]);
+
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post.mock.calls[0][0]).toBe(
+      'http://127.0.0.1:23119/better-bibtex/json-rpc',
+    );
+    expect(result.attachmentsByCitekey.get('smith2023')).toEqual([ATTACHMENT]);
+    expect(result.attachmentsByCitekey.get('noatt2024')).toEqual([]);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('splits large citekey lists into multiple batch requests', async () => {
+    const citekeys = Array.from({ length: 120 }, (_, i) => `key${i}`);
+    const post = jest.fn((_url: string, body: string) => {
+      const requests = JSON.parse(body) as Array<{ id: number }>;
+      expect(requests.length).toBeLessThanOrEqual(50);
+      return Promise.resolve(
+        jsonResponse(
+          200,
+          requests.map((r) => ({ jsonrpc: '2.0', id: r.id, result: [] })),
+        ),
+      );
+    }) as unknown as jest.MockedFunction<ZoteroHttpPostFn>;
+    const client = makeClient(post);
+
+    const result = await client.fetchAttachmentsForCitekeys(citekeys);
+
+    expect(post).toHaveBeenCalledTimes(3);
+    expect(result.attachmentsByCitekey.size).toBe(120);
+    expect(result.attachmentsByCitekey.get('key119')).toEqual([]);
+  });
+
+  it('collects per-citekey JSON-RPC errors without failing the fetch', async () => {
+    const post = jest.fn((_url: string, body: string) => {
+      const requests = JSON.parse(body) as Array<{
+        id: number;
+        params: [string];
+      }>;
+      return Promise.resolve(
+        jsonResponse(
+          200,
+          requests.map((r) =>
+            r.params[0] === 'broken'
+              ? {
+                  jsonrpc: '2.0',
+                  id: r.id,
+                  error: { code: -1, message: 'not found' },
+                }
+              : { jsonrpc: '2.0', id: r.id, result: [ATTACHMENT] },
+          ),
+        ),
+      );
+    }) as unknown as jest.MockedFunction<ZoteroHttpPostFn>;
+    const client = makeClient(post);
+
+    const result = await client.fetchAttachmentsForCitekeys([
+      'ok2020',
+      'broken',
+    ]);
+
+    expect(result.attachmentsByCitekey.has('ok2020')).toBe(true);
+    expect(result.attachmentsByCitekey.has('broken')).toBe(false);
+    expect(result.errors).toEqual([
+      { citekey: 'broken', message: 'not found' },
+    ]);
+  });
+
+  it('tolerates a bare (non-array) response for a single-request batch', async () => {
+    const post = jest.fn((_url: string, _body: string) =>
+      Promise.resolve(
+        jsonResponse(200, { jsonrpc: '2.0', id: 0, result: [ATTACHMENT] }),
+      ),
+    ) as unknown as jest.MockedFunction<ZoteroHttpPostFn>;
+    const client = makeClient(post);
+
+    const result = await client.fetchAttachmentsForCitekeys(['solo2021']);
+
+    expect(result.attachmentsByCitekey.get('solo2021')).toEqual([ATTACHMENT]);
+  });
+
+  it('ignores results whose id does not map to a citekey', async () => {
+    const post = jest.fn((_url: string, _body: string) =>
+      Promise.resolve(
+        jsonResponse(200, [
+          { jsonrpc: '2.0', id: 999, result: [ATTACHMENT] },
+          { jsonrpc: '2.0', id: 'weird', result: [ATTACHMENT] },
+        ]),
+      ),
+    ) as unknown as jest.MockedFunction<ZoteroHttpPostFn>;
+    const client = makeClient(post);
+
+    const result = await client.fetchAttachmentsForCitekeys(['only2020']);
+
+    expect(result.attachmentsByCitekey.size).toBe(0);
+  });
+
+  it('throws ZoteroApiError on a non-2xx response', async () => {
+    const post = jest.fn((_url: string, _body: string) =>
+      Promise.resolve(jsonResponse(500, {})),
+    ) as unknown as jest.MockedFunction<ZoteroHttpPostFn>;
+    const client = makeClient(post);
+
+    await expect(client.fetchAttachmentsForCitekeys(['a2020'])).rejects.toThrow(
+      ZoteroApiError,
+    );
+  });
+
+  it('throws ZoteroApiError when the connection fails', async () => {
+    const post = jest.fn((_url: string, _body: string) =>
+      Promise.reject(new Error('ECONNREFUSED')),
+    ) as unknown as jest.MockedFunction<ZoteroHttpPostFn>;
+    const client = makeClient(post);
+
+    await expect(client.fetchAttachmentsForCitekeys(['a2020'])).rejects.toThrow(
+      /Could not reach Zotero/,
+    );
+  });
+
+  it('throws ZoteroAbortError when the signal is already aborted', async () => {
+    const post = jest.fn() as unknown as jest.MockedFunction<ZoteroHttpPostFn>;
+    const client = makeClient(post);
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      client.fetchAttachmentsForCitekeys(['a2020'], {
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow(ZoteroAbortError);
+    expect(post).not.toHaveBeenCalled();
+  });
+});

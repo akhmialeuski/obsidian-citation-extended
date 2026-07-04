@@ -126,8 +126,10 @@ export const SettingsSchema = z.object({
             readerLocations: z.array(z.string()).optional(),
           })
           .optional(),
-        // Zotero-only: include Zotero notes/PDF annotations in the pull export.
+        // Zotero-only: include Zotero child notes in the pull export.
         zoteroExportNotes: z.boolean().optional(),
+        // Zotero-only: fetch native PDF annotations via BBT JSON-RPC.
+        zoteroImportAnnotations: z.boolean().optional(),
       }),
     )
     .default([]),

@@ -53,10 +53,16 @@ export interface DatabaseConfig {
   /** Readwise-only client-side import filters. */
   readwiseFilters?: ReadwiseFilters;
   /**
-   * Zotero-only: include Zotero notes and PDF annotations in the pull export
+   * Zotero-only: include Zotero child notes in the pull export
    * (`&exportNotes=true`). Surfaced in templates via `{{note}}`.
    */
   zoteroExportNotes?: boolean;
+  /**
+   * Zotero-only: fetch native PDF annotations (highlights, comments, colors,
+   * page deep-links) via the Better BibTeX JSON-RPC `item.attachments`
+   * method. Surfaced in templates via `{{annotations}}` / `{{attachments}}`.
+   */
+  zoteroImportAnnotations?: boolean;
 }
 
 /**
@@ -98,5 +104,22 @@ export function resolveZoteroExportNotes(
   if (!databaseId) return false;
   return (
     databases.find((db) => db.id === databaseId)?.zoteroExportNotes ?? false
+  );
+}
+
+/**
+ * Resolve the "import PDF annotations" flag for a Zotero database by id.
+ *
+ * Returns `false` when the id is missing or not found (mirrors
+ * {@link resolveZoteroExportNotes}).
+ */
+export function resolveZoteroImportAnnotations(
+  databases: DatabaseConfig[],
+  databaseId: string | undefined,
+): boolean {
+  if (!databaseId) return false;
+  return (
+    databases.find((db) => db.id === databaseId)?.zoteroImportAnnotations ??
+    false
   );
 }

@@ -1,4 +1,8 @@
 import type { TemplateContext } from './template-context';
+import type {
+  ZoteroAnnotation,
+  ZoteroAttachment,
+} from '../zotero/zotero-annotations';
 
 export interface Author {
   given?: string;
@@ -110,6 +114,20 @@ export abstract class Entry {
    * every adapter must declare.
    */
   public collections?: string[];
+
+  /**
+   * Native Zotero PDF annotations (highlights, comments, colors, deep
+   * links). Populated only by the live Zotero source when "Import PDF
+   * annotations" is enabled — a concrete optional field like
+   * {@link collections}, so other adapters need not declare it.
+   */
+  public annotations?: ZoteroAnnotation[];
+
+  /**
+   * Zotero attachments (PDF files with `zotero://open-pdf` links).
+   * Populated together with {@link annotations}.
+   */
+  public attachments?: ZoteroAttachment[];
 
   public abstract eventPlace?: string;
 
@@ -347,6 +365,9 @@ export abstract class Entry {
       keywords: this.keywords,
       tags: this.tags,
       collections: this.collections,
+      annotations: this.annotations,
+      attachments: this.attachments,
+      annotationCount: this.annotations?.length ?? 0,
       lastname: this.lastname(),
       language: this.language,
       note: this.note,

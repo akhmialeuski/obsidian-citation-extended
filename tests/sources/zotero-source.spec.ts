@@ -108,7 +108,7 @@ describe('ZoteroSource.load', () => {
 
     expect(fs.writeFile).toHaveBeenCalled();
     expect(JSON.parse(written.value!)).toMatchObject({
-      version: 1,
+      version: 2,
       format: DATABASE_FORMATS.CslJson,
       raw: CSL,
     });
@@ -191,5 +191,250 @@ describe('ZoteroSource.dispose', () => {
     );
     source.watch(jest.fn());
     expect(() => source.dispose()).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PDF annotation enrichment
+// ---------------------------------------------------------------------------
+
+describe('ZoteroSource annotation enrichment', () => {
+  const RAW_ATTACHMENT = {
+    open: 'zotero://open-pdf/library/items/ATTKEY01',
+    path: '/z/storage/ATTKEY01/paper.pdf',
+    annotations: [
+      {
+        key: 'ANNOT001',
+        annotationType: 'highlight',
+        annotationText: 'quoted text',
+        annotationColor: '#ffd400',
+        annotationPosition: { pageIndex: 3 },
+        annotationSortIndex: '00003|0|0',
+      },
+    ],
+  };
+
+  function makeAnnotatingClient(
+    attachmentsImpl?: jest.Mock,
+    bibliographyImpl: () => Promise<string> = () => Promise.resolve(CSL),
+  ) {
+    const fetchAttachmentsForCitekeys =
+      attachmentsImpl ??
+      jest.fn((citekeys: string[]) =>
+        Promise.resolve({
+          attachmentsByCitekey: new Map(
+            citekeys
+              .filter((k) => k === 'smith2023')
+              .map((k) => [k, [RAW_ATTACHMENT]]),
+          ),
+          errors: [],
+        }),
+      );
+    return {
+      client: {
+        fetchBibliography: jest.fn(bibliographyImpl),
+        fetchAttachmentsForCitekeys,
+        ping: jest.fn(),
+      } as never,
+      fetchAttachmentsForCitekeys,
+    };
+  }
+
+  it('attaches normalized annotations and attachments to matching entries', async () => {
+    const { client } = makeAnnotatingClient();
+    const source = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      undefined,
+      undefined,
+      undefined,
+      true,
+    );
+
+    const result = await source.load();
+
+    const smith = result.entries.find((e) => e.id === 'smith2023')!;
+    expect(smith.annotations).toHaveLength(1);
+    expect(smith.annotations![0].text).toBe('quoted text');
+    expect(smith.annotations![0].colorName).toBe('yellow');
+    expect(smith.annotations![0].page).toBe(4);
+    expect(smith.annotations![0].openURI).toBe(
+      'zotero://open-pdf/library/items/ATTKEY01?page=4&annotation=ANNOT001',
+    );
+    expect(smith.attachments).toHaveLength(1);
+    expect(smith.attachments![0].key).toBe('ATTKEY01');
+
+    const doe = result.entries.find((e) => e.id === 'doe2024')!;
+    expect(doe.annotations).toBeUndefined();
+    expect(doe.attachments).toBeUndefined();
+  });
+
+  it('exposes annotations through the template context', async () => {
+    const { client } = makeAnnotatingClient();
+    const source = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      undefined,
+      undefined,
+      undefined,
+      true,
+    );
+
+    const result = await source.load();
+    const smith = result.entries.find((e) => e.id === 'smith2023')!;
+    const context = smith.toTemplateContext();
+
+    expect(context.annotationCount).toBe(1);
+    expect(context.annotations![0].comment).toBe('');
+    const doeContext = result.entries
+      .find((e) => e.id === 'doe2024')!
+      .toTemplateContext();
+    expect(doeContext.annotationCount).toBe(0);
+  });
+
+  it('does not fetch attachments when the flag is off', async () => {
+    const { client, fetchAttachmentsForCitekeys } = makeAnnotatingClient();
+    const source = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+    );
+
+    await source.load();
+
+    expect(fetchAttachmentsForCitekeys).not.toHaveBeenCalled();
+  });
+
+  it('degrades to a load warning when the annotation fetch fails', async () => {
+    const failing = jest.fn(() =>
+      Promise.reject(new ZoteroApiError('JSON-RPC broke')),
+    );
+    const { client } = makeAnnotatingClient(failing);
+    const source = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      undefined,
+      undefined,
+      undefined,
+      true,
+    );
+
+    const result = await source.load();
+
+    expect(result.entries).toHaveLength(2);
+    expect(result.parseErrors).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining('PDF annotations unavailable'),
+      }),
+    ]);
+  });
+
+  it('caches attachments and re-attaches them on offline fallback', async () => {
+    const { fs } = createMockFileSystem();
+    const { client } = makeAnnotatingClient();
+    const online = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      fs,
+      '/cache/zotero.json',
+      undefined,
+      true,
+    );
+    await online.load();
+
+    const offlineClient = {
+      fetchBibliography: jest.fn(() =>
+        Promise.reject(new ZoteroApiError('Zotero closed')),
+      ),
+      fetchAttachmentsForCitekeys: jest.fn(),
+      ping: jest.fn(),
+    } as never;
+    const offline = new ZoteroSource(
+      'z1',
+      offlineClient,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      fs,
+      '/cache/zotero.json',
+      undefined,
+      true,
+    );
+
+    const result = await offline.load();
+
+    const smith = result.entries.find((e) => e.id === 'smith2023')!;
+    expect(smith.annotations).toHaveLength(1);
+    expect(smith.annotations![0].openURI).toContain('ATTKEY01');
+    expect(result.parseErrors![0].message).toContain('using cache');
+  });
+
+  it('accepts a V1 cache without annotations on offline fallback', async () => {
+    const v1 = JSON.stringify({ version: 1, format: 'csl-json', raw: CSL });
+    const { fs } = createMockFileSystem(v1);
+    const offlineClient = {
+      fetchBibliography: jest.fn(() =>
+        Promise.reject(new ZoteroApiError('Zotero closed')),
+      ),
+      fetchAttachmentsForCitekeys: jest.fn(),
+      ping: jest.fn(),
+    } as never;
+    const source = new ZoteroSource(
+      'z1',
+      offlineClient,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      fs,
+      '/cache/zotero.json',
+      undefined,
+      true,
+    );
+
+    const result = await source.load();
+
+    expect(result.entries).toHaveLength(2);
+    expect(
+      result.entries.find((e) => e.id === 'smith2023')!.annotations,
+    ).toBeUndefined();
+  });
+
+  it('writes a V2 cache including the attachments payload', async () => {
+    const { fs, written } = createMockFileSystem();
+    const { client } = makeAnnotatingClient();
+    const source = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      fs,
+      '/cache/zotero.json',
+      undefined,
+      true,
+    );
+
+    await source.load();
+
+    const cache = JSON.parse(written.value!) as {
+      version: number;
+      attachments?: Record<string, unknown[]>;
+    };
+    expect(cache.version).toBe(2);
+    expect(cache.attachments!.smith2023).toHaveLength(1);
   });
 });

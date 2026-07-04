@@ -3,9 +3,15 @@ import {
   DataSourceLoadOptions,
   DataSourceLoadResult,
 } from '../data-source';
-import { WORKER_TASK_KINDS, convertToEntries, ZoteroAbortError } from '../core';
+import {
+  WORKER_TASK_KINDS,
+  convertToEntries,
+  normalizeZoteroAttachments,
+  ZoteroAbortError,
+} from '../core';
 import type {
   DatabaseType,
+  Entry,
   ParseErrorInfo,
   ParseWorkerResponse,
 } from '../core';
@@ -18,11 +24,17 @@ import { createLinkedAbortController, PeriodicSync } from './source-utils';
  * Versioned on-disk cache: the raw export body plus the format it was fetched
  * in. Lets Obsidian keep serving the library when Zotero is closed, and lets a
  * later format change be detected (a stale-format cache is simply ignored).
+ *
+ * V2 adds the raw `item.attachments` responses (per citekey) so annotations
+ * survive offline loads. A V1 cache is still accepted — it simply carries no
+ * annotations.
  */
-interface ZoteroCacheStateV1 {
-  version: 1;
+interface ZoteroCacheStateV2 {
+  version: 1 | 2;
   format: DatabaseType;
   raw: string;
+  /** Citekey → raw BBT `item.attachments` result. Absent in V1 caches. */
+  attachments?: Record<string, unknown[]>;
 }
 
 /**
@@ -33,11 +45,18 @@ interface ZoteroCacheStateV1 {
  *
  *   pull export text -> Worker (loadEntries) -> EntryData[] -> convertToEntries
  *
- * When the export is configured to include notes, Zotero child notes and PDF
- * annotations come through in the `note` field and surface via `{{note}}`.
+ * When the export is configured to include notes, Zotero child notes come
+ * through in the `note` field and surface via `{{note}}`.
  *
- * **Offline cache:** the last successful export is cached on disk. If Zotero is
- * not reachable on a later load, the cache is used so the library stays usable.
+ * **PDF annotations:** when enabled, the source additionally fetches native
+ * Zotero PDF annotations for every entry via batched Better BibTeX JSON-RPC
+ * `item.attachments` calls, and attaches them as `entry.annotations` /
+ * `entry.attachments` for templates. Annotation fetching is best-effort: a
+ * failure degrades to a load warning, never a failed load.
+ *
+ * **Offline cache:** the last successful export (and annotation payload) is
+ * cached on disk. If Zotero is not reachable on a later load, the cache is
+ * used so the library stays usable.
  *
  * **Periodic sync:** because there is no file to watch, the source optionally
  * polls on a configurable interval (chained setTimeout, re-reading the provider
@@ -57,6 +76,8 @@ export class ZoteroSource implements DataSource {
     private cachePath?: string,
     /** Current periodic-sync interval in ms (0 = disabled); read each cycle. */
     syncIntervalProvider?: () => number,
+    /** Fetch native PDF annotations and attach them to entries. */
+    private importAnnotations = false,
   ) {
     this.poller = syncIntervalProvider
       ? new PeriodicSync(syncIntervalProvider, 'ZoteroSource')
@@ -92,7 +113,7 @@ export class ZoteroSource implements DataSource {
           console.warn(
             `ZoteroSource: Zotero unavailable, using cached export (${message})`,
           );
-          return await this.parseRaw(
+          const result = await this.parseRaw(
             cached.raw,
             cached.format,
             [
@@ -102,19 +123,77 @@ export class ZoteroSource implements DataSource {
             ],
             signal,
           );
+          if (this.importAnnotations && cached.attachments) {
+            ZoteroSource.attachAnnotations(result.entries, cached.attachments);
+          }
+          return result;
         }
         const message = error instanceof Error ? error.message : String(error);
         throw new Error(`Failed to load from Zotero: ${message}`);
       }
 
-      // Persist the successful export for offline use (best-effort).
-      await this.writeCache(raw);
+      const result = await this.parseRaw(raw, this.format, [], signal);
 
-      return await this.parseRaw(raw, this.format, [], signal);
+      // Annotation enrichment is best-effort: a failure downgrades to a load
+      // warning so the bibliography itself stays usable.
+      let attachments: Record<string, unknown[]> | undefined;
+      if (this.importAnnotations) {
+        try {
+          attachments = await this.fetchAttachments(result.entries, signal);
+          ZoteroSource.attachAnnotations(result.entries, attachments);
+        } catch (error) {
+          if (error instanceof ZoteroAbortError || signal.aborted) {
+            throw error;
+          }
+          const message =
+            error instanceof Error ? error.message : String(error);
+          console.warn(`ZoteroSource: annotation fetch failed (${message})`);
+          result.parseErrors = [
+            ...(result.parseErrors ?? []),
+            { message: `PDF annotations unavailable: ${message}` },
+          ];
+        }
+      }
+
+      // Persist the successful export (and annotations) for offline use.
+      await this.writeCache(raw, attachments);
+
+      return result;
     } finally {
       if (this.abortController?.signal === signal) {
         this.abortController = null;
       }
+    }
+  }
+
+  /** Fetch raw attachments for all entries via batched JSON-RPC. */
+  private async fetchAttachments(
+    entries: Entry[],
+    signal: AbortSignal,
+  ): Promise<Record<string, unknown[]>> {
+    const citekeys = entries.map((e) => e.id);
+    const { attachmentsByCitekey, errors } =
+      await this.client.fetchAttachmentsForCitekeys(citekeys, { signal });
+    if (errors.length > 0) {
+      console.debug(
+        `ZoteroSource: ${errors.length} citekey(s) had no resolvable attachments`,
+        errors.slice(0, 5),
+      );
+    }
+    return Object.fromEntries(attachmentsByCitekey);
+  }
+
+  /** Normalize raw attachment payloads and attach them to matching entries. */
+  private static attachAnnotations(
+    entries: Entry[],
+    attachmentsByCitekey: Record<string, unknown[]>,
+  ): void {
+    for (const entry of entries) {
+      const raw = attachmentsByCitekey[entry.id];
+      if (!raw) continue;
+      const { attachments, annotations } = normalizeZoteroAttachments(raw);
+      if (attachments.length > 0) entry.attachments = attachments;
+      if (annotations.length > 0) entry.annotations = annotations;
     }
   }
 
@@ -145,7 +224,7 @@ export class ZoteroSource implements DataSource {
   }
 
   /** Read and validate the cache file, or null when missing/corrupt/stale. */
-  private async readCache(): Promise<ZoteroCacheStateV1 | null> {
+  private async readCache(): Promise<ZoteroCacheStateV2 | null> {
     if (!this.fileSystem || !this.cachePath) return null;
     try {
       if (!(await this.fileSystem.exists(this.cachePath))) return null;
@@ -155,11 +234,12 @@ export class ZoteroSource implements DataSource {
       if (
         parsed !== null &&
         typeof parsed === 'object' &&
-        (parsed as { version?: unknown }).version === 1 &&
+        ((parsed as { version?: unknown }).version === 1 ||
+          (parsed as { version?: unknown }).version === 2) &&
         typeof (parsed as { raw?: unknown }).raw === 'string' &&
         typeof (parsed as { format?: unknown }).format === 'string'
       ) {
-        return parsed as ZoteroCacheStateV1;
+        return parsed as ZoteroCacheStateV2;
       }
     } catch {
       // Missing or corrupt cache behaves exactly like no cache.
@@ -168,16 +248,20 @@ export class ZoteroSource implements DataSource {
   }
 
   /** Write the raw export to the cache file (best-effort, errors are silent). */
-  private async writeCache(raw: string): Promise<void> {
+  private async writeCache(
+    raw: string,
+    attachments?: Record<string, unknown[]>,
+  ): Promise<void> {
     if (!this.fileSystem || !this.cachePath) return;
     try {
       await this.fileSystem.writeFile(
         this.cachePath,
         JSON.stringify({
-          version: 1,
+          version: 2,
           format: this.format,
           raw,
-        } satisfies ZoteroCacheStateV1),
+          ...(attachments ? { attachments } : {}),
+        } satisfies ZoteroCacheStateV2),
       );
     } catch {
       // Cache write failure is not critical.

@@ -318,3 +318,77 @@ Iterate with `{{#each entry.highlights}}`:
 ```
 
 For non-Readwise entries this array is empty, so the loop renders nothing.
+
+## Zotero PDF Annotations
+
+When a live Zotero database has **Import PDF annotations** enabled (see [Data Sources](../data-sources.md#live-zotero-connection-better-bibtex)), entries expose native Zotero PDF annotations — the highlights, comments, and notes you made in Zotero's built-in PDF reader.
+
+### `annotations` Array
+
+Each item is one annotation, in document order per attachment:
+
+| Property | Description | Example |
+|----------|-------------|---------|
+| `text` | Highlighted / underlined text (empty for note and image annotations) | `A key finding.` |
+| `comment` | Your comment on the annotation | `Compare with Smith 2020` |
+| `type` | `highlight`, `underline`, `note`, `image`, `ink` | `highlight` |
+| `color` | Hex color | `#ffd400` |
+| `colorName` | Zotero palette name: `yellow`, `red`, `green`, `blue`, `purple`, `magenta`, `orange`, `gray` (null for custom colors) | `yellow` |
+| `page` | 1-based page number | `12` |
+| `pageLabel` | Page label from the PDF (may be roman numerals) | `xii` |
+| `openURI` | Deep link opening the PDF in Zotero **at this annotation** | `zotero://open-pdf/library/items/KEY?page=12&annotation=ANNOT` |
+| `imagePath` | Absolute path to the cached image for image annotations | |
+| `tags` | Tags on the annotation | `["method"]` |
+| `dateModified` | ISO timestamp | `2026-01-15T10:30:00Z` |
+| `key` | Zotero annotation key | `ABCD1234` |
+| `attachmentKey` / `attachmentPath` / `attachmentTitle` | Which PDF the annotation belongs to | |
+| `sortIndex` | Zotero sort index (document order) | `00011\|001234\|00100` |
+
+### `attachments` Array
+
+One item per Zotero attachment returned for the entry:
+
+| Property | Description |
+|----------|-------------|
+| `key` | Zotero attachment item key |
+| `path` | Absolute file path |
+| `title` | File basename without extension |
+| `openURI` | `zotero://open-pdf/...` link for the attachment |
+| `annotationCount` | Number of annotations on this attachment |
+
+### `annotationCount`
+
+Total number of annotations on the entry (`0` when none or the feature is off) — handy for conditionals.
+
+### Examples
+
+Render every annotation as a quote with a jump-back link:
+
+```handlebars
+{{#if annotationCount}}
+## Annotations
+
+{{#each annotations}}
+> {{this.text}}{{#if this.comment}}
+> — *{{this.comment}}*{{/if}}
+> [p. {{this.pageLabel}}]({{this.openURI}})
+
+{{/each}}
+{{/if}}
+```
+
+Group by color meaning (e.g. yellow = key claims, red = disagreements):
+
+```handlebars
+## Key claims
+{{#each annotations}}{{#if (eq this.colorName "yellow")}}
+- {{this.text}} ([p. {{this.pageLabel}}]({{this.openURI}}))
+{{/if}}{{/each}}
+
+## Disagreements
+{{#each annotations}}{{#if (eq this.colorName "red")}}
+- {{this.text}} ([p. {{this.pageLabel}}]({{this.openURI}}))
+{{/if}}{{/each}}
+```
+
+For entries from file-based databases (or with the toggle off) `annotations` is absent and these sections render nothing.

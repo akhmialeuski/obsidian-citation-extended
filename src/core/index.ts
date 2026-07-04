@@ -11,6 +11,7 @@ export {
   generateDatabaseId,
   resolveReadwiseFilters,
   resolveZoteroExportNotes,
+  resolveZoteroImportAnnotations,
 } from './types/database';
 export type { TemplateContext } from './types/template-context';
 export { WORKER_TASK_KINDS } from './types/worker-protocol';
@@ -55,12 +56,19 @@ export {
   ZoteroConnectorClient,
   ZoteroApiError,
   ZoteroAbortError,
+  ZOTERO_ANNOTATION_COLOR_NAMES,
+  zoteroColorName,
+  normalizeZoteroAttachments,
 } from './zotero';
 export type {
   ZoteroHttpResponse,
   ZoteroHttpGetFn,
   ZoteroHttpPostFn,
   ZoteroVersions,
+  ZoteroAttachmentsFetchResult,
+  ZoteroAnnotation,
+  ZoteroAttachment,
+  NormalizedAttachments,
 } from './zotero';
 
 // Readwise incremental sync (delta merge)

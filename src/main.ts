@@ -48,6 +48,7 @@ import {
   ReadwiseApiClient,
   resolveReadwiseFilters,
   resolveZoteroExportNotes,
+  resolveZoteroImportAnnotations,
   ZoteroConnectorClient,
 } from './core';
 import LoadWorker from 'web-worker:./worker';
@@ -215,6 +216,10 @@ export default class CitationPlugin extends Plugin {
           // settings change applies without recreating the source.
           () =>
             resolveSyncIntervalMs(this.settings.zoteroSyncIntervalMinutes) ?? 0,
+          resolveZoteroImportAnnotations(
+            this.settings.databases,
+            def.databaseId,
+          ),
         ),
     );
 

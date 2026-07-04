@@ -337,16 +337,35 @@ export class CitationSettingTab extends PluginSettingTab {
       });
 
     new Setting(card)
-      .setName('Import notes & annotations')
+      .setName('Import notes')
       .setDesc(
-        'Include Zotero notes and PDF annotations in the export ' +
-          '(exportNotes=true). They become available via the {{note}} template variable.',
+        'Include Zotero child notes in the export (exportNotes=true). ' +
+          'They become available via the {{note}} template variable.',
       )
       .addToggle((toggle) => {
         toggle
           .setValue(db.zoteroExportNotes ?? false)
           .onChange(async (value) => {
             this.plugin.settings.databases[index].zoteroExportNotes = value;
+            await this.plugin.saveSettings();
+            // Recreating the source (key includes this flag) happens on reload.
+            void this.plugin.libraryService.load();
+          });
+      });
+
+    new Setting(card)
+      .setName('Import PDF annotations')
+      .setDesc(
+        'Fetch native Zotero PDF annotations (highlights, comments, colors, ' +
+          'page deep-links) for every entry. Available in templates via ' +
+          '{{annotations}} and {{attachments}}. Requires Better BibTeX.',
+      )
+      .addToggle((toggle) => {
+        toggle
+          .setValue(db.zoteroImportAnnotations ?? false)
+          .onChange(async (value) => {
+            this.plugin.settings.databases[index].zoteroImportAnnotations =
+              value;
             await this.plugin.saveSettings();
             // Recreating the source (key includes this flag) happens on reload.
             void this.plugin.libraryService.load();

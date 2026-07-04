@@ -711,9 +711,13 @@ describe('CitationSettingTab', () => {
       const toggles = allComponents((s) => s.getToggleComponents()) as Array<{
         triggerChange(v: boolean): void;
       }>;
-      // The second toggle is "Import notes & annotations".
+      // The second toggle is "Import notes".
       toggles[1].triggerChange(true);
       expect(plugin.settings.databases[0].zoteroExportNotes).toBe(true);
+
+      // The third toggle is "Import PDF annotations".
+      toggles[2].triggerChange(true);
+      expect(plugin.settings.databases[0].zoteroImportAnnotations).toBe(true);
 
       const texts = allComponents((s) => s.getTextComponents()) as Array<{
         triggerChange(v: string): void;

@@ -361,9 +361,12 @@ export class SourceManager implements ISourceManager {
       )}`;
     }
     if (transport === DATA_SOURCE_TYPES.Zotero) {
-      // Fold the export-notes flag in so toggling it recreates the source (the
-      // factory snapshots it). The URL is not a secret, kept verbatim.
-      return `${db.path}:notes-${db.zoteroExportNotes ? 1 : 0}`;
+      // Fold the export-notes and import-annotations flags in so toggling
+      // either recreates the source (the factory snapshots them). The URL is
+      // not a secret, kept verbatim.
+      return `${db.path}:notes-${db.zoteroExportNotes ? 1 : 0}:annot-${
+        db.zoteroImportAnnotations ? 1 : 0
+      }`;
     }
     return db.path;
   }

@@ -93,6 +93,26 @@ describe('SettingsSchema', () => {
         expect(result.data.databases[0].zoteroExportNotes).toBe(true);
       }
     });
+
+    it('preserves the Zotero import-annotations flag on a database', () => {
+      const settings = {
+        ...DEFAULT_SETTINGS,
+        databases: [
+          {
+            name: 'Zotero',
+            type: 'csl-json',
+            path: 'http://127.0.0.1:23119/better-bibtex/collection?/0/A.json',
+            sourceType: 'zotero',
+            zoteroImportAnnotations: true,
+          },
+        ],
+      };
+      const result = validateSettings(settings);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.databases[0].zoteroImportAnnotations).toBe(true);
+      }
+    });
   });
 
   describe('zoteroSyncIntervalMinutes', () => {

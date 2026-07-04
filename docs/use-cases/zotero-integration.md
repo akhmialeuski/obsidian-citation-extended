@@ -251,7 +251,7 @@ Instead of exporting a file and watching it, the plugin can fetch the library **
 1. In Zotero, right-click a library or collection → **Download Better BibTeX export…** and copy the URL (choose the **Better CSL JSON** or **BibLaTeX** variant).
 2. In plugin settings, add a database, set its **type** to match, and enable **Load live from Zotero (Better BibTeX)**.
 3. Paste the URL into **Better BibTeX export URL** and click **Test connection** — it reports the Zotero and Better BibTeX versions on success.
-4. Optionally enable **Import notes & annotations** to pull Zotero notes and PDF annotations into `{{note}}`, and set an **Auto-sync interval** to re-fetch periodically.
+4. Optionally enable **Import notes** to pull Zotero child notes into `{{note}}`, and set an **Auto-sync interval** to re-fetch periodically.
 
 Requirements and trade-offs:
 
@@ -260,6 +260,39 @@ Requirements and trade-offs:
 - There is no file to watch, so updates arrive on the auto-sync interval or when you run **Sync now** / **Refresh citation database** (rather than instantly on change).
 
 See [Data Sources: Zotero (Better BibTeX) live connection](../data-sources.md#zotero-better-bibtex-live-connection) for details.
+
+### Import PDF annotations (highlights with colors and deep links)
+
+With the live connection active, enable **Import PDF annotations** on the database card to bring your Zotero PDF reader highlights into templates as structured data. Each annotation carries its text, your comment, the color (hex + palette name), the page, tags, and a deep link that opens the PDF in Zotero **at that exact annotation**.
+
+A template section that renders annotations as linked quotes:
+
+```handlebars
+{{#if annotationCount}}
+## Annotations ({{annotationCount}})
+
+{{#each annotations}}
+> {{#if this.text}}{{this.text}}{{else}}*({{this.type}} annotation)*{{/if}}
+{{#if this.comment}}> — {{this.comment}}{{/if}}
+> [page {{this.pageLabel}}]({{this.openURI}})
+
+{{/each}}
+{{/if}}
+```
+
+Filter by color to give highlight colors meaning (yellow = key claims, red = critique):
+
+```handlebars
+{{#each annotations}}{{#if (eq this.colorName "red")}}
+- {{this.text}} ([p. {{this.pageLabel}}]({{this.openURI}}))
+{{/if}}{{/each}}
+```
+
+Notes:
+
+- Works with both Better CSL JSON and BibLaTeX formats — annotations are fetched separately via the Better BibTeX JSON-RPC API, not from the export file.
+- Clicking an annotation link opens Zotero's PDF reader on the right page with the annotation selected.
+- The full field list is in [Template Variables: Zotero PDF Annotations](../templates/variables.md#zotero-pdf-annotations).
 
 ### CSL-JSON Export
 

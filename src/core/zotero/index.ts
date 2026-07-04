@@ -8,4 +8,15 @@ export type {
   ZoteroHttpGetFn,
   ZoteroHttpPostFn,
   ZoteroVersions,
+  ZoteroAttachmentsFetchResult,
 } from './zotero-client';
+export {
+  ZOTERO_ANNOTATION_COLOR_NAMES,
+  zoteroColorName,
+  normalizeZoteroAttachments,
+} from './zotero-annotations';
+export type {
+  ZoteroAnnotation,
+  ZoteroAttachment,
+  NormalizedAttachments,
+} from './zotero-annotations';
