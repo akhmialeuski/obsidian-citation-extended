@@ -8,6 +8,7 @@ Practical, step-by-step guides for common workflows with Obsidian Citation Exten
 
 - [Citing a Source](citing-a-source.md) — Insert a citation while writing, using primary and secondary formats
 - [Creating Literature Notes](creating-literature-notes.md) — Create, organize, and manage literature notes from your references
+- [Updating Literature Notes](updating-literature-notes.md) — Re-sync notes with the library via three-way merge, without ever losing manual edits
 - [Multi-Citation Workflow](multi-citation-workflow.md) — Insert multiple citations at once or append to existing ones
 - [Navigating from Citation to Note](navigating-from-citation-to-note.md) — Jump from a citation in your text directly to its literature note
 

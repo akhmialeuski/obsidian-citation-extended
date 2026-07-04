@@ -50,6 +50,7 @@ export interface INoteService {
     citekey: string,
     library: Library,
   ): IVaultFile | null;
+  findCitekeyForFile(file: IVaultFile, library: Library): string | null;
   getOrCreateLiteratureNoteFile(
     citekey: string,
     library: Library,

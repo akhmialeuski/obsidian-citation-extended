@@ -226,3 +226,43 @@
   font-size: 13px;
   padding: 8px 0;
 }
+
+/* Update review dialog (note sync diff) */
+.citation-update-review .citation-review-diff {
+  max-height: 45vh;
+  overflow: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  margin: 8px 0 12px;
+}
+
+.citation-update-review .citation-review-pre {
+  margin: 0;
+  padding: 8px;
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.citation-update-review .citation-diff-line.is-added {
+  background-color: rgba(var(--color-green-rgb), 0.14);
+  color: var(--text-normal);
+}
+
+.citation-update-review .citation-diff-line.is-removed {
+  background-color: rgba(var(--color-red-rgb), 0.12);
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.citation-update-review .citation-diff-line.is-fold {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+.citation-update-review .citation-review-conflicts {
+  color: var(--text-warning, var(--text-accent));
+  font-size: 13px;
+}

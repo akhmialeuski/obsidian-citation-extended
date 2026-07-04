@@ -150,6 +150,10 @@ class ObsidianWorkspaceAccess implements IWorkspaceAccess {
     return (ext.activeEditor?.editor as IEditorProxy) ?? null;
   }
 
+  getActiveFile(): IVaultFile | null {
+    return this.app.workspace.getActiveFile();
+  }
+
   async openFile(file: IVaultFile, newPane: boolean): Promise<void> {
     const tFile = this.app.vault.getAbstractFileByPath(file.path);
     if (tFile instanceof TFile) {

@@ -15,6 +15,7 @@ Welcome to the documentation for Obsidian Citation Extended, a plugin that integ
 - **[Use Cases](use-cases/index.md)** — Step-by-step guides for common workflows
   - [Citing a Source](use-cases/citing-a-source.md) — Insert citations while writing
   - [Creating Literature Notes](use-cases/creating-literature-notes.md) — Create and organize literature notes
+  - [Updating Literature Notes](use-cases/updating-literature-notes.md) — Re-sync notes without losing manual edits
   - [Multi-Citation Workflow](use-cases/multi-citation-workflow.md) — Insert multiple citations at once
   - [Navigating from Citation to Note](use-cases/navigating-from-citation-to-note.md) — Jump from citation to note
   - [Linking Literature Notes](use-cases/linking-literature-notes.md) — Insert wiki/Markdown links to notes

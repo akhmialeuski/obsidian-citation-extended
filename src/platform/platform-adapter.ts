@@ -95,6 +95,9 @@ export interface IWorkspaceAccess {
   /** Return the currently active editor, or null when no editor is focused. */
   getActiveEditor(): IEditorProxy | null;
 
+  /** Return the currently active vault file, or null when none is open. */
+  getActiveFile(): IVaultFile | null;
+
   /** Open a vault file in a pane. */
   openFile(file: IVaultFile, newPane: boolean): Promise<void>;
 

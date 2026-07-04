@@ -404,3 +404,46 @@ describe('resolveSyncIntervalMs', () => {
     ).toBeLessThan(2 ** 31);
   });
 });
+
+describe('note update settings', () => {
+  it('defaults to smart sync with review-on-conflicts', () => {
+    const result = validateSettings({ ...DEFAULT_SETTINGS });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.noteUpdateMode).toBe('sync');
+      expect(result.data.updateConfirmation).toBe('conflicts');
+    }
+  });
+
+  it('accepts every documented mode and confirmation value', () => {
+    for (const noteUpdateMode of ['sync', 'frontmatter', 'overwrite']) {
+      for (const updateConfirmation of ['conflicts', 'always', 'never']) {
+        const result = validateSettings({
+          ...DEFAULT_SETTINGS,
+          noteUpdateMode,
+          updateConfirmation,
+        });
+        expect(result.success).toBe(true);
+      }
+    }
+  });
+
+  it('rejects unknown mode values', () => {
+    const result = validateSettings({
+      ...DEFAULT_SETTINGS,
+      noteUpdateMode: 'yolo',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('migrates the legacy "preserve" mode to "sync"', () => {
+    const result = validateSettings({
+      ...DEFAULT_SETTINGS,
+      noteUpdateMode: 'preserve',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.noteUpdateMode).toBe('sync');
+    }
+  });
+});

@@ -19,7 +19,10 @@ import {
   ZoteroConnectorClient,
   ZoteroLocalApiClient,
   ZOTERO_LOCAL_API_DEFAULT_BASE,
+  NOTE_UPDATE_MODE_LABELS,
+  UPDATE_CONFIRMATION_LABELS,
 } from '../../core';
+import type { NoteUpdateMode, UpdateConfirmationMode } from '../../core';
 import {
   obsidianHttpGet,
   obsidianZoteroGet,
@@ -1075,6 +1078,41 @@ export class CitationSettingTab extends PluginSettingTab {
         'or leave empty to remove characters entirely.',
       'filenameSanitizationReplacement',
     );
+
+    new Setting(containerEl)
+      .setName('Note update mode')
+      .setDesc(
+        'How "Update literature note(s)" treats existing notes. Smart sync ' +
+          'manages only the callout blocks and frontmatter keys produced by ' +
+          'your template (merging your edits and library changes three-way) ' +
+          'and never touches anything else; frontmatter-only leaves the body ' +
+          'alone entirely; overwrite replaces the whole note.',
+      )
+      .addDropdown((dropdown) => {
+        dropdown.addOptions(NOTE_UPDATE_MODE_LABELS);
+        dropdown.setValue(this.plugin.settings.noteUpdateMode);
+        dropdown.onChange(async (value) => {
+          this.plugin.settings.noteUpdateMode = value as NoteUpdateMode;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName('Review changes before writing')
+      .setDesc(
+        'When to show the diff dialog during note updates. Conflicts happen ' +
+          'when both you and the library changed the same block or ' +
+          'frontmatter key since the last sync.',
+      )
+      .addDropdown((dropdown) => {
+        dropdown.addOptions(UPDATE_CONFIRMATION_LABELS);
+        dropdown.setValue(this.plugin.settings.updateConfirmation);
+        dropdown.onChange(async (value) => {
+          this.plugin.settings.updateConfirmation =
+            value as UpdateConfirmationMode;
+          await this.plugin.saveSettings();
+        });
+      });
 
     new Setting(containerEl).setName('Literature note templates').setHeading();
 

@@ -37,6 +37,8 @@ import {
 } from './application/content-template-resolver';
 
 import { BatchNoteOrchestrator } from './notes/batch/batch-note-orchestrator';
+import { BaselineStore } from './notes/baseline-store';
+import { ModalUpdateReviewPresenter } from './ui/modals/update-review-modal';
 import { CitationSettingTab } from './ui/settings/settings-tab';
 import { CitationsPluginSettings } from './ui/settings/settings';
 import {
@@ -300,11 +302,20 @@ export default class CitationPlugin extends Plugin {
     );
 
     this.templateService = new TemplateService(this.settings);
+
+    // Baselines power the three-way note sync: they record what the plugin
+    // last rendered so updates can tell user edits from library changes.
+    const baselineStore = new BaselineStore(
+      platformAdapter.fileSystem,
+      readwiseCacheDir ? `${readwiseCacheDir}/note-baselines.json` : '',
+    );
+
     this.noteService = new NoteService(
       platformAdapter,
       this.settings,
       this.templateService,
       () => this.contentTemplateResolver.resolve(),
+      baselineStore,
     );
     this.libraryService = new LibraryService(
       this.settings,
@@ -326,6 +337,8 @@ export default class CitationPlugin extends Plugin {
       this.noteService,
       this.templateService,
       platformAdapter.vault,
+      baselineStore,
+      new ModalUpdateReviewPresenter(this.app),
     );
 
     this.uiService = new UIService(this);

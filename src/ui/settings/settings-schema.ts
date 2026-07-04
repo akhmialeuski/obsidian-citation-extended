@@ -1,5 +1,11 @@
 import { z } from 'zod';
 import { DATABASE_FORMATS, DatabaseType } from '../../core/types/database';
+import {
+  NOTE_UPDATE_MODES,
+  DEFAULT_NOTE_UPDATE_MODE,
+  UPDATE_CONFIRMATION_MODES,
+  DEFAULT_UPDATE_CONFIRMATION,
+} from '../../core/sync/note-update-mode';
 
 // Zod-compatible tuple derived from DATABASE_FORMATS constants
 const DATABASE_FORMAT_ENUM = Object.values(DATABASE_FORMATS) as [
@@ -102,6 +108,13 @@ export const SettingsSchema = z.object({
     })
     .default('_'),
   autoCreateNoteOnCitation: z.boolean().default(false),
+  // How "Update literature note(s)" treats existing notes: smart sync
+  // (callout blocks + 3-way merge), frontmatter-only, or full overwrite.
+  noteUpdateMode: z.enum(NOTE_UPDATE_MODES).default(DEFAULT_NOTE_UPDATE_MODE),
+  // When the diff review dialog is required before writing an update.
+  updateConfirmation: z
+    .enum(UPDATE_CONFIRMATION_MODES)
+    .default(DEFAULT_UPDATE_CONFIRMATION),
   literatureNoteLinkDisplayTemplate: z.string().default(''),
   // Inline editor autocomplete: when enabled, typing `@`/`[@` shows a citekey
   // suggestion popover backed by the same search index as the search modal.
@@ -210,6 +223,8 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   referenceListSortOrder: 'default',
   filenameSanitizationReplacement: '_',
   autoCreateNoteOnCitation: false,
+  noteUpdateMode: DEFAULT_NOTE_UPDATE_MODE,
+  updateConfirmation: DEFAULT_UPDATE_CONFIRMATION,
   literatureNoteLinkDisplayTemplate: '',
   enableInlineSuggestions: true,
   bibliographyEntryTemplate:
@@ -229,5 +244,21 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
 };
 
 export function validateSettings(settings: unknown) {
-  return SettingsSchema.safeParse(settings);
+  return SettingsSchema.safeParse(normalizeLegacySettings(settings));
+}
+
+/**
+ * Map values written by older builds onto the current schema before
+ * validation. Currently: the pre-release `preserve` note update mode
+ * (persist-marker model) becomes `sync` (its successor).
+ */
+export function normalizeLegacySettings(settings: unknown): unknown {
+  if (
+    settings !== null &&
+    typeof settings === 'object' &&
+    (settings as { noteUpdateMode?: unknown }).noteUpdateMode === 'preserve'
+  ) {
+    return { ...settings, noteUpdateMode: DEFAULT_NOTE_UPDATE_MODE };
+  }
+  return settings;
 }

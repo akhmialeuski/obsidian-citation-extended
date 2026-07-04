@@ -22,6 +22,7 @@ import {
   RefreshLibraryAction,
   OpenNoteAtCursorAction,
   BatchUpdateNotesAction,
+  UpdateCurrentNoteAction,
 } from '../application/actions';
 
 /**
@@ -74,6 +75,13 @@ export class UIService implements IUIService {
     actionRegistry.register(new InsertMultiCitationAction(actionCtx));
     actionRegistry.register(
       new BatchUpdateNotesAction(
+        actionCtx,
+        this.plugin.batchOrchestrator,
+        this.plugin.contentTemplateResolver,
+      ),
+    );
+    actionRegistry.register(
+      new UpdateCurrentNoteAction(
         actionCtx,
         this.plugin.batchOrchestrator,
         this.plugin.contentTemplateResolver,

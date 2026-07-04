@@ -2,6 +2,7 @@ import * as path from 'path';
 import { CitationsPluginSettings } from '../ui/settings/settings';
 import { INoteService, ITemplateService, IPlatformAdapter } from '../container';
 import { IVaultFile } from '../platform/platform-adapter';
+import type { IBaselineStore } from './baseline-store';
 import {
   Library,
   LiteratureNoteNotFoundError,
@@ -22,6 +23,8 @@ export class NoteService implements INoteService {
     private settings: CitationsPluginSettings,
     private templateService: ITemplateService,
     resolveContentTemplate?: ContentTemplateResolver,
+    /** Records the rendered content as the sync baseline for new notes. */
+    private baselineStore?: IBaselineStore,
   ) {
     this.resolveContentTemplate =
       resolveContentTemplate ?? (() => Promise.resolve(''));
@@ -221,7 +224,18 @@ export class NoteService implements INoteService {
     if (!contentResult.ok) {
       throw contentResult.error;
     }
-    return this.platform.vault.create(notePath, contentResult.value);
+    const created = await this.platform.vault.create(
+      notePath,
+      contentResult.value,
+    );
+    // Best-effort: the baseline lets later updates tell user edits apart
+    // from library changes from the very first sync.
+    try {
+      await this.baselineStore?.recordFromRender(citekey, contentResult.value);
+    } catch (e) {
+      console.warn('Citations: could not record note baseline', e);
+    }
+    return created;
   }
 
   /**
@@ -289,6 +303,52 @@ export class NoteService implements INoteService {
     }
 
     return null;
+  }
+
+  /**
+   * Reverse lookup: find the library citekey that a vault file belongs to.
+   *
+   * Resolution order mirrors {@link findExistingLiteratureNoteFile}:
+   * 1. The configured frontmatter identifier field, when set.
+   * 2. Exact rendered-title path match against every library entry.
+   * 3. Basename match (handles notes moved to another folder), accepted only
+   *    when unambiguous.
+   *
+   * Returns null when the file cannot be matched to any entry.
+   *
+   * @throws {TemplateRenderError} when the title template fails to render
+   */
+  findCitekeyForFile(file: IVaultFile, library: Library): string | null {
+    const identifierField = this.settings.noteIdentifierField;
+    if (identifierField) {
+      const fm = this.platform.vault.getFrontmatter(file);
+      const value = fm?.[identifierField];
+      if (
+        value != null &&
+        (typeof value === 'string' || typeof value === 'number') &&
+        library.entries[String(value)]
+      ) {
+        return String(value);
+      }
+    }
+
+    const filePath = this.platform.normalizePath(file.path).toLowerCase();
+    const fileName = file.name.toLowerCase();
+    const basenameMatches: string[] = [];
+
+    for (const citekey of Object.keys(library.entries)) {
+      const notePath = this.platform
+        .normalizePath(this.getPathForCitekey(citekey, library))
+        .toLowerCase();
+      if (notePath === filePath) {
+        return citekey;
+      }
+      if (notePath.split('/').pop() === fileName) {
+        basenameMatches.push(citekey);
+      }
+    }
+
+    return basenameMatches.length === 1 ? basenameMatches[0] : null;
   }
 
   /**

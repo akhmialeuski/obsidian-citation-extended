@@ -7,6 +7,7 @@ import { InsertNoteLinkAction } from '../../../../src/application/actions/insert
 import { OpenNoteAction } from '../../../../src/application/actions/open-note.action';
 import { OpenNoteAtCursorAction } from '../../../../src/application/actions/open-note-at-cursor.action';
 import { BatchUpdateNotesAction } from '../../../../src/application/actions/batch-update.action';
+import { UpdateCurrentNoteAction } from '../../../../src/application/actions/update-current-note.action';
 import { ActionContext } from '../../../../src/application/actions/action.types';
 import { LiteratureNoteNotFoundError } from '../../../../src/core/errors';
 import type { IBatchNoteOrchestrator } from '../../../../src/notes/batch/batch-update.types';
@@ -57,6 +58,7 @@ function makeCtx(): ActionContext & { _editor: any } {
     platform: {
       workspace: {
         getActiveEditor: jest.fn(() => editor),
+        getActiveFile: jest.fn(() => null),
         getConfig: jest.fn(() => null),
         fileToLinktext: jest.fn(() => 'link'),
         openUrl: jest.fn(),
@@ -81,6 +83,8 @@ function makeCtx(): ActionContext & { _editor: any } {
       autoCreateNoteOnCitation: false,
       disableAutomaticNoteCreation: false,
       literatureNoteLinkDisplayTemplate: '',
+      noteUpdateMode: 'sync',
+      updateConfirmation: 'conflicts',
     },
     _editor: editor,
   } as unknown as ActionContext & {
@@ -831,6 +835,8 @@ describe('BatchUpdateNotesAction', () => {
   let resolver: { resolve: jest.Mock };
   let action: BatchUpdateNotesAction;
 
+  const EMPTY = { updated: [], skipped: [], conflicts: [], errors: [] };
+
   beforeEach(() => {
     ctx = makeCtx();
     orchestrator = {
@@ -851,33 +857,36 @@ describe('BatchUpdateNotesAction', () => {
     expect(action.descriptor.icon).toBe('refresh-cw');
   });
 
+  it('passes mode and confirmation from settings to the orchestrator', async () => {
+    orchestrator.preview.mockResolvedValue({ ...EMPTY });
+
+    await action.execute({});
+
+    expect(orchestrator.preview).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'sync', confirmation: 'conflicts' }),
+    );
+  });
+
   it('shows "up to date" when preview returns 0 changes', async () => {
-    orchestrator.preview.mockResolvedValue({
-      updated: [],
-      skipped: [],
-      errors: [],
-    });
+    orchestrator.preview.mockResolvedValue({ ...EMPTY });
 
     await action.execute({});
 
     expect(resolver.resolve).toHaveBeenCalled();
-    expect(orchestrator.preview).toHaveBeenCalled();
     expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
       'Citations: All notes are already up to date.',
     );
     expect(orchestrator.execute).not.toHaveBeenCalled();
   });
 
-  it('executes batch update when preview finds changes', async () => {
+  it('executes the batch update when preview finds changes', async () => {
     orchestrator.preview.mockResolvedValue({
+      ...EMPTY,
       updated: ['a', 'b', 'c'],
-      skipped: [],
-      errors: [],
     });
     orchestrator.execute.mockResolvedValue({
+      ...EMPTY,
       updated: ['a', 'b', 'c'],
-      skipped: [],
-      errors: [],
     });
 
     await action.execute({});
@@ -891,16 +900,14 @@ describe('BatchUpdateNotesAction', () => {
     );
   });
 
-  it('uses singular "note" for single change', async () => {
+  it('counts pending conflicts as work in the preview notice', async () => {
     orchestrator.preview.mockResolvedValue({
-      updated: ['a'],
-      skipped: [],
-      errors: [],
+      ...EMPTY,
+      conflicts: [{ citekey: 'a', conflictIds: ['meta'] }],
     });
     orchestrator.execute.mockResolvedValue({
+      ...EMPTY,
       updated: ['a'],
-      skipped: [],
-      errors: [],
     });
 
     await action.execute({});
@@ -910,86 +917,197 @@ describe('BatchUpdateNotesAction', () => {
     );
   });
 
-  it('reports skipped and error counts in summary', async () => {
-    orchestrator.preview.mockResolvedValue({
-      updated: ['a'],
-      skipped: [],
-      errors: [],
-    });
+  it('reports conflicts, skips, and errors in the summary', async () => {
+    const debugSpy = jest.spyOn(console, 'debug').mockImplementation();
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    orchestrator.preview.mockResolvedValue({ ...EMPTY, updated: ['a'] });
     orchestrator.execute.mockResolvedValue({
       updated: ['a'],
       skipped: ['b'],
-      errors: [{ citekey: 'c', error: 'fail' }],
+      conflicts: [{ citekey: 'c', conflictIds: ['meta'] }],
+      errors: [{ citekey: 'd', error: 'fail' }],
     });
-    const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
 
     await action.execute({});
 
     expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
-      'Citations: Batch update complete. Updated: 1 · Skipped: 1 · Errors: 1',
+      'Citations: Batch update complete. Updated: 1 · Conflicts skipped: 1 · Skipped: 1 · Errors: 1',
     );
-    expect(consoleSpy).toHaveBeenCalledWith(
+    expect(warnSpy).toHaveBeenCalledWith(
       'Citations batch update errors:',
       expect.any(Array),
     );
-    consoleSpy.mockRestore();
+    debugSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 
-  it('invokes progress callback during execution', async () => {
+  it('shows library-not-ready and stops', async () => {
     orchestrator.preview.mockResolvedValue({
-      updated: ['a'],
-      skipped: [],
-      errors: [],
+      ...EMPTY,
+      libraryNotReady: true,
     });
-    orchestrator.execute.mockImplementation(
-      async (
-        _req: unknown,
-        onProgress: (p: { current: number; total: number }) => void,
-      ) => {
-        // Simulate progress at current=10 (divisible by 10)
-        onProgress({ current: 10, total: 20 });
-        // Simulate progress at current=20 (equals total)
-        onProgress({ current: 20, total: 20 });
-        return { updated: ['a'], skipped: [], errors: [] };
-      },
-    );
 
     await action.execute({});
 
     expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
-      'Citations: Updated 10/20 notes…',
+      'Citations: Library is not loaded yet.',
     );
-    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
-      'Citations: Updated 20/20 notes…',
-    );
+    expect(orchestrator.execute).not.toHaveBeenCalled();
   });
 
-  it('skips progress notification for non-milestone steps', async () => {
-    orchestrator.preview.mockResolvedValue({
-      updated: ['a'],
-      skipped: [],
-      errors: [],
-    });
+  it('reports scan progress at milestones only', async () => {
+    orchestrator.preview.mockResolvedValue({ ...EMPTY, updated: ['a'] });
     orchestrator.execute.mockImplementation(
       async (
         _req: unknown,
         onProgress: (p: { current: number; total: number }) => void,
       ) => {
-        // Step 3 is not divisible by 10 and is not equal to total
         onProgress({ current: 3, total: 20 });
-        return { updated: ['a'], skipped: [], errors: [] };
+        onProgress({ current: 10, total: 20 });
+        onProgress({ current: 20, total: 20 });
+        return { ...EMPTY, updated: ['a'] };
       },
     );
 
     await action.execute({});
 
-    // The "Updated 3/20" message should NOT appear
-    const showCalls = (ctx.platform.notifications.show as jest.Mock).mock.calls;
-    const progressMsgs = showCalls.filter(
-      (c: string[]) =>
-        typeof c[0] === 'string' && c[0].includes('Updated 3/20'),
+    const messages = (
+      ctx.platform.notifications.show as jest.Mock
+    ).mock.calls.map((c: string[]) => c[0]);
+    expect(messages).toContain('Citations: Scanned 10/20 notes…');
+    expect(messages).toContain('Citations: Scanned 20/20 notes…');
+    expect(messages).not.toContain('Citations: Scanned 3/20 notes…');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// UpdateCurrentNoteAction
+// ---------------------------------------------------------------------------
+describe('UpdateCurrentNoteAction', () => {
+  let ctx: ReturnType<typeof makeCtx>;
+  let orchestrator: { preview: jest.Mock; execute: jest.Mock };
+  let resolver: { resolve: jest.Mock };
+  let action: UpdateCurrentNoteAction;
+
+  const EMPTY = { updated: [], skipped: [], conflicts: [], errors: [] };
+  const activeFile = {
+    path: 'Reading notes/@test2024.md',
+    name: '@test2024.md',
+  };
+
+  beforeEach(() => {
+    ctx = makeCtx();
+    (ctx.platform.workspace.getActiveFile as jest.Mock).mockReturnValue(
+      activeFile,
     );
-    expect(progressMsgs).toHaveLength(0);
+    (
+      ctx.noteService as unknown as Record<string, jest.Mock>
+    ).findCitekeyForFile = jest.fn(() => 'test2024');
+    orchestrator = { preview: jest.fn(), execute: jest.fn() };
+    resolver = { resolve: jest.fn().mockResolvedValue('{{title}}') };
+    action = new UpdateCurrentNoteAction(
+      ctx,
+      orchestrator as unknown as IBatchNoteOrchestrator,
+      resolver as unknown as IContentTemplateResolver,
+    );
+  });
+
+  it('has the correct descriptor', () => {
+    expect(action.descriptor.id).toBe('update-current-note');
+    expect(action.descriptor.name).toBe(
+      'Update literature note for current file',
+    );
+  });
+
+  it('notifies when there is no active file', async () => {
+    (ctx.platform.workspace.getActiveFile as jest.Mock).mockReturnValue(null);
+
+    await action.execute({});
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'Citations: No active file.',
+    );
+    expect(orchestrator.execute).not.toHaveBeenCalled();
+  });
+
+  it('notifies when the library is not loaded', async () => {
+    (ctx.libraryService as { library: null }).library = null;
+
+    await action.execute({});
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'Citations: Library is not loaded yet.',
+    );
+    expect(orchestrator.execute).not.toHaveBeenCalled();
+  });
+
+  it('notifies when the file matches no library entry', async () => {
+    (
+      ctx.noteService as unknown as Record<string, jest.Mock>
+    ).findCitekeyForFile.mockReturnValue(null);
+
+    await action.execute({});
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      expect.stringContaining('does not match any library entry'),
+    );
+    expect(orchestrator.execute).not.toHaveBeenCalled();
+  });
+
+  it('updates the matched note with the configured mode and confirmation', async () => {
+    orchestrator.execute.mockResolvedValue({ ...EMPTY, updated: ['test2024'] });
+
+    await action.execute({});
+
+    expect(orchestrator.execute).toHaveBeenCalledWith({
+      citekeys: ['test2024'],
+      templateStr: '{{title}}',
+      dryRun: false,
+      mode: 'sync',
+      confirmation: 'conflicts',
+    });
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'Citations: Updated note for "test2024".',
+    );
+  });
+
+  it('reports unresolved conflicts', async () => {
+    orchestrator.execute.mockResolvedValue({
+      ...EMPTY,
+      conflicts: [{ citekey: 'test2024', conflictIds: ['meta', 'title'] }],
+    });
+
+    await action.execute({});
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      expect.stringContaining('conflicts: meta, title'),
+    );
+  });
+
+  it('reports errors from the orchestrator', async () => {
+    orchestrator.execute.mockResolvedValue({
+      ...EMPTY,
+      errors: [{ citekey: 'test2024', error: 'boom' }],
+    });
+
+    await action.execute({});
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      expect.stringContaining('boom'),
+    );
+  });
+
+  it('reports up-to-date when nothing changed', async () => {
+    orchestrator.execute.mockResolvedValue({
+      ...EMPTY,
+      skipped: ['test2024'],
+    });
+
+    await action.execute({});
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'Citations: Note for "test2024" is already up to date.',
+    );
   });
 });
 

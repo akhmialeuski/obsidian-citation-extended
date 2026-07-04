@@ -229,6 +229,28 @@ When generating filenames for literature notes, characters that are not allowed 
 
 This setting also applies when slashes in data values are replaced to prevent unintended subdirectories, and when batch updates generate filenames via the citation service.
 
+### Note update mode
+
+Controls how **Update all literature notes** and **Update literature note for current file** treat existing notes.
+
+| Mode | Behaviour |
+|------|-----------|
+| **Smart sync** (default) | Only content the plugin owns is managed: frontmatter keys rendered by the template and `{{#syncBlock}}` callouts (marked by native `^zc-…` block IDs). Each is merged three-way against the last synced snapshot, so library changes and your edits combine automatically; real conflicts open the review dialog. Everything else in the note is never touched. |
+| **Update frontmatter only** | Frontmatter keys are merged the same way; the body is never touched. |
+| **Overwrite notes completely** | The whole note is replaced by the freshly rendered template. |
+
+### Review changes before writing
+
+When the diff review dialog appears during note updates:
+
+| Value | Behaviour |
+|-------|-----------|
+| **Only when there are conflicts** (default) | Clean merges are written automatically; the dialog opens only when you and the library changed the same thing. |
+| **Before every change** | Every pending write shows the diff first. |
+| **Never** | Clean merges are written; conflicted notes are skipped and reported. |
+
+See [Updating Literature Notes](use-cases/updating-literature-notes.md) for the full model, including how deletions and pre-existing notes are handled.
+
 ### Literature note title template
 
 A Handlebars template that produces the filename (without `.md`). The default `@{{citekey}}` creates files like `@smith2023.md`.

@@ -997,3 +997,182 @@ describe('NoteService', () => {
     });
   });
 });
+
+describe('NoteService.findCitekeyForFile', () => {
+  let noteService: NoteService;
+  let platform: IPlatformAdapter;
+  let settings: CitationsPluginSettings;
+  let templateService: TemplateService;
+  let library: Library;
+
+  beforeEach(() => {
+    platform = createMockPlatformAdapter();
+    settings = new CitationsPluginSettings();
+    settings.literatureNoteFolder = 'Reading notes';
+
+    templateService = new TemplateService(settings);
+    jest
+      .spyOn(templateService, 'getTemplateVariables')
+      .mockImplementation(
+        (entry: Entry) => ({ citekey: entry.id }) as unknown as TemplateContext,
+      );
+    jest.spyOn(templateService, 'getTitle').mockImplementation((vars) => ({
+      ok: true,
+      value: `@${(vars as { citekey: string }).citekey}`,
+    }));
+
+    noteService = new NoteService(platform, settings, templateService);
+
+    library = new Library({
+      smith2020: { id: 'smith2020' } as Entry,
+      jones2021: { id: 'jones2021' } as Entry,
+    });
+  });
+
+  function file(path: string): IVaultFile {
+    return { path, name: path.split('/').pop()! };
+  }
+
+  it('matches a file by its exact rendered path', () => {
+    expect(
+      noteService.findCitekeyForFile(
+        file('Reading notes/@smith2020.md'),
+        library,
+      ),
+    ).toBe('smith2020');
+  });
+
+  it('matches case-insensitively', () => {
+    expect(
+      noteService.findCitekeyForFile(
+        file('reading Notes/@Smith2020.MD'),
+        library,
+      ),
+    ).toBe('smith2020');
+  });
+
+  it('matches by basename when the note was moved to another folder', () => {
+    expect(
+      noteService.findCitekeyForFile(file('Archive/@jones2021.md'), library),
+    ).toBe('jones2021');
+  });
+
+  it('returns null when no entry matches', () => {
+    expect(
+      noteService.findCitekeyForFile(
+        file('Reading notes/unrelated.md'),
+        library,
+      ),
+    ).toBeNull();
+  });
+
+  it('returns null for an ambiguous basename match', () => {
+    jest
+      .spyOn(templateService, 'getTitle')
+      .mockReturnValue({ ok: true, value: '@same' });
+
+    expect(
+      noteService.findCitekeyForFile(file('Archive/@same.md'), library),
+    ).toBeNull();
+  });
+
+  it('prefers the frontmatter identifier field when configured', () => {
+    settings.noteIdentifierField = 'citekey';
+    (platform.vault.getFrontmatter as jest.Mock).mockReturnValue({
+      citekey: 'jones2021',
+    });
+
+    expect(
+      noteService.findCitekeyForFile(file('Anywhere/renamed.md'), library),
+    ).toBe('jones2021');
+  });
+
+  it('falls back to path matching when the frontmatter value is unknown', () => {
+    settings.noteIdentifierField = 'citekey';
+    (platform.vault.getFrontmatter as jest.Mock).mockReturnValue({
+      citekey: 'not-in-library',
+    });
+
+    expect(
+      noteService.findCitekeyForFile(
+        file('Reading notes/@smith2020.md'),
+        library,
+      ),
+    ).toBe('smith2020');
+  });
+});
+
+describe('NoteService baseline recording on creation', () => {
+  it('records the rendered content as the sync baseline', async () => {
+    const platform = createMockPlatformAdapter();
+    const settings = new CitationsPluginSettings();
+    settings.literatureNoteFolder = 'Reading notes';
+
+    const templateService = new TemplateService(settings);
+    jest
+      .spyOn(templateService, 'getTemplateVariables')
+      .mockReturnValue({} as unknown as TemplateContext);
+    jest
+      .spyOn(templateService, 'getTitle')
+      .mockReturnValue({ ok: true, value: '@smith2020' });
+    jest
+      .spyOn(templateService, 'render')
+      .mockReturnValue({ ok: true, value: 'rendered note body' });
+
+    const baselineStore = {
+      recordFromRender: jest.fn().mockResolvedValue(undefined),
+    };
+    const noteService = new NoteService(
+      platform,
+      settings,
+      templateService,
+      () => Promise.resolve('tpl'),
+      baselineStore as never,
+    );
+    const library = new Library({ smith2020: { id: 'smith2020' } as Entry });
+
+    await noteService.getOrCreateLiteratureNoteFile('smith2020', library);
+
+    expect(baselineStore.recordFromRender).toHaveBeenCalledWith(
+      'smith2020',
+      'rendered note body',
+    );
+  });
+
+  it('creation survives a failing baseline store', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation();
+    const platform = createMockPlatformAdapter();
+    const settings = new CitationsPluginSettings();
+    const templateService = new TemplateService(settings);
+    jest
+      .spyOn(templateService, 'getTemplateVariables')
+      .mockReturnValue({} as unknown as TemplateContext);
+    jest
+      .spyOn(templateService, 'getTitle')
+      .mockReturnValue({ ok: true, value: '@smith2020' });
+    jest
+      .spyOn(templateService, 'render')
+      .mockReturnValue({ ok: true, value: 'body' });
+
+    const baselineStore = {
+      recordFromRender: jest.fn().mockRejectedValue(new Error('disk full')),
+    };
+    const noteService = new NoteService(
+      platform,
+      settings,
+      templateService,
+      () => Promise.resolve('tpl'),
+      baselineStore as never,
+    );
+    const library = new Library({ smith2020: { id: 'smith2020' } as Entry });
+
+    const created = await noteService.getOrCreateLiteratureNoteFile(
+      'smith2020',
+      library,
+    );
+
+    expect(created).toBeDefined();
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+});

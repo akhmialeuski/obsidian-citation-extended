@@ -1658,11 +1658,12 @@ describe('CitationSettingTab', () => {
         allDropdowns.push(...setting.getDropdownComponents());
       }
 
-      // The citation preset dropdown is after the database type dropdowns
-      // For 1 database: index 0 = database type, index 1 = citation preset, index 2 = sort order
-      // Trigger the citation preset one specifically
-      if (allDropdowns.length >= 2) {
-        allDropdowns[1].triggerChange('parencite');
+      // The citation preset dropdown is after the database type dropdowns.
+      // For 1 database: index 0 = database type, index 1 = note update mode,
+      // index 2 = review confirmation, index 3 = citation preset,
+      // index 4 = sort order. Trigger the citation preset one specifically.
+      if (allDropdowns.length >= 4) {
+        allDropdowns[3].triggerChange('parencite');
       }
 
       // Wait for async IIFE
@@ -1691,8 +1692,8 @@ describe('CitationSettingTab', () => {
       }
 
       // Trigger the citation preset dropdown with 'custom'
-      if (allDropdowns.length >= 2) {
-        allDropdowns[1].triggerChange('custom');
+      if (allDropdowns.length >= 4) {
+        allDropdowns[3].triggerChange('custom');
       }
 
       await Promise.resolve();
