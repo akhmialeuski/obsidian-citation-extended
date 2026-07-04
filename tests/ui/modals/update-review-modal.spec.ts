@@ -146,8 +146,17 @@ describe('UpdateReviewModal', () => {
     ).toContain('meta');
   });
 
-  it('resolves "apply" when Apply is clicked', async () => {
+  it('resolves "apply" via the keep-my-edits button on conflicts', async () => {
     const { modal, decision } = openModal(makeItem());
+    clickButton(modal, 'Apply (keep my edits)');
+    await expect(decision).resolves.toBe('apply');
+  });
+
+  it('labels the apply button plainly for clean changes', async () => {
+    const { modal, decision } = openModal(makeItem({ conflictIds: [] }));
+    expect(buttons(modal).map((b) => b.textContent)).not.toContain(
+      'Apply (keep my edits)',
+    );
     clickButton(modal, 'Apply');
     await expect(decision).resolves.toBe('apply');
   });
@@ -176,8 +185,8 @@ describe('UpdateReviewModal', () => {
     const headings = [
       ...modal.contentEl.querySelectorAll('.citation-review-heading'),
     ].map((h) => h.textContent);
-    expect(headings).toContain('Apply (keep your edits):');
-    expect(headings).toContain('Use library version:');
+    expect(headings).toContain('Apply (keep my edits) — will write:');
+    expect(headings).toContain('Use library version — will write:');
 
     // Two separate diff containers, one per resolution.
     expect(

@@ -37,6 +37,10 @@ export class UpdateReviewModal extends Modal {
 
     const conflictCount = this.item.conflictIds.length;
     const hasConflicts = conflictCount > 0;
+    // With conflicts the button label must say WHICH side it keeps — a bare
+    // "Apply" reads as "apply the library changes", the opposite of what the
+    // safe default does.
+    const applyLabel = hasConflicts ? 'Apply (keep my edits)' : 'Apply';
     if (hasConflicts) {
       contentEl.createEl('p', {
         cls: 'citation-review-conflicts',
@@ -44,8 +48,10 @@ export class UpdateReviewModal extends Modal {
           `${conflictCount} conflict${
             conflictCount === 1 ? '' : 's'
           }: ${this.item.conflictIds.join(', ')} — ` +
-          'both you and the library changed these. "Apply" keeps your ' +
-          'version; "Use library version" takes the fresh data.',
+          'both you and the library changed these. Both outcomes are ' +
+          'previewed below: "Apply (keep my edits)" still applies the rest ' +
+          'of the update but keeps YOUR version of the conflicted parts; ' +
+          '"Use library version" replaces them with the library’s version.',
       });
     }
 
@@ -53,7 +59,7 @@ export class UpdateReviewModal extends Modal {
     if (hasConflicts) {
       contentEl.createEl('p', {
         cls: 'citation-review-heading',
-        text: 'Apply (keep your edits):',
+        text: 'Apply (keep my edits) — will write:',
       });
     }
     this.renderDiff(
@@ -66,7 +72,7 @@ export class UpdateReviewModal extends Modal {
     if (hasConflicts && this.item.hunksTakeTheirs) {
       contentEl.createEl('p', {
         cls: 'citation-review-heading',
-        text: 'Use library version:',
+        text: 'Use library version — will write:',
       });
       this.renderDiff(
         contentEl.createDiv('citation-review-diff'),
@@ -77,7 +83,7 @@ export class UpdateReviewModal extends Modal {
     const buttons = new Setting(contentEl);
     buttons.addButton((b) =>
       b
-        .setButtonText('Apply')
+        .setButtonText(applyLabel)
         .setCta()
         .onClick(() => this.finish('apply')),
     );
