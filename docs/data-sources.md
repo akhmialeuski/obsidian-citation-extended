@@ -61,7 +61,7 @@ The plugin loads data from both Readwise APIs in parallel and merges the results
 **Setup:**
 1. Go to **Settings** > **Citation plugin** > **Citation databases**
 2. Click **Add database**
-3. Change the **Database type** dropdown to **Readwise**
+3. Change the **Database source** dropdown to **Readwise**
 4. Enter your API token (get it from [readwise.io/access_token](https://readwise.io/access_token))
 5. Click **Validate token** to confirm it works
 6. Click **Sync now** to load data
@@ -129,7 +129,7 @@ Loads the bibliography **directly from a running Zotero** via the [Better BibTeX
 **Setup:**
 1. In Zotero, right-click a library or collection → **Download Better BibTeX export…** and copy the URL. Choose the **Better CSL JSON** (`.json`) or **BibLaTeX** (`.bib`) variant.
 2. In plugin settings, add a database and set its **type** to match (Better CSL JSON or Better BibTeX).
-3. Toggle **Load live from Zotero (Better BibTeX)** on, paste the URL into **Better BibTeX export URL**, and click **Test connection** to confirm Zotero answers (it reports the Zotero and BBT versions).
+3. Set **Database source** to **Zotero (Better BibTeX)**, pick the matching **Export format**, paste the URL into **Better BibTeX export URL**, and click **Test connection** to confirm Zotero answers (it reports the Zotero and BBT versions).
 
 **Notes:** Enable **Import notes** to append `&exportNotes=true` to the export, so Zotero child notes are included and surfaced via the `{{note}}` template variable.
 

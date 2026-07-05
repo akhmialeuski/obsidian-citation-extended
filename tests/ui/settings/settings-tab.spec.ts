@@ -607,7 +607,7 @@ describe('CitationSettingTab', () => {
 
       expect(plugin.libraryService.load).toHaveBeenCalled();
       expect(mockNotice).toHaveBeenCalledWith(
-        'Database format changed. Reloading library\u2026',
+        'Database source changed. Reloading library\u2026',
       );
     });
 
@@ -657,16 +657,17 @@ describe('CitationSettingTab', () => {
       expect(hasUrlField).toBe(true);
     });
 
-    it('shows the live-Zotero toggle and disabling it clears the sourceType', () => {
+    it('switching the source dropdown to a file format clears the sourceType', () => {
       plugin = zoteroPlugin();
       tab = new CitationSettingTab({} as never, plugin);
       tab.display();
 
-      const toggles = allComponents((s) => s.getToggleComponents()) as Array<{
-        triggerChange(v: boolean): void;
-      }>;
-      // First toggle on the card is the "Load live from Zotero" switch.
-      toggles[0].triggerChange(false);
+      const dropdowns = allComponents((s) =>
+        s.getDropdownComponents(),
+      ) as Array<{ triggerChange(v: string): void }>;
+      // First dropdown on the card is the "Database source" selector; picking
+      // an explicit file format leaves live mode.
+      dropdowns[0].triggerChange('csl-json');
       expect(plugin.settings.databases[0].sourceType).toBeUndefined();
     });
 
@@ -693,6 +694,25 @@ describe('CitationSettingTab', () => {
       );
     });
 
+    it('selecting the Zotero (Better BibTeX) source sets the sourceType', () => {
+      plugin = createMockPlugin({
+        databases: [
+          { id: 'f1', name: 'Library', type: 'csl-json', path: '/lib.json' },
+        ],
+      });
+      tab = new CitationSettingTab({} as never, plugin);
+      tab.display();
+
+      const dropdowns = allComponents((s) =>
+        s.getDropdownComponents(),
+      ) as Array<{ triggerChange(v: string): void }>;
+      dropdowns[0].triggerChange('zotero-bbt');
+      expect(plugin.settings.databases[0].sourceType).toBe('zotero');
+      // Format is preserved (csl-json is BBT-servable) and the path cleared.
+      expect(plugin.settings.databases[0].type).toBe('csl-json');
+      expect(plugin.settings.databases[0].path).toBe('');
+    });
+
     it('saves the export-notes flag and the URL, and exercises the buttons', () => {
       plugin = zoteroPlugin();
       tab = new CitationSettingTab({} as never, plugin);
@@ -701,12 +721,13 @@ describe('CitationSettingTab', () => {
       const toggles = allComponents((s) => s.getToggleComponents()) as Array<{
         triggerChange(v: boolean): void;
       }>;
-      // The second toggle is "Import notes".
-      toggles[1].triggerChange(true);
+      // The first toggle is "Import notes" (the live-Zotero switch is gone —
+      // the source is selected in the dropdown now).
+      toggles[0].triggerChange(true);
       expect(plugin.settings.databases[0].zoteroExportNotes).toBe(true);
 
-      // The third toggle is "Import PDF annotations".
-      toggles[2].triggerChange(true);
+      // The second toggle is "Import PDF annotations".
+      toggles[1].triggerChange(true);
       expect(plugin.settings.databases[0].zoteroImportAnnotations).toBe(true);
 
       const texts = allComponents((s) => s.getTextComponents()) as Array<{
