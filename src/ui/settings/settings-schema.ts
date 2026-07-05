@@ -7,6 +7,16 @@ const DATABASE_FORMAT_ENUM = Object.values(DATABASE_FORMATS) as [
   ...DatabaseType[],
 ];
 
+// The legacy single-database export settings describe a FILE export — the
+// API-backed formats (Readwise, Zotero local API) are only meaningful inside
+// `databases[]`. An out-of-range legacy value degrades to CSL JSON via
+// `.catch` instead of failing the whole settings parse.
+const FILE_DATABASE_FORMAT_ENUM = [
+  DATABASE_FORMATS.CslJson,
+  DATABASE_FORMATS.BibLaTeX,
+  DATABASE_FORMATS.Hayagriva,
+] as [DatabaseType, ...DatabaseType[]];
+
 export const CITATION_STYLE_PRESET_OPTIONS = [
   'custom',
   'textcite',
@@ -66,7 +76,9 @@ export function resolveSyncIntervalMs(minutes: number): number | undefined {
 
 export const SettingsSchema = z.object({
   citationExportPath: z.string(),
-  citationExportFormat: z.enum(DATABASE_FORMAT_ENUM),
+  citationExportFormat: z
+    .enum(FILE_DATABASE_FORMAT_ENUM)
+    .catch(DATABASE_FORMATS.CslJson),
   literatureNoteTitleTemplate: z.string().min(1),
   literatureNoteFolder: z.string(),
   // Legacy: kept for migration. New installs use only the path field.

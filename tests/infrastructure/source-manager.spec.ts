@@ -545,4 +545,18 @@ describe('SourceManager Zotero local API transport', () => {
 
     expect(factory.create).toHaveBeenCalledTimes(1);
   });
+
+  it('recreates the source when the annotations flag is toggled', () => {
+    const factory = makeMockFactory();
+    const manager = new SourceManager(factory as never);
+
+    manager.syncSources([makeApiDb({ zoteroImportAnnotations: false })]);
+    const first = factory.create.mock.results[0].value as {
+      dispose: jest.Mock;
+    };
+    manager.syncSources([makeApiDb({ zoteroImportAnnotations: true })]);
+
+    expect(factory.create).toHaveBeenCalledTimes(2);
+    expect(first.dispose).toHaveBeenCalled();
+  });
 });

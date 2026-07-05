@@ -25,7 +25,11 @@ import {
   obsidianZoteroGet,
   obsidianZoteroPost,
 } from '../../platform/obsidian-http';
-import { DATA_SOURCE_TYPES } from '../../data-source';
+import {
+  DATA_SOURCE_TYPES,
+  isZoteroBbtConfig,
+  ZOTERO_EXPORT_FORMATS,
+} from '../../data-source';
 import {
   DEFAULT_SETTINGS,
   SettingsSchema,
@@ -246,10 +250,7 @@ export class CitationSettingTab extends PluginSettingTab {
           // Live Better BibTeX pull: keep the current export format when it is
           // one BBT can serve, otherwise default to CSL JSON. The URL (path)
           // must be re-entered for the new source.
-          if (
-            db.type !== DATABASE_FORMATS.CslJson &&
-            db.type !== DATABASE_FORMATS.BibLaTeX
-          ) {
+          if (!ZOTERO_EXPORT_FORMATS.has(db.type)) {
             db.type = DATABASE_FORMATS.CslJson;
           }
           db.sourceType = DATA_SOURCE_TYPES.Zotero;
@@ -297,13 +298,9 @@ export class CitationSettingTab extends PluginSettingTab {
 
   /** True when the database is a live Zotero (Better BibTeX) pull. */
   private static isLiveZotero(db: DatabaseConfig): boolean {
-    // A stale zotero flag on a format BBT cannot serve degrades to file mode
-    // (matches how resolveTransport routes the source).
-    return (
-      db.sourceType === DATA_SOURCE_TYPES.Zotero &&
-      (db.type === DATABASE_FORMATS.CslJson ||
-        db.type === DATABASE_FORMATS.BibLaTeX)
-    );
+    // Shared with SourceManager.resolveTransport — the rendered fields always
+    // match how the source is actually routed.
+    return isZoteroBbtConfig(db);
   }
 
   /** Which source-dropdown option represents the database's current config. */
@@ -577,6 +574,25 @@ export class CitationSettingTab extends PluginSettingTab {
               await this.plugin.saveSettings();
             }, 500),
           );
+      });
+
+    new Setting(card)
+      .setName('Import PDF annotations')
+      .setDesc(
+        'Fetch native Zotero PDF annotations (highlights, comments, colors, ' +
+          'page deep-links) for every entry. Available in templates via ' +
+          '{{annotations}} and {{attachments}}.',
+      )
+      .addToggle((toggle) => {
+        toggle
+          .setValue(db.zoteroImportAnnotations ?? false)
+          .onChange(async (value) => {
+            this.plugin.settings.databases[index].zoteroImportAnnotations =
+              value;
+            await this.plugin.saveSettings();
+            // Recreating the source (key includes this flag) happens on reload.
+            void this.plugin.libraryService.load();
+          });
       });
 
     new Setting(card)

@@ -46,10 +46,12 @@ function makeItem(overrides: Partial<ZoteroApiItem> = {}): ZoteroApiItem {
 function makeLibrary(
   items: ZoteroApiItem[],
   attachments: ZoteroApiItem[] = [],
+  annotations: ZoteroApiItem[] = [],
 ): ZoteroApiLibraryData {
   return {
     items,
     attachments,
+    annotations,
     collectionNames: { COLL0001: 'Machine Learning' },
     libraryVersion: 42,
   };
@@ -198,6 +200,172 @@ describe('buildZoteroApiEntries', () => {
     const entries = buildZoteroApiEntries(makeLibrary([broken, makeItem()]));
     expect(entries).toHaveLength(1);
   });
+
+  it('a pinned citekey wins over an earlier generated collision', () => {
+    // Item A comes FIRST in API order and would generate "lecun2015"; item B
+    // has that exact key user-pinned. B must keep its pinned key (existing
+    // notes/links point at it) — A gets the suffix.
+    const generated = makeItem({ key: 'ITEMAAA1' });
+    delete generated.data.citationKey;
+    const pinned = makeItem({ key: 'ITEMBBB2' });
+
+    const entries = buildZoteroApiEntries(makeLibrary([generated, pinned]));
+
+    expect(entries.map((e) => [e.key, e.citekey])).toEqual([
+      ['ITEMAAA1', 'lecun2015a'],
+      ['ITEMBBB2', 'lecun2015'],
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Annotations (native local API sweep)
+// ---------------------------------------------------------------------------
+
+describe('buildZoteroApiEntries — annotations', () => {
+  const attachment: ZoteroApiItem = {
+    key: 'ATT00001',
+    version: 3,
+    data: {
+      itemType: 'attachment',
+      parentItem: 'ITEM0001',
+      linkMode: 'imported_file',
+      contentType: 'application/pdf',
+      filename: 'lecun2015.pdf',
+    },
+  };
+
+  function makeAnnotation(
+    overrides: Partial<Record<string, unknown>> = {},
+    key = 'ANN00001',
+  ): ZoteroApiItem {
+    return {
+      key,
+      version: 7,
+      data: {
+        itemType: 'annotation',
+        parentItem: 'ATT00001',
+        annotationType: 'highlight',
+        annotationText: 'the quick brown fox',
+        annotationComment: 'important',
+        annotationColor: '#ffd400',
+        annotationPageLabel: '5',
+        annotationSortIndex: '00004|001234|00567',
+        // The local API keeps the position as the raw JSON string.
+        annotationPosition: '{"pageIndex":4,"rects":[[1,2,3,4]]}',
+        tags: [{ tag: 'method' }],
+        dateModified: '2026-03-01T00:00:00Z',
+        ...overrides,
+      },
+    };
+  }
+
+  it('maps annotation items onto the parent entry via the attachment chain', () => {
+    const [dto] = buildZoteroApiEntries(
+      makeLibrary([makeItem()], [attachment], [makeAnnotation()]),
+    );
+
+    expect(dto.annotations).toHaveLength(1);
+    const annotation = dto.annotations![0];
+    expect(annotation).toEqual({
+      id: 'ANN00001',
+      type: 'highlight',
+      text: 'the quick brown fox',
+      comment: 'important',
+      color: '#ffd400',
+      colorName: 'yellow',
+      page: 5, // pageIndex 4 from the JSON-string position, 1-based
+      pageLabel: '5',
+      tags: ['method'],
+      imagePath: null,
+      openURI:
+        'zotero://open-pdf/library/items/ATT00001?page=5&annotation=ANN00001',
+      sortIndex: '00004|001234|00567',
+      dateModified: '2026-03-01T00:00:00Z',
+      source: 'zotero',
+    });
+  });
+
+  it('builds attachment refs with annotation counts', () => {
+    const [dto] = buildZoteroApiEntries(
+      makeLibrary(
+        [makeItem()],
+        [attachment],
+        [makeAnnotation(), makeAnnotation({}, 'ANN00002')],
+      ),
+    );
+
+    expect(dto.attachmentRefs).toEqual([
+      {
+        id: 'ATT00001',
+        path: 'storage/ATT00001/lecun2015.pdf',
+        title: 'lecun2015',
+        openURI: 'zotero://open-pdf/library/items/ATT00001',
+        annotationCount: 2,
+      },
+    ]);
+  });
+
+  it('orders annotations by sortIndex (reading order), not API order', () => {
+    const later = makeAnnotation(
+      { annotationSortIndex: '00009|000001|00001', annotationText: 'later' },
+      'ANN00009',
+    );
+    const earlier = makeAnnotation(
+      { annotationSortIndex: '00001|000001|00001', annotationText: 'earlier' },
+      'ANN00002',
+    );
+
+    const [dto] = buildZoteroApiEntries(
+      makeLibrary([makeItem()], [attachment], [later, earlier]),
+    );
+
+    expect(dto.annotations!.map((a) => a.text)).toEqual(['earlier', 'later']);
+  });
+
+  it('uses the group-library open URI when the scope has a groupId', () => {
+    const [dto] = buildZoteroApiEntries(
+      makeLibrary([makeItem()], [attachment], [makeAnnotation()]),
+      { groupId: '4478' },
+    );
+
+    expect(dto.annotations![0].openURI).toBe(
+      'zotero://open-pdf/groups/4478/items/ATT00001?page=5&annotation=ANN00001',
+    );
+    expect(dto.attachmentRefs![0].openURI).toBe(
+      'zotero://open-pdf/groups/4478/items/ATT00001',
+    );
+  });
+
+  it('drops annotations whose parent attachment belongs to no entry', () => {
+    const orphan = makeAnnotation({ parentItem: 'ATTOTHER' }, 'ANN00003');
+
+    const [dto] = buildZoteroApiEntries(
+      makeLibrary([makeItem()], [attachment], [orphan]),
+    );
+
+    expect(dto.annotations).toBeUndefined();
+    expect(dto.attachmentRefs![0].annotationCount).toBe(0);
+  });
+
+  it('excludes bare web-link attachments from refs entirely', () => {
+    const linkedUrl: ZoteroApiItem = {
+      key: 'ATT00003',
+      version: 3,
+      data: {
+        itemType: 'attachment',
+        parentItem: 'ITEM0001',
+        linkMode: 'linked_url',
+        url: 'https://example.com',
+      },
+    };
+
+    const [dto] = buildZoteroApiEntries(
+      makeLibrary([makeItem()], [attachment, linkedUrl], []),
+    );
+
+    expect(dto.attachmentRefs!.map((r) => r.id)).toEqual(['ATT00001']);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -265,5 +433,72 @@ describe('ZoteroApiAdapter', () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]).toBeInstanceOf(ZoteroApiAdapter);
     expect(entries[0].citekey).toBe('lecun2015');
+  });
+
+  it('builds the native select URI from the item key (no BBT handler)', () => {
+    expect(new ZoteroApiAdapter(makeDto()).zoteroSelectURI).toBe(
+      'zotero://select/library/items/ITEM0001',
+    );
+  });
+
+  it('builds the group select URI when fetched from a group scope', () => {
+    const dto = { ...makeDto(), groupId: '4478' };
+    expect(new ZoteroApiAdapter(dto).zoteroSelectURI).toBe(
+      'zotero://select/groups/4478/items/ITEM0001',
+    );
+  });
+
+  it('keeps a comma inside a native tag as one keyword', () => {
+    const item = makeItem();
+    item.data.tags = [{ tag: 'reading, methodology' }, { tag: 'ml' }];
+
+    const [dto] = buildZoteroApiEntries(makeLibrary([item]));
+    const entry = new ZoteroApiAdapter(dto);
+
+    // The CSL keyword string would re-split on the comma; the native tags
+    // must win.
+    expect(entry.keywords).toEqual(['reading, methodology', 'ml']);
+  });
+
+  it('exposes injected annotations through the uniform Entry interface', () => {
+    const attachment: ZoteroApiItem = {
+      key: 'ATT00001',
+      version: 1,
+      data: {
+        itemType: 'attachment',
+        parentItem: 'ITEM0001',
+        linkMode: 'imported_file',
+        filename: 'lecun2015.pdf',
+      },
+    };
+    const annotation: ZoteroApiItem = {
+      key: 'ANN00001',
+      version: 1,
+      data: {
+        itemType: 'annotation',
+        parentItem: 'ATT00001',
+        annotationType: 'highlight',
+        annotationText: 'quoted',
+        annotationColor: '#5fb236',
+        annotationSortIndex: '00001|000001|00001',
+      },
+    };
+
+    const [dto] = buildZoteroApiEntries(
+      makeLibrary([makeItem()], [attachment], [annotation]),
+    );
+    const entry = new ZoteroApiAdapter(dto);
+
+    expect(entry.annotations).toHaveLength(1);
+    expect(entry.annotations[0].text).toBe('quoted');
+    expect(entry.annotations[0].colorName).toBe('green');
+    expect(entry.attachments).toHaveLength(1);
+    expect(entry.attachments[0].annotationCount).toBe(1);
+    // The DTO round-trips through the on-disk cache as plain JSON — a cached
+    // entry must surface the same annotations.
+    const revived = new ZoteroApiAdapter(
+      JSON.parse(JSON.stringify(dto)) as ZoteroApiEntryData,
+    );
+    expect(revived.annotations).toHaveLength(1);
   });
 });

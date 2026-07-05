@@ -324,5 +324,131 @@ describe('ZoteroLocalApiClient', () => {
 
       expect(library.items.map((i) => i.key)).toEqual(['GOOD0001']);
     });
+
+    it('drops attachments of unfetched parents on a collection-scoped fetch', async () => {
+      const get = makeGet([
+        {
+          match: '/collections/ABCD1234/items/top',
+          pages: [
+            { body: [item('ITEM0001')], headers: { 'Total-Results': '1' } },
+          ],
+        },
+        {
+          match: 'itemType=attachment',
+          pages: [
+            {
+              body: [
+                item('ATTIN001', { parentItem: 'ITEM0001' }),
+                item('ATTOUT01', { parentItem: 'ITEMELSE' }),
+              ],
+              headers: { 'Total-Results': '2' },
+            },
+          ],
+        },
+        {
+          match: '/collections?',
+          pages: [{ body: [], headers: { 'Total-Results': '0' } }],
+        },
+      ]);
+      const client = new ZoteroLocalApiClient(undefined, get);
+
+      const library = await client.fetchLibrary({ collectionKey: 'ABCD1234' });
+
+      expect(library.attachments.map((a) => a.key)).toEqual(['ATTIN001']);
+    });
+
+    it('does not fetch annotations unless asked', async () => {
+      const get = makeGet([
+        {
+          match: '/items/top',
+          pages: [{ body: [item('A')], headers: { 'Total-Results': '1' } }],
+        },
+        {
+          match: 'itemType=attachment',
+          pages: [{ body: [], headers: { 'Total-Results': '0' } }],
+        },
+        {
+          match: '/collections',
+          pages: [{ body: [], headers: { 'Total-Results': '0' } }],
+        },
+      ]);
+      const client = new ZoteroLocalApiClient(undefined, get);
+
+      const library = await client.fetchLibrary();
+
+      expect(library.annotations).toEqual([]);
+      expect(
+        get.mock.calls.some((c) => c[0].includes('itemType=annotation')),
+      ).toBe(false);
+    });
+
+    it('fetches annotations and keeps only those of fetched attachments', async () => {
+      const get = makeGet([
+        {
+          match: '/items/top',
+          pages: [
+            { body: [item('ITEM0001')], headers: { 'Total-Results': '1' } },
+          ],
+        },
+        {
+          match: 'itemType=attachment',
+          pages: [
+            {
+              body: [item('ATT00001', { parentItem: 'ITEM0001' })],
+              headers: { 'Total-Results': '1' },
+            },
+          ],
+        },
+        {
+          match: 'itemType=annotation',
+          pages: [
+            {
+              body: [
+                item('ANN00001', { parentItem: 'ATT00001' }),
+                item('ANNORPHN', { parentItem: 'ATTELSE1' }),
+              ],
+              headers: { 'Total-Results': '2' },
+            },
+          ],
+        },
+        {
+          match: '/collections',
+          pages: [{ body: [], headers: { 'Total-Results': '0' } }],
+        },
+      ]);
+      const client = new ZoteroLocalApiClient(undefined, get);
+
+      const library = await client.fetchLibrary({}, undefined, {
+        includeAnnotations: true,
+      });
+
+      expect(library.annotations.map((a) => a.key)).toEqual(['ANN00001']);
+    });
+  });
+
+  describe('getLibraryVersion', () => {
+    it('returns the Last-Modified-Version from a one-item probe', async () => {
+      const get = jest.fn(() =>
+        Promise.resolve(
+          response(200, [], {
+            'Total-Results': '847',
+            'Last-Modified-Version': '1234',
+          }),
+        ),
+      ) as unknown as jest.MockedFunction<ZoteroHttpGetFn>;
+      const client = new ZoteroLocalApiClient(undefined, get);
+
+      await expect(client.getLibraryVersion()).resolves.toBe(1234);
+      expect(get.mock.calls[0][0]).toContain('limit=1');
+    });
+
+    it('returns null when the header is missing', async () => {
+      const get = jest.fn(() =>
+        Promise.resolve(response(200, [], { 'Total-Results': '0' })),
+      ) as unknown as jest.MockedFunction<ZoteroHttpGetFn>;
+      const client = new ZoteroLocalApiClient(undefined, get);
+
+      await expect(client.getLibraryVersion()).resolves.toBeNull();
+    });
   });
 });

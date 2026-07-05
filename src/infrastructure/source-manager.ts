@@ -5,7 +5,7 @@ import type {
   DataSourceLoadResult,
 } from '../data-source';
 import type { IDataSourceFactory } from '../sources/data-source-factory';
-import { DATA_SOURCE_TYPES } from '../data-source';
+import { DATA_SOURCE_TYPES, isZoteroBbtConfig } from '../data-source';
 import { DATABASE_FORMATS } from '../core';
 import type { SourceLoadResult } from './normalization-pipeline';
 
@@ -310,11 +310,6 @@ export class SourceManager implements ISourceManager {
    * API-based formats (Readwise) use their own transport; file-based
    * formats fall back to the explicit sourceType or LocalFile.
    */
-  /** Formats Better BibTeX can export, hence valid for the Zotero transport. */
-  private static readonly ZOTERO_CAPABLE_FORMATS: ReadonlySet<string> = new Set(
-    [DATABASE_FORMATS.CslJson, DATABASE_FORMATS.BibLaTeX],
-  );
-
   private resolveTransport(db: DatabaseConfig): string {
     if (db.type === DATABASE_FORMATS.Readwise) {
       return DATA_SOURCE_TYPES.Readwise;
@@ -324,15 +319,10 @@ export class SourceManager implements ISourceManager {
     if (db.type === DATABASE_FORMATS.ZoteroApi) {
       return DATA_SOURCE_TYPES.ZoteroApi;
     }
-    // Zotero uses a file FORMAT (CSL JSON / BibLaTeX) but an HTTP transport, so
-    // it is selected by the explicit sourceType. Honour it only for a format
-    // Better BibTeX can export — a stale/hand-edited `sourceType` on an
-    // incompatible format (e.g. Hayagriva) falls back to a file source, which
-    // is exactly what the settings UI then renders.
-    if (
-      db.sourceType === DATA_SOURCE_TYPES.Zotero &&
-      SourceManager.ZOTERO_CAPABLE_FORMATS.has(db.type)
-    ) {
+    // Zotero uses a file FORMAT (CSL JSON / BibLaTeX) but an HTTP transport,
+    // selected by the shared predicate (also drives the settings UI, so the
+    // routing and the rendered fields can never disagree).
+    if (isZoteroBbtConfig(db)) {
       return DATA_SOURCE_TYPES.Zotero;
     }
     return db.sourceType ?? DATA_SOURCE_TYPES.LocalFile;
@@ -374,10 +364,11 @@ export class SourceManager implements ISourceManager {
       }`;
     }
     if (transport === DATA_SOURCE_TYPES.ZoteroApi) {
-      // Fold the scope in so changing group/collection recreates the source.
+      // Fold the scope and the annotations flag in so changing any of them
+      // recreates the source (the factory snapshots them at construction).
       return `${db.path}:group-${db.zoteroApiGroupId ?? ''}:coll-${
         db.zoteroApiCollection ?? ''
-      }`;
+      }:annot-${db.zoteroImportAnnotations ? 1 : 0}`;
     }
     return db.path;
   }

@@ -20,6 +20,11 @@
  */
 
 import { Entry } from '../types/entry';
+import type { Annotation, AttachmentRef } from '../types/annotation';
+import {
+  basenameWithoutExtension,
+  mapZoteroAnnotation,
+} from '../zotero/zotero-annotations';
 import type { Author } from '../types/entry';
 import { EntryCSLAdapter } from './csl-adapter';
 import type { EntryDataCSL } from './csl-adapter';
@@ -27,10 +32,6 @@ import type {
   ZoteroApiItem,
   ZoteroApiLibraryData,
 } from '../zotero/zotero-local-api-client';
-
-// ---------------------------------------------------------------------------
-// DTO
-// ---------------------------------------------------------------------------
 
 /** Self-contained entry data for the Zotero local API source (cacheable). */
 export interface ZoteroApiEntryData {
@@ -46,14 +47,21 @@ export interface ZoteroApiEntryData {
   files?: string[];
   /** Collection names the item belongs to. */
   collections?: string[];
+  /**
+   * Native structured Zotero tags. Kept first-class so a tag containing a
+   * comma is never split by the CSL keyword-string round-trip.
+   */
+  tags?: string[];
+  /** Group library id when fetched from a group scope ('' = personal). */
+  groupId?: string;
+  /** Normalized PDF annotations (source-agnostic shape), when imported. */
+  annotations?: Annotation[];
+  /** Attachment references matching the uniform Entry interface. */
+  attachmentRefs?: AttachmentRef[];
   /** ISO timestamps from Zotero. */
   dateAdded?: string;
   dateModified?: string;
 }
-
-// ---------------------------------------------------------------------------
-// Adapter
-// ---------------------------------------------------------------------------
 
 /**
  * Entry adapter for {@link ZoteroApiEntryData}. Reuses all CSL field logic
@@ -69,22 +77,49 @@ export class ZoteroApiAdapter extends EntryCSLAdapter {
     dateModified?: string;
   };
 
+  /** Native tags (structured, comma-safe) — see {@link keywords}. */
+  private readonly nativeTags?: string[];
+  /** Group library id ('' / undefined = personal library). */
+  private readonly groupId?: string;
+
   constructor(data: ZoteroApiEntryData) {
     super(data.csl);
     this.files = data.files ?? null;
     this.collections = data.collections;
+    this.nativeTags = data.tags;
+    this.groupId = data.groupId;
     this.zotero = {
       key: data.key,
       version: data.version,
       dateAdded: data.dateAdded,
       dateModified: data.dateModified,
     };
+    if (data.annotations?.length || data.attachmentRefs?.length) {
+      this.setAnnotations(data.annotations ?? [], data.attachmentRefs ?? []);
+    }
+  }
+
+  /**
+   * Native structured tags, NOT the CSL keyword string re-split on commas —
+   * a Zotero tag like "reading, methodology" stays one tag. Falls back to
+   * the CSL parsing for cached DTOs written before tags were structured.
+   */
+  get keywords(): string[] | undefined {
+    if (this.nativeTags && this.nativeTags.length > 0) return this.nativeTags;
+    return super.keywords;
+  }
+
+  /**
+   * Native Zotero select URI built from the real item key. The inherited
+   * `zotero://select/items/@citekey` form is a Better BibTeX handler that
+   * does not exist on the BBT-less installs this source targets.
+   */
+  get zoteroSelectURI(): string {
+    return this.groupId
+      ? `zotero://select/groups/${this.groupId}/items/${this.zotero.key}`
+      : `zotero://select/library/items/${this.zotero.key}`;
   }
 }
-
-// ---------------------------------------------------------------------------
-// Citekey resolution
-// ---------------------------------------------------------------------------
 
 /** `Citation Key: xxx` line in the Extra field (legacy BBT convention). */
 const EXTRA_CITEKEY_RE = /^\s*citation key\s*:\s*(\S+)\s*$/im;
@@ -129,24 +164,27 @@ function generatedCitekey(item: ZoteroApiItem): string {
   return base.length > 0 ? base : item.key.toLowerCase();
 }
 
-/** Resolve a unique citekey for `item`, deduplicating against `taken`. */
-function resolveCitekey(item: ZoteroApiItem, taken: Set<string>): string {
-  const preferred = nativeCitekey(item.data) ?? extraCitekey(item.data) ?? null;
-  const base = preferred ?? generatedCitekey(item);
+/** The item's user-pinned citekey (native field or Extra line), or null. */
+function pinnedCitekey(item: ZoteroApiItem): string | null {
+  return nativeCitekey(item.data) ?? extraCitekey(item.data);
+}
 
+/**
+ * Deduplicate `base` against `taken`: suffix BBT-style (smith2023a, …) and
+ * fall back to the unique Zotero key when the alphabet is exhausted.
+ */
+function dedupeCitekey(
+  base: string,
+  taken: Set<string>,
+  itemKey: string,
+): string {
   if (!taken.has(base)) return base;
-  // Suffix generated keys BBT-style: smith2023a, smith2023b, … and fall back
-  // to the unique Zotero key when the alphabet is exhausted.
   for (let i = 0; i < 26; i++) {
     const candidate = `${base}${String.fromCharCode(97 + i)}`;
     if (!taken.has(candidate)) return candidate;
   }
-  return `${base}-${item.key.toLowerCase()}`;
+  return `${base}-${itemKey.toLowerCase()}`;
 }
-
-// ---------------------------------------------------------------------------
-// CSL construction
-// ---------------------------------------------------------------------------
 
 /** Native Zotero itemType → CSL type (subset; unknown types → 'document'). */
 const ITEM_TYPE_TO_CSL: Record<string, string> = {
@@ -277,20 +315,28 @@ function buildCsl(item: ZoteroApiItem, citekey: string): EntryDataCSL {
   return csl;
 }
 
-// ---------------------------------------------------------------------------
-// Attachment file synthesis
-// ---------------------------------------------------------------------------
-
 /** linkModes whose files live inside the Zotero storage directory. */
 const STORED_LINK_MODES = new Set(['imported_file', 'imported_url']);
 
-/**
- * Build the per-parent file list. Stored attachments become
- * `storage/<KEY>/<filename>` (the shape the `zoteroPdfURI` helpers parse);
- * linked files keep their raw path.
- */
-function filesByParent(attachments: ZoteroApiItem[]): Map<string, string[]> {
-  const byParent = new Map<string, string[]>();
+/** One parent item's attachment, resolved for file + annotation synthesis. */
+interface ApiAttachmentInfo {
+  /** Zotero attachment item key. */
+  key: string;
+  /**
+   * Synthesized file path — `storage/<KEY>/<filename>` for stored files (the
+   * shape the `zoteroPdfURI` helpers parse), the raw path for linked files,
+   * or null for link-only attachments (URLs).
+   */
+  file: string | null;
+  /** Display title: file basename, else the attachment's own title. */
+  title: string | null;
+}
+
+/** Group attachment items by their parent item key. */
+function attachmentsByParent(
+  attachments: ZoteroApiItem[],
+): Map<string, ApiAttachmentInfo[]> {
+  const byParent = new Map<string, ApiAttachmentInfo[]>();
   for (const attachment of attachments) {
     const data = attachment.data;
     const parent = typeof data.parentItem === 'string' ? data.parentItem : null;
@@ -304,19 +350,54 @@ function filesByParent(attachments: ZoteroApiItem[]): Map<string, string[]> {
     } else if (linkMode === 'linked_file') {
       const path = typeof data.path === 'string' ? data.path : '';
       if (path) file = path.replace(/^attachments:/, '');
+    } else if (linkMode === 'linked_url') {
+      // A bare web link: no file, and Zotero cannot annotate it — skip.
+      continue;
     }
-    if (!file) continue;
 
     const list = byParent.get(parent) ?? [];
-    list.push(file);
+    list.push({
+      key: attachment.key,
+      file,
+      title:
+        basenameWithoutExtension(file) ??
+        (typeof data.title === 'string' && data.title.length > 0
+          ? data.title
+          : null),
+    });
     byParent.set(parent, list);
   }
   return byParent;
 }
 
-// ---------------------------------------------------------------------------
-// Library → entry DTOs
-// ---------------------------------------------------------------------------
+/**
+ * Build the annotations and attachment refs for one item from its attachment
+ * infos and the per-attachment annotation groups. Annotations are ordered by
+ * Zotero's zero-padded sortIndex (== reading order) within each attachment.
+ */
+function annotationsForItem(
+  infos: ApiAttachmentInfo[],
+  annotationsByAttachment: Map<string, ZoteroApiItem[]>,
+  openBase: string,
+): { annotations: Annotation[]; attachmentRefs: AttachmentRef[] } {
+  const annotations: Annotation[] = [];
+  const attachmentRefs: AttachmentRef[] = [];
+  for (const info of infos) {
+    const openURI = `zotero://open-pdf/${openBase}/items/${info.key}`;
+    const mapped = (annotationsByAttachment.get(info.key) ?? [])
+      .map((a) => mapZoteroAnnotation(a.data, a.key, openURI))
+      .sort((x, y) => x.sortIndex.localeCompare(y.sortIndex));
+    annotations.push(...mapped);
+    attachmentRefs.push({
+      id: info.key,
+      path: info.file,
+      title: info.title,
+      openURI,
+      annotationCount: mapped.length,
+    });
+  }
+  return { annotations, attachmentRefs };
+}
 
 /**
  * Convert a fetched library into cacheable entry DTOs, resolving citekeys,
@@ -324,14 +405,46 @@ function filesByParent(attachments: ZoteroApiItem[]): Map<string, string[]> {
  */
 export function buildZoteroApiEntries(
   library: ZoteroApiLibraryData,
+  scope: { groupId?: string } = {},
 ): ZoteroApiEntryData[] {
-  const files = filesByParent(library.attachments);
+  const attachmentInfos = attachmentsByParent(library.attachments);
+  const openBase = scope.groupId ? `groups/${scope.groupId}` : 'library';
+
+  // Annotations arrive as one flat sweep; group by their parent attachment
+  // so each entry only walks its own attachments' annotations.
+  const annotationsByAttachment = new Map<string, ZoteroApiItem[]>();
+  for (const annotation of library.annotations ?? []) {
+    if (!annotation.data || typeof annotation.data !== 'object') continue;
+    const parent = annotation.data.parentItem;
+    if (typeof parent !== 'string') continue;
+    const list = annotationsByAttachment.get(parent) ?? [];
+    list.push(annotation);
+    annotationsByAttachment.set(parent, list);
+  }
+
   const taken = new Set<string>();
   const entries: ZoteroApiEntryData[] = [];
 
+  // Pass 1: user-pinned citekeys (native field / Extra line) claim their
+  // names FIRST, regardless of API order — otherwise a generated
+  // lastnameYear key from an earlier item could steal a pinned key from a
+  // later item, silently re-pointing the user's existing notes and links.
+  // Only two items pinning the SAME key contend, first in API order wins.
+  const pinnedKeys = new Map<string, string>();
   for (const item of library.items) {
     if (!item.data || typeof item.data !== 'object') continue;
-    const citekey = resolveCitekey(item, taken);
+    const pinned = pinnedCitekey(item);
+    if (!pinned) continue;
+    const key = dedupeCitekey(pinned, taken, item.key);
+    pinnedKeys.set(item.key, key);
+    taken.add(key);
+  }
+
+  for (const item of library.items) {
+    if (!item.data || typeof item.data !== 'object') continue;
+    const citekey =
+      pinnedKeys.get(item.key) ??
+      dedupeCitekey(generatedCitekey(item), taken, item.key);
     taken.add(citekey);
 
     const collectionKeys = Array.isArray(item.data.collections)
@@ -343,13 +456,28 @@ export function buildZoteroApiEntries(
       )
       .filter((name): name is string => typeof name === 'string');
 
+    const infos = attachmentInfos.get(item.key) ?? [];
+    const { annotations, attachmentRefs } = annotationsForItem(
+      infos,
+      annotationsByAttachment,
+      openBase,
+    );
+    const fileList = infos
+      .map((info) => info.file)
+      .filter((file): file is string => file !== null);
+
+    const tags = tagNames(item.data);
     entries.push({
       key: item.key,
       version: item.version,
       citekey,
       csl: buildCsl(item, citekey),
-      files: files.get(item.key),
+      files: fileList.length > 0 ? fileList : undefined,
       collections: collections.length > 0 ? collections : undefined,
+      tags: tags.length > 0 ? tags : undefined,
+      groupId: scope.groupId || undefined,
+      annotations: annotations.length > 0 ? annotations : undefined,
+      attachmentRefs: attachmentRefs.length > 0 ? attachmentRefs : undefined,
       dateAdded:
         typeof item.data.dateAdded === 'string'
           ? item.data.dateAdded

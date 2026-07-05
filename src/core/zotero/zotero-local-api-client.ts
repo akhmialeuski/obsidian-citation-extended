@@ -42,8 +42,16 @@ export interface ZoteroApiItem {
 export interface ZoteroApiLibraryData {
   /** Top-level bibliographic items (no attachments/annotations/notes). */
   items: ZoteroApiItem[];
-  /** All attachment items, for PDF link synthesis (keyed by parent below). */
+  /**
+   * Attachment items for PDF link synthesis. When the fetch is
+   * collection-scoped, already filtered to attachments of fetched items.
+   */
   attachments: ZoteroApiItem[];
+  /**
+   * PDF annotation items (children of attachments). Empty unless the fetch
+   * was made with `includeAnnotations`.
+   */
+  annotations: ZoteroApiItem[];
   /** Collection key → collection name. */
   collectionNames: Record<string, string>;
   /** `Last-Modified-Version` of the library at fetch time, or null. */
@@ -111,6 +119,7 @@ export class ZoteroLocalApiClient {
   async fetchLibrary(
     scope: ZoteroApiScope = {},
     signal?: AbortSignal,
+    options: { includeAnnotations?: boolean } = {},
   ): Promise<ZoteroApiLibraryData> {
     const prefix = this.libraryPrefix(scope);
     const itemsPath = scope.collectionKey
@@ -122,19 +131,66 @@ export class ZoteroLocalApiClient {
       signal,
     );
     // Attachments are child items and never appear under /top; fetch them
-    // library-wide in one paged sweep and let the caller match parents.
-    const { items: attachments } = await this.fetchAllPages(
+    // library-wide in one paged sweep. For a collection-scoped fetch, drop
+    // attachments whose parent was not fetched — they can never match an
+    // entry and would only waste memory and normalization work downstream.
+    const { items: allAttachments } = await this.fetchAllPages(
       `${this.base}/api/${prefix}/items?itemType=attachment&format=json`,
       signal,
     );
+    const itemKeys = new Set(items.map((i) => i.key));
+    const attachments = scope.collectionKey
+      ? allAttachments.filter((a) => {
+          const parent = (a.data as { parentItem?: unknown }).parentItem;
+          return typeof parent === 'string' && itemKeys.has(parent);
+        })
+      : allAttachments;
+
+    // PDF annotations are children of attachments; fetched on demand only,
+    // and kept only when they belong to a fetched attachment.
+    let annotations: ZoteroApiItem[] = [];
+    if (options.includeAnnotations) {
+      const { items: allAnnotations } = await this.fetchAllPages(
+        `${this.base}/api/${prefix}/items?itemType=annotation&format=json`,
+        signal,
+      );
+      const attachmentKeys = new Set(attachments.map((a) => a.key));
+      annotations = allAnnotations.filter((a) => {
+        const parent = (a.data as { parentItem?: unknown }).parentItem;
+        return typeof parent === 'string' && attachmentKeys.has(parent);
+      });
+    }
+
     const collectionNames = await this.fetchCollectionNames(prefix, signal);
 
     return {
       items,
       attachments,
+      annotations,
       collectionNames,
       libraryVersion: version,
     };
+  }
+
+  /**
+   * Cheap change probe: the library's `Last-Modified-Version` from a
+   * single-item request. Lets callers serve their cache and skip the full
+   * re-fetch (items, attachments, annotations, collections) when the
+   * library has not changed since the cached version.
+   */
+  async getLibraryVersion(
+    scope: ZoteroApiScope = {},
+    signal?: AbortSignal,
+  ): Promise<number | null> {
+    const prefix = this.libraryPrefix(scope);
+    const response = await this.request(
+      `${this.base}/api/${prefix}/items/top?limit=1&format=json`,
+      signal,
+    );
+    return ZoteroLocalApiClient.numericHeader(
+      response,
+      'last-modified-version',
+    );
   }
 
   /** Page through a list endpoint using start/limit + Total-Results. */

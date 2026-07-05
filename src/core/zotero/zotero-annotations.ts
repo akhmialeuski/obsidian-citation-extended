@@ -77,7 +77,8 @@ function attachmentKeyOf(open: unknown, path: unknown): string | null {
   return null;
 }
 
-function basenameWithoutExtension(path: unknown): string | null {
+/** File basename without its extension, or null (used as attachment title). */
+export function basenameWithoutExtension(path: unknown): string | null {
   if (typeof path !== 'string' || path.length === 0) return null;
   const base = path.replace(/^.*[\\/]/, '').replace(/\.[^/.]+$/, '');
   return base.length > 0 ? base : null;
@@ -157,6 +158,39 @@ function buildOpenURI(
 }
 
 /**
+ * Map one raw Zotero annotation record (`annotationType`, `annotationText`,
+ * `annotationPosition`, …) into the source-agnostic model. The field
+ * vocabulary is identical between the BBT JSON-RPC payload (fields on the
+ * annotation object itself) and the native local-API item (`item.data`), so
+ * both adapters share this single mapping.
+ */
+export function mapZoteroAnnotation(
+  fields: Record<string, unknown>,
+  annotationKey: string | null,
+  attachmentOpenURI: string | null,
+): Annotation {
+  const pageLabel = str(fields.annotationPageLabel);
+  const page = pageOf(fields.annotationPosition, pageLabel);
+  const color = str(fields.annotationColor);
+  return {
+    id: annotationKey,
+    type: str(fields.annotationType),
+    text: str(fields.annotationText),
+    comment: str(fields.annotationComment),
+    color,
+    colorName: zoteroColorName(color),
+    page,
+    pageLabel,
+    sortIndex: str(fields.annotationSortIndex),
+    dateModified: strOrNull(fields.dateModified),
+    tags: tagsOf(fields.tags),
+    imagePath: strOrNull(fields.annotationImagePath),
+    openURI: buildOpenURI(attachmentOpenURI, page, annotationKey),
+    source: 'zotero',
+  };
+}
+
+/**
  * Normalize the raw `item.attachments` JSON-RPC result for one citekey into
  * typed attachments and annotations. Malformed input yields empty arrays —
  * never an exception.
@@ -182,28 +216,7 @@ export function normalizeZoteroAttachments(
 
     const normalized = rawAnnotations
       .filter((a): a is Record<string, unknown> => !!a && typeof a === 'object')
-      .map((a) => {
-        const pageLabel = str(a.annotationPageLabel);
-        const page = pageOf(a.annotationPosition, pageLabel);
-        const annotationKey = strOrNull(a.key);
-        const color = str(a.annotationColor);
-        return {
-          id: annotationKey,
-          type: str(a.annotationType),
-          text: str(a.annotationText),
-          comment: str(a.annotationComment),
-          color,
-          colorName: zoteroColorName(color),
-          page,
-          pageLabel,
-          sortIndex: str(a.annotationSortIndex),
-          dateModified: strOrNull(a.dateModified),
-          tags: tagsOf(a.tags),
-          imagePath: strOrNull(a.annotationImagePath),
-          openURI: buildOpenURI(open, page, annotationKey),
-          source: 'zotero',
-        } satisfies Annotation;
-      });
+      .map((a) => mapZoteroAnnotation(a, strOrNull(a.key), open));
 
     // Document order: Zotero's sortIndex sorts by code unit (see
     // compareSortIndex — locale collation would reorder it).

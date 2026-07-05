@@ -18,7 +18,12 @@ import type {
 import type { ZoteroConnectorClient } from '../core';
 import type { IFileSystem } from '../platform/platform-adapter';
 import { WorkerManager } from '../util';
-import { createLinkedAbortController, PeriodicSync } from './source-utils';
+import {
+  createLinkedAbortController,
+  PeriodicSync,
+  readVersionedJsonCache,
+  writeVersionedJsonCache,
+} from './source-utils';
 
 /**
  * Versioned on-disk cache: the raw export body plus the format it was fetched
@@ -37,6 +42,17 @@ interface ZoteroCacheStateV2 {
   raw: string;
   /** Citekey → raw BBT `item.attachments` result. Absent when not fetched. */
   attachments?: Record<string, unknown[]>;
+}
+
+function isZoteroCacheState(parsed: unknown): parsed is ZoteroCacheStateV2 {
+  return (
+    parsed !== null &&
+    typeof parsed === 'object' &&
+    ((parsed as { version?: unknown }).version === 1 ||
+      (parsed as { version?: unknown }).version === 2) &&
+    typeof (parsed as { raw?: unknown }).raw === 'string' &&
+    typeof (parsed as { format?: unknown }).format === 'string'
+  );
 }
 
 /**
@@ -315,51 +331,24 @@ export class ZoteroSource implements DataSource {
   }
 
   /** Read+validate a single cache file, or null when missing/corrupt/stale. */
-  private async readCacheFrom(
-    path?: string,
-  ): Promise<ZoteroCacheStateV2 | null> {
-    if (!this.fileSystem || !path) return null;
-    try {
-      if (!(await this.fileSystem.exists(path))) return null;
-      const parsed: unknown = JSON.parse(await this.fileSystem.readFile(path));
-      if (
-        parsed !== null &&
-        typeof parsed === 'object' &&
-        ((parsed as { version?: unknown }).version === 1 ||
-          (parsed as { version?: unknown }).version === 2) &&
-        typeof (parsed as { raw?: unknown }).raw === 'string' &&
-        typeof (parsed as { format?: unknown }).format === 'string'
-      ) {
-        return parsed as ZoteroCacheStateV2;
-      }
-    } catch {
-      // Missing or corrupt cache behaves exactly like no cache.
-    }
-    return null;
+  private readCacheFrom(path?: string): Promise<ZoteroCacheStateV2 | null> {
+    return readVersionedJsonCache(this.fileSystem, path, isZoteroCacheState);
   }
 
   /** Write the raw export to the cache file (best-effort, errors are silent). */
-  private async writeCache(
+  private writeCache(
     raw: string,
     attachments?: Record<string, unknown[]>,
   ): Promise<void> {
-    if (!this.fileSystem || !this.cachePath) return;
-    try {
-      await this.fileSystem.writeFile(
-        this.cachePath,
-        JSON.stringify({
-          // Keep version 1: the annotations payload is an OPTIONAL superset, so
-          // a rolled-back build (which accepts only version === 1 and ignores
-          // unknown fields) can still read this cache for its offline fallback.
-          version: 1,
-          format: this.format,
-          raw,
-          ...(attachments ? { attachments } : {}),
-        } satisfies ZoteroCacheStateV2),
-      );
-    } catch {
-      // Cache write failure is not critical.
-    }
+    return writeVersionedJsonCache(this.fileSystem, this.cachePath, {
+      // Keep version 1: the annotations payload is an OPTIONAL superset, so
+      // a rolled-back build (which accepts only version === 1 and ignores
+      // unknown fields) can still read this cache for its offline fallback.
+      version: 1,
+      format: this.format,
+      raw,
+      ...(attachments ? { attachments } : {}),
+    } satisfies ZoteroCacheStateV2);
   }
 
   watch(callback: () => void): void {

@@ -262,6 +262,10 @@ export default class CitationPlugin extends Plugin {
           // Shares the Zotero auto-sync interval setting.
           () =>
             resolveSyncIntervalMs(this.settings.zoteroSyncIntervalMinutes) ?? 0,
+          resolveZoteroImportAnnotations(
+            this.settings.databases,
+            def.databaseId,
+          ),
         ),
     );
 

@@ -12,7 +12,12 @@ import {
 import type { ParseErrorInfo, ZoteroApiEntryData } from '../core';
 import type { ZoteroLocalApiClient, ZoteroApiScope } from '../core';
 import type { IFileSystem } from '../platform/platform-adapter';
-import { createLinkedAbortController, PeriodicSync } from './source-utils';
+import {
+  createLinkedAbortController,
+  PeriodicSync,
+  readVersionedJsonCache,
+  writeVersionedJsonCache,
+} from './source-utils';
 
 /** Versioned on-disk cache of the last successful fetch. */
 interface ZoteroApiCacheStateV1 {
@@ -21,6 +26,17 @@ interface ZoteroApiCacheStateV1 {
   entries: ZoteroApiEntryData[];
   /** Zotero library version at fetch time, or null. */
   libraryVersion: number | null;
+}
+
+function isZoteroApiCacheState(
+  parsed: unknown,
+): parsed is ZoteroApiCacheStateV1 {
+  return (
+    parsed !== null &&
+    typeof parsed === 'object' &&
+    (parsed as { version?: unknown }).version === 1 &&
+    Array.isArray((parsed as { entries?: unknown }).entries)
+  );
 }
 
 /**
@@ -36,8 +52,15 @@ interface ZoteroApiCacheStateV1 {
  * a legacy `Citation Key:` line in Extra, or a generated fallback — so the
  * source works with or without Better BibTeX installed.
  *
+ * **PDF annotations:** when enabled, annotation items are fetched in the
+ * same library sweep and mapped onto entries through the uniform
+ * `entry.annotations` / `entry.attachments` interface.
+ *
  * **Offline cache:** the last successful fetch is cached on disk (as DTOs).
  * If Zotero is closed on a later load, the cache keeps the library usable.
+ * The cache also short-circuits online loads: a cheap library-version probe
+ * against `Last-Modified-Version` serves the cache unchanged when the
+ * library has not moved since the last fetch.
  *
  * **Periodic sync:** no file to watch, so the source optionally polls on a
  * configurable interval (same mechanism as the Better BibTeX source).
@@ -54,6 +77,8 @@ export class ZoteroApiSource implements DataSource {
     private cachePath?: string,
     /** Current periodic-sync interval in ms (0 = disabled); read each cycle. */
     syncIntervalProvider?: () => number,
+    /** Fetch native PDF annotations and attach them to entries. */
+    private importAnnotations = false,
   ) {
     this.poller = syncIntervalProvider
       ? new PeriodicSync(syncIntervalProvider, 'ZoteroApiSource')
@@ -75,10 +100,26 @@ export class ZoteroApiSource implements DataSource {
       const priorErrors: ParseErrorInfo[] = [];
 
       try {
-        const library = await this.client.fetchLibrary(this.scope, signal);
-        dtos = buildZoteroApiEntries(library);
-        libraryVersion = library.libraryVersion;
-        await this.writeCache(dtos, libraryVersion);
+        // Cheap change probe first: when the cached library version still
+        // matches, serve the cache and skip the full multi-sweep re-fetch
+        // (items + attachments + annotations + collections). Matters for
+        // periodic sync against large libraries.
+        const cached = await this.readCache();
+        const unchanged =
+          cached?.libraryVersion != null &&
+          (await this.client.getLibraryVersion(this.scope, signal)) ===
+            cached.libraryVersion;
+        if (cached && unchanged) {
+          dtos = cached.entries;
+          libraryVersion = cached.libraryVersion;
+        } else {
+          const library = await this.client.fetchLibrary(this.scope, signal, {
+            includeAnnotations: this.importAnnotations,
+          });
+          dtos = buildZoteroApiEntries(library, this.scope);
+          libraryVersion = library.libraryVersion;
+          await this.writeCache(dtos, libraryVersion);
+        }
       } catch (error) {
         // A cancelled load is not a failure — let the caller's abort logic run.
         if (error instanceof ZoteroAbortError || signal.aborted) {
@@ -117,45 +158,24 @@ export class ZoteroApiSource implements DataSource {
   }
 
   /** Read and validate the cache file, or null when missing/corrupt. */
-  private async readCache(): Promise<ZoteroApiCacheStateV1 | null> {
-    if (!this.fileSystem || !this.cachePath) return null;
-    try {
-      if (!(await this.fileSystem.exists(this.cachePath))) return null;
-      const parsed: unknown = JSON.parse(
-        await this.fileSystem.readFile(this.cachePath),
-      );
-      if (
-        parsed !== null &&
-        typeof parsed === 'object' &&
-        (parsed as { version?: unknown }).version === 1 &&
-        Array.isArray((parsed as { entries?: unknown }).entries)
-      ) {
-        return parsed as ZoteroApiCacheStateV1;
-      }
-    } catch {
-      // Missing or corrupt cache behaves exactly like no cache.
-    }
-    return null;
+  private readCache(): Promise<ZoteroApiCacheStateV1 | null> {
+    return readVersionedJsonCache(
+      this.fileSystem,
+      this.cachePath,
+      isZoteroApiCacheState,
+    );
   }
 
   /** Persist the fetched DTOs for offline use (best-effort). */
-  private async writeCache(
+  private writeCache(
     entries: ZoteroApiEntryData[],
     libraryVersion: number | null,
   ): Promise<void> {
-    if (!this.fileSystem || !this.cachePath) return;
-    try {
-      await this.fileSystem.writeFile(
-        this.cachePath,
-        JSON.stringify({
-          version: 1,
-          entries,
-          libraryVersion,
-        } satisfies ZoteroApiCacheStateV1),
-      );
-    } catch {
-      // Cache write failure is not critical.
-    }
+    return writeVersionedJsonCache(this.fileSystem, this.cachePath, {
+      version: 1,
+      entries,
+      libraryVersion,
+    } satisfies ZoteroApiCacheStateV1);
   }
 
   watch(callback: () => void): void {
