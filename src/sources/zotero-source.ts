@@ -138,20 +138,34 @@ export class ZoteroSource implements DataSource {
       // warning so the bibliography itself stays usable.
       let attachments: Record<string, unknown[]> | undefined;
       if (this.importAnnotations) {
-        try {
-          attachments = await this.fetchAttachments(result.entries, signal);
+        // When the export is byte-identical to the cached one, the library
+        // did not change — reuse the cached attachment payloads instead of
+        // re-fetching every entry's attachments on every (periodic) load.
+        const cached = await this.readCache();
+        if (
+          cached &&
+          cached.raw === raw &&
+          cached.format === this.format &&
+          cached.attachments
+        ) {
+          attachments = cached.attachments;
           ZoteroSource.attachAnnotations(result.entries, attachments);
-        } catch (error) {
-          if (error instanceof ZoteroAbortError || signal.aborted) {
-            throw error;
+        } else {
+          try {
+            attachments = await this.fetchAttachments(result.entries, signal);
+            ZoteroSource.attachAnnotations(result.entries, attachments);
+          } catch (error) {
+            if (error instanceof ZoteroAbortError || signal.aborted) {
+              throw error;
+            }
+            const message =
+              error instanceof Error ? error.message : String(error);
+            console.warn(`ZoteroSource: annotation fetch failed (${message})`);
+            result.parseErrors = [
+              ...(result.parseErrors ?? []),
+              { message: `PDF annotations unavailable: ${message}` },
+            ];
           }
-          const message =
-            error instanceof Error ? error.message : String(error);
-          console.warn(`ZoteroSource: annotation fetch failed (${message})`);
-          result.parseErrors = [
-            ...(result.parseErrors ?? []),
-            { message: `PDF annotations unavailable: ${message}` },
-          ];
         }
       }
 

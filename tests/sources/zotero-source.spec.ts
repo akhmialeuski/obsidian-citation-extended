@@ -300,6 +300,37 @@ describe('ZoteroSource annotation enrichment', () => {
     expect(doeContext.annotationCount).toBe(0);
   });
 
+  it('reuses cached attachments when the export is unchanged', async () => {
+    // Periodic polls with an unchanged library must not re-fetch every
+    // entry's attachments via JSON-RPC on each cycle.
+    const { client, fetchAttachmentsForCitekeys } = makeAnnotatingClient();
+    const { fs } = createMockFileSystem(
+      JSON.stringify({
+        version: 2,
+        format: DATABASE_FORMATS.CslJson,
+        raw: CSL,
+        attachments: { smith2023: [RAW_ATTACHMENT] },
+      }),
+    );
+    const source = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      fs,
+      '/cache/zotero.json',
+      undefined,
+      true,
+    );
+
+    const result = await source.load();
+
+    expect(fetchAttachmentsForCitekeys).not.toHaveBeenCalled();
+    const smith = result.entries.find((e) => e.id === 'smith2023')!;
+    expect(smith.annotations).toHaveLength(1);
+  });
+
   it('does not fetch attachments when the flag is off', async () => {
     const { client, fetchAttachmentsForCitekeys } = makeAnnotatingClient();
     const source = new ZoteroSource(

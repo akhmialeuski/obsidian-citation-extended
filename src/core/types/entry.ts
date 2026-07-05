@@ -415,25 +415,37 @@ export abstract class Entry {
   toJSON(): Record<string, unknown> {
     const jsonObj = { ...this } as Record<string, unknown>;
 
-    // add getter values
-    const proto = Object.getPrototypeOf(this) as object;
-    Object.entries(Object.getOwnPropertyDescriptors(proto))
-      .filter(([, descriptor]) => typeof descriptor.get == 'function')
-      .forEach(([key, descriptor]) => {
-        if (descriptor && key[0] !== '_') {
-          try {
-            const val = (this as unknown as Record<string, unknown>)[key];
-            jsonObj[key] = val;
-          } catch {
-            return;
-          }
+    // Add getter values from the ENTIRE prototype chain, not just the
+    // immediate prototype: an adapter may sit several levels below Entry
+    // (e.g. a specialized adapter extending EntryCSLAdapter), and walking
+    // one level would silently drop every inherited getter — all `entry.*`
+    // template fields would render empty for that adapter. Property reads
+    // dispatch dynamically, so the nearest override wins; `seen` just
+    // prevents re-reading the same key at farther levels.
+    const seen = new Set<string>();
+    for (
+      let proto = Object.getPrototypeOf(this) as object | null;
+      proto && proto !== Object.prototype;
+      proto = Object.getPrototypeOf(proto) as object | null
+    ) {
+      for (const [key, descriptor] of Object.entries(
+        Object.getOwnPropertyDescriptors(proto),
+      )) {
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (typeof descriptor.get !== 'function' || key[0] === '_') continue;
+        try {
+          jsonObj[key] = (this as unknown as Record<string, unknown>)[key];
+        } catch {
+          continue;
         }
-      });
+      }
+    }
 
-    // Annotations/attachments live on the BASE class (getters + injected
-    // backing fields), so surface them explicitly and uniformly here — the
-    // getter loop above only sees the immediate adapter prototype, and the
-    // spread would otherwise leak the raw `_annotations`/`_attachments`.
+    // Annotations/attachments are getters on Entry itself, so the chain walk
+    // above already surfaced them — but keep the explicit assignment so the
+    // uniform shape survives even if a subclass shadows them, and never leak
+    // the raw injected backing fields copied by the spread.
     jsonObj.annotations = this.annotations;
     jsonObj.attachments = this.attachments;
     delete jsonObj._annotations;
