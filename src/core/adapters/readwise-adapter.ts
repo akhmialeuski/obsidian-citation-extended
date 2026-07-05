@@ -1,4 +1,5 @@
 import { Author, Entry } from '../types/entry';
+import type { Annotation } from '../types/annotation';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -348,11 +349,48 @@ export class ReadwiseAdapter extends Entry {
   }
 
   /**
-   * Structured list of highlights with per-item metadata (text, note,
-   * location, color, tags). Empty array when the entry has no highlights.
-   * Iterate in templates via `{{#each entry.highlights}}`.
+   * Readwise highlights ARE annotations — exposed ONLY through the
+   * source-agnostic {@link Entry.annotations} interface (the same one Zotero
+   * maps into), so `{{annotations}}` works uniformly across sources and there
+   * is no second, Readwise-specific template surface for the same data.
+   * Derived from the parsed entry data (no external fetch), memoized because
+   * sort/search touch it.
    */
-  get highlights(): ReadwiseHighlightItem[] {
-    return this.data.highlights ?? [];
+  get annotations(): Annotation[] {
+    return this.memo('annotations', () =>
+      (this.data.highlights ?? []).map((h, index) =>
+        readwiseHighlightToAnnotation(h, index),
+      ),
+    );
   }
+}
+
+/** Zero-pad an index so lexicographic sort equals highlight order. */
+function orderKey(index: number): string {
+  return String(index).padStart(8, '0');
+}
+
+/** Map one Readwise highlight into the source-agnostic annotation shape. */
+function readwiseHighlightToAnnotation(
+  h: ReadwiseHighlightItem,
+  index: number,
+): Annotation {
+  const isPage = h.locationType === 'page' && h.location != null;
+  return {
+    id: h.id || null,
+    type: 'highlight',
+    text: h.text ?? '',
+    comment: h.note ?? '',
+    // Readwise stores a palette NAME (e.g. "yellow"), not a hex value.
+    color: '',
+    colorName: h.color ?? null,
+    page: isPage ? h.location : null,
+    pageLabel: isPage ? String(h.location) : '',
+    tags: h.tags ?? [],
+    imagePath: null,
+    openURI: h.url ?? null,
+    sortIndex: orderKey(index),
+    dateModified: h.highlightedAt ?? null,
+    source: 'readwise',
+  };
 }

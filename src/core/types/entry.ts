@@ -1,8 +1,5 @@
 import type { TemplateContext } from './template-context';
-import type {
-  ZoteroAnnotation,
-  ZoteroAttachment,
-} from '../zotero/zotero-annotations';
+import type { Annotation, AttachmentRef } from './annotation';
 
 export interface Author {
   given?: string;
@@ -115,19 +112,42 @@ export abstract class Entry {
    */
   public collections?: string[];
 
-  /**
-   * Native Zotero PDF annotations (highlights, comments, colors, deep
-   * links). Populated only by the live Zotero source when "Import PDF
-   * annotations" is enabled — a concrete optional field like
-   * {@link collections}, so other adapters need not declare it.
-   */
-  public annotations?: ZoteroAnnotation[];
+  /** Injected annotations (see {@link setAnnotations}). */
+  protected _annotations?: Annotation[];
+  /** Injected attachments (see {@link setAnnotations}). */
+  protected _attachments?: AttachmentRef[];
 
   /**
-   * Zotero attachments (PDF files with `zotero://open-pdf` links).
-   * Populated together with {@link annotations}.
+   * Source-agnostic annotations for this entry ([] when none). The consumer
+   * (templates, notes layer) reads this ONE interface regardless of source.
+   *
+   * Two population paths, both behind the source boundary:
+   * - Adapters whose annotation data lives in the parsed entry (e.g. Readwise
+   *   highlights) override this getter.
+   * - Sources whose annotations come from a separate call (e.g. Zotero via
+   *   Better BibTeX JSON-RPC) inject them with {@link setAnnotations}.
    */
-  public attachments?: ZoteroAttachment[];
+  public get annotations(): Annotation[] {
+    return this._annotations ?? [];
+  }
+
+  /** Source-agnostic attachments for this entry ([] when none). */
+  public get attachments(): AttachmentRef[] {
+    return this._attachments ?? [];
+  }
+
+  /**
+   * Inject externally-fetched annotations/attachments (used by sources whose
+   * annotation data is not part of the parsed entry). Adapters that derive
+   * annotations from their own data override {@link annotations} instead.
+   */
+  public setAnnotations(
+    annotations: Annotation[],
+    attachments: AttachmentRef[],
+  ): void {
+    this._annotations = annotations;
+    this._attachments = attachments;
+  }
 
   public abstract eventPlace?: string;
 
@@ -367,7 +387,7 @@ export abstract class Entry {
       collections: this.collections,
       annotations: this.annotations,
       attachments: this.attachments,
-      annotationCount: this.annotations?.length ?? 0,
+      annotationCount: this.annotations.length,
       lastname: this.lastname(),
       language: this.language,
       note: this.note,
@@ -409,6 +429,15 @@ export abstract class Entry {
           }
         }
       });
+
+    // Annotations/attachments live on the BASE class (getters + injected
+    // backing fields), so surface them explicitly and uniformly here — the
+    // getter loop above only sees the immediate adapter prototype, and the
+    // spread would otherwise leak the raw `_annotations`/`_attachments`.
+    jsonObj.annotations = this.annotations;
+    jsonObj.attachments = this.attachments;
+    delete jsonObj._annotations;
+    delete jsonObj._attachments;
 
     return jsonObj;
   }

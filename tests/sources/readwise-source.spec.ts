@@ -469,13 +469,13 @@ describe('ReadwiseSource', () => {
       const parent1 = result.entries.find(
         (e) => e.id === 'rd-parent-1',
       ) as ReadwiseAdapter;
-      expect(parent1.highlights).toHaveLength(1);
-      expect(parent1.highlights[0].text).toBe('Child highlight text');
+      expect(parent1.annotations).toHaveLength(1);
+      expect(parent1.annotations[0].text).toBe('Child highlight text');
 
       const parent2 = result.entries.find(
         (e) => e.id === 'rd-parent-2',
       ) as ReadwiseAdapter;
-      expect(parent2.highlights).toHaveLength(0);
+      expect(parent2.annotations).toHaveLength(0);
     });
 
     it('keeps orphan child documents (missing parent) as top-level entries', async () => {
@@ -709,16 +709,17 @@ describe('ReadwiseSource', () => {
       const source = new ReadwiseSource('src-1', client, worker as never);
       const entry = (await source.load()).entries[0] as ReadwiseAdapter;
 
-      expect(entry.highlights).toHaveLength(1);
-      const h = entry.highlights[0];
+      expect(entry.annotations).toHaveLength(1);
+      const h = entry.annotations[0];
       expect(h.id).toBe('7');
       expect(h.text).toBe('HL text');
-      expect(h.note).toBe('HL note');
-      expect(h.location).toBe(55);
-      expect(h.locationType).toBe('page');
-      expect(h.color).toBe('blue');
-      expect(h.url).toBe('https://readwise.io/h/7');
+      expect(h.comment).toBe('HL note');
+      expect(h.page).toBe(55);
+      expect(h.pageLabel).toBe('55');
+      expect(h.colorName).toBe('blue');
+      expect(h.openURI).toBe('https://readwise.io/h/7');
       expect(h.tags).toEqual(['k1', 'k2']);
+      expect(h.source).toBe('readwise');
     });
   });
 
@@ -1664,7 +1665,7 @@ describe('ReadwiseSource incremental sync', () => {
     ) as ReadwiseAdapter;
     expect(book1.title).toBe('Book One (renamed)');
     // Old highlight kept, new one added.
-    const texts = book1.highlights.map((h) => h.text);
+    const texts = book1.annotations.map((h) => h.text);
     expect(texts).toContain('old highlight');
     expect(texts).toContain('new highlight');
   });
@@ -1733,7 +1734,7 @@ describe('ReadwiseSource incremental sync', () => {
     expect(result.entries).toHaveLength(1);
     const parent = result.entries[0] as ReadwiseAdapter;
     expect(parent.citekey).toBe('rd-parent-1');
-    expect(parent.highlights.map((h) => h.text)).toContain(
+    expect(parent.annotations.map((h) => h.text)).toContain(
       'fresh child highlight',
     );
   });

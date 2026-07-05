@@ -192,8 +192,12 @@ export class ZoteroSource implements DataSource {
       const raw = attachmentsByCitekey[entry.id];
       if (!raw) continue;
       const { attachments, annotations } = normalizeZoteroAttachments(raw);
-      if (attachments.length > 0) entry.attachments = attachments;
-      if (annotations.length > 0) entry.annotations = annotations;
+      if (attachments.length > 0 || annotations.length > 0) {
+        // Inject through the uniform Entry interface — the source is the only
+        // place that knows these came from a BBT call; consumers just read
+        // entry.annotations.
+        entry.setAnnotations(annotations, attachments);
+      }
     }
   }
 

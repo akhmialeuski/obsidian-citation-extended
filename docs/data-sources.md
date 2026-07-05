@@ -107,7 +107,7 @@ The plugin loads data from both Readwise APIs in parallel and merges the results
 | `highlights[]`                | `highlights[]`             | Structured per-highlight metadata (see below)              |
 | `published_date`              | `issuedDate`               | Reader (v3) entries only                                   |
 
-**Structured highlights:** In addition to the aggregated `note` string, each Readwise entry exposes a structured `highlights` array via `entry.highlights`, where each item has `text`, `note`, `location`, `locationType`, `color`, `highlightedAt`, `url`, and `tags`. Iterate it in templates with `{{#each entry.highlights}}` to render highlights as a list or table. The aggregated `{{note}}` string is still available for backward compatibility.
+**Structured highlights:** In addition to the aggregated `note` string, Readwise highlights are exposed through the source-agnostic `annotations` template interface (shared with Zotero PDF annotations): each item has `text`, `comment`, `page`, `pageLabel`, `colorName`, `tags`, `openURI`, and `source: "readwise"`. Iterate with `{{#each annotations}}`. The aggregated `{{note}}` string is still available for backward compatibility.
 
 **Reader child documents:** Highlights and notes you create inside Readwise Reader are stored as child documents. The plugin merges them into their parent document's `highlights` array (rather than discarding them). A child whose parent is outside the synced set is kept as a standalone entry.
 

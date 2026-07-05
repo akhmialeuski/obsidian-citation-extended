@@ -45,8 +45,13 @@ const KNOWN_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   readingProgress: 'Reader reading progress as a fraction from 0 to 1',
   readerLocation:
     'Reader location of the document: new, later, shortlist, archive, or feed',
-  highlights:
-    'Structured Readwise highlights. Iterate with {{#each entry.highlights}} — each item has text, note, location, locationType, color, highlightedAt, url, tags',
+  // Source-agnostic annotations (Zotero PDF annotations, Readwise highlights, …)
+  annotations:
+    'Annotations from any source (Zotero PDF annotations, Readwise highlights). Iterate with {{#each annotations}} — each item has text, comment, type, color, colorName, page, pageLabel, tags, imagePath, openURI, source',
+  annotationCount:
+    'Number of annotations on the entry (0 when none) — use for {{#if annotationCount}} guards',
+  attachments:
+    'Source attachments (e.g. PDFs). Each item has id, path, title, openURI, annotationCount',
 };
 
 /** Static examples for helper-based variables that are not derived from entry data */

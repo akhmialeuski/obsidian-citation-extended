@@ -294,101 +294,115 @@ Readwise entries expose extra scalar fields that are not part of the top-level t
 
 For non-Readwise entries these fields are absent, so the references render as empty strings.
 
-### `entry.highlights` Array (Readwise)
+### Readwise highlights
 
-Readwise entries expose a structured `entry.highlights` array. Each item carries the per-highlight metadata that the aggregated `{{note}}` string discards:
-
-| Property | Description | Example |
-|----------|-------------|---------|
-| `text` | The highlighted text | `Habits are the compound interest of self-improvement` |
-| `note` | Personal note attached to the highlight | `Key idea` |
-| `location` | Page / order / percent locator | `42` |
-| `locationType` | `page` / `order` / `time_offset` | `page` |
-| `color` | Highlight color | `yellow` |
-| `highlightedAt` | ISO timestamp when highlighted | `2024-01-01T00:00:00Z` |
-| `url` | Direct link to the highlight | |
-| `tags` | Per-highlight tags | `["important"]` |
-
-Iterate with `{{#each entry.highlights}}`:
+Readwise highlights are exposed through the **source-agnostic `annotations` interface** described in the next section — the same one Zotero PDF annotations use, so one template section covers both. The mapping: highlight text → `text`, your note → `comment`, page location → `page`/`pageLabel`, color name → `colorName`, per-highlight tags → `tags`, direct link → `openURI`, and `source` is `readwise`.
 
 ```handlebars
-{{#each entry.highlights}}
-- {{this.text}}{{#if this.location}} (loc. {{this.location}}){{/if}}
+{{#each annotations}}
+- {{this.text}}{{#if this.comment}} — *{{this.comment}}*{{/if}}{{#if this.page}} (p. {{this.page}}){{/if}}
 {{/each}}
 ```
 
-For non-Readwise entries this array is empty, so the loop renders nothing.
+For entries with no highlights the array is empty, so the loop renders nothing.
 
-## Zotero PDF Annotations
+## Annotations (source-agnostic)
 
-When a live Zotero database has **Import PDF annotations** enabled (see [Data Sources](../data-sources.md#live-zotero-connection-better-bibtex)), entries expose native Zotero PDF annotations — the highlights, comments, and notes you made in Zotero's built-in PDF reader.
+`annotations` is a **single, uniform interface** across every data source. Any
+source that carries annotation-like data maps it into the same shape, so your
+template never depends on where the data came from:
+
+- **Zotero** (live Better BibTeX connection, **Import PDF annotations** enabled — see [Data Sources](../data-sources.md#live-zotero-connection-better-bibtex)) → native PDF highlights, comments, and **image/area annotations**, with `source: "zotero"`.
+- **Readwise** → each highlight (text + your note + color + tags), with `source: "readwise"`.
+- **Any future source** implements the same mapping — no template change needed.
+
+A source with no annotations yields an **empty array**, so guard with
+`{{#if annotationCount}}` and the section simply renders nothing. This is always
+safe — you never have to special-case a source or a missing field.
 
 ### `annotations` Array
 
-Each item is one annotation, in document order per attachment:
+Each item is one annotation, in document order:
 
 | Property | Description | Example |
 |----------|-------------|---------|
-| `text` | Highlighted / underlined text (empty for note and image annotations) | `A key finding.` |
-| `comment` | Your comment on the annotation | `Compare with Smith 2020` |
-| `type` | `highlight`, `underline`, `note`, `image`, `ink` | `highlight` |
-| `color` | Hex color | `#ffd400` |
-| `colorName` | Zotero palette name: `yellow`, `red`, `green`, `blue`, `purple`, `magenta`, `orange`, `gray` (null for custom colors) | `yellow` |
-| `page` | 1-based page number | `12` |
-| `pageLabel` | Page label from the PDF (may be roman numerals) | `xii` |
-| `openURI` | Deep link opening the PDF in Zotero **at this annotation** | `zotero://open-pdf/library/items/KEY?page=12&annotation=ANNOT` |
-| `imagePath` | Absolute path to the cached image for image annotations | |
+| `text` | Highlighted / quoted text (**empty** for note- and image-only annotations) | `A key finding.` |
+| `comment` | Your comment/note on the annotation | `Compare with Smith 2020` |
+| `type` | `highlight`, `underline`, `note`, `image`, `ink`, … (source's own term) | `highlight` |
+| `color` | Raw color (hex for Zotero; empty for Readwise, which uses a name) | `#ffd400` |
+| `colorName` | Palette name (`yellow`, `red`, …), or null when unknown | `yellow` |
+| `page` | 1-based page number, or null | `12` |
+| `pageLabel` | Page label as shown (may be roman numerals) | `xii` |
+| `openURI` | Link that opens the source **at this annotation**, or null | `zotero://open-pdf/library/items/KEY?page=12&annotation=ANNOT` |
+| `imagePath` | Absolute path to the cached image (**image/area annotations**), or null | `/…/storage/…/IMG.png` |
 | `tags` | Tags on the annotation | `["method"]` |
-| `dateModified` | ISO timestamp | `2026-01-15T10:30:00Z` |
-| `key` | Zotero annotation key | `ABCD1234` |
-| `attachmentKey` / `attachmentPath` / `attachmentTitle` | Which PDF the annotation belongs to | |
-| `sortIndex` | Zotero sort index (document order) | `00011\|001234\|00100` |
+| `dateModified` | ISO timestamp, or null | `2026-01-15T10:30:00Z` |
+| `id` | Stable per-source id (used in deep links), or null | `ABCD1234` |
+| `sortIndex` | Opaque document-order key | `00011\|001234\|00100` |
+| `source` | Which source produced it | `zotero` |
 
 ### `attachments` Array
 
-One item per Zotero attachment returned for the entry:
+One item per source attachment (e.g. a PDF). Empty when none.
 
 | Property | Description |
 |----------|-------------|
-| `key` | Zotero attachment item key |
+| `id` | Per-source attachment id |
 | `path` | Absolute file path |
 | `title` | File basename without extension |
-| `openURI` | `zotero://open-pdf/...` link for the attachment |
+| `openURI` | Link opening the attachment in the source |
 | `annotationCount` | Number of annotations on this attachment |
 
 ### `annotationCount`
 
-Total number of annotations on the entry (`0` when none or the feature is off) — handy for conditionals.
+Total number of annotations on the entry (`0` when none or the source has no
+annotation data) — handy for conditionals.
 
 ### Examples
 
-Render every annotation as a quote with a jump-back link:
+Render every annotation as a quote — **handles highlights AND image/area
+annotations** (image annotations have no `text`, only a `comment` and an image):
 
 ```handlebars
 {{#if annotationCount}}
 ## Annotations
 
 {{#each annotations}}
-> {{this.text}}{{#if this.comment}}
-> — *{{this.comment}}*{{/if}}
+{{#if this.text}}
+> {{this.text}}
+{{/if}}
+{{#if this.imagePath}}
+> ![area annotation]({{this.imagePath}})
+{{/if}}
+{{#if this.comment}}
+> — *{{this.comment}}*
+{{/if}}
+{{#if this.openURI}}
 > [p. {{this.pageLabel}}]({{this.openURI}})
+{{/if}}
 
 {{/each}}
 {{/if}}
 ```
+
+> The `{{#if this.text}}` / `{{#if this.imagePath}}` / `{{#if this.comment}}`
+> guards are what make this robust: an image annotation with only a comment
+> (like a portrait clipped from a page) renders the image + your note and
+> skips the empty quote line, instead of producing a blank `>` .
 
 Group by color meaning (e.g. yellow = key claims, red = disagreements):
 
 ```handlebars
 ## Key claims
 {{#each annotations}}{{#if (eq this.colorName "yellow")}}
-- {{this.text}} ([p. {{this.pageLabel}}]({{this.openURI}}))
+- {{#if this.text}}{{this.text}}{{else}}{{this.comment}}{{/if}} ([p. {{this.pageLabel}}]({{this.openURI}}))
 {{/if}}{{/each}}
 
 ## Disagreements
 {{#each annotations}}{{#if (eq this.colorName "red")}}
-- {{this.text}} ([p. {{this.pageLabel}}]({{this.openURI}}))
+- {{#if this.text}}{{this.text}}{{else}}{{this.comment}}{{/if}} ([p. {{this.pageLabel}}]({{this.openURI}}))
 {{/if}}{{/each}}
 ```
 
-For entries from file-based databases (or with the toggle off) `annotations` is absent and these sections render nothing.
+For a source with no annotation data (or the Zotero toggle off), `annotations`
+is `[]` and every section above renders nothing.

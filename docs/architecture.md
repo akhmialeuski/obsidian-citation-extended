@@ -1059,7 +1059,7 @@ Readwise uses a single database format: `'readwise'`. The internal mode (`readwi
 
 ### Structured Highlights
 
-Each entry carries both an aggregated `highlightsText` string (for backward-compatible `{{note}}` templates) and a structured `highlights: ReadwiseHighlightItem[]` array exposed via `entry.highlights` (for `{{#each entry.highlights}}`). Each item preserves per-highlight `text`, `note`, `location`, `locationType`, `color`, `highlightedAt`, `url`, and `tags`. v2 Export highlights map directly; v3 Reader child documents are merged in (see below).
+Each entry carries both an aggregated `highlightsText` string (for backward-compatible `{{note}}` templates) and structured `ReadwiseHighlightItem[]` data that the adapter maps into the source-agnostic `annotations` interface (`{{#each annotations}}` — shared with Zotero PDF annotations). Each annotation preserves the highlight `text`, your note as `comment`, `page`/`pageLabel`, `colorName`, `tags`, and `openURI`. v2 Export highlights map directly; v3 Reader child documents are merged in (see below).
 
 ### Reader Child-Document Merge
 

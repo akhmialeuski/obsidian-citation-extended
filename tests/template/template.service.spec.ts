@@ -200,6 +200,47 @@ describe('TemplateService', () => {
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.value).toBe('Content: 2023');
     });
+
+    test('annotation template skips empty text and renders image + comment', () => {
+      // A highlight (has text) and an image/area annotation (no text, only a
+      // comment + imagePath) — the recipe must skip the blank quote for the
+      // image and still surface its comment and image.
+      const template = [
+        '{{#each annotations}}',
+        '{{#if this.text}}> {{this.text}}',
+        '{{/if}}{{#if this.imagePath}}> ![img]({{this.imagePath}})',
+        '{{/if}}{{#if this.comment}}> — {{this.comment}}',
+        '{{/if}}{{/each}}',
+      ].join('\n');
+      const variables = {
+        annotationCount: 2,
+        annotations: [
+          { text: 'A highlight.', comment: '', imagePath: null },
+          { text: '', comment: 'Багдан Стэткевіч', imagePath: '/c/img.png' },
+        ],
+      } as unknown as TemplateContext;
+
+      const result = service.render(template, variables);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value).toContain('> A highlight.');
+        expect(result.value).toContain('> ![img](/c/img.png)');
+        expect(result.value).toContain('> — Багдан Стэткевіч');
+        // The image annotation contributed no empty quote line.
+        expect(result.value).not.toMatch(/^> \n/m);
+      }
+    });
+
+    test('annotation section renders nothing when there are none', () => {
+      const template = '{{#if annotationCount}}## Annotations{{/if}}';
+      const variables = {
+        annotationCount: 0,
+        annotations: [],
+      } as unknown as TemplateContext;
+      const result = service.render(template, variables);
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value).toBe('');
+    });
   });
   describe('Helpers', () => {
     test('join helper', () => {

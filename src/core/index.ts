@@ -66,10 +66,12 @@ export type {
   ZoteroHttpPostFn,
   ZoteroVersions,
   ZoteroAttachmentsFetchResult,
-  ZoteroAnnotation,
-  ZoteroAttachment,
   NormalizedAttachments,
 } from './zotero';
+
+// Source-agnostic annotation model (Zotero, Readwise, and future sources all
+// normalize into this; consumers read only this interface).
+export type { Annotation, AttachmentRef } from './types/annotation';
 
 // Readwise incremental sync (delta merge)
 export {

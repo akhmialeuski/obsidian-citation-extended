@@ -1,7 +1,4 @@
-import type {
-  ZoteroAnnotation,
-  ZoteroAttachment,
-} from '../zotero/zotero-annotations';
+import type { Annotation, AttachmentRef } from './annotation';
 
 export interface TemplateContext {
   citekey: string;
@@ -16,8 +13,8 @@ export interface TemplateContext {
   keywords?: string[];
   tags?: string[];
   collections?: string[];
-  annotations?: ZoteroAnnotation[];
-  attachments?: ZoteroAttachment[];
+  annotations?: Annotation[];
+  attachments?: AttachmentRef[];
   annotationCount?: number;
   lastname?: string;
   language?: string;

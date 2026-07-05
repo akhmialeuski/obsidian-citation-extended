@@ -41,6 +41,70 @@ function makeEntryData(
 
 describe('ReadwiseAdapter', () => {
   // -------------------------------------------------------------------------
+  // Source-agnostic annotations (highlights → Entry.annotations)
+  // -------------------------------------------------------------------------
+
+  describe('annotations (uniform interface)', () => {
+    it('maps structured highlights into the shared Annotation shape', () => {
+      const adapter = new ReadwiseAdapter(
+        makeEntryData({
+          highlights: [
+            {
+              id: 'h1',
+              text: 'A key sentence.',
+              note: 'my thought',
+              location: 42,
+              locationType: 'page',
+              color: 'yellow',
+              highlightedAt: '2024-06-01T00:00:00Z',
+              url: 'https://readwise.io/open/h1',
+              tags: ['idea'],
+            },
+            {
+              id: 'h2',
+              text: 'Second one.',
+              note: null,
+              location: null,
+              locationType: 'none',
+              color: null,
+              highlightedAt: null,
+              url: null,
+              tags: [],
+            },
+          ],
+        }),
+      );
+
+      const anns = adapter.annotations;
+      expect(anns).toHaveLength(2);
+      expect(anns[0]).toMatchObject({
+        id: 'h1',
+        type: 'highlight',
+        text: 'A key sentence.',
+        comment: 'my thought',
+        colorName: 'yellow',
+        page: 42,
+        pageLabel: '42',
+        tags: ['idea'],
+        openURI: 'https://readwise.io/open/h1',
+        source: 'readwise',
+      });
+      // document order is preserved via sortIndex
+      expect(anns[0].sortIndex < anns[1].sortIndex).toBe(true);
+      // non-page location → no page number, empty label
+      expect(anns[1].page).toBeNull();
+      expect(anns[1].pageLabel).toBe('');
+      expect(anns[1].comment).toBe('');
+    });
+
+    it('yields [] for an entry with no highlights (template skips)', () => {
+      const adapter = new ReadwiseAdapter(makeEntryData({ highlights: [] }));
+      expect(adapter.annotations).toEqual([]);
+      expect(adapter.toTemplateContext().annotationCount).toBe(0);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Constructor & Identity
   // -------------------------------------------------------------------------
 
@@ -418,8 +482,11 @@ describe('ReadwiseAdapter', () => {
     });
   });
 
-  describe('structured highlights getter', () => {
-    it('returns the structured highlights array', () => {
+  describe('structured highlights via the uniform annotations interface', () => {
+    // There is deliberately NO separate `entry.highlights` template surface:
+    // highlights are exposed only through the source-agnostic `annotations`
+    // interface shared with Zotero (and any future source).
+    it('exposes highlight data through annotations', () => {
       const adapter = new ReadwiseAdapter(
         makeEntryData({
           highlights: [
@@ -437,17 +504,17 @@ describe('ReadwiseAdapter', () => {
           ],
         }),
       );
-      expect(adapter.highlights).toHaveLength(1);
-      expect(adapter.highlights[0].text).toBe('first highlight');
-      expect(adapter.highlights[0].note).toBe('a note');
+      expect(adapter.annotations).toHaveLength(1);
+      expect(adapter.annotations[0].text).toBe('first highlight');
+      expect(adapter.annotations[0].comment).toBe('a note');
     });
 
     it('returns an empty array when highlights are absent (backward-compat)', () => {
       const adapter = new ReadwiseAdapter(makeEntryData());
-      expect(adapter.highlights).toEqual([]);
+      expect(adapter.annotations).toEqual([]);
     });
 
-    it('exposes highlights via toJSON for {{#each entry.highlights}}', () => {
+    it('exposes annotations via toJSON for {{entry.annotations}}', () => {
       const adapter = new ReadwiseAdapter(
         makeEntryData({
           highlights: [
@@ -466,8 +533,10 @@ describe('ReadwiseAdapter', () => {
         }),
       );
       const json = adapter.toJSON();
-      expect(Array.isArray(json.highlights)).toBe(true);
-      expect((json.highlights as unknown[]).length).toBe(1);
+      expect(Array.isArray(json.annotations)).toBe(true);
+      expect((json.annotations as unknown[]).length).toBe(1);
+      // No duplicate surface: the raw highlights array is not re-exported.
+      expect(json.highlights).toBeUndefined();
     });
   });
 

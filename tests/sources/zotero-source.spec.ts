@@ -258,18 +258,20 @@ describe('ZoteroSource annotation enrichment', () => {
 
     const smith = result.entries.find((e) => e.id === 'smith2023')!;
     expect(smith.annotations).toHaveLength(1);
-    expect(smith.annotations![0].text).toBe('quoted text');
-    expect(smith.annotations![0].colorName).toBe('yellow');
-    expect(smith.annotations![0].page).toBe(4);
-    expect(smith.annotations![0].openURI).toBe(
+    expect(smith.annotations[0].text).toBe('quoted text');
+    expect(smith.annotations[0].colorName).toBe('yellow');
+    expect(smith.annotations[0].page).toBe(4);
+    expect(smith.annotations[0].openURI).toBe(
       'zotero://open-pdf/library/items/ATTKEY01?page=4&annotation=ANNOT001',
     );
     expect(smith.attachments).toHaveLength(1);
-    expect(smith.attachments![0].key).toBe('ATTKEY01');
+    expect(smith.attachments[0].id).toBe('ATTKEY01');
 
+    // Uniform interface: an entry with no annotations yields [] (not
+    // undefined), so templates iterate/guard without special-casing.
     const doe = result.entries.find((e) => e.id === 'doe2024')!;
-    expect(doe.annotations).toBeUndefined();
-    expect(doe.attachments).toBeUndefined();
+    expect(doe.annotations).toEqual([]);
+    expect(doe.attachments).toEqual([]);
   });
 
   it('exposes annotations through the template context', async () => {
@@ -379,7 +381,7 @@ describe('ZoteroSource annotation enrichment', () => {
 
     const smith = result.entries.find((e) => e.id === 'smith2023')!;
     expect(smith.annotations).toHaveLength(1);
-    expect(smith.annotations![0].openURI).toContain('ATTKEY01');
+    expect(smith.annotations[0].openURI).toContain('ATTKEY01');
     expect(result.parseErrors![0].message).toContain('using cache');
   });
 
@@ -410,7 +412,7 @@ describe('ZoteroSource annotation enrichment', () => {
     expect(result.entries).toHaveLength(2);
     expect(
       result.entries.find((e) => e.id === 'smith2023')!.annotations,
-    ).toBeUndefined();
+    ).toEqual([]);
   });
 
   it('writes a V2 cache including the attachments payload', async () => {

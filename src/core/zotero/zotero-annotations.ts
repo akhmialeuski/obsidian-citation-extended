@@ -11,7 +11,13 @@
  *
  * Everything here is defensive: fields may be missing depending on the
  * Zotero/BBT version, so normalization never throws on malformed items.
+ *
+ * This is Zotero's ADAPTER to the source-agnostic {@link Annotation} model:
+ * it maps BBT payloads into the same interface Readwise (and any future
+ * source) map into, so `entry.annotations` reads uniformly.
  */
+
+import type { Annotation, AttachmentRef } from '../types/annotation';
 
 /** Zotero's eight default highlight colors (hex → name). */
 export const ZOTERO_ANNOTATION_COLOR_NAMES: Record<string, string> = {
@@ -31,64 +37,11 @@ export function zoteroColorName(color: string | undefined): string | null {
   return ZOTERO_ANNOTATION_COLOR_NAMES[color.toLowerCase()] ?? null;
 }
 
-/** A single normalized PDF annotation, ready for template consumption. */
-export interface ZoteroAnnotation {
-  /** Zotero annotation item key (used in deep links), or null. */
-  key: string | null;
-  /** highlight | underline | note | image | ink | text (as reported). */
-  type: string;
-  /** Highlighted/underlined text ('' for note/image annotations). */
-  text: string;
-  /** The user's comment on the annotation, or ''. */
-  comment: string;
-  /** Hex color like `#ffd400`, or ''. */
-  color: string;
-  /** Zotero palette name (yellow/red/green/blue/purple/magenta/orange/gray), or null. */
-  colorName: string | null;
-  /** 1-based page number derived from the annotation position, or null. */
-  page: number | null;
-  /** The page label shown in the PDF reader (may be roman numerals etc.). */
-  pageLabel: string;
-  /** Zotero sort index — lexicographic order == document order. */
-  sortIndex: string;
-  /** ISO timestamp of the last modification, or null. */
-  dateModified: string | null;
-  /** Tag names attached to the annotation. */
-  tags: string[];
-  /** Absolute path of the cached image for image annotations, or null. */
-  imagePath: string | null;
-  /** Key of the attachment the annotation belongs to, or null. */
-  attachmentKey: string | null;
-  /** Absolute path of the attachment file, or null. */
-  attachmentPath: string | null;
-  /** Attachment display name (file basename without extension), or null. */
-  attachmentTitle: string | null;
-  /**
-   * Deep link opening the PDF in Zotero at this annotation
-   * (`zotero://open-pdf/...?page=N&annotation=KEY`), or null.
-   */
-  openURI: string | null;
-}
-
-/** A normalized attachment reference for an entry. */
-export interface ZoteroAttachment {
-  /** Zotero attachment item key, or null when it cannot be derived. */
-  key: string | null;
-  /** Absolute file path, or null. */
-  path: string | null;
-  /** Display name (file basename without extension), or null. */
-  title: string | null;
-  /** `zotero://open-pdf/...` link for the attachment, or null. */
-  openURI: string | null;
-  /** Number of annotations found on this attachment. */
-  annotationCount: number;
-}
-
 /** Result of normalizing one citekey's `item.attachments` response. */
 export interface NormalizedAttachments {
-  attachments: ZoteroAttachment[];
+  attachments: AttachmentRef[];
   /** All annotations across attachments, in document order per attachment. */
-  annotations: ZoteroAnnotation[];
+  annotations: Annotation[];
 }
 
 /** Extract an item key from a `zotero://open-pdf/...` URI. */
@@ -188,8 +141,8 @@ function buildOpenURI(
 export function normalizeZoteroAttachments(
   raw: unknown,
 ): NormalizedAttachments {
-  const attachments: ZoteroAttachment[] = [];
-  const annotations: ZoteroAnnotation[] = [];
+  const attachments: AttachmentRef[] = [];
+  const annotations: Annotation[] = [];
   if (!Array.isArray(raw)) {
     return { attachments, annotations };
   }
@@ -212,7 +165,7 @@ export function normalizeZoteroAttachments(
         const annotationKey = strOrNull(a.key);
         const color = str(a.annotationColor);
         return {
-          key: annotationKey,
+          id: annotationKey,
           type: str(a.annotationType),
           text: str(a.annotationText),
           comment: str(a.annotationComment),
@@ -224,11 +177,9 @@ export function normalizeZoteroAttachments(
           dateModified: strOrNull(a.dateModified),
           tags: tagsOf(a.tags),
           imagePath: strOrNull(a.annotationImagePath),
-          attachmentKey: key,
-          attachmentPath: path,
-          attachmentTitle: basenameWithoutExtension(path),
           openURI: buildOpenURI(open, key, page, annotationKey),
-        } satisfies ZoteroAnnotation;
+          source: 'zotero',
+        } satisfies Annotation;
       });
 
     // Document order: Zotero's sortIndex is zero-padded, so a plain
@@ -236,7 +187,7 @@ export function normalizeZoteroAttachments(
     normalized.sort((a, b) => a.sortIndex.localeCompare(b.sortIndex));
 
     attachments.push({
-      key,
+      id: key,
       path,
       title: basenameWithoutExtension(path),
       openURI: open,

@@ -62,7 +62,7 @@ describe('normalizeZoteroAttachments', () => {
 
     expect(attachments).toHaveLength(1);
     expect(attachments[0]).toEqual({
-      key: 'ATTKEY01',
+      id: 'ATTKEY01',
       path: '/home/user/Zotero/storage/ATTKEY01/Smith - 2023 - Paper.pdf',
       title: 'Smith - 2023 - Paper',
       openURI: 'zotero://open-pdf/library/items/ATTKEY01',
@@ -71,7 +71,7 @@ describe('normalizeZoteroAttachments', () => {
 
     expect(annotations).toHaveLength(1);
     const a = annotations[0];
-    expect(a.key).toBe('ANNOT001');
+    expect(a.id).toBe('ANNOT001');
     expect(a.type).toBe('highlight');
     expect(a.text).toBe('A key finding.');
     expect(a.comment).toBe('Important!');
@@ -83,8 +83,7 @@ describe('normalizeZoteroAttachments', () => {
     expect(a.dateModified).toBe('2026-01-15T10:30:00Z');
     expect(a.tags).toEqual(['method', 'key-result']);
     expect(a.imagePath).toBeNull();
-    expect(a.attachmentKey).toBe('ATTKEY01');
-    expect(a.attachmentTitle).toBe('Smith - 2023 - Paper');
+    expect(a.source).toBe('zotero');
     expect(a.openURI).toBe(
       'zotero://open-pdf/library/items/ATTKEY01?page=12&annotation=ANNOT001',
     );
@@ -148,17 +147,17 @@ describe('normalizeZoteroAttachments', () => {
         annotations: [HIGHLIGHT],
       },
     ]);
-    expect(attachments[0].key).toBe('WINKEY99');
+    expect(attachments[0].id).toBe('WINKEY99');
     expect(annotations[0].openURI).toBe(
       'zotero://open-pdf/library/items/WINKEY99?page=12&annotation=ANNOT001',
     );
   });
 
   it('produces no deep link when neither open URI nor storage key exist', () => {
-    const { annotations } = normalizeZoteroAttachments([
+    const { attachments, annotations } = normalizeZoteroAttachments([
       { path: '/plain/dir/file.pdf', annotations: [HIGHLIGHT] },
     ]);
-    expect(annotations[0].attachmentKey).toBeNull();
+    expect(attachments[0].id).toBeNull();
     expect(annotations[0].openURI).toBeNull();
   });
 
@@ -193,7 +192,7 @@ describe('normalizeZoteroAttachments', () => {
         ],
       },
     ]);
-    expect(annotations.map((a) => a.key)).toEqual(['A', 'B']);
+    expect(annotations.map((a) => a.id)).toEqual(['A', 'B']);
   });
 
   it('accepts string tags and skips malformed tag entries', () => {
@@ -231,7 +230,7 @@ describe('normalizeZoteroAttachments', () => {
     ).toEqual({
       attachments: [
         {
-          key: null,
+          id: null,
           path: null,
           title: null,
           openURI: null,

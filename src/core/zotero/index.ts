@@ -15,8 +15,4 @@ export {
   zoteroColorName,
   normalizeZoteroAttachments,
 } from './zotero-annotations';
-export type {
-  ZoteroAnnotation,
-  ZoteroAttachment,
-  NormalizedAttachments,
-} from './zotero-annotations';
+export type { NormalizedAttachments } from './zotero-annotations';

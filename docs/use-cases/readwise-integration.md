@@ -108,18 +108,18 @@ The Readwise-specific fields (`asin`, `documentNote`, `wordCount`, `readingProgr
 
 ### Rendering structured highlights
 
-In addition to the aggregated `{{note}}` string, each Readwise entry exposes a structured `highlights` array. Iterate it with `{{#each entry.highlights}}` to render highlights with their per-item metadata (note, page/location, color, tags):
+In addition to the aggregated `{{note}}` string, Readwise highlights are exposed through the **source-agnostic `annotations` interface** — the same one Zotero PDF annotations use, so a single template section renders both. Iterate with `{{#each annotations}}`:
 
 ```handlebars
 ## Highlights
 
-{{#each entry.highlights}}
-- {{this.text}}{{#if this.location}} (loc. {{this.location}}){{/if}}{{#if this.color}} [{{this.color}}]{{/if}}
-{{#if this.note}}  > {{this.note}}{{/if}}
+{{#each annotations}}
+- {{this.text}}{{#if this.page}} (p. {{this.page}}){{/if}}{{#if this.colorName}} [{{this.colorName}}]{{/if}}
+{{#if this.comment}}  > {{this.comment}}{{/if}}
 {{/each}}
 ```
 
-Each highlight item has: `text`, `note`, `location`, `locationType`, `color`, `highlightedAt`, `url`, and `tags`.
+Each item has: `text`, `comment` (your note), `page`/`pageLabel`, `colorName`, `tags`, `openURI`, `source` (`readwise`) — see [Template Variables → Annotations](../templates/variables.md#annotations-source-agnostic).
 
 ## Expected Output
 
@@ -173,7 +173,7 @@ You do not rise to the level of your goals. You fall to the level of your system
 - You can use Readwise alongside file-based databases (Zotero, BibTeX, etc.) -- all entries are merged into a single searchable library
 - The plugin loads data from both Readwise APIs automatically; there is no mode selector
 - **Import filters:** Expand **Advanced filters** on the database card to limit what gets imported -- by category, tag, Reader location, or a minimum highlight count. This is useful if you have thousands of items but only want a subset in Obsidian
-- **Reader highlights:** Highlights and notes made inside Readwise Reader are merged into their parent document (rather than dropped), so they show up in `entry.highlights` and in search
+- **Reader highlights:** Highlights and notes made inside Readwise Reader are merged into their parent document (rather than dropped), so they show up in `annotations` and in search
 - **Truthful sync:** If a manual **Sync now** fails (e.g., invalid token or network error), the plugin reports the error and leaves the "Last sync" timestamp unchanged -- it no longer reports a false success
 - **Offline cache:** After each successful sync, data is cached locally at `.obsidian/plugins/citation-extended/readwise-cache-<id>.json` (one file per Readwise database). If the Readwise API is unavailable on the next plugin load (e.g., you are offline), the plugin falls back to the cached data and shows a warning. You do not need to manage the cache file -- it is updated automatically after a fully successful sync (a partial outage leaves the previous cache intact)
 - **Reader URLs:** The `{{zoteroSelectURI}}` variable and the "Open in Readwise" action open items in the Readwise Reader app, not the legacy Readwise highlights page
