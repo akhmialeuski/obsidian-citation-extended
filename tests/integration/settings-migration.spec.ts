@@ -46,14 +46,22 @@ describe('Integration: Settings Migration & Validation', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects invalid database type', () => {
+  it('quarantines a database with an invalid type instead of failing the parse', () => {
     const settings = {
       ...DEFAULT_SETTINGS,
-      databases: [{ name: 'Test', type: 'invalid-format', path: '/test.xyz' }],
+      databases: [
+        { name: 'Bad', type: 'invalid-format', path: '/test.xyz' },
+        { name: 'Good', type: 'csl-json', path: '/test.json' },
+      ],
     };
 
     const result = validateSettings(settings);
-    expect(result.success).toBe(false);
+    // One bad element must not discard every other validated setting (the
+    // caller would fall back to raw settings) — it is dropped with a warning.
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.databases.map((db) => db.name)).toEqual(['Good']);
+    }
   });
 
   it('handles legacy settings with citationExportPath', () => {

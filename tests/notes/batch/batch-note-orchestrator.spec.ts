@@ -40,6 +40,7 @@ function makeNoteService(
   files: Record<string, IVaultFile | null>,
 ): INoteService {
   return {
+    createNoteLookupIndex: jest.fn().mockReturnValue({}),
     findExistingLiteratureNoteFile: jest
       .fn()
       .mockImplementation((citekey: string) => files[citekey] ?? null),

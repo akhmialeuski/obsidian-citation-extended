@@ -266,4 +266,127 @@ describe('BaselineStore', () => {
 
     expect(await store.get('smith2023')).toEqual(BASELINE);
   });
+
+  it('seeds a corrupt-disk flush from the session cache, not from empty', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation();
+    // Healthy initial load: the session cache holds smith2023 + doe2020.
+    const files: Record<string, string> = {
+      '/plugin/baselines.json': JSON.stringify({
+        version: 1,
+        baselines: { smith2023: BASELINE, doe2020: OTHER },
+      }),
+    };
+    const fs = {
+      exists: jest.fn((p: string) => Promise.resolve(p in files)),
+      readFile: jest.fn((p: string) => Promise.resolve(files[p])),
+      writeFile: jest.fn((p: string, data: string) => {
+        files[p] = data;
+        return Promise.resolve();
+      }),
+    } as unknown as IFileSystem;
+    const store = new BaselineStore(fs, '/plugin/baselines.json');
+    expect(await store.get('smith2023')).toEqual(BASELINE);
+
+    // A sync tool corrupts the file mid-session; the user updates one note.
+    files['/plugin/baselines.json'] = '{corrupt json';
+    await store.set('new2024', OTHER);
+    await store.flush();
+
+    const onDisk = JSON.parse(files['/plugin/baselines.json']) as {
+      baselines: Record<string, unknown>;
+    };
+    // Every baseline the session knew survives — a `{}` seed would have
+    // shrunk the file to just the one dirty key, destroying merge history.
+    expect(Object.keys(onDisk.baselines).sort()).toEqual([
+      'doe2020',
+      'new2024',
+      'smith2023',
+    ]);
+    // The unreadable original was still preserved for inspection.
+    expect(files['/plugin/baselines.json.corrupt']).toBe('{corrupt json');
+    warn.mockRestore();
+  });
+
+  it('does not roll back a baseline set while a flush is in flight', async () => {
+    const { fs } = makeFileSystem(
+      JSON.stringify({ version: 1, baselines: { smith2023: BASELINE } }),
+    );
+    const store = new BaselineStore(fs, '/plugin/baselines.json');
+    await store.set('smith2023', BASELINE);
+
+    // While flush() awaits its merge read of the file, another caller
+    // advances the same key in memory.
+    let raced = false;
+    (fs.readFile as jest.Mock).mockImplementation(async () => {
+      if (!raced) {
+        raced = true;
+        await store.set('smith2023', OTHER);
+      }
+      return JSON.stringify({ version: 1, baselines: { smith2023: BASELINE } });
+    });
+
+    await store.flush();
+
+    // The adoption pass must not overwrite the newer in-memory value with
+    // the stale merged one — the racing set() would be lost entirely.
+    expect(await store.get('smith2023')).toEqual(OTHER);
+
+    // And the still-dirty key persists the new value on the next flush.
+    await store.flush();
+    const reloaded = new BaselineStore(fs, '/plugin/baselines.json');
+    (fs.readFile as jest.Mock).mockImplementation(() =>
+      Promise.resolve(
+        (fs.writeFile as jest.Mock).mock.calls.at(-1)![1] as string,
+      ),
+    );
+    expect(await reloaded.get('smith2023')).toEqual(OTHER);
+  });
+
+  describe('note-path identity', () => {
+    it('stamps the note path on set and returns the baseline for it', async () => {
+      const { fs } = makeFileSystem();
+      const store = new BaselineStore(fs, '/plugin/baselines.json');
+
+      await store.set('smith2023', BASELINE, 'Notes/@smith2023.md');
+
+      expect(await store.get('smith2023', 'Notes/@smith2023.md')).toEqual({
+        ...BASELINE,
+        path: 'Notes/@smith2023.md',
+      });
+    });
+
+    it('returns null for a different file than the baseline was recorded for', async () => {
+      const { fs } = makeFileSystem();
+      const store = new BaselineStore(fs, '/plugin/baselines.json');
+
+      await store.set('smith2023', BASELINE, 'Notes/@smith2023.md');
+
+      // The citekey now resolves elsewhere (renamed note / changed title
+      // template) — merging that file against this baseline would misread
+      // its content, so it must behave like a first sync.
+      expect(
+        await store.get('smith2023', 'Elsewhere/@smith2023.md'),
+      ).toBeNull();
+    });
+
+    it('accepts a legacy baseline without a recorded path', async () => {
+      const { fs } = makeFileSystem(
+        JSON.stringify({ version: 1, baselines: { smith2023: BASELINE } }),
+      );
+      const store = new BaselineStore(fs, '/plugin/baselines.json');
+
+      expect(await store.get('smith2023', 'Notes/@smith2023.md')).toEqual(
+        BASELINE,
+      );
+    });
+
+    it('returns the baseline regardless of path when no path is asked for', async () => {
+      const { fs } = makeFileSystem();
+      const store = new BaselineStore(fs, '/plugin/baselines.json');
+
+      await store.set('smith2023', BASELINE, 'Notes/@smith2023.md');
+
+      expect(await store.get('smith2023')).toMatchObject(BASELINE);
+    });
+  });
 });

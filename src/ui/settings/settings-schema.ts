@@ -84,6 +84,60 @@ export function resolveSyncIntervalMs(minutes: number): number | undefined {
 // (older build, hand-edited data.json) must clamp to its default instead of
 // failing the whole safeParse — which would discard EVERY other user setting.
 
+/** One configured database (see {@link quarantineInvalidDatabases}). */
+const DatabaseConfigSchema = z.object({
+  id: z.string().optional(),
+  name: z.string(),
+  type: z.enum(DATABASE_FORMAT_ENUM),
+  path: z.string(),
+  sourceType: z.string().optional(),
+  // Per-source-kind remembered connection strings (see DatabaseConfig).
+  sourcePaths: z.record(z.string()).optional(),
+  // Readwise-only client-side import filters (optional, backward-compat).
+  readwiseFilters: z
+    .object({
+      categories: z.array(z.string()).optional(),
+      tags: z.array(z.string()).optional(),
+      minHighlights: z.number().min(READWISE_FILTER_MIN_HIGHLIGHTS).optional(),
+      readerLocations: z.array(z.string()).optional(),
+    })
+    .optional(),
+  // Zotero-only: include Zotero child notes in the pull export.
+  zoteroExportNotes: z.boolean().optional(),
+  // Zotero-only: fetch native PDF annotations via BBT JSON-RPC.
+  zoteroImportAnnotations: z.boolean().optional(),
+  // Zotero local API only: group library id ('' = personal library).
+  zoteroApiGroupId: z.string().optional(),
+  // Zotero local API only: collection key ('' = whole library).
+  zoteroApiCollection: z.string().optional(),
+});
+
+/**
+ * Drop invalid `databases[]` elements before the array parse instead of
+ * letting ONE bad element (unknown `type` from a newer build, a hand-edit)
+ * fail the whole settings parse — the caller would then fall back to raw,
+ * unvalidated settings, losing every schema protection for every field.
+ */
+function quarantineInvalidDatabases(value: unknown): unknown {
+  if (value === undefined) return value; // let `.default([])` apply
+  if (!Array.isArray(value)) {
+    console.warn(
+      'Citations: settings key "databases" is not an array — ignoring it.',
+    );
+    return [];
+  }
+  return value.filter((element, index) => {
+    const result = DatabaseConfigSchema.safeParse(element);
+    if (!result.success) {
+      console.warn(
+        `Citations: dropping invalid database config at index ${index}:`,
+        result.error.issues[0]?.message ?? 'unknown issue',
+      );
+    }
+    return result.success;
+  });
+}
+
 export const SettingsSchema = z.object({
   citationExportPath: z.string(),
   citationExportFormat: z
@@ -138,40 +192,12 @@ export const SettingsSchema = z.object({
   bibliographyEntryTemplate: z
     .string()
     .default('{{authorString}}{{#if year}} ({{year}}){{/if}}. {{title}}.'),
-  // Multi-source configuration
-  databases: z
-    .array(
-      z.object({
-        id: z.string().optional(),
-        name: z.string(),
-        type: z.enum(DATABASE_FORMAT_ENUM),
-        path: z.string(),
-        sourceType: z.string().optional(),
-        // Per-source-kind remembered connection strings (see DatabaseConfig).
-        sourcePaths: z.record(z.string()).optional(),
-        // Readwise-only client-side import filters (optional, backward-compat).
-        readwiseFilters: z
-          .object({
-            categories: z.array(z.string()).optional(),
-            tags: z.array(z.string()).optional(),
-            minHighlights: z
-              .number()
-              .min(READWISE_FILTER_MIN_HIGHLIGHTS)
-              .optional(),
-            readerLocations: z.array(z.string()).optional(),
-          })
-          .optional(),
-        // Zotero-only: include Zotero child notes in the pull export.
-        zoteroExportNotes: z.boolean().optional(),
-        // Zotero-only: fetch native PDF annotations via BBT JSON-RPC.
-        zoteroImportAnnotations: z.boolean().optional(),
-        // Zotero local API only: group library id ('' = personal library).
-        zoteroApiGroupId: z.string().optional(),
-        // Zotero local API only: collection key ('' = whole library).
-        zoteroApiCollection: z.string().optional(),
-      }),
-    )
-    .default([]),
+  // Multi-source configuration. Invalid elements are quarantined (dropped
+  // with a warning) rather than failing the whole settings parse.
+  databases: z.preprocess(
+    quarantineInvalidDatabases,
+    z.array(DatabaseConfigSchema).default([]),
+  ),
   disableAutomaticNoteCreation: z.boolean().default(false),
   // Template profiles for type-specific note templates
   templateProfiles: z

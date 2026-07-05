@@ -28,12 +28,28 @@ import { baselineFromRender } from '../core';
  *   never be cached over real data.
  */
 export interface IBaselineStore {
-  /** Baseline for a citekey, or null when none was recorded. */
-  get(citekey: string): Promise<NoteBaseline | null>;
-  /** Record the baseline in memory (persist later with {@link flush}). */
-  set(citekey: string, baseline: NoteBaseline): Promise<void>;
+  /**
+   * Baseline for a citekey, or null when none was recorded. When `notePath`
+   * is given and the stored baseline was recorded against a DIFFERENT file,
+   * null is returned (first-sync semantics) — a foreign baseline must never
+   * drive a merge on a file it does not describe.
+   */
+  get(citekey: string, notePath?: string): Promise<NoteBaseline | null>;
+  /**
+   * Record the baseline in memory (persist later with {@link flush}),
+   * stamping the note path it was recorded against when provided.
+   */
+  set(
+    citekey: string,
+    baseline: NoteBaseline,
+    notePath?: string,
+  ): Promise<void>;
   /** Record a baseline directly from freshly rendered note content. */
-  recordFromRender(citekey: string, rendered: string): Promise<void>;
+  recordFromRender(
+    citekey: string,
+    rendered: string,
+    notePath?: string,
+  ): Promise<void>;
   /** Persist pending changes to disk (no-op when nothing changed). */
   flush(): Promise<void>;
 }
@@ -67,19 +83,44 @@ export class BaselineStore implements IBaselineStore {
     private filePath: string,
   ) {}
 
-  async get(citekey: string): Promise<NoteBaseline | null> {
+  async get(citekey: string, notePath?: string): Promise<NoteBaseline | null> {
     const all = await this.load();
-    return all[citekey] ?? null;
+    const baseline = all[citekey] ?? null;
+    // A baseline recorded against another file (renamed note, changed title
+    // template) must not drive that file's merge. Pre-path baselines
+    // (undefined) are accepted for backward compatibility — they get stamped
+    // on the next write.
+    if (
+      baseline?.path !== undefined &&
+      notePath !== undefined &&
+      baseline.path !== notePath
+    ) {
+      console.debug(
+        `Citations: baseline for "${citekey}" was recorded for ` +
+          `"${baseline.path}", not "${notePath}" — treating as first sync`,
+      );
+      return null;
+    }
+    return baseline;
   }
 
-  async set(citekey: string, baseline: NoteBaseline): Promise<void> {
+  async set(
+    citekey: string,
+    baseline: NoteBaseline,
+    notePath?: string,
+  ): Promise<void> {
     const all = await this.load();
-    all[citekey] = baseline;
+    all[citekey] =
+      notePath !== undefined ? { ...baseline, path: notePath } : baseline;
     this.dirtyKeys.add(citekey);
   }
 
-  async recordFromRender(citekey: string, rendered: string): Promise<void> {
-    await this.set(citekey, baselineFromRender(rendered));
+  async recordFromRender(
+    citekey: string,
+    rendered: string,
+    notePath?: string,
+  ): Promise<void> {
+    await this.set(citekey, baselineFromRender(rendered), notePath);
   }
 
   async flush(): Promise<void> {
@@ -116,14 +157,23 @@ export class BaselineStore implements IBaselineStore {
         this.corruptOnDisk = false;
       }
 
+      // Base of the write: disk when readable (merge-on-flush), else the
+      // session cache — it holds everything the healthy initial load gave us.
+      // Seeding `{}` on a corrupt read would shrink the file to just the
+      // dirty keys, destroying every other note's merge history.
       const merged: Record<string, NoteBaseline> =
-        disk.state === 'ok' ? { ...disk.baselines } : {};
+        disk.state === 'ok' ? { ...disk.baselines } : { ...cache };
       for (const key of pending) {
         if (cache[key] !== undefined) merged[key] = cache[key];
       }
       // Adopt merged as the session cache so later reads see the other
-      // device's baselines too (plus our own pending entries).
-      for (const [key, value] of Object.entries(merged)) cache[key] = value;
+      // device's baselines too (plus our own pending entries). Keys dirtied
+      // DURING the awaits above are newer than anything in `merged` — leave
+      // them for the next flush instead of rolling them back.
+      for (const [key, value] of Object.entries(merged)) {
+        if (this.dirtyKeys.has(key)) continue;
+        cache[key] = value;
+      }
 
       await this.fileSystem.writeFile(
         this.filePath,

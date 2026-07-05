@@ -362,7 +362,7 @@ describe('SettingsSchema', () => {
       expect(result.success).toBe(true);
     });
 
-    it('rejects a negative minHighlights', () => {
+    it('drops a database with a negative minHighlights (quarantine)', () => {
       const result = validateSettings({
         ...DEFAULT_SETTINGS,
         databases: [
@@ -375,7 +375,21 @@ describe('SettingsSchema', () => {
           },
         ],
       });
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.databases).toEqual([]);
+      }
+    });
+
+    it('ignores a non-array databases value (quarantine)', () => {
+      const result = validateSettings({
+        ...DEFAULT_SETTINGS,
+        databases: 'oops',
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.databases).toEqual([]);
+      }
     });
   });
 });

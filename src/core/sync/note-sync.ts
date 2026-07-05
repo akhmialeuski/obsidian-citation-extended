@@ -42,6 +42,15 @@ export interface NoteBaseline {
   deletedBlocks?: string[];
   /** Frontmatter keys the user deleted — never re-added. */
   deletedKeys?: string[];
+  /**
+   * Vault path of the note this snapshot was recorded against (stamped by
+   * the baseline store). A citekey can resolve to a DIFFERENT file later
+   * (renamed note, changed title template/folder) — merging that file
+   * against a foreign baseline would misread its content as user edits or
+   * silently overwrite it, so a path mismatch must degrade to "no baseline"
+   * (first-sync semantics). Absent in stores written before this field.
+   */
+  path?: string;
 }
 
 /** One unit (block or frontmatter key) where both sides changed. */

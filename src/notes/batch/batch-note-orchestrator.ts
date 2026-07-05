@@ -96,6 +96,10 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
     /** Files already targeted this run — a second citekey resolving to the
      *  same path must not write over the first one's result. */
     const seenPaths = new Set<string>();
+    // One shared vault snapshot for the whole batch: the fallback lookups
+    // (case-insensitive path, moved-note basename, frontmatter id) each scan
+    // the vault once total instead of once per citekey.
+    const lookupIndex = this.noteService.createNoteLookupIndex();
 
     for (let i = 0; i < citekeys.length; i++) {
       const citekey = citekeys[i];
@@ -114,7 +118,11 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
 
       const file =
         request.files?.[citekey] ??
-        this.noteService.findExistingLiteratureNoteFile(citekey, library);
+        this.noteService.findExistingLiteratureNoteFile(
+          citekey,
+          library,
+          lookupIndex,
+        );
       if (!file) {
         result.skipped.push(citekey);
         continue;
@@ -146,7 +154,7 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
         const priorBaseline =
           request.mode === 'overwrite'
             ? null
-            : await this.baselines.get(citekey);
+            : await this.baselines.get(citekey, file.path);
         const plan = planNoteSync({
           rendered,
           current,
@@ -232,11 +240,15 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
     citekey: string,
     rendered: string,
     current: string,
+    notePath: string,
   ): Promise<NoteSyncPlan> {
     return planNoteSync({
       rendered,
       current,
-      baseline: mode === 'overwrite' ? null : await this.baselines.get(citekey),
+      baseline:
+        mode === 'overwrite'
+          ? null
+          : await this.baselines.get(citekey, notePath),
       mode,
     });
   }
@@ -334,6 +346,7 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
         item.citekey,
         item.rendered,
         fresh,
+        item.file.path,
       );
       if (!plan.changed && plan.conflicts.length === 0) {
         result.skipped.push(item.citekey);
@@ -364,6 +377,6 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
     plan: NoteSyncPlan,
   ): Promise<void> {
     await this.vault.modify(file, content);
-    await this.baselines.set(citekey, plan.baseline);
+    await this.baselines.set(citekey, plan.baseline, file.path);
   }
 }

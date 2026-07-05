@@ -113,6 +113,72 @@ describe('NoteService', () => {
     );
   });
 
+  describe('getPathForCitekey memoization', () => {
+    // Path resolution renders the title template — the hot inner step of
+    // reverse lookups and batch scans (O(entries × renders) unmemoized).
+
+    test('renders the title once per citekey and library', () => {
+      noteService.getPathForCitekey('citekey1', library);
+      noteService.getPathForCitekey('citekey1', library);
+      noteService.getPathForCitekey('citekey1', library);
+
+      expect(templateService.getTitle).toHaveBeenCalledTimes(1);
+    });
+
+    test('re-renders when a path-relevant setting changes', () => {
+      const first = noteService.getPathForCitekey('citekey1', library);
+      settings.literatureNoteFolder = 'Elsewhere';
+      const second = noteService.getPathForCitekey('citekey1', library);
+
+      expect(first.replace(/\\/g, '/')).toBe('Reading notes/My Title.md');
+      expect(second.replace(/\\/g, '/')).toBe('Elsewhere/My Title.md');
+    });
+
+    test('re-renders for a fresh library object (reload)', () => {
+      noteService.getPathForCitekey('citekey1', library);
+      const reloaded = new Library({ citekey1: { id: 'citekey1' } as Entry });
+      noteService.getPathForCitekey('citekey1', reloaded);
+
+      expect(templateService.getTitle).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('shared note lookup index', () => {
+    test('scans the vault once across many lookups with a shared index', () => {
+      // Both lookups miss every strategy, which exercises all fallback scans.
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([]);
+      const twoEntries = new Library({
+        citekey1: { id: 'citekey1' } as Entry,
+        citekey2: { id: 'citekey2' } as Entry,
+      });
+
+      const index = noteService.createNoteLookupIndex();
+      noteService.findExistingLiteratureNoteFile('citekey1', twoEntries, index);
+      noteService.findExistingLiteratureNoteFile('citekey2', twoEntries, index);
+
+      // One vault snapshot serves every fallback of every lookup — this was
+      // O(citekeys × files) with per-call scans.
+      expect(platform.vault.getMarkdownFiles).toHaveBeenCalledTimes(1);
+    });
+
+    test('shared index still finds a note moved into a subfolder', () => {
+      const moved = {
+        path: 'Reading notes/archive/My Title.md',
+        name: 'My Title.md',
+      } as IVaultFile;
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([moved]);
+
+      const index = noteService.createNoteLookupIndex();
+      const found = noteService.findExistingLiteratureNoteFile(
+        'citekey1',
+        library,
+        index,
+      );
+
+      expect(found).toBe(moved);
+    });
+  });
+
   test('getPathForCitekey throws TemplateRenderError on bad template', () => {
     jest.spyOn(templateService, 'getTitle').mockReturnValue({
       ok: false,
@@ -1154,6 +1220,9 @@ describe('NoteService baseline recording on creation', () => {
     expect(baselineStore.recordFromRender).toHaveBeenCalledWith(
       'smith2020',
       'rendered note body',
+      // The created file's path is stamped so a later rename / template
+      // change cannot merge that other file against this baseline.
+      expect.any(String),
     );
     // recordFromRender only mutates memory; note creation must flush it so the
     // first sync has a baseline on disk.
