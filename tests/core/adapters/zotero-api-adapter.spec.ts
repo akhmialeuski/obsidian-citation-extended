@@ -12,10 +12,6 @@ import type {
   ZoteroApiLibraryData,
 } from '../../../src/core/zotero/zotero-local-api-client';
 
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
-
 function makeItem(overrides: Partial<ZoteroApiItem> = {}): ZoteroApiItem {
   return {
     key: 'ITEM0001',
@@ -56,10 +52,6 @@ function makeLibrary(
     libraryVersion: 42,
   };
 }
-
-// ---------------------------------------------------------------------------
-// buildZoteroApiEntries
-// ---------------------------------------------------------------------------
 
 describe('buildZoteroApiEntries', () => {
   it('builds a DTO with the native citation key', () => {
@@ -240,10 +232,6 @@ describe('buildZoteroApiEntries', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Annotations (native local API sweep)
-// ---------------------------------------------------------------------------
-
 describe('buildZoteroApiEntries — annotations', () => {
   const attachment: ZoteroApiItem = {
     key: 'ATT00001',
@@ -389,10 +377,6 @@ describe('buildZoteroApiEntries — annotations', () => {
     expect(dto.attachmentRefs!.map((r) => r.id)).toEqual(['ATT00001']);
   });
 });
-
-// ---------------------------------------------------------------------------
-// ZoteroApiAdapter
-// ---------------------------------------------------------------------------
 
 describe('ZoteroApiAdapter', () => {
   function makeDto(): ZoteroApiEntryData {

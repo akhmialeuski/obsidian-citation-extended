@@ -31,10 +31,6 @@ beforeEach(() => {
   jest.spyOn(console, 'warn').mockImplementation(() => {});
 });
 
-// ---------------------------------------------------------------------------
-// Invariant 1: Strict Record exhaustiveness
-// ---------------------------------------------------------------------------
-
 describe('Invariant 1: Strict Record coverage', () => {
   const allFormats = Object.values(DATABASE_FORMATS) as DatabaseType[];
 
@@ -73,10 +69,6 @@ describe('Invariant 1: Strict Record coverage', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Invariant 2: Single Readwise database format
-// ---------------------------------------------------------------------------
-
 describe('Invariant 2: Single Readwise database format', () => {
   it('DATABASE_FORMATS has exactly one Readwise entry', () => {
     const readwiseFormats = Object.entries(DATABASE_FORMATS).filter(([, v]) =>
@@ -92,10 +84,6 @@ describe('Invariant 2: Single Readwise database format', () => {
     expect(allValues).not.toContain('reader-documents');
   });
 });
-
-// ---------------------------------------------------------------------------
-// Invariant 3: ReadwiseSource uses the worker pipeline
-// ---------------------------------------------------------------------------
 
 describe('Invariant 3: ReadwiseSource worker pipeline', () => {
   function makeExportBook(): ReadwiseExportBook {
