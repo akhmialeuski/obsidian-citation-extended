@@ -87,10 +87,6 @@ export class CitationSettingTab extends PluginSettingTab {
     this.renderDisplaySection(containerEl);
   }
 
-  // ---------------------------------------------------------------------------
-  // Section 1: Citation databases
-  // ---------------------------------------------------------------------------
-
   private renderDatabaseSection(containerEl: HTMLElement): void {
     new Setting(containerEl).setName('Citation databases').setHeading();
     containerEl.createEl('p', {
@@ -474,10 +470,6 @@ export class CitationSettingTab extends PluginSettingTab {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Database card field variants
-  // ---------------------------------------------------------------------------
-
   private renderFilePathField(
     card: HTMLElement,
     db: DatabaseConfig,
@@ -807,10 +799,6 @@ export class CitationSettingTab extends PluginSettingTab {
       });
   }
 
-  // ---------------------------------------------------------------------------
-  // Section 2: Literature notes
-  // ---------------------------------------------------------------------------
-
   private renderLiteratureNotesSection(containerEl: HTMLElement): void {
     new Setting(containerEl).setName('Literature notes').setHeading();
 
@@ -905,10 +893,6 @@ export class CitationSettingTab extends PluginSettingTab {
         });
       });
   }
-
-  // ---------------------------------------------------------------------------
-  // Section 3: Markdown citations
-  // ---------------------------------------------------------------------------
 
   private renderCitationsSection(containerEl: HTMLElement): void {
     new Setting(containerEl)
@@ -1010,10 +994,6 @@ export class CitationSettingTab extends PluginSettingTab {
       });
   }
 
-  // ---------------------------------------------------------------------------
-  // Section 4: Display
-  // ---------------------------------------------------------------------------
-
   private renderDisplaySection(containerEl: HTMLElement): void {
     new Setting(containerEl).setName('Display').setHeading();
 
@@ -1051,10 +1031,6 @@ export class CitationSettingTab extends PluginSettingTab {
           );
       });
   }
-
-  // ---------------------------------------------------------------------------
-  // Reusable field builders
-  // ---------------------------------------------------------------------------
 
   private buildTextField<K extends keyof CitationsPluginSettingsType>(
     containerEl: HTMLElement,

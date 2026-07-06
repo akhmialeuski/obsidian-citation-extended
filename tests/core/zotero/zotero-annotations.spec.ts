@@ -5,10 +5,6 @@ import {
   ZOTERO_ANNOTATION_COLOR_NAMES,
 } from '../../../src/core/zotero/zotero-annotations';
 
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
-
 const HIGHLIGHT = {
   key: 'ANNOT001',
   annotationType: 'highlight',
@@ -28,10 +24,6 @@ const ATTACHMENT = {
   annotations: [HIGHLIGHT],
 };
 
-// ---------------------------------------------------------------------------
-// zoteroColorName
-// ---------------------------------------------------------------------------
-
 describe('zoteroColorName', () => {
   it.each(Object.entries(ZOTERO_ANNOTATION_COLOR_NAMES))(
     'maps %s to %s',
@@ -50,10 +42,6 @@ describe('zoteroColorName', () => {
     expect(zoteroColorName('')).toBeNull();
   });
 });
-
-// ---------------------------------------------------------------------------
-// normalizeZoteroAttachments
-// ---------------------------------------------------------------------------
 
 describe('compareSortIndex', () => {
   it('orders by UTF-16 code unit (Zotero byte order), not locale', () => {

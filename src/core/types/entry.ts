@@ -254,10 +254,8 @@ export abstract class Entry {
     return this.keywords;
   }
 
-  // ---------------------------------------------------------------------------
   // Domain convenience methods — encapsulate presentation logic so callers
   // remain decoupled from raw field details.
-  // ---------------------------------------------------------------------------
 
   /**
    * Publication year as a string, or empty string when unavailable.

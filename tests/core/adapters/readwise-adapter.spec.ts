@@ -9,10 +9,6 @@ import {
   ReadwiseMode,
 } from '../../../src/core/adapters/readwise-adapter';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function makeEntryData(
   overrides: Partial<ReadwiseEntryData> = {},
 ): ReadwiseEntryData {
@@ -35,15 +31,7 @@ function makeEntryData(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe('ReadwiseAdapter', () => {
-  // -------------------------------------------------------------------------
-  // Source-agnostic annotations (highlights → Entry.annotations)
-  // -------------------------------------------------------------------------
-
   describe('annotations (uniform interface)', () => {
     it('maps structured highlights into the shared Annotation shape', () => {
       const adapter = new ReadwiseAdapter(
@@ -144,10 +132,6 @@ describe('ReadwiseAdapter', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Constructor & Identity
-  // -------------------------------------------------------------------------
-
   describe('constructor and identity', () => {
     it('creates an adapter from entry data', () => {
       const adapter = new ReadwiseAdapter(makeEntryData());
@@ -182,10 +166,6 @@ describe('ReadwiseAdapter', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Type mapping
-  // -------------------------------------------------------------------------
-
   describe('type mapping', () => {
     const cases: Array<[string, string]> = [
       ['books', 'book'],
@@ -209,10 +189,6 @@ describe('ReadwiseAdapter', () => {
       expect(adapter.type).toBe(expected);
     });
   });
-
-  // -------------------------------------------------------------------------
-  // Author parsing
-  // -------------------------------------------------------------------------
 
   describe('author parsing', () => {
     it('parses "FirstName LastName and FirstName LastName" format', () => {
@@ -268,10 +244,6 @@ describe('ReadwiseAdapter', () => {
       ]);
     });
   });
-
-  // -------------------------------------------------------------------------
-  // Field mapping
-  // -------------------------------------------------------------------------
 
   describe('field mapping', () => {
     it('maps summary to abstract', () => {
@@ -345,10 +317,6 @@ describe('ReadwiseAdapter', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Undefined fields (fields not available from Readwise)
-  // -------------------------------------------------------------------------
-
   describe('unavailable fields', () => {
     let adapter: ReadwiseAdapter;
 
@@ -421,10 +389,6 @@ describe('ReadwiseAdapter', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Readwise-specific getters
-  // -------------------------------------------------------------------------
-
   describe('Readwise-specific getters', () => {
     it('returns readwiseUrl', () => {
       const adapter = new ReadwiseAdapter(
@@ -461,10 +425,6 @@ describe('ReadwiseAdapter', () => {
       expect(adapter.category).toBe('podcasts');
     });
   });
-
-  // -------------------------------------------------------------------------
-  // zoteroSelectURI override
-  // -------------------------------------------------------------------------
 
   describe('extended field mappings', () => {
     it('maps readable_title to titleShort', () => {
@@ -589,10 +549,6 @@ describe('ReadwiseAdapter', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Notes / highlights
-  // -------------------------------------------------------------------------
-
   describe('notes (highlights)', () => {
     it('sets _note from highlightsText', () => {
       const adapter = new ReadwiseAdapter(
@@ -608,10 +564,6 @@ describe('ReadwiseAdapter', () => {
       expect(adapter.note).toBe('');
     });
   });
-
-  // -------------------------------------------------------------------------
-  // Domain methods from Entry base class
-  // -------------------------------------------------------------------------
 
   describe('inherited domain methods', () => {
     it('toTemplateContext returns all expected fields', () => {
@@ -673,10 +625,6 @@ describe('ReadwiseAdapter', () => {
       expect(adapter.yearString()).toBe('');
     });
   });
-
-  // -------------------------------------------------------------------------
-  // Mutable properties for NormalizationPipeline
-  // -------------------------------------------------------------------------
 
   describe('mutable properties for pipeline', () => {
     it('_sourceDatabase is initially undefined', () => {

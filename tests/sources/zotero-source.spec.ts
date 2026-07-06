@@ -194,10 +194,6 @@ describe('ZoteroSource.dispose', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// PDF annotation enrichment
-// ---------------------------------------------------------------------------
-
 describe('ZoteroSource annotation enrichment', () => {
   const RAW_ATTACHMENT = {
     open: 'zotero://open-pdf/library/items/ATTKEY01',

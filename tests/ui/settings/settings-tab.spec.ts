@@ -1,8 +1,5 @@
 /** @jest-environment jsdom */
 
-// ---------------------------------------------------------------------------
-// Polyfill Obsidian-specific HTMLElement methods for jsdom
-// ---------------------------------------------------------------------------
 beforeAll(() => {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const proto = HTMLElement.prototype as any;
@@ -94,9 +91,6 @@ beforeAll(() => {
   /* eslint-enable @typescript-eslint/no-explicit-any */
 });
 
-// ---------------------------------------------------------------------------
-// Track all Setting instances for assertion
-// ---------------------------------------------------------------------------
 const settingInstances: Array<Record<string, unknown>> = [];
 const mockReadLocalFile = jest.fn();
 const mockNotice = jest.fn();
@@ -133,9 +127,6 @@ jest.mock('../../../src/core/readwise/readwise-api-client', () => {
   };
 });
 
-// ---------------------------------------------------------------------------
-// Mock: obsidian — factory must be self-contained (hoisted by Jest)
-// ---------------------------------------------------------------------------
 jest.mock(
   'obsidian',
   () => {
@@ -383,10 +374,6 @@ jest.mock(
   { virtual: true },
 );
 
-// ---------------------------------------------------------------------------
-// Imports (after mocks)
-// ---------------------------------------------------------------------------
-
 import { CitationSettingTab } from '../../../src/ui/settings/settings-tab';
 import { CitationsPluginSettings } from '../../../src/ui/settings/settings';
 import type CitationPlugin from '../../../src/main';
@@ -397,10 +384,6 @@ import {
   LIBRARY_LOAD_TIMEOUT_MIN_SECONDS,
   LIBRARY_LOAD_TIMEOUT_MAX_SECONDS,
 } from '../../../src/ui/settings/settings-schema';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 // Helper type for interacting with mock settings
 interface MockSettingInstance {
@@ -458,10 +441,6 @@ describe('CitationSettingTab', () => {
     tab = new CitationSettingTab({} as never, plugin);
   });
 
-  // -----------------------------------------------------------------------
-  // display()
-  // -----------------------------------------------------------------------
-
   describe('display()', () => {
     it('renders without throwing', () => {
       expect(() => tab.display()).not.toThrow();
@@ -492,10 +471,6 @@ describe('CitationSettingTab', () => {
       expect(container.children.length).toBe(firstChildCount);
     });
   });
-
-  // -----------------------------------------------------------------------
-  // renderDatabaseSection
-  // -----------------------------------------------------------------------
 
   describe('renderDatabaseSection', () => {
     it('renders a card for each database', () => {
@@ -560,10 +535,6 @@ describe('CitationSettingTab', () => {
       expect(plugin.settings.databases).toHaveLength(20);
     });
   });
-
-  // -----------------------------------------------------------------------
-  // renderDatabaseCard
-  // -----------------------------------------------------------------------
 
   describe('renderDatabaseCard', () => {
     it('renders header with name text input and delete extra button', () => {
@@ -656,10 +627,6 @@ describe('CitationSettingTab', () => {
     });
   });
 
-  // -----------------------------------------------------------------------
-  // Zotero (Better BibTeX) live connection fields
-  // -----------------------------------------------------------------------
-
   describe('renderDatabaseCard — Zotero live connection', () => {
     function zoteroPlugin(): CitationPlugin {
       return createMockPlugin({
@@ -744,10 +711,6 @@ describe('CitationSettingTab', () => {
     });
   });
 
-  // -----------------------------------------------------------------------
-  // checkDatabasePath
-  // -----------------------------------------------------------------------
-
   describe('checkDatabasePath', () => {
     it('shows "Path verified." on success', async () => {
       mockReadLocalFile.mockResolvedValue(new ArrayBuffer(0));
@@ -794,10 +757,6 @@ describe('CitationSettingTab', () => {
     });
   });
 
-  // -----------------------------------------------------------------------
-  // renderLiteratureNotesSection
-  // -----------------------------------------------------------------------
-
   describe('renderLiteratureNotesSection', () => {
     it('renders documentation links', () => {
       tab.display();
@@ -837,10 +796,6 @@ describe('CitationSettingTab', () => {
       expect(plugin.saveSettings).toHaveBeenCalled();
     });
   });
-
-  // -----------------------------------------------------------------------
-  // renderCitationsSection
-  // -----------------------------------------------------------------------
 
   describe('renderCitationsSection', () => {
     it('renders citation style preset dropdown', () => {
@@ -886,10 +841,6 @@ describe('CitationSettingTab', () => {
     });
   });
 
-  // -----------------------------------------------------------------------
-  // renderDisplaySection
-  // -----------------------------------------------------------------------
-
   describe('renderDisplaySection', () => {
     it('sort order dropdown saves setting on change', async () => {
       tab.display();
@@ -907,10 +858,6 @@ describe('CitationSettingTab', () => {
       expect(plugin.settings.referenceListSortOrder).toBe('year-desc');
     });
   });
-
-  // -----------------------------------------------------------------------
-  // Readwise database card fields (renderReadwiseFields)
-  // -----------------------------------------------------------------------
 
   describe('Readwise database card', () => {
     beforeEach(() => {
@@ -1371,10 +1318,6 @@ describe('CitationSettingTab', () => {
     });
   });
 
-  // -----------------------------------------------------------------------
-  // renderLiteratureNotesSection — additional coverage
-  // -----------------------------------------------------------------------
-
   describe('renderLiteratureNotesSection — link display template', () => {
     it('literatureNoteLinkDisplayTemplate text saves setting on change', async () => {
       tab.display();
@@ -1401,10 +1344,6 @@ describe('CitationSettingTab', () => {
       expect(plugin.saveSettings).toHaveBeenCalled();
     });
   });
-
-  // -----------------------------------------------------------------------
-  // settingValueToString (private, tested via reflection)
-  // -----------------------------------------------------------------------
 
   describe('settingValueToString', () => {
     let toStr: (v: unknown) => string;
@@ -1441,10 +1380,6 @@ describe('CitationSettingTab', () => {
       expect(toStr([])).toBe('');
     });
   });
-
-  // -----------------------------------------------------------------------
-  // createSaveHandler (tested indirectly via buildTextField onChange)
-  // -----------------------------------------------------------------------
 
   describe('createSaveHandler', () => {
     it('saves setting for valid value', async () => {
@@ -1488,10 +1423,6 @@ describe('CitationSettingTab', () => {
       expect(errorEls.length).toBeGreaterThan(0);
     });
   });
-
-  // -----------------------------------------------------------------------
-  // createSaveHandler — tested directly via reflection (covers lines 454-476)
-  // -----------------------------------------------------------------------
 
   describe('createSaveHandler (direct)', () => {
     let createSaveHandler: (
@@ -1548,10 +1479,6 @@ describe('CitationSettingTab', () => {
   });
 
   // buildTextArea was removed as dead code in the refactoring
-
-  // -----------------------------------------------------------------------
-  // Citation preset onChange (covers lines 304-316)
-  // -----------------------------------------------------------------------
 
   describe('citation preset onChange', () => {
     it('updates templates when non-custom preset is selected', async () => {
@@ -1613,10 +1540,6 @@ describe('CitationSettingTab', () => {
       expect(plugin.settings.markdownCitationTemplate).toBe('my-custom');
     });
   });
-
-  // -----------------------------------------------------------------------
-  // buildCitationTemplateField
-  // -----------------------------------------------------------------------
 
   describe('buildCitationTemplateField', () => {
     it('disables input when preset is not custom', () => {

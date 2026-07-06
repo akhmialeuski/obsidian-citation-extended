@@ -1,10 +1,6 @@
 import { Author, Entry } from '../types/entry';
 import type { Annotation } from '../types/annotation';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 /** Named constants for the Readwise API modes (avoids scattered string literals). */
 export const READWISE_MODES = {
   Highlights: 'readwise-highlights',
@@ -64,8 +60,8 @@ export interface ReadwiseEntryData {
   tags: string[];
   publishedDate: string | null;
   updatedAt: string | null;
-  // --- Additional mapped fields (optional for backward-compat with cached
-  //     JSON written before these fields existed) ---------------------------
+  // Additional mapped fields (optional for backward-compat with cached
+  // JSON written before these fields existed).
   /** Cleaned/normalized title (v2 `readable_title`) → titleShort. */
   readableTitle?: string | null;
   /** Origin: "kindle"/"instapaper" (v2) or Reader source (v3) → source. */
@@ -85,10 +81,6 @@ export interface ReadwiseEntryData {
   /** Extra raw fields the adapter does not map but preserves in toJSON. */
   extra?: Record<string, unknown>;
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 /** Map Readwise / Reader category strings to standard reference types. */
 const CATEGORY_TYPE_MAP: Record<string, string> = {
@@ -148,10 +140,6 @@ function toDate(dateStr: string | null): Date | null {
   return new Date(ms);
 }
 
-// ---------------------------------------------------------------------------
-// Adapter
-// ---------------------------------------------------------------------------
-
 /**
  * Adapter that maps Readwise-specific data to the standard {@link Entry}
  * interface.  Works for both Readwise v2 Export entries (highlights) and
@@ -181,8 +169,6 @@ export class ReadwiseAdapter extends Entry {
     }
   }
 
-  // -- Identity -------------------------------------------------------------
-
   get id(): string {
     return this._id ?? this.citekey;
   }
@@ -196,8 +182,6 @@ export class ReadwiseAdapter extends Entry {
       ? `rw-${this.data.rawId}`
       : `rd-${this.data.rawId}`;
   }
-
-  // -- Standard Entry fields ------------------------------------------------
 
   get type(): string {
     return mapCategoryToType(this.data.category);
@@ -291,14 +275,10 @@ export class ReadwiseAdapter extends Entry {
     return undefined;
   }
 
-  // -- Overridden base-class getters ----------------------------------------
-
   /** Returns the Readwise web URL instead of a zotero:// select URI. */
   public override get zoteroSelectURI(): string {
     return this.data.readwiseUrl;
   }
-
-  // -- Readwise-specific getters --------------------------------------------
 
   /** URL to the entry on the Readwise web app. */
   get readwiseUrl(): string {

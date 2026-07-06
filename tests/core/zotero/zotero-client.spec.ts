@@ -148,10 +148,6 @@ describe('ZoteroConnectorClient.ping', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// fetchAttachmentsForCitekeys
-// ---------------------------------------------------------------------------
-
 describe('ZoteroConnectorClient.fetchAttachmentsForCitekeys', () => {
   const ATTACHMENT = {
     open: 'zotero://open-pdf/library/items/ATTKEY01',
