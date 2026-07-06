@@ -331,6 +331,73 @@ describe('ZoteroSource annotation enrichment', () => {
     expect(smith.annotations).toHaveLength(1);
   });
 
+  it('re-fetches attachments on a fullRefresh even when the export is unchanged', async () => {
+    // A PDF-annotation edit does not change the export body, so the manual
+    // "Refresh citation database" (fullRefresh) must bypass the reuse path and
+    // re-fetch — otherwise new highlights would never appear.
+    const { client, fetchAttachmentsForCitekeys } = makeAnnotatingClient();
+    const { fs } = createMockFileSystem(
+      JSON.stringify({
+        version: 2,
+        format: DATABASE_FORMATS.CslJson,
+        raw: CSL,
+        attachments: { smith2023: [RAW_ATTACHMENT] },
+      }),
+    );
+    const source = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      fs,
+      '/cache/zotero.json',
+      undefined,
+      true,
+    );
+
+    await source.load(undefined, { fullRefresh: true });
+
+    expect(fetchAttachmentsForCitekeys).toHaveBeenCalled();
+  });
+
+  it('preserves the cached attachment payload when a fresh fetch fails', async () => {
+    const failing = jest.fn(() =>
+      Promise.reject(new ZoteroApiError('JSON-RPC broke')),
+    );
+    // The cache holds attachments for the PREVIOUS export; the new export
+    // differs so reuse does not apply and a fresh (failing) fetch is attempted.
+    const { fs, written } = createMockFileSystem(
+      JSON.stringify({
+        version: 2,
+        format: DATABASE_FORMATS.CslJson,
+        raw: 'previous-export-body',
+        attachments: { smith2023: [RAW_ATTACHMENT] },
+      }),
+    );
+    const { client } = makeAnnotatingClient(failing);
+    const source = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      fs,
+      '/cache/zotero.json',
+      undefined,
+      true,
+    );
+
+    await source.load();
+
+    // writeCache must carry the last good attachments forward, not clobber
+    // them with `undefined` — otherwise a later offline load loses annotations.
+    const persisted = JSON.parse(written.value!) as {
+      attachments?: Record<string, unknown[]>;
+    };
+    expect(persisted.attachments).toEqual({ smith2023: [RAW_ATTACHMENT] });
+  });
+
   it('does not fetch attachments when the flag is off', async () => {
     const { client, fetchAttachmentsForCitekeys } = makeAnnotatingClient();
     const source = new ZoteroSource(

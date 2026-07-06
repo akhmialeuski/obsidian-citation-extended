@@ -18,6 +18,7 @@ import { LocalFileSource } from './sources/local-file-source';
 import { VaultFileSource } from './sources/vault-file-source';
 import { ReadwiseSource } from './sources/readwise-source';
 import { ZoteroSource } from './sources/zotero-source';
+import { sourceCacheFilePath } from './sources/source-utils';
 import { SourceManager } from './infrastructure/source-manager';
 import { TemplateProfileRegistry } from './domain/template-profile-registry';
 import {
@@ -193,8 +194,9 @@ export default class CitationPlugin extends Plugin {
     );
 
     // Register Zotero (Better BibTeX) source type — def.path holds the pull
-    // export URL; def.format selects the parser (CSL JSON or BibLaTeX). Each
-    // gets its own offline cache keyed by the stable source id.
+    // export URL; def.format selects the parser (CSL JSON or BibLaTeX). The
+    // offline cache is keyed by the stable database id (see sourceCacheFilePath)
+    // so it survives config-flag toggles and upgrades.
     registry.register(
       DATA_SOURCE_TYPES.Zotero,
       (def, id) =>
@@ -209,9 +211,12 @@ export default class CitationPlugin extends Plugin {
           def.format,
           resolveZoteroExportNotes(this.settings.databases, def.databaseId),
           platformAdapter.fileSystem,
-          readwiseCacheDir
-            ? `${readwiseCacheDir}/zotero-cache-${id.replace(cacheNameSanitizeRe, '-')}.json`
-            : '',
+          sourceCacheFilePath(
+            readwiseCacheDir,
+            'zotero-cache',
+            def.databaseId,
+            id,
+          ),
           // Interval provider (not a snapshot): re-read every poll cycle so a
           // settings change applies without recreating the source.
           () =>

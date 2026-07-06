@@ -52,7 +52,12 @@ interface ZoteroCacheStateV2 {
  * Zotero PDF annotations for every entry via batched Better BibTeX JSON-RPC
  * `item.attachments` calls, and attaches them as `entry.annotations` /
  * `entry.attachments` for templates. Annotation fetching is best-effort: a
- * failure degrades to a load warning, never a failed load.
+ * failure degrades to a load warning, never a failed load, and the previously
+ * cached payload is preserved rather than clobbered. To bound cost, a periodic
+ * load whose export is byte-identical to the cache reuses the cached
+ * attachments; because an annotation edit does not change the export body, a
+ * `fullRefresh` load (the manual "Refresh citation database" command) always
+ * re-fetches so new highlights are picked up on demand.
  *
  * **Offline cache:** the last successful export (and annotation payload) is
  * cached on disk. If Zotero is not reachable on a later load, the cache is
@@ -86,7 +91,7 @@ export class ZoteroSource implements DataSource {
 
   async load(
     externalSignal?: AbortSignal,
-    _options?: DataSourceLoadOptions,
+    options?: DataSourceLoadOptions,
   ): Promise<DataSourceLoadResult> {
     this.abortController?.abort();
     const controller = createLinkedAbortController(externalSignal);
@@ -138,18 +143,24 @@ export class ZoteroSource implements DataSource {
       // warning so the bibliography itself stays usable.
       let attachments: Record<string, unknown[]> | undefined;
       if (this.importAnnotations) {
-        // When the export is byte-identical to the cached one, the library
-        // did not change — reuse the cached attachment payloads instead of
-        // re-fetching every entry's attachments on every (periodic) load.
         const cached = await this.readCache();
-        if (
-          cached &&
-          cached.raw === raw &&
-          cached.format === this.format &&
-          cached.attachments
-        ) {
-          attachments = cached.attachments;
-          ZoteroSource.attachAnnotations(result.entries, attachments);
+        // When the export is byte-identical to the cached one the bibliography
+        // did not change, so reuse the cached attachment payloads instead of
+        // re-fetching every entry's attachments on every (periodic) load.
+        //
+        // BUT a PDF-annotation edit in Zotero does NOT change the export body,
+        // so a `fullRefresh` (the manual "Refresh citation database" command)
+        // must bypass this reuse and re-fetch — otherwise new highlights would
+        // never surface until an unrelated bibliographic field changed.
+        const reusableAttachments =
+          !options?.fullRefresh &&
+          cached?.raw === raw &&
+          cached?.format === this.format
+            ? cached.attachments
+            : undefined;
+        if (reusableAttachments) {
+          attachments = reusableAttachments;
+          ZoteroSource.attachAnnotations(result.entries, reusableAttachments);
         } else {
           try {
             attachments = await this.fetchAttachments(result.entries, signal);
@@ -165,6 +176,10 @@ export class ZoteroSource implements DataSource {
               ...(result.parseErrors ?? []),
               { message: `PDF annotations unavailable: ${message}` },
             ];
+            // Carry the last good attachment payload forward so writeCache does
+            // not clobber it with nothing — a later offline load then still has
+            // annotations for the (unchanged) citekeys instead of an empty set.
+            attachments = cached?.attachments;
           }
         }
       }

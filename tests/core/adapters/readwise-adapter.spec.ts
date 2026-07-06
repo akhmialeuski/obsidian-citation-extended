@@ -97,6 +97,46 @@ describe('ReadwiseAdapter', () => {
       expect(anns[1].comment).toBe('');
     });
 
+    it('preserves non-page positions (value AND type) in pageLabel', () => {
+      const adapter = new ReadwiseAdapter(
+        makeEntryData({
+          highlights: [
+            {
+              id: 'k1',
+              text: 'Kindle passage.',
+              note: null,
+              location: 1234,
+              locationType: 'location',
+              color: null,
+              highlightedAt: null,
+              url: null,
+              tags: [],
+            },
+            {
+              id: 'p1',
+              text: 'Podcast moment.',
+              note: null,
+              location: 90,
+              locationType: 'time_offset',
+              color: null,
+              highlightedAt: null,
+              url: null,
+              tags: [],
+            },
+          ],
+        }),
+      );
+
+      const anns = adapter.annotations;
+      // A Kindle/podcast position is not a page: page stays null, but the
+      // value and its type survive in pageLabel (the removed entry.highlights
+      // surface exposed this — dropping it silently would lose the position).
+      expect(anns[0].page).toBeNull();
+      expect(anns[0].pageLabel).toBe('location 1234');
+      expect(anns[1].page).toBeNull();
+      expect(anns[1].pageLabel).toBe('time_offset 90');
+    });
+
     it('yields [] for an entry with no highlights (template skips)', () => {
       const adapter = new ReadwiseAdapter(makeEntryData({ highlights: [] }));
       expect(adapter.annotations).toEqual([]);

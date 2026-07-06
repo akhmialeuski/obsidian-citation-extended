@@ -37,6 +37,22 @@ export function zoteroColorName(color: string | undefined): string | null {
   return ZOTERO_ANNOTATION_COLOR_NAMES[color.toLowerCase()] ?? null;
 }
 
+/**
+ * Order two Zotero annotation `sortIndex` strings by UTF-16 code unit — NOT
+ * by locale. Zotero constructs sortIndex specifically for byte-wise ordering
+ * (`page|offsetY|offsetX`, zero-padded). `String.prototype.localeCompare`
+ * applies ICU collation, which weights digits and the `|` separator
+ * differently and varies by the user's locale; for variable-width segments
+ * (e.g. EPUB/snapshot CFI sortIndexes) that can reorder annotations, and
+ * because the order feeds rendered note blocks it would produce spurious
+ * three-way-merge conflicts across machines with different locales.
+ */
+export function compareSortIndex(a: string, b: string): number {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
 /** Result of normalizing one citekey's `item.attachments` response. */
 export interface NormalizedAttachments {
   attachments: AttachmentRef[];
@@ -182,9 +198,9 @@ export function normalizeZoteroAttachments(
         } satisfies Annotation;
       });
 
-    // Document order: Zotero's sortIndex is zero-padded, so a plain
-    // lexicographic comparison equals reading order.
-    normalized.sort((a, b) => a.sortIndex.localeCompare(b.sortIndex));
+    // Document order: Zotero's sortIndex sorts by code unit (see
+    // compareSortIndex — locale collation would reorder it).
+    normalized.sort((a, b) => compareSortIndex(a.sortIndex, b.sortIndex));
 
     attachments.push({
       id: key,

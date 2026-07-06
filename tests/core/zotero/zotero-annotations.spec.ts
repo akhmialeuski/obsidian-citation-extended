@@ -1,4 +1,5 @@
 import {
+  compareSortIndex,
   normalizeZoteroAttachments,
   zoteroColorName,
   ZOTERO_ANNOTATION_COLOR_NAMES,
@@ -53,6 +54,30 @@ describe('zoteroColorName', () => {
 // ---------------------------------------------------------------------------
 // normalizeZoteroAttachments
 // ---------------------------------------------------------------------------
+
+describe('compareSortIndex', () => {
+  it('orders by UTF-16 code unit (Zotero byte order), not locale', () => {
+    expect(compareSortIndex('00003|0|0', '00020|0|0')).toBeLessThan(0);
+    expect(compareSortIndex('00020|0|0', '00003|0|0')).toBeGreaterThan(0);
+    expect(compareSortIndex('00003|0|0', '00003|0|0')).toBe(0);
+    // The separator '|' (U+007C) sorts after digits, so a shorter leading
+    // segment orders before a longer one — the reading order Zotero intends.
+    expect(compareSortIndex('00003', '00003|5')).toBeLessThan(0);
+  });
+
+  it('matches raw code-unit comparison for a shuffled list', () => {
+    const idx = [
+      '00020|0|0',
+      '00003|0|0',
+      '00003|5|0',
+      '00003|0|9',
+      '00100|0|0',
+    ];
+    const byHelper = [...idx].sort(compareSortIndex);
+    const byCodeUnit = [...idx].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    expect(byHelper).toEqual(byCodeUnit);
+  });
+});
 
 describe('normalizeZoteroAttachments', () => {
   it('normalizes a highlight annotation with all fields', () => {

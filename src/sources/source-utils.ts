@@ -4,6 +4,32 @@
  * configurable interval — this module keeps that machinery in one place.
  */
 
+/** Characters not allowed in a cache filename segment. */
+const CACHE_NAME_SANITIZE_RE = /[^a-zA-Z0-9_-]/g;
+
+/**
+ * Offline-cache filename for a data source, derived from the STABLE database
+ * id — never the volatile source key.
+ *
+ * The source key intentionally changes when a config flag toggles (so the
+ * source is recreated), and its shape has also changed across releases;
+ * deriving the cache name from it would orphan a perfectly good cache on a
+ * flag toggle or an upgrade, silently breaking the "library stays usable
+ * offline" guarantee. Keyed by the immutable database id, the cache survives
+ * both. Falls back to the source key for a legacy database not yet assigned an
+ * id. Returns '' when no cache directory is configured (caching disabled).
+ */
+export function sourceCacheFilePath(
+  cacheDir: string,
+  prefix: string,
+  databaseId: string | undefined,
+  sourceKey: string,
+): string {
+  if (!cacheDir) return '';
+  const stable = (databaseId ?? sourceKey).replace(CACHE_NAME_SANITIZE_RE, '-');
+  return `${cacheDir}/${prefix}-${stable}.json`;
+}
+
 /**
  * Create an {@link AbortController} that is also aborted when `externalSignal`
  * aborts. Used so a source's in-flight HTTP work stops when the library load is

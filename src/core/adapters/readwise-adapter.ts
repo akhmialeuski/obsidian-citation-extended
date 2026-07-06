@@ -375,7 +375,8 @@ function readwiseHighlightToAnnotation(
   h: ReadwiseHighlightItem,
   index: number,
 ): Annotation {
-  const isPage = h.locationType === 'page' && h.location != null;
+  const hasLocation = h.location != null;
+  const isPage = h.locationType === 'page' && hasLocation;
   return {
     id: h.id || null,
     type: 'highlight',
@@ -384,8 +385,12 @@ function readwiseHighlightToAnnotation(
     // Readwise stores a palette NAME (e.g. "yellow"), not a hex value.
     color: '',
     colorName: h.color ?? null,
+    // A real page becomes a numeric `page`; every other kind of position
+    // (Kindle "location", Reader "order", podcast "time_offset") is preserved
+    // in `pageLabel` — value AND type — so it is not silently dropped the way
+    // the removed `entry.highlights` surface never dropped it.
     page: isPage ? h.location : null,
-    pageLabel: isPage ? String(h.location) : '',
+    pageLabel: readwiseLocationLabel(h.location, h.locationType, isPage),
     tags: h.tags ?? [],
     imagePath: null,
     openURI: h.url ?? null,
@@ -393,4 +398,19 @@ function readwiseHighlightToAnnotation(
     dateModified: h.highlightedAt ?? null,
     source: 'readwise',
   };
+}
+
+/**
+ * Human-readable position label for a Readwise highlight. Pages render as the
+ * bare number ("42"); non-page kinds keep their type so a template can tell a
+ * Kindle location from a page ("location 1234", "order 5", "time_offset 90").
+ */
+function readwiseLocationLabel(
+  location: number | null,
+  locationType: string | null,
+  isPage: boolean,
+): string {
+  if (location == null) return '';
+  if (isPage) return String(location);
+  return `${locationType ?? 'location'} ${location}`;
 }

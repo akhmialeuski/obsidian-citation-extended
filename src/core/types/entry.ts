@@ -442,12 +442,10 @@ export abstract class Entry {
       }
     }
 
-    // Annotations/attachments are getters on Entry itself, so the chain walk
-    // above already surfaced them — but keep the explicit assignment so the
-    // uniform shape survives even if a subclass shadows them, and never leak
-    // the raw injected backing fields copied by the spread.
-    jsonObj.annotations = this.annotations;
-    jsonObj.attachments = this.attachments;
+    // `annotations`/`attachments` are getters on Entry (or a subclass), so the
+    // dynamic-dispatch chain walk above already surfaced the correct values —
+    // no explicit re-assignment is needed. Only strip the raw backing fields
+    // that the `{ ...this }` spread copied verbatim, so they never leak.
     delete jsonObj._annotations;
     delete jsonObj._attachments;
 
