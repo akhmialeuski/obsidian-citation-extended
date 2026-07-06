@@ -170,7 +170,13 @@ export function syncFrontmatter(
 
   const conflicts: FrontmatterConflict[] = [];
   const updatedKeys: string[] = [];
-  const baseline: Record<string, string> = {};
+  // Null-prototype: frontmatter keys are arbitrary user strings, so a key
+  // literally named `__proto__` must be stored as a normal own key (on a plain
+  // object it would set the prototype and silently vanish).
+  const baseline: Record<string, string> = Object.create(null) as Record<
+    string,
+    string
+  >;
   const deletedKeys: string[] = [];
   /** Chosen output blocks per plugin key, keyed by name. */
   const resolutions = new Map<string, KeyResolution>();
@@ -181,7 +187,12 @@ export function syncFrontmatter(
     baseline[key] = renderNorm;
     const currentRaw = current.raw.get(key);
     const currentNorm = current.norm.get(key);
-    const baseNorm = baselineKeys ? (baselineKeys[key] ?? null) : null;
+    // Own-property lookup: a JSON-deserialized baseline has Object.prototype,
+    // so a key like `toString` must not read back an inherited function.
+    const baseNorm =
+      baselineKeys && Object.prototype.hasOwnProperty.call(baselineKeys, key)
+        ? baselineKeys[key]
+        : null;
 
     if (currentNorm === undefined) {
       // Key absent from the note. Respect a deletion the same way blocks do:

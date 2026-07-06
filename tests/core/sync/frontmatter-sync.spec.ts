@@ -82,6 +82,33 @@ describe('syncFrontmatter', () => {
     expect(result.lines).toEqual(['year: 2023', 'doi: 10.1/x']);
   });
 
+  it('treats a prototype-colliding key as having no baseline (own-property lookup)', () => {
+    // The JSON baseline is a plain object; a frontmatter key literally named
+    // `toString` must not read back the inherited Function as its base value.
+    const rendered = ['toString: b'];
+    const current = ['toString: a'];
+    const result = syncFrontmatter(rendered, current, {}); // no own 'toString'
+
+    // base resolves to null (not the inherited function) → a normal
+    // no-baseline conflict, and base is a string|null, never a Function.
+    expect(result.conflicts).toHaveLength(1);
+    expect(result.conflicts[0]).toMatchObject({ key: 'toString', base: null });
+    expect(typeof result.conflicts[0].base).not.toBe('function');
+  });
+
+  it('stores a __proto__ key as a normal own baseline key (no pollution)', () => {
+    const rendered = ['__proto__: danger'];
+    const current: string[] = [];
+    const result = syncFrontmatter(rendered, current, null);
+
+    // The baseline must record it as an own key without mutating the object's
+    // prototype (a plain object would set the prototype and drop the key).
+    expect(
+      Object.prototype.hasOwnProperty.call(result.baseline, '__proto__'),
+    ).toBe(true);
+    expect(Object.getPrototypeOf(result.baseline)).toBeNull();
+  });
+
   it('conflicts on a differing key when there is no baseline', () => {
     const rendered = ['year: 2024'];
     const current = ['year: 2023'];

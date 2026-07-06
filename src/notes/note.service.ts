@@ -359,7 +359,7 @@ export class NoteService implements INoteService {
       if (
         value != null &&
         (typeof value === 'string' || typeof value === 'number') &&
-        library.entries[String(value)]
+        library.getEntry(String(value)) !== undefined
       ) {
         return String(value);
       }

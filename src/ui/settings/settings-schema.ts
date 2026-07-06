@@ -7,12 +7,6 @@ import {
   DEFAULT_UPDATE_CONFIRMATION,
 } from '../../core/sync/note-update-mode';
 
-// Zod-compatible tuple derived from DATABASE_FORMATS constants
-const DATABASE_FORMAT_ENUM = Object.values(DATABASE_FORMATS) as [
-  DatabaseType,
-  ...DatabaseType[],
-];
-
 // The legacy single-database export settings describe a FILE export — the
 // API-backed formats (Readwise, Zotero local API) are only meaningful inside
 // `databases[]`. An out-of-range legacy value degrades to CSL JSON via
@@ -88,7 +82,13 @@ export function resolveSyncIntervalMs(minutes: number): number | undefined {
 const DatabaseConfigSchema = z.object({
   id: z.string().optional(),
   name: z.string(),
-  type: z.enum(DATABASE_FORMAT_ENUM),
+  // `type` is a plain string, not the known-format enum: a database written by
+  // a NEWER plugin build may carry a `type` this version does not recognize.
+  // Rejecting it would drop the element (quarantine) and the next save would
+  // persist the loss — permanently destroying the user's source config on a
+  // downgrade. Kept verbatim so it round-trips; an unrecognized type simply
+  // fails loudly at load time (reported as a source error) instead.
+  type: z.string().min(1),
   path: z.string(),
   sourceType: z.string().optional(),
   // Per-source-kind remembered connection strings (see DatabaseConfig).

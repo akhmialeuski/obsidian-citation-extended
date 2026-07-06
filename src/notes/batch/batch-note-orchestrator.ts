@@ -110,7 +110,7 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
         currentCitekey: citekey,
       });
 
-      const entry = library.entries[citekey];
+      const entry = library.getEntry(citekey);
       if (!entry) {
         result.skipped.push(citekey);
         continue;
@@ -163,6 +163,17 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
         });
 
         if (!plan.changed && plan.conflicts.length === 0) {
+          // Bootstrap a baseline for a pristine note that has none yet (a
+          // legacy note whose content already equals the render): without it,
+          // a LATER library-side change is planned with no baseline and shows
+          // up as a spurious conflict instead of a clean 3-way merge.
+          if (
+            request.mode !== 'overwrite' &&
+            priorBaseline === null &&
+            !request.dryRun
+          ) {
+            await this.baselines.set(citekey, plan.baseline, file.path);
+          }
           result.skipped.push(citekey);
           continue;
         }
@@ -193,14 +204,25 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
         ) {
           if (plan.conflicts.length > 0) {
             // Cannot resolve without the user — leave the note untouched.
-            result.conflicts.push({
+            this.reportConflict(
+              result,
               citekey,
-              conflictIds: plan.conflicts.map((c) => c.id),
-            });
+              plan.conflicts.map((c) => c.id),
+            );
             continue;
           }
           if (request.dryRun) {
             result.updated.push(citekey);
+            continue;
+          }
+          if (firstSyncAppend) {
+            // The safety gate wins over 'never': appending blocks into a
+            // non-empty legacy note can duplicate its body text, so when no
+            // review is possible we skip and report rather than silently
+            // append without the consent the review would have obtained.
+            this.reportConflict(result, citekey, [
+              'first-sync-append-needs-review',
+            ]);
             continue;
           }
           await this.write(citekey, file, plan.content, plan);
@@ -299,10 +321,18 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
       }
 
       if (decision === 'skip') {
-        result.conflicts.push({
-          citekey: item.citekey,
-          conflictIds: item.plan.conflicts.map((c) => c.id),
-        });
+        // A note reviewed only by policy ('always' / first-sync append) has no
+        // conflicts; skipping it is a plain skip, not a conflict — reporting it
+        // as a conflict with an empty id list is misleading ("conflicts: ()").
+        if (item.plan.conflicts.length > 0) {
+          this.reportConflict(
+            result,
+            item.citekey,
+            item.plan.conflicts.map((c) => c.id),
+          );
+        } else {
+          result.skipped.push(item.citekey);
+        }
         continue;
       }
 
@@ -334,10 +364,7 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
         // An overwrite re-plan can never surface a conflict (it has none by
         // construction), so the generic guard below would silently clobber
         // whatever the user typed while the dialog was open. Skip instead.
-        result.conflicts.push({
-          citekey: item.citekey,
-          conflictIds: ['edited-during-review'],
-        });
+        this.reportConflict(result, item.citekey, ['edited-during-review']);
         return;
       }
       // The file moved under us during review — re-plan against reality.
@@ -355,10 +382,11 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
       if (plan.conflicts.length > 0) {
         // New conflicts appeared since the reviewed diff — don't apply a stale
         // decision to content the user never saw.
-        result.conflicts.push({
-          citekey: item.citekey,
-          conflictIds: plan.conflicts.map((c) => c.id),
-        });
+        this.reportConflict(
+          result,
+          item.citekey,
+          plan.conflicts.map((c) => c.id),
+        );
         return;
       }
     }
@@ -378,5 +406,14 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
   ): Promise<void> {
     await this.vault.modify(file, content);
     await this.baselines.set(citekey, plan.baseline, file.path);
+  }
+
+  /** Record a note that could not be applied without user resolution. */
+  private reportConflict(
+    result: BatchUpdateResult,
+    citekey: string,
+    conflictIds: string[],
+  ): void {
+    result.conflicts.push({ citekey, conflictIds });
   }
 }

@@ -15,8 +15,9 @@ import type {
   IVaultAccess,
   IVaultFile,
 } from '../../../src/platform/platform-adapter';
-import type { Library, NoteBaseline } from '../../../src/core';
-import { buildSyncBlock } from '../../../src/core';
+import type { NoteBaseline } from '../../../src/core';
+import { buildSyncBlock, Library } from '../../../src/core';
+import type { Entry } from '../../../src/core';
 
 jest.mock('obsidian', () => ({}), { virtual: true });
 
@@ -29,7 +30,7 @@ function makeFile(path: string): IVaultFile {
 }
 
 function makeLibrary(entries: Record<string, object> = {}): Library {
-  return { entries } as unknown as Library;
+  return new Library(entries as Record<string, Entry>);
 }
 
 function makeLibraryService(library: Library | null): ILibraryService {
@@ -726,6 +727,32 @@ describe('BatchNoteOrchestrator', () => {
       expect(written).toContain('Old unmarked metadata text.');
       expect(written).toContain('^zc-meta');
     });
+
+    it('does not silently append first-sync blocks when review is disabled', async () => {
+      const modify = jest.fn();
+      const legacyNote = '# My note\n\nOld unmarked metadata text.';
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(makeLibrary({ key1: {} })),
+        makeNoteService({ key1: makeFile('n/key1.md') }),
+        makeTemplateService(() => ({ ok: true, value: note(2024) })),
+        makeVault({ 'n/key1.md': legacyNote }, modify),
+        makeBaselineStore(), // no baseline: first sync
+        // no presenter
+      );
+
+      const result = await orchestrator.execute({
+        ...REQUEST,
+        confirmation: 'never',
+      });
+
+      // The safety gate wins over 'never': the note is not appended-to; it is
+      // reported for the user instead of silently duplicating body text.
+      expect(modify).not.toHaveBeenCalled();
+      expect(result.updated).toEqual([]);
+      expect(result.conflicts).toEqual([
+        { citekey: 'key1', conflictIds: ['first-sync-append-needs-review'] },
+      ]);
+    });
   });
 
   describe('baseline flushing', () => {
@@ -762,6 +789,51 @@ describe('BatchNoteOrchestrator', () => {
       await orchestrator.execute(REQUEST);
 
       expect(store.set).not.toHaveBeenCalled();
+    });
+
+    it('bootstraps a baseline for a pristine note that has none yet', async () => {
+      // The note already equals the render but has no baseline; recording one
+      // now means a LATER library change is a clean 3-way merge rather than a
+      // spurious no-baseline conflict.
+      const store = makeBaselineStore(); // no baseline for key1
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(makeLibrary({ key1: {} })),
+        makeNoteService({ key1: makeFile('n/key1.md') }),
+        makeTemplateService(() => ({ ok: true, value: note(2023) })),
+        makeVault({ 'n/key1.md': note(2023) }),
+        store,
+      );
+
+      const result = await orchestrator.execute(REQUEST);
+
+      expect(result.skipped).toEqual(['key1']);
+      expect(store.set).toHaveBeenCalledWith(
+        'key1',
+        expect.anything(),
+        'n/key1.md',
+      );
+    });
+
+    it('reports a skipped clean review as skipped, not a conflict', async () => {
+      // confirmation 'always' routes even a clean, conflict-free change through
+      // review; skipping it is a skip, not a conflict with an empty id list.
+      const presenter = makePresenter(['skip']);
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(makeLibrary({ key1: {} })),
+        makeNoteService({ key1: makeFile('n/key1.md') }),
+        makeTemplateService(() => ({ ok: true, value: note(2024) })),
+        makeVault({ 'n/key1.md': note(2023) }),
+        makeBaselineStore({ key1: baselineFor(2023) }),
+        presenter,
+      );
+
+      const result = await orchestrator.execute({
+        ...REQUEST,
+        confirmation: 'always',
+      });
+
+      expect(result.skipped).toEqual(['key1']);
+      expect(result.conflicts).toEqual([]);
     });
 
     it('records no baselines in a dry-run', async () => {

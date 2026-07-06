@@ -342,6 +342,82 @@ describe('BaselineStore', () => {
     expect(await reloaded.get('smith2023')).toEqual(OTHER);
   });
 
+  it('serializes concurrent flushes so neither loses its keys', async () => {
+    // A real on-disk file both flushes read-modify-write; without
+    // serialization the second flush merges against a pre-write snapshot and
+    // clobbers the first flush's key (which is already cleared from dirtyKeys).
+    const files: Record<string, string> = {
+      '/plugin/baselines.json': JSON.stringify({ version: 1, baselines: {} }),
+    };
+    let readDelay = 0;
+    const fs = {
+      exists: jest.fn((p: string) => Promise.resolve(p in files)),
+      readFile: jest.fn(async (p: string) => {
+        // Stagger the first read so the two flushes genuinely interleave if
+        // they are allowed to run concurrently.
+        if (readDelay > 0) {
+          readDelay--;
+          await Promise.resolve();
+          await Promise.resolve();
+        }
+        return files[p];
+      }),
+      writeFile: jest.fn((p: string, data: string) => {
+        files[p] = data;
+        return Promise.resolve();
+      }),
+    } as unknown as IFileSystem;
+
+    const store = new BaselineStore(fs, '/plugin/baselines.json');
+    await store.set('alpha', BASELINE);
+    readDelay = 1;
+    const flushA = store.flush();
+    await store.set('beta', OTHER);
+    const flushB = store.flush();
+    await Promise.all([flushA, flushB]);
+
+    const onDisk = JSON.parse(files['/plugin/baselines.json']) as {
+      baselines: Record<string, unknown>;
+    };
+    expect(Object.keys(onDisk.baselines).sort()).toEqual(['alpha', 'beta']);
+  });
+
+  it('seeds from the session cache when the file is deleted mid-session', async () => {
+    const files: Record<string, string> = {
+      '/plugin/baselines.json': JSON.stringify({
+        version: 1,
+        baselines: { smith2023: BASELINE, doe2020: OTHER },
+      }),
+    };
+    const fs = {
+      exists: jest.fn((p: string) => Promise.resolve(p in files)),
+      readFile: jest.fn((p: string) => Promise.resolve(files[p])),
+      writeFile: jest.fn((p: string, data: string) => {
+        files[p] = data;
+        return Promise.resolve();
+      }),
+    } as unknown as IFileSystem;
+    const store = new BaselineStore(fs, '/plugin/baselines.json');
+    expect(await store.get('smith2023')).toEqual(BASELINE); // populate cache
+
+    // A sync tool (iCloud eviction / Syncthing) removes the file, then the
+    // user updates one note.
+    delete files['/plugin/baselines.json'];
+    await store.set('new2024', OTHER);
+    await store.flush();
+
+    const onDisk = JSON.parse(files['/plugin/baselines.json']) as {
+      baselines: Record<string, unknown>;
+    };
+    // The 97-notes-lost regression: a missing file must seed from the cache,
+    // not shrink the store to just the dirty key.
+    expect(Object.keys(onDisk.baselines).sort()).toEqual([
+      'doe2020',
+      'new2024',
+      'smith2023',
+    ]);
+  });
+
   describe('note-path identity', () => {
     it('stamps the note path on set and returns the baseline for it', async () => {
       const { fs } = makeFileSystem();

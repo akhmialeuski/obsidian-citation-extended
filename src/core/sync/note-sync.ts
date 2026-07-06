@@ -165,6 +165,21 @@ export function baselineFromRender(rendered: string): NoteBaseline {
 // Planner
 // ---------------------------------------------------------------------------
 
+/**
+ * Own-property lookup on a JSON-deserialized block map. A sync-block name that
+ * matches an `Object.prototype` member (e.g. `toString`) must not read back the
+ * inherited function — that would make baseText a non-string and either crash
+ * the merge or misclassify the block.
+ */
+function ownBaseText(
+  blocks: Record<string, string> | null | undefined,
+  name: string,
+): string | null {
+  return blocks && Object.prototype.hasOwnProperty.call(blocks, name)
+    ? blocks[name]
+    : null;
+}
+
 interface BlockResolution {
   /** Chosen text for the safe (keep-ours) variant, or null to drop. */
   ours: string | null;
@@ -233,7 +248,7 @@ export function planNoteSync(input: NoteSyncInput): NoteSyncPlan {
     for (const [name, renderBlock] of renderedBlocks) {
       baselineOut.blocks[name] = renderBlock.text;
       const currentBlock = currentBlocks.get(name);
-      const baseText = baseBlocks ? (baseBlocks[name] ?? null) : null;
+      const baseText = ownBaseText(baseBlocks, name);
 
       if (!currentBlock) {
         // Not in the note. Respect a user deletion (known from the baseline
@@ -261,7 +276,7 @@ export function planNoteSync(input: NoteSyncInput): NoteSyncPlan {
     // library): pristine ones are removed, edited ones are conflicts.
     for (const [name, currentBlock] of currentBlocks) {
       if (renderedBlocks.has(name)) continue;
-      const baseText = baseBlocks ? (baseBlocks[name] ?? null) : null;
+      const baseText = ownBaseText(baseBlocks, name);
       if (baseText === null) {
         // Unknown plugin-style block (perhaps from another tool or a renamed
         // template section) — leave it strictly alone.

@@ -57,6 +57,27 @@ describe('planNoteSync', () => {
     expect(plan.content).toBe(content);
   });
 
+  it('handles a block name that collides with an Object.prototype member', () => {
+    // 'toString' passes the name regex; the JSON baseline (a plain object) has
+    // no own 'toString' key, so the lookup must return null — not the
+    // inherited Function, which would crash mergeText or misclassify the block.
+    const block = buildSyncBlock('toString', 'inner content');
+    const rendered = `---\ntitle: X\n---\n\n${block}\n`;
+    const current = `---\ntitle: X\n---\n\nlegacy body\n`;
+
+    let plan!: ReturnType<typeof planNoteSync>;
+    expect(() => {
+      plan = planNoteSync({
+        rendered,
+        current,
+        baseline: { frontmatter: {}, blocks: {} },
+      });
+    }).not.toThrow();
+
+    expect(plan.conflicts).toEqual([]);
+    expect(plan.summary.blocksAppended).toContain('toString');
+  });
+
   it('never touches user content outside plugin blocks', () => {
     const current = render(2023).replace(
       '## My notes\n',

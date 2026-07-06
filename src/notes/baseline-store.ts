@@ -62,9 +62,12 @@ interface BaselineFileV1 {
 /** Result of a disk read, distinguishing "no data" from "unreadable data". */
 interface DiskRead {
   baselines: Record<string, NoteBaseline>;
-  /** 'ok' — usable (possibly absent) file; 'corrupt' — exists but unreadable;
-   *  'newer' — written by a newer plugin version (never overwrite). */
-  state: 'ok' | 'corrupt' | 'newer';
+  /** 'ok' — a present, readable file; 'missing' — no file on disk;
+   *  'corrupt' — exists but unreadable; 'newer' — written by a newer plugin
+   *  version (never overwrite). Only 'ok' is safe to use as the write base;
+   *  'missing'/'corrupt' seed the write from the session cache instead, so a
+   *  file evicted/replaced mid-session does not shrink the store. */
+  state: 'ok' | 'missing' | 'corrupt' | 'newer';
 }
 
 export class BaselineStore implements IBaselineStore {
@@ -77,6 +80,13 @@ export class BaselineStore implements IBaselineStore {
   private newerVersionOnDisk = false;
   /** The initial load found an unreadable file — back it up before writing. */
   private corruptOnDisk = false;
+  /**
+   * Serializes {@link flush}: two overlapping flushes each read-modify-write
+   * the file, so the second would clobber the first's just-persisted keys
+   * (which are already cleared from dirtyKeys and thus lost). Every flush runs
+   * strictly after the previous one, re-reading the file it wrote.
+   */
+  private flushChain: Promise<void> = Promise.resolve();
 
   constructor(
     private fileSystem: IFileSystem | undefined,
@@ -123,7 +133,19 @@ export class BaselineStore implements IBaselineStore {
     await this.set(citekey, baselineFromRender(rendered), notePath);
   }
 
-  async flush(): Promise<void> {
+  flush(): Promise<void> {
+    // Chain each flush after the previous one so no two run concurrently.
+    // The chain pointer swallows errors so one failed flush cannot break the
+    // chain; the caller still observes its own flush's outcome via `next`.
+    const next = this.flushChain.then(
+      () => this.doFlush(),
+      () => this.doFlush(),
+    );
+    this.flushChain = next.catch(() => undefined);
+    return next;
+  }
+
+  private async doFlush(): Promise<void> {
     if (this.dirtyKeys.size === 0) return;
     if (!this.fileSystem || !this.filePath) return;
     if (this.newerVersionOnDisk) {
@@ -157,9 +179,11 @@ export class BaselineStore implements IBaselineStore {
         this.corruptOnDisk = false;
       }
 
-      // Base of the write: disk when readable (merge-on-flush), else the
-      // session cache — it holds everything the healthy initial load gave us.
-      // Seeding `{}` on a corrupt read would shrink the file to just the
+      // Base of the write: the disk snapshot ONLY when it is a present,
+      // readable file (merge-on-flush against another device's writes).
+      // Otherwise — a missing (evicted/deleted mid-session) or corrupt file —
+      // seed from the session cache, which still holds everything the healthy
+      // initial load gave us. Seeding `{}` would shrink the store to just the
       // dirty keys, destroying every other note's merge history.
       const merged: Record<string, NoteBaseline> =
         disk.state === 'ok' ? { ...disk.baselines } : { ...cache };
@@ -231,7 +255,10 @@ export class BaselineStore implements IBaselineStore {
     }
     try {
       if (!(await this.fileSystem.exists(this.filePath))) {
-        return { baselines: {}, state: 'ok' };
+        // No file: a fresh install (cache empty, seeding from it is a no-op)
+        // OR a file evicted/deleted mid-session (cache still holds the real
+        // baselines, so the flush must seed from it, not from `{}`).
+        return { baselines: {}, state: 'missing' };
       }
       const parsed: unknown = JSON.parse(
         await this.fileSystem.readFile(this.filePath),

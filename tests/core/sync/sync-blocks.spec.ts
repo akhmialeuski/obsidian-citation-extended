@@ -16,6 +16,15 @@ describe('isValidSyncBlockName', () => {
       expect(isValidSyncBlockName(name)).toBe(false);
     },
   );
+
+  it.each(['__proto__', 'constructor', 'prototype'])(
+    'rejects the prototype-colliding name %p',
+    (name) => {
+      // As a plain-object key downstream these would pollute the prototype or
+      // read back an inherited member, so they are never plugin blocks.
+      expect(isValidSyncBlockName(name)).toBe(false);
+    },
+  );
 });
 
 describe('buildSyncBlock', () => {
@@ -113,6 +122,23 @@ describe('parseSyncBlocks', () => {
   it('ignores non-plugin block IDs', () => {
     const content = ['> [!note] x', '> body', '> ^my-own-id'].join('\n');
     expect(parseSyncBlocks(content).size).toBe(0);
+  });
+
+  it('does not treat a prototype-colliding block name as a plugin block', () => {
+    // `^zc-__proto__` / `^zc-constructor` must be left to the user, not parsed
+    // into the (plain-object) baseline block map.
+    const content = [
+      '> [!note] x',
+      '> body',
+      '> ^zc-__proto__',
+      '',
+      '> [!note] y',
+      '> body2',
+      '> ^zc-constructor',
+    ].join('\n');
+    const blocks = parseSyncBlocks(content);
+    expect(blocks.size).toBe(0);
+    expect(blocks.get('__proto__')).toBeUndefined();
   });
 
   it('keeps the first block when names are duplicated', () => {

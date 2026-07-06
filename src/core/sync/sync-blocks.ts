@@ -21,6 +21,19 @@ export const SYNC_BLOCK_ID_PREFIX = 'zc-';
 /** Valid sync-block names: letters, digits, underscore, dash. */
 export const SYNC_BLOCK_NAME_RE = /^[A-Za-z0-9_-]+$/;
 
+/**
+ * Names that collide with `Object.prototype` members: as plain-object keys
+ * downstream (the JSON baseline block map) `__proto__` would pollute the
+ * prototype and `constructor`/`prototype` would read back an inherited
+ * function. They are never treated as plugin blocks — a block so named is left
+ * to the user, which is safe.
+ */
+const FORBIDDEN_SYNC_BLOCK_NAMES: ReadonlySet<string> = new Set([
+  '__proto__',
+  'prototype',
+  'constructor',
+]);
+
 /** Escape a string for safe interpolation into a RegExp. */
 function escapeRegExp(literal: string): string {
   return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -62,9 +75,13 @@ const CALLOUT_HEADER_RE = /^ {0,3}>\s*\[![^\]]+\][-+]?/;
  */
 const AMBIGUOUS_INNER_LINE_RE = /^(\s*)(\[!|\^zc-)/;
 
-/** Type guard: is `name` a valid sync-block name? */
+/** Type guard: is `name` a valid, non-prototype-colliding sync-block name? */
 export function isValidSyncBlockName(name: unknown): name is string {
-  return typeof name === 'string' && SYNC_BLOCK_NAME_RE.test(name);
+  return (
+    typeof name === 'string' &&
+    SYNC_BLOCK_NAME_RE.test(name) &&
+    !FORBIDDEN_SYNC_BLOCK_NAMES.has(name)
+  );
 }
 
 /** A plugin-owned block found in note content. */
@@ -127,6 +144,9 @@ export function parseSyncBlocks(content: string): Map<string, SyncBlock> {
     }
 
     const name = idMatch[1];
+    // A prototype-colliding name is treated as user-owned content (skipped),
+    // so it can never reach the plain-object baseline block map downstream.
+    if (!isValidSyncBlockName(name)) continue;
     if (!blocks.has(name)) {
       blocks.set(name, {
         name,
