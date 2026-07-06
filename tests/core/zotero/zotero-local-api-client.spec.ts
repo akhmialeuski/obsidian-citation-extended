@@ -100,6 +100,19 @@ describe('ZoteroLocalApiClient', () => {
       expect(get.mock.calls[0][0]).toContain('/api/groups/4242/items/top');
     });
 
+    it('scopes the probe to a collection when a collection key is given', async () => {
+      const get = jest.fn(() =>
+        Promise.resolve(response(200, [], { 'Total-Results': '5' })),
+      ) as unknown as jest.MockedFunction<ZoteroHttpGetFn>;
+      const client = new ZoteroLocalApiClient(undefined, get);
+
+      await client.ping({ collectionKey: 'ABCD1234' });
+
+      // The probe must hit the collection endpoint so a wrong/typo'd key fails
+      // here instead of reporting a misleading library-wide count.
+      expect(get.mock.calls[0][0]).toContain('/collections/ABCD1234/items/top');
+    });
+
     it('maps HTTP 403 to the enable-local-API hint', async () => {
       const get = jest.fn(() =>
         Promise.resolve(response(403, 'Local API is not enabled')),
@@ -242,6 +255,35 @@ describe('ZoteroLocalApiClient', () => {
       expect(itemCalls).toHaveLength(2);
       expect(itemCalls[0][0]).toContain('start=0');
       expect(itemCalls[1][0]).toContain('start=100');
+    });
+
+    it('fetches every item when the server returns pages shorter than the limit', async () => {
+      // A server (or proxy) whose page cap is below PAGE_LIMIT returns short
+      // pages while Total-Results is larger. Advancing the cursor by the fixed
+      // limit would skip the un-returned offsets; advancing by the actual page
+      // size must fetch everything. This mock honours the `start` param.
+      const TOTAL = 150;
+      const SERVER_PAGE = 60;
+      const get = jest.fn((url: string) => {
+        if (url.includes('/items/top')) {
+          const start = parseInt(url.match(/start=(\d+)/)?.[1] ?? '0', 10);
+          const count = Math.min(SERVER_PAGE, Math.max(0, TOTAL - start));
+          const body = Array.from({ length: count }, (_, i) =>
+            item(`K${start + i}`),
+          );
+          return Promise.resolve(
+            response(200, body, { 'Total-Results': String(TOTAL) }),
+          );
+        }
+        return Promise.resolve(response(200, [], { 'Total-Results': '0' }));
+      }) as unknown as jest.MockedFunction<ZoteroHttpGetFn>;
+      const client = new ZoteroLocalApiClient(undefined, get);
+
+      const library = await client.fetchLibrary();
+
+      expect(library.items).toHaveLength(TOTAL);
+      // No offset was skipped or double-fetched.
+      expect(new Set(library.items.map((i) => i.key)).size).toBe(TOTAL);
     });
 
     it('stops on a short page when the server reports no totals', async () => {

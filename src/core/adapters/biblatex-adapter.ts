@@ -5,12 +5,14 @@ import { Author, Entry } from '../types/entry';
 import { EntryDataCSL } from './csl-adapter';
 import { HayagrivaEntryData } from './hayagriva-adapter';
 import { ReadwiseEntryData } from './readwise-adapter';
+import type { ZoteroApiEntryData } from './zotero-api-adapter';
 
 export type EntryData =
   | EntryDataCSL
   | EntryDataBibLaTeX
   | HayagrivaEntryData
-  | ReadwiseEntryData;
+  | ReadwiseEntryData
+  | ZoteroApiEntryData;
 
 export function isEntryDataBibLaTeX(
   entry: EntryData,

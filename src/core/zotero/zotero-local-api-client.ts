@@ -94,16 +94,30 @@ export class ZoteroLocalApiClient {
   }
 
   /**
+   * Path to the top-level items list for a scope, honouring a collection key.
+   * Shared by ping / fetchLibrary / getLibraryVersion so all three address the
+   * SAME endpoint — a probe must validate exactly what a full fetch will read.
+   */
+  private topItemsPath(scope: ZoteroApiScope): string {
+    const prefix = this.libraryPrefix(scope);
+    return scope.collectionKey
+      ? `${prefix}/collections/${scope.collectionKey}/items/top`
+      : `${prefix}/items/top`;
+  }
+
+  /**
    * Probe the local API: confirms Zotero is running, the local API is
-   * enabled, and reports how many items the scope contains.
+   * enabled, and reports how many items the scope contains. When a collection
+   * key is configured the probe targets that collection, so a wrong/typo'd key
+   * surfaces as a failure here (HTTP 404) instead of "connected" with a
+   * misleading library-wide count.
    */
   async ping(
     scope: ZoteroApiScope = {},
     signal?: AbortSignal,
   ): Promise<ZoteroApiPingResult> {
-    const prefix = this.libraryPrefix(scope);
     const response = await this.request(
-      `${this.base}/api/${prefix}/items/top?limit=1&format=json`,
+      `${this.base}/api/${this.topItemsPath(scope)}?limit=1&format=json`,
       signal,
     );
     return {
@@ -122,12 +136,8 @@ export class ZoteroLocalApiClient {
     options: { includeAnnotations?: boolean } = {},
   ): Promise<ZoteroApiLibraryData> {
     const prefix = this.libraryPrefix(scope);
-    const itemsPath = scope.collectionKey
-      ? `${prefix}/collections/${scope.collectionKey}/items/top`
-      : `${prefix}/items/top`;
-
     const { items, version } = await this.fetchAllPages(
-      `${this.base}/api/${itemsPath}?format=json&include=csljson,data`,
+      `${this.base}/api/${this.topItemsPath(scope)}?format=json&include=csljson,data`,
       signal,
     );
     // Attachments are child items and never appear under /top; fetch them
@@ -182,9 +192,8 @@ export class ZoteroLocalApiClient {
     scope: ZoteroApiScope = {},
     signal?: AbortSignal,
   ): Promise<number | null> {
-    const prefix = this.libraryPrefix(scope);
     const response = await this.request(
-      `${this.base}/api/${prefix}/items/top?limit=1&format=json`,
+      `${this.base}/api/${this.topItemsPath(scope)}?limit=1&format=json`,
       signal,
     );
     return ZoteroLocalApiClient.numericHeader(
@@ -200,10 +209,10 @@ export class ZoteroLocalApiClient {
   ): Promise<{ items: ZoteroApiItem[]; version: number | null }> {
     const items: ZoteroApiItem[] = [];
     let start = 0;
-    let total = Number.POSITIVE_INFINITY;
     let version: number | null = null;
+    let total: number | null = null;
 
-    while (start < total) {
+    for (;;) {
       const response = await this.request(
         `${baseUrl}&limit=${PAGE_LIMIT}&start=${start}`,
         signal,
@@ -228,12 +237,25 @@ export class ZoteroLocalApiClient {
         ZoteroLocalApiClient.numericHeader(response, 'last-modified-version') ??
         version;
       const reportedTotal = ZoteroLocalApiClient.totalResults(response);
-      total =
-        reportedTotal ?? (page.length < PAGE_LIMIT ? items.length : total);
-      start += PAGE_LIMIT;
-      // Defensive stop: a server not reporting totals and returning a short
-      // page means we reached the end.
-      if (page.length < PAGE_LIMIT && reportedTotal === null) break;
+      if (reportedTotal !== null) total = reportedTotal;
+
+      // Advance by the number of items the server ACTUALLY returned, not by
+      // the requested PAGE_LIMIT: a server (or proxy) whose page cap is smaller
+      // than PAGE_LIMIT returns short pages, and advancing by the fixed limit
+      // would silently skip every un-returned offset in between.
+      start += page.length;
+
+      // Termination, in priority order:
+      //  - an empty page means the end (also a backstop against a server that
+      //    keeps reporting more than it will actually return);
+      //  - a reported total is authoritative — stop once the offset reaches it;
+      //  - with no total, a short page is the last page.
+      if (page.length === 0) break;
+      if (total !== null) {
+        if (start >= total) break;
+      } else if (page.length < PAGE_LIMIT) {
+        break;
+      }
     }
 
     return { items, version };

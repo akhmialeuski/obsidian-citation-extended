@@ -201,6 +201,28 @@ describe('buildZoteroApiEntries', () => {
     expect(entries).toHaveLength(1);
   });
 
+  it('excludes standalone notes and attachments returned under /items/top', () => {
+    // /items/top includes top-level standalone notes and attachments; they are
+    // not bibliographic entries and would otherwise become titleless junk
+    // records with generated `item`/`itema` citekeys.
+    const note = {
+      key: 'NOTE0001',
+      version: 1,
+      data: { itemType: 'note', note: '<p>a standalone note</p>' },
+    } as unknown as ZoteroApiItem;
+    const attachment = {
+      key: 'ATTA0001',
+      version: 1,
+      data: { itemType: 'attachment', filename: 'orphan.pdf' },
+    } as unknown as ZoteroApiItem;
+
+    const entries = buildZoteroApiEntries(
+      makeLibrary([note, attachment, makeItem()]),
+    );
+
+    expect(entries.map((e) => e.key)).toEqual(['ITEM0001']);
+  });
+
   it('a pinned citekey wins over an earlier generated collision', () => {
     // Item A comes FIRST in API order and would generate "lecun2015"; item B
     // has that exact key user-pinned. B must keep its pinned key (existing
@@ -446,6 +468,22 @@ describe('ZoteroApiAdapter', () => {
     expect(new ZoteroApiAdapter(dto).zoteroSelectURI).toBe(
       'zotero://select/groups/4478/items/ITEM0001',
     );
+  });
+
+  it('exposes the open-pdf library prefix for the PDF-link template helpers', () => {
+    // Personal library → 'library'; group library → 'groups/<id>', so the
+    // template helpers build open-pdf links that point at the right library.
+    expect(new ZoteroApiAdapter(makeDto()).zoteroLibraryPrefix).toBe('library');
+    expect(
+      new ZoteroApiAdapter({ ...makeDto(), groupId: '4478' })
+        .zoteroLibraryPrefix,
+    ).toBe('groups/4478');
+    // …and it is carried through the template context.
+    const context = new ZoteroApiAdapter({
+      ...makeDto(),
+      groupId: '4478',
+    }).toTemplateContext();
+    expect(context.zoteroLibraryPrefix).toBe('groups/4478');
   });
 
   it('keeps a comma inside a native tag as one keyword', () => {

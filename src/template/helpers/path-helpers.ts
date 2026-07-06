@@ -53,6 +53,27 @@ function stripPathAndExtension(filePath: string): string {
   return filePath.replace(/^.*[\\/]/, '').replace(/\.[^/.]+$/, '');
 }
 
+/**
+ * The `zotero://open-pdf/<prefix>/items/<key>` library segment for the entry
+ * being rendered, read from the template root. Defaults to `library` (personal
+ * library) for non-Zotero sources and for callers that do not supply it; a
+ * group-library local-API entry exposes `groups/<id>` so the deep link opens
+ * the correct library instead of the wrong one.
+ */
+function libraryPrefixFrom(
+  options: Handlebars.HelperOptions | undefined,
+): string {
+  const data = options?.data as { root?: unknown } | undefined;
+  const root = data?.root as { zoteroLibraryPrefix?: unknown } | undefined;
+  const prefix = root?.zoteroLibraryPrefix;
+  return typeof prefix === 'string' && prefix.length > 0 ? prefix : 'library';
+}
+
+/** Build a `zotero://open-pdf` deep link for an attachment key + prefix. */
+function openPdfURI(prefix: string, key: string): string {
+  return `zotero://open-pdf/${prefix}/items/${key}`;
+}
+
 export function registerPathHelpers(hbs: HandlebarsInstance): void {
   hbs.registerHelper('urlEncode', (value: unknown) => {
     if (typeof value !== 'string') return value;
@@ -96,13 +117,16 @@ export function registerPathHelpers(hbs: HandlebarsInstance): void {
    * Extracts the Zotero storage key from the file path.
    * Returns an empty string when no PDF is found or the path has no storage key.
    */
-  hbs.registerHelper('zoteroPdfURI', (files: unknown) => {
-    const pdf = findFirstPdf(files);
-    if (!pdf) return '';
-    const key = extractStorageKey(pdf);
-    if (!key) return '';
-    return `zotero://open-pdf/library/items/${key}`;
-  });
+  hbs.registerHelper(
+    'zoteroPdfURI',
+    (files: unknown, options?: Handlebars.HelperOptions) => {
+      const pdf = findFirstPdf(files);
+      if (!pdf) return '';
+      const key = extractStorageKey(pdf);
+      if (!key) return '';
+      return openPdfURI(libraryPrefixFrom(options), key);
+    },
+  );
 
   /**
    * Generate zotero://open-pdf URIs for all PDF attachments as an array.
@@ -112,15 +136,19 @@ export function registerPathHelpers(hbs: HandlebarsInstance): void {
    * Use with {{#each}} to iterate:
    *   {{#each (zoteroPdfURIs entry.files)}}[PDF]({{this}}){{/each}}
    */
-  hbs.registerHelper('zoteroPdfURIs', (files: unknown) => {
-    const pdfs = findAllPdfs(files);
-    return pdfs
-      .map((pdf) => {
-        const key = extractStorageKey(pdf);
-        return key ? `zotero://open-pdf/library/items/${key}` : null;
-      })
-      .filter((uri): uri is string => uri !== null);
-  });
+  hbs.registerHelper(
+    'zoteroPdfURIs',
+    (files: unknown, options?: Handlebars.HelperOptions) => {
+      const prefix = libraryPrefixFrom(options);
+      const pdfs = findAllPdfs(files);
+      return pdfs
+        .map((pdf) => {
+          const key = extractStorageKey(pdf);
+          return key ? openPdfURI(prefix, key) : null;
+        })
+        .filter((uri): uri is string => uri !== null);
+    },
+  );
 
   /**
    * Generate a Markdown link to the first PDF attachment that opens in
@@ -128,13 +156,19 @@ export function registerPathHelpers(hbs: HandlebarsInstance): void {
    * extension. Returns an empty string when no PDF is found or the path
    * has no Zotero storage key.
    */
-  hbs.registerHelper('zoteroPdfMarkdownLink', (files: unknown) => {
-    const pdf = findFirstPdf(files);
-    if (!pdf) return '';
-    const key = extractStorageKey(pdf);
-    if (!key) return '';
-    return `[${stripPathAndExtension(pdf)}](zotero://open-pdf/library/items/${key})`;
-  });
+  hbs.registerHelper(
+    'zoteroPdfMarkdownLink',
+    (files: unknown, options?: Handlebars.HelperOptions) => {
+      const pdf = findFirstPdf(files);
+      if (!pdf) return '';
+      const key = extractStorageKey(pdf);
+      if (!key) return '';
+      return `[${stripPathAndExtension(pdf)}](${openPdfURI(
+        libraryPrefixFrom(options),
+        key,
+      )})`;
+    },
+  );
 
   /**
    * Generate Markdown links for all PDF attachments that open in Zotero's
@@ -146,14 +180,18 @@ export function registerPathHelpers(hbs: HandlebarsInstance): void {
    * Use with {{#each}} to iterate:
    *   {{#each (zoteroPdfMarkdownLinks entry.files)}}- {{this}}{{/each}}
    */
-  hbs.registerHelper('zoteroPdfMarkdownLinks', (files: unknown) => {
-    const pdfs = findAllPdfs(files);
-    return pdfs
-      .map((pdf) => {
-        const key = extractStorageKey(pdf);
-        if (!key) return null;
-        return `[${stripPathAndExtension(pdf)}](zotero://open-pdf/library/items/${key})`;
-      })
-      .filter((link): link is string => link !== null);
-  });
+  hbs.registerHelper(
+    'zoteroPdfMarkdownLinks',
+    (files: unknown, options?: Handlebars.HelperOptions) => {
+      const prefix = libraryPrefixFrom(options);
+      const pdfs = findAllPdfs(files);
+      return pdfs
+        .map((pdf) => {
+          const key = extractStorageKey(pdf);
+          if (!key) return null;
+          return `[${stripPathAndExtension(pdf)}](${openPdfURI(prefix, key)})`;
+        })
+        .filter((link): link is string => link !== null);
+    },
+  );
 }

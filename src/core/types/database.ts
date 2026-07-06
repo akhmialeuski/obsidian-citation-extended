@@ -52,6 +52,14 @@ export interface DatabaseConfig {
   type: DatabaseType;
   /** Transport type — auto-derived from path if omitted. */
   sourceType?: string;
+  /**
+   * Connection strings remembered per source-kind (dropdown option → path).
+   * `path` means different things per source (file path, BBT export URL,
+   * Readwise token, API base URL), so switching the source type stashes the
+   * outgoing value here and restores the incoming kind's value — a mis-click
+   * on the source dropdown never permanently loses a configured path/URL/token.
+   */
+  sourcePaths?: Record<string, string>;
   /** Readwise-only client-side import filters. */
   readwiseFilters?: ReadwiseFilters;
   /**

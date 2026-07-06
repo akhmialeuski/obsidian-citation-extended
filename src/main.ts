@@ -248,6 +248,9 @@ export default class CitationPlugin extends Plugin {
     // Register the native Zotero local API source (Zotero 7+, no Better
     // BibTeX needed) — def.path holds the base URL (empty = default
     // http://127.0.0.1:23119); group/collection scope comes from settings.
+    // The offline cache is keyed by the stable database id (see
+    // sourceCacheFilePath); the source itself records scope + annotation flag
+    // inside the cache payload and re-fetches when they change.
     registry.register(
       DATA_SOURCE_TYPES.ZoteroApi,
       (def, id) =>
@@ -256,9 +259,12 @@ export default class CitationPlugin extends Plugin {
           new ZoteroLocalApiClient(def.path, obsidianZoteroGet),
           resolveZoteroApiScope(this.settings.databases, def.databaseId),
           platformAdapter.fileSystem,
-          readwiseCacheDir
-            ? `${readwiseCacheDir}/zotero-api-cache-${id.replace(cacheNameSanitizeRe, '-')}.json`
-            : '',
+          sourceCacheFilePath(
+            readwiseCacheDir,
+            'zotero-api-cache',
+            def.databaseId,
+            id,
+          ),
           // Shares the Zotero auto-sync interval setting.
           () =>
             resolveSyncIntervalMs(this.settings.zoteroSyncIntervalMinutes) ?? 0,

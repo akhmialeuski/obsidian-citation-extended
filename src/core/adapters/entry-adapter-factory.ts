@@ -31,9 +31,7 @@ const ENTRY_ADAPTERS: Record<DatabaseType, (entries: EntryData[]) => Entry[]> =
       entries.map((e) => new ReadwiseAdapter(e as ReadwiseEntryData)),
 
     [DATABASE_FORMATS.ZoteroApi]: (entries) =>
-      entries.map(
-        (e) => new ZoteroApiAdapter(e as unknown as ZoteroApiEntryData),
-      ),
+      entries.map((e) => new ZoteroApiAdapter(e as ZoteroApiEntryData)),
   };
 
 /**

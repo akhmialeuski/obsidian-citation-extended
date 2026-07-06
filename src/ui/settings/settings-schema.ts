@@ -120,6 +120,8 @@ export const SettingsSchema = z.object({
         type: z.enum(DATABASE_FORMAT_ENUM),
         path: z.string(),
         sourceType: z.string().optional(),
+        // Per-source-kind remembered connection strings (see DatabaseConfig).
+        sourcePaths: z.record(z.string()).optional(),
         // Readwise-only client-side import filters (optional, backward-compat).
         readwiseFilters: z
           .object({

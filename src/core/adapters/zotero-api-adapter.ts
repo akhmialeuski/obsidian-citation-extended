@@ -19,10 +19,10 @@
  * - **Collection names** from the collections map.
  */
 
-import { Entry } from '../types/entry';
 import type { Annotation, AttachmentRef } from '../types/annotation';
 import {
   basenameWithoutExtension,
+  compareSortIndex,
   mapZoteroAnnotation,
 } from '../zotero/zotero-annotations';
 import type { Author } from '../types/entry';
@@ -119,6 +119,15 @@ export class ZoteroApiAdapter extends EntryCSLAdapter {
       ? `zotero://select/groups/${this.groupId}/items/${this.zotero.key}`
       : `zotero://select/library/items/${this.zotero.key}`;
   }
+
+  /**
+   * `groups/<id>` for a group-library source so the PDF-link template helpers
+   * build `zotero://open-pdf/groups/<id>/…` deep links that open the correct
+   * library; `library` (the base default) for the personal library.
+   */
+  get zoteroLibraryPrefix(): string {
+    return this.groupId ? `groups/${this.groupId}` : 'library';
+  }
 }
 
 /** `Citation Key: xxx` line in the Extra field (legacy BBT convention). */
@@ -160,13 +169,37 @@ function generatedCitekey(item: ZoteroApiItem): string {
   const yearMatch = (parsedDate || dataDate).match(/\d{4}/);
   const year = yearMatch ? yearMatch[0] : '';
 
-  const base = `${slug(name) || 'item'}${year}`;
-  return base.length > 0 ? base : item.key.toLowerCase();
+  // `slug(name) || 'item'` guarantees a non-empty stem, so `base` is never
+  // empty — no key fallback is needed.
+  return `${slug(name) || 'item'}${year}`;
 }
 
 /** The item's user-pinned citekey (native field or Extra line), or null. */
 function pinnedCitekey(item: ZoteroApiItem): string | null {
   return nativeCitekey(item.data) ?? extraCitekey(item.data);
+}
+
+/**
+ * Item types that appear under `/items/top` but are NOT bibliographic
+ * entries: a standalone note or attachment (and, defensively, an annotation)
+ * is a top-level item in Zotero, but turning it into a library entry yields a
+ * titleless junk record with a generated `item`/`itema`/… citekey.
+ */
+const NON_BIBLIOGRAPHIC_ITEM_TYPES = new Set([
+  'note',
+  'attachment',
+  'annotation',
+]);
+
+/** True when the item is a real bibliographic entry worth an adapter. */
+function isBibliographicItem(item: ZoteroApiItem): boolean {
+  if (!item.data || typeof item.data !== 'object') return false;
+  const itemType = item.data.itemType;
+  // Absent itemType is tolerated (the CSL fallback maps it to 'document');
+  // only the known non-bibliographic types are filtered out.
+  return (
+    typeof itemType !== 'string' || !NON_BIBLIOGRAPHIC_ITEM_TYPES.has(itemType)
+  );
 }
 
 /**
@@ -297,7 +330,11 @@ function cslFromNativeData(item: ZoteroApiItem, citekey: string): EntryDataCSL {
 }
 
 /** Take the API's csljson projection when usable, else map native data. */
-function buildCsl(item: ZoteroApiItem, citekey: string): EntryDataCSL {
+function buildCsl(
+  item: ZoteroApiItem,
+  citekey: string,
+  tags: string[],
+): EntryDataCSL {
   const projected = item.csljson;
   const csl: EntryDataCSL =
     projected && typeof projected === 'object' && 'type' in projected
@@ -308,9 +345,8 @@ function buildCsl(item: ZoteroApiItem, citekey: string): EntryDataCSL {
   // carry the item key for search + zotero://select links.
   csl.id = citekey;
   csl['zotero-key'] = item.key;
-  if (!csl.keyword) {
-    const tags = tagNames(item.data);
-    if (tags.length > 0) csl.keyword = tags.join(', ');
+  if (!csl.keyword && tags.length > 0) {
+    csl.keyword = tags.join(', ');
   }
   return csl;
 }
@@ -386,7 +422,7 @@ function annotationsForItem(
     const openURI = `zotero://open-pdf/${openBase}/items/${info.key}`;
     const mapped = (annotationsByAttachment.get(info.key) ?? [])
       .map((a) => mapZoteroAnnotation(a.data, a.key, openURI))
-      .sort((x, y) => x.sortIndex.localeCompare(y.sortIndex));
+      .sort((x, y) => compareSortIndex(x.sortIndex, y.sortIndex));
     annotations.push(...mapped);
     attachmentRefs.push({
       id: info.key,
@@ -432,7 +468,7 @@ export function buildZoteroApiEntries(
   // Only two items pinning the SAME key contend, first in API order wins.
   const pinnedKeys = new Map<string, string>();
   for (const item of library.items) {
-    if (!item.data || typeof item.data !== 'object') continue;
+    if (!isBibliographicItem(item)) continue;
     const pinned = pinnedCitekey(item);
     if (!pinned) continue;
     const key = dedupeCitekey(pinned, taken, item.key);
@@ -441,7 +477,7 @@ export function buildZoteroApiEntries(
   }
 
   for (const item of library.items) {
-    if (!item.data || typeof item.data !== 'object') continue;
+    if (!isBibliographicItem(item)) continue;
     const citekey =
       pinnedKeys.get(item.key) ??
       dedupeCitekey(generatedCitekey(item), taken, item.key);
@@ -471,7 +507,7 @@ export function buildZoteroApiEntries(
       key: item.key,
       version: item.version,
       citekey,
-      csl: buildCsl(item, citekey),
+      csl: buildCsl(item, citekey, tags),
       files: fileList.length > 0 ? fileList : undefined,
       collections: collections.length > 0 ? collections : undefined,
       tags: tags.length > 0 ? tags : undefined,
@@ -490,11 +526,4 @@ export function buildZoteroApiEntries(
   }
 
   return entries;
-}
-
-/** Wrap DTOs in adapters (used by the entry-adapter factory). */
-export function zoteroApiEntriesToAdapters(
-  entries: ZoteroApiEntryData[],
-): Entry[] {
-  return entries.map((e) => new ZoteroApiAdapter(e));
 }

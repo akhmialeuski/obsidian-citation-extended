@@ -86,7 +86,6 @@ export type {
 export {
   ZoteroApiAdapter,
   buildZoteroApiEntries,
-  zoteroApiEntriesToAdapters,
 } from './adapters/zotero-api-adapter';
 export type { ZoteroApiEntryData } from './adapters/zotero-api-adapter';
 

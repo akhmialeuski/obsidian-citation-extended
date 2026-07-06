@@ -246,38 +246,16 @@ export class CitationSettingTab extends PluginSettingTab {
       dropdown.setValue(CitationSettingTab.sourceOptionFor(db));
       dropdown.onChange(async (value) => {
         const db = this.plugin.settings.databases[index];
-        if (value === SOURCE_OPTION_ZOTERO_BBT) {
-          // Live Better BibTeX pull: keep the current export format when it is
-          // one BBT can serve, otherwise default to CSL JSON. The URL (path)
-          // must be re-entered for the new source.
-          if (!ZOTERO_EXPORT_FORMATS.has(db.type)) {
-            db.type = DATABASE_FORMATS.CslJson;
-          }
-          db.sourceType = DATA_SOURCE_TYPES.Zotero;
-          db.path = '';
-          await this.plugin.saveSettings();
-          this.display();
-          return; // needs the export URL before a load can succeed
-        }
-
-        db.type = value as DatabaseType;
-        if (value === DATABASE_FORMATS.Readwise) {
-          db.sourceType = DATA_SOURCE_TYPES.Readwise;
-          db.path = '';
-        } else if (value === DATABASE_FORMATS.ZoteroApi) {
-          // Transport is implied by the type; path holds the base URL
-          // (empty = default http://127.0.0.1:23119).
-          delete db.sourceType;
-          db.path = '';
-        } else {
-          // A file format was picked explicitly — always file mode.
-          delete db.sourceType;
-        }
+        CitationSettingTab.switchDatabaseSource(db, value);
         await this.plugin.saveSettings();
         this.display();
-        // Only reload for sources that can work immediately — Readwise needs
-        // a token first.
-        if (value !== DATABASE_FORMATS.Readwise) {
+        // Live Better BibTeX and Readwise need a URL/token before a load can
+        // succeed, so re-render their fields and wait for input rather than
+        // firing a load that would just error.
+        const needsConnectionInput =
+          value === SOURCE_OPTION_ZOTERO_BBT ||
+          value === DATABASE_FORMATS.Readwise;
+        if (!needsConnectionInput) {
           new Notice('Database source changed. Reloading library…');
           void this.plugin.libraryService.load();
         }
@@ -308,6 +286,42 @@ export class CitationSettingTab extends PluginSettingTab {
     return CitationSettingTab.isLiveZotero(db)
       ? SOURCE_OPTION_ZOTERO_BBT
       : db.type;
+  }
+
+  /**
+   * Switch a database to a new source-dropdown option, preserving connection
+   * strings. `path` means something different for each source (file path, BBT
+   * URL, Readwise token, API base URL), so the outgoing value is stashed under
+   * its kind and the incoming kind's stashed value restored — switching source
+   * and back is lossless, and a mis-click never destroys a configured path.
+   */
+  private static switchDatabaseSource(
+    db: DatabaseConfig,
+    option: string,
+  ): void {
+    const outgoing = CitationSettingTab.sourceOptionFor(db);
+    const stash = { ...(db.sourcePaths ?? {}) };
+    stash[outgoing] = db.path;
+    db.sourcePaths = stash;
+    db.path = stash[option] ?? '';
+
+    if (option === SOURCE_OPTION_ZOTERO_BBT) {
+      // Live Better BibTeX pull: keep the current export format when BBT can
+      // serve it, otherwise default to CSL JSON.
+      if (!ZOTERO_EXPORT_FORMATS.has(db.type)) {
+        db.type = DATABASE_FORMATS.CslJson;
+      }
+      db.sourceType = DATA_SOURCE_TYPES.Zotero;
+      return;
+    }
+
+    db.type = option as DatabaseType;
+    if (option === DATABASE_FORMATS.Readwise) {
+      db.sourceType = DATA_SOURCE_TYPES.Readwise;
+    } else {
+      // File formats and the native Zotero API imply their transport.
+      delete db.sourceType;
+    }
   }
 
   /**

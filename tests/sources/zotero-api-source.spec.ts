@@ -135,10 +135,17 @@ describe('ZoteroApiSource.load', () => {
       version: number;
       entries: unknown[];
       libraryVersion: number;
+      groupId: string;
+      collectionKey: string;
+      importAnnotations: boolean;
     };
-    expect(cache.version).toBe(1);
+    expect(cache.version).toBe(2);
     expect(cache.entries).toHaveLength(2);
     expect(cache.libraryVersion).toBe(7);
+    // Fetch parameters are recorded so a later scope/flag change invalidates.
+    expect(cache.groupId).toBe('');
+    expect(cache.collectionKey).toBe('');
+    expect(cache.importAnnotations).toBe(false);
   });
 
   it('falls back to the cache when Zotero is unreachable', async () => {
@@ -236,6 +243,139 @@ describe('ZoteroApiSource.load', () => {
 
     expect(fetchLibraryMock(client)).toHaveBeenCalledTimes(1);
     expect(result.entries.map((e) => e.id)).toEqual(['new2026']);
+  });
+
+  it('re-fetches on a fullRefresh even when the library version is unchanged', async () => {
+    const { fs } = createMockFileSystem();
+    const seeder = new ZoteroApiSource(
+      'za1',
+      makeClient(() => Promise.resolve(makeLibrary())),
+      {},
+      fs,
+      '/cache/zotero-api.json',
+    );
+    await seeder.load();
+
+    const client = makeClient(
+      () => Promise.resolve(makeLibrary()),
+      () => Promise.resolve(7),
+    );
+    const source = new ZoteroApiSource(
+      'za1',
+      client,
+      {},
+      fs,
+      '/cache/zotero-api.json',
+    );
+
+    await source.load(undefined, { fullRefresh: true });
+
+    // A manual refresh must bypass the version fast-path so a stale/wrong
+    // cache is always recoverable.
+    expect(fetchLibraryMock(client)).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a cache written for a different scope', async () => {
+    const { fs } = createMockFileSystem();
+    // Seed a cache for the personal library at version 7.
+    const seeder = new ZoteroApiSource(
+      'za1',
+      makeClient(() => Promise.resolve(makeLibrary())),
+      {},
+      fs,
+      '/cache/zotero-api.json',
+    );
+    await seeder.load();
+
+    // A source scoped to a collection must NOT serve the personal-library
+    // cache even though the (library-wide) version probe matches.
+    const client = makeClient(
+      () =>
+        Promise.resolve({
+          ...makeLibrary(),
+          items: [makeItem('ITEM0009', 'coll2026', 'Scoped')],
+        }),
+      () => Promise.resolve(7),
+    );
+    const scoped = new ZoteroApiSource(
+      'za1',
+      client,
+      { collectionKey: 'ABCD1234' },
+      fs,
+      '/cache/zotero-api.json',
+    );
+
+    const result = await scoped.load();
+
+    expect(fetchLibraryMock(client)).toHaveBeenCalledTimes(1);
+    expect(result.entries.map((e) => e.id)).toEqual(['coll2026']);
+  });
+
+  it('re-fetches when the annotation flag differs from the cache', async () => {
+    const { fs } = createMockFileSystem();
+    // Seed a cache WITHOUT annotations.
+    const seeder = new ZoteroApiSource(
+      'za1',
+      makeClient(() => Promise.resolve(makeLibrary())),
+      {},
+      fs,
+      '/cache/zotero-api.json',
+    );
+    await seeder.load();
+
+    const client = makeClient(
+      () => Promise.resolve(makeLibrary()),
+      () => Promise.resolve(7),
+    );
+    const withAnnotations = new ZoteroApiSource(
+      'za1',
+      client,
+      {},
+      fs,
+      '/cache/zotero-api.json',
+      undefined,
+      true,
+    );
+
+    await withAnnotations.load();
+
+    // Enabling annotations must force a re-fetch (the cached entries have
+    // none) even though the library version is unchanged.
+    expect(fetchLibraryMock(client)).toHaveBeenCalledWith(
+      {},
+      expect.anything(),
+      { includeAnnotations: true },
+    );
+  });
+
+  it('does not serve a different-scope cache on offline fallback', async () => {
+    const { fs } = createMockFileSystem();
+    const seeder = new ZoteroApiSource(
+      'za1',
+      makeClient(() => Promise.resolve(makeLibrary())),
+      {},
+      fs,
+      '/cache/zotero-api.json',
+    );
+    await seeder.load();
+
+    const failing = makeClient(
+      () => Promise.reject(new ZoteroApiError('down')),
+      () => Promise.reject(new ZoteroApiError('down')),
+    );
+    const scoped = new ZoteroApiSource(
+      'za1',
+      failing,
+      { collectionKey: 'OTHERKEY' },
+      fs,
+      '/cache/zotero-api.json',
+    );
+
+    // The stale-scope cache must not be served — a wrong-collection library is
+    // worse than a clear failure.
+    await expect(scoped.load()).rejects.toThrow(
+      /Failed to load from Zotero local API/,
+    );
   });
 
   it('throws when Zotero is unreachable and no cache exists', async () => {

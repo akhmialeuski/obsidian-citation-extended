@@ -627,6 +627,64 @@ describe('CitationSettingTab', () => {
     });
   });
 
+  // Source switching preserves connection strings
+  describe('switchDatabaseSource', () => {
+    const sw = (
+      CitationSettingTab as unknown as {
+        switchDatabaseSource: (
+          db: Record<string, unknown>,
+          option: string,
+        ) => void;
+      }
+    ).switchDatabaseSource;
+
+    it('stashes the outgoing path and restores each source-kind on switch-back', () => {
+      const db: Record<string, unknown> = {
+        name: 'X',
+        path: '/lib/refs.json',
+        type: 'csl-json',
+      };
+
+      // file → Readwise: the file path is stashed, not destroyed.
+      sw(db, 'readwise');
+      expect(db.type).toBe('readwise');
+      expect(db.sourceType).toBe('readwise');
+      expect(db.path).toBe('');
+      expect((db.sourcePaths as Record<string, string>)['csl-json']).toBe(
+        '/lib/refs.json',
+      );
+
+      // enter a token, then Readwise → Zotero BBT: the token is stashed.
+      db.path = 'rw-token-123';
+      sw(db, 'zotero-bbt');
+      expect(db.sourceType).toBe('zotero');
+      expect(db.path).toBe('');
+      expect((db.sourcePaths as Record<string, string>)['readwise']).toBe(
+        'rw-token-123',
+      );
+
+      // back to the original file format: the original path is restored.
+      sw(db, 'csl-json');
+      expect(db.type).toBe('csl-json');
+      expect(db.sourceType).toBeUndefined();
+      expect(db.path).toBe('/lib/refs.json');
+    });
+
+    it('defaults an incoming source with no stashed path to empty', () => {
+      const db: Record<string, unknown> = {
+        name: 'Y',
+        path: 'http://127.0.0.1:23119/api',
+        type: 'zotero-api',
+      };
+      sw(db, 'biblatex');
+      expect(db.type).toBe('biblatex');
+      expect(db.path).toBe('');
+      expect((db.sourcePaths as Record<string, string>)['zotero-api']).toBe(
+        'http://127.0.0.1:23119/api',
+      );
+    });
+  });
+
   describe('renderDatabaseCard — Zotero live connection', () => {
     function zoteroPlugin(): CitationPlugin {
       return createMockPlugin({
