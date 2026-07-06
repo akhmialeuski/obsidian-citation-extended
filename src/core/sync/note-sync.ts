@@ -28,10 +28,6 @@ import {
 } from './frontmatter-sync';
 import type { NoteUpdateMode } from './note-update-mode';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 /** Snapshot of what the plugin last wrote into a note. */
 export interface NoteBaseline {
   /** Plugin-owned frontmatter keys → normalized rendered key block. */
@@ -110,10 +106,6 @@ export interface NoteSyncInput {
   mode?: NoteUpdateMode;
 }
 
-// ---------------------------------------------------------------------------
-// Line-ending normalization
-// ---------------------------------------------------------------------------
-
 /**
  * Normalize CRLF / lone CR to LF. All sync comparisons are LF-based (the
  * render and stored baseline are always LF), so a CRLF note read from disk
@@ -127,10 +119,6 @@ export function normalizeLineEndings(content: string): string {
 
 /** Internal alias — the planner normalizes both inputs at its boundary. */
 const toLf = normalizeLineEndings;
-
-// ---------------------------------------------------------------------------
-// Baseline from a render
-// ---------------------------------------------------------------------------
 
 /** Empty change summary. */
 function emptySummary(): SyncSummary {
@@ -161,10 +149,6 @@ export function baselineFromRender(rendered: string): NoteBaseline {
   return { frontmatter: fm.baseline, blocks };
 }
 
-// ---------------------------------------------------------------------------
-// Planner
-// ---------------------------------------------------------------------------
-
 /**
  * Own-property lookup on a JSON-deserialized block map. A sync-block name that
  * matches an `Object.prototype` member (e.g. `toString`) must not read back the
@@ -193,7 +177,7 @@ export function planNoteSync(input: NoteSyncInput): NoteSyncPlan {
   const currentRaw = toLf(input.current);
   const mode: NoteUpdateMode = input.mode ?? 'sync';
 
-  // --- Overwrite: wholesale replace, baseline derived from the render ---
+  // Overwrite: wholesale replace, baseline derived from the render
   if (mode === 'overwrite') {
     return {
       changed: renderedRaw !== currentRaw,
@@ -211,7 +195,7 @@ export function planNoteSync(input: NoteSyncInput): NoteSyncPlan {
   const conflicts: SyncConflict[] = [];
   const summary = emptySummary();
 
-  // --- Frontmatter -----------------------------------------------------
+  // Frontmatter
   const fm = syncFrontmatter(
     rendered.frontmatter,
     current.frontmatter,
@@ -223,7 +207,7 @@ export function planNoteSync(input: NoteSyncInput): NoteSyncPlan {
     conflicts.push(toConflict(c));
   }
 
-  // --- Body blocks -------------------------------------------------------
+  // Body blocks
   const currentBody = current.body.join('\n');
   let bodyOurs = currentBody;
   const baselineOut: NoteBaseline = {
@@ -324,7 +308,7 @@ export function planNoteSync(input: NoteSyncInput): NoteSyncPlan {
   if (baselineOut.deletedBlocks!.length === 0) delete baselineOut.deletedBlocks;
   if (baselineOut.deletedKeys!.length === 0) delete baselineOut.deletedKeys;
 
-  // --- Assembly ----------------------------------------------------------
+  // Assembly
   const hasFm = rendered.found || current.found;
   const content = assemble(fm.lines, hasFm, bodyOurs);
 
@@ -350,10 +334,6 @@ export function planNoteSync(input: NoteSyncInput): NoteSyncPlan {
     summary,
   };
 }
-
-// ---------------------------------------------------------------------------
-// Internals
-// ---------------------------------------------------------------------------
 
 function toConflict(c: FrontmatterConflict): SyncConflict {
   return {

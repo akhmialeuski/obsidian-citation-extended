@@ -21,10 +21,6 @@ import type {
   IWorkspaceAccess,
 } from './platform-adapter';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 interface WorkspaceExt {
   activeEditor?: { editor?: IEditorProxy } | null;
 }
@@ -32,10 +28,6 @@ interface WorkspaceExt {
 interface VaultExt {
   getConfig(key: string): unknown;
 }
-
-// ---------------------------------------------------------------------------
-// Sub-adapter implementations
-// ---------------------------------------------------------------------------
 
 class ObsidianFileSystem implements IFileSystem {
   constructor(private app: App) {}
@@ -205,10 +197,6 @@ class ObsidianNotificationService implements INotificationService {
     new Notice(message);
   }
 }
-
-// ---------------------------------------------------------------------------
-// Composite adapter
-// ---------------------------------------------------------------------------
 
 /**
  * Concrete {@link IPlatformAdapter} implementation backed by the Obsidian runtime.

@@ -21,10 +21,6 @@ import type { Entry } from '../../../src/core';
 
 jest.mock('obsidian', () => ({}), { virtual: true });
 
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
-
 function makeFile(path: string): IVaultFile {
   return { path, name: path.split('/').pop()! };
 }
@@ -133,10 +129,6 @@ const REQUEST = {
   mode: 'sync' as const,
   confirmation: 'conflicts' as const,
 };
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('BatchNoteOrchestrator', () => {
   let orchestrator: IBatchNoteOrchestrator;
@@ -503,7 +495,7 @@ describe('BatchNoteOrchestrator', () => {
       expect(item.hunksTakeTheirs!.length).toBeGreaterThan(0);
     });
 
-    // --- TOCTOU: the note changes while the modal is open (regression) -------
+    // TOCTOU: the note changes while the modal is open (regression)
 
     it('re-reads and re-plans before writing a reviewed note', async () => {
       const presenter = makePresenter(['apply']);

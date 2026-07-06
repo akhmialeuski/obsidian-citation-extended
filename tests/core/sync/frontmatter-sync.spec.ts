@@ -4,10 +4,6 @@ import {
   syncFrontmatter,
 } from '../../../src/core/sync/frontmatter-sync';
 
-// ---------------------------------------------------------------------------
-// splitFrontmatter
-// ---------------------------------------------------------------------------
-
 describe('splitFrontmatter', () => {
   it('splits a well-formed frontmatter block from the body', () => {
     const split = splitFrontmatter('---\nyear: 2023\n---\n\nbody text');
@@ -31,10 +27,6 @@ describe('splitFrontmatter', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// parseKeyBlocks
-// ---------------------------------------------------------------------------
-
 describe('parseKeyBlocks', () => {
   it('captures the prelude before the first key', () => {
     const kb = parseKeyBlocks(['# a comment', '', 'year: 2023']);
@@ -54,10 +46,6 @@ describe('parseKeyBlocks', () => {
     expect(kb.raw.get('alias')).toBe('alias: one\nalias: two');
   });
 });
-
-// ---------------------------------------------------------------------------
-// syncFrontmatter
-// ---------------------------------------------------------------------------
 
 describe('syncFrontmatter', () => {
   it('preserves the prelude and user key order verbatim', () => {

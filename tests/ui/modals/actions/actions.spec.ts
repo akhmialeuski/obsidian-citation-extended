@@ -699,9 +699,6 @@ describe('InsertMultiCitationAction', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// OpenNoteAtCursorAction
-// ---------------------------------------------------------------------------
 describe('OpenNoteAtCursorAction', () => {
   let ctx: ReturnType<typeof makeCtx>;
   let action: OpenNoteAtCursorAction;
@@ -823,9 +820,6 @@ describe('OpenNoteAtCursorAction', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// BatchUpdateNotesAction
-// ---------------------------------------------------------------------------
 describe('BatchUpdateNotesAction', () => {
   let ctx: ReturnType<typeof makeCtx>;
   let orchestrator: {
@@ -996,9 +990,6 @@ describe('BatchUpdateNotesAction', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// UpdateCurrentNoteAction
-// ---------------------------------------------------------------------------
 describe('UpdateCurrentNoteAction', () => {
   let ctx: ReturnType<typeof makeCtx>;
   let orchestrator: { preview: jest.Mock; execute: jest.Mock };
@@ -1157,9 +1148,6 @@ describe('UpdateCurrentNoteAction', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// InsertCitationAction — additional coverage
-// ---------------------------------------------------------------------------
 describe('InsertCitationAction (additional)', () => {
   let ctx: ReturnType<typeof makeCtx>;
   let action: InsertCitationAction;
@@ -1194,9 +1182,6 @@ describe('InsertCitationAction (additional)', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// InsertNoteContentAction — additional coverage
-// ---------------------------------------------------------------------------
 describe('InsertNoteContentAction (additional)', () => {
   let ctx: ReturnType<typeof makeCtx>;
   let action: InsertNoteContentAction;
@@ -1230,9 +1215,6 @@ describe('InsertNoteContentAction (additional)', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// InsertNoteLinkAction — additional coverage
-// ---------------------------------------------------------------------------
 describe('InsertNoteLinkAction (additional)', () => {
   let ctx: ReturnType<typeof makeCtx>;
   let action: InsertNoteLinkAction;
@@ -1429,9 +1411,6 @@ describe('InsertNoteLinkAction (additional)', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// OpenNoteAction — additional coverage
-// ---------------------------------------------------------------------------
 describe('OpenNoteAction (additional)', () => {
   let ctx: ReturnType<typeof makeCtx>;
   let action: OpenNoteAction;
@@ -1517,9 +1496,6 @@ describe('OpenNoteAction (additional)', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// InsertSubsequentCitationAction — additional coverage
-// ---------------------------------------------------------------------------
 describe('InsertSubsequentCitationAction (additional)', () => {
   let ctx: ReturnType<typeof makeCtx>;
   let action: InsertSubsequentCitationAction;

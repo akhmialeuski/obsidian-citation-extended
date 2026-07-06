@@ -105,7 +105,7 @@ describe('BaselineStore', () => {
     expect(fs.readFile).toHaveBeenCalledTimes(1);
   });
 
-  // --- data-protection invariants (regression) ------------------------------
+  // data-protection invariants (regression)
 
   const OTHER = {
     frontmatter: { year: 'year: 1999' },

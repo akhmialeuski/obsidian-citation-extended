@@ -12,19 +12,11 @@ import {
 } from './template/introspection.service';
 import { StoreSubscriber } from './library/library-store';
 
-// ---------------------------------------------------------------------------
-// Minimal store contract exposed through service interfaces
-// ---------------------------------------------------------------------------
-
 /** Read-only store contract exposed to consumers that need reactive library state. */
 export interface ILibraryStore {
   subscribe(fn: StoreSubscriber<LibraryState>): () => void;
   getState(): LibraryState;
 }
-
-// ---------------------------------------------------------------------------
-// Service interfaces -- allow the UI layer to depend on abstractions
-// ---------------------------------------------------------------------------
 
 /** Handlebars-based template compilation, rendering, and validation. */
 export interface ITemplateService {
@@ -94,10 +86,6 @@ export interface IUIService {
   dispose(): void;
 }
 
-// ---------------------------------------------------------------------------
-// Platform adapter re-export for convenience
-// ---------------------------------------------------------------------------
-
 export type {
   IPlatformAdapter,
   IFileSystem,
@@ -110,22 +98,10 @@ export type {
   IStatusBarItem,
 } from './platform/platform-adapter';
 
-// ---------------------------------------------------------------------------
-// Application services re-export
-// ---------------------------------------------------------------------------
-
 export type { ICitationService } from './application/citation.service';
 export type { IContentTemplateResolver } from './application/content-template-resolver';
 
-// ---------------------------------------------------------------------------
-// Data source registry re-export
-// ---------------------------------------------------------------------------
-
 export type { IDataSourceRegistry } from './sources/data-source-registry';
-
-// ---------------------------------------------------------------------------
-// Batch note update re-export
-// ---------------------------------------------------------------------------
 
 export type {
   IBatchNoteOrchestrator,

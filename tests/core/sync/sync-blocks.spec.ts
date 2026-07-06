@@ -160,7 +160,7 @@ describe('parseSyncBlocks', () => {
     expect(hasSyncBlocks('text about ^zc-meta ids')).toBe(false);
   });
 
-  // --- walk-back precision (regression) ------------------------------------
+  // walk-back precision (regression)
 
   it('does not absorb a user callout stacked directly above the block', () => {
     // No blank line between the user callout and the plugin block: the plugin

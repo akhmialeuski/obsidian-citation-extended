@@ -4,10 +4,6 @@
  * ported without depending on Obsidian directly.
  */
 
-// ---------------------------------------------------------------------------
-// File system access (reading/writing raw files, creating folders)
-// ---------------------------------------------------------------------------
-
 export interface IFileSystem {
   /** Read a file and return its content as a UTF-8 string. */
   readFile(path: string): Promise<string>;
@@ -24,10 +20,6 @@ export interface IFileSystem {
   /** Absolute path to the root of the current vault / workspace. */
   getBasePath(): string;
 }
-
-// ---------------------------------------------------------------------------
-// Vault-level file access (Obsidian vault abstraction)
-// ---------------------------------------------------------------------------
 
 /** Minimal representation of a vault file. */
 export interface IVaultFile {
@@ -68,10 +60,6 @@ export interface IVaultAccess {
   getFrontmatter(file: IVaultFile): Record<string, unknown> | null;
 }
 
-// ---------------------------------------------------------------------------
-// Editor proxy (cursor, text manipulation)
-// ---------------------------------------------------------------------------
-
 export interface IEditorPosition {
   line: number;
   ch: number;
@@ -86,10 +74,6 @@ export interface IEditorProxy {
   /** Return the content of the line at the given zero-based line number. */
   getLine(lineNumber: number): string;
 }
-
-// ---------------------------------------------------------------------------
-// Workspace access (active editor, open file, configuration)
-// ---------------------------------------------------------------------------
 
 export interface IWorkspaceAccess {
   /** Return the currently active editor, or null when no editor is focused. */
@@ -115,28 +99,16 @@ export interface IWorkspaceAccess {
   ): string;
 }
 
-// ---------------------------------------------------------------------------
-// User notifications
-// ---------------------------------------------------------------------------
-
 export interface INotificationService {
   /** Show a transient toast notification to the user. */
   show(message: string): void;
 }
-
-// ---------------------------------------------------------------------------
-// Status bar (optional, desktop-only in Obsidian)
-// ---------------------------------------------------------------------------
 
 export interface IStatusBarItem {
   setText(text: string): void;
   addClass(cls: string): void;
   removeClass(cls: string): void;
 }
-
-// ---------------------------------------------------------------------------
-// Composite platform adapter
-// ---------------------------------------------------------------------------
 
 export interface IPlatformAdapter {
   readonly fileSystem: IFileSystem;

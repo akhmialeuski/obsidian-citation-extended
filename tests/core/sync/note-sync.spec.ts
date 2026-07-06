@@ -1,10 +1,6 @@
 import { buildSyncBlock, planNoteSync } from '../../../src/core/sync';
 import type { NoteBaseline } from '../../../src/core/sync';
 
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
-
 /** Template render with the given year and annotation text. */
 function render(year: number, annotation = 'first highlight'): string {
   return [
@@ -38,10 +34,6 @@ function baselineFor(
     },
   };
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('planNoteSync', () => {
   it('reports no change when note matches the render', () => {
