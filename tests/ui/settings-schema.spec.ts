@@ -9,6 +9,36 @@ import {
 jest.mock('obsidian', () => ({}), { virtual: true });
 
 describe('SettingsSchema', () => {
+  describe('citationExportFormat (legacy single-database field)', () => {
+    it('accepts the file formats', () => {
+      for (const format of ['csl-json', 'biblatex', 'hayagriva']) {
+        const result = validateSettings({
+          ...DEFAULT_SETTINGS,
+          citationExportFormat: format,
+        });
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data.citationExportFormat).toBe(format);
+        }
+      }
+    });
+
+    it('degrades an API-backed or unknown value to CSL JSON instead of failing the parse', () => {
+      for (const format of ['readwise', 'zotero-api', 'bogus']) {
+        const result = validateSettings({
+          ...DEFAULT_SETTINGS,
+          citationExportFormat: format,
+        });
+        // A bad legacy value must not nuke the whole settings object (that
+        // would silently fall back to raw, unvalidated settings upstream).
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data.citationExportFormat).toBe('csl-json');
+        }
+      }
+    });
+  });
+
   describe('database id field', () => {
     it('accepts databases with id', () => {
       const settings = {
@@ -111,6 +141,27 @@ describe('SettingsSchema', () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.data.databases[0].zoteroImportAnnotations).toBe(true);
+      }
+    });
+
+    it('preserves the Zotero local API scope fields on a database', () => {
+      const settings = {
+        ...DEFAULT_SETTINGS,
+        databases: [
+          {
+            name: 'Zotero API',
+            type: 'zotero-api',
+            path: '',
+            zoteroApiGroupId: '4242',
+            zoteroApiCollection: 'ABCD1234',
+          },
+        ],
+      };
+      const result = validateSettings(settings);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.databases[0].zoteroApiGroupId).toBe('4242');
+        expect(result.data.databases[0].zoteroApiCollection).toBe('ABCD1234');
       }
     });
   });

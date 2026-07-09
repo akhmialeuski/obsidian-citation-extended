@@ -17,13 +17,19 @@ import {
   generateDatabaseId,
   ReadwiseApiClient,
   ZoteroConnectorClient,
+  ZoteroLocalApiClient,
+  ZOTERO_LOCAL_API_DEFAULT_BASE,
 } from '../../core';
 import {
   obsidianHttpGet,
   obsidianZoteroGet,
   obsidianZoteroPost,
 } from '../../platform/obsidian-http';
-import { DATA_SOURCE_TYPES } from '../../data-source';
+import {
+  DATA_SOURCE_TYPES,
+  isZoteroBbtConfig,
+  ZOTERO_EXPORT_FORMATS,
+} from '../../data-source';
 import {
   DEFAULT_SETTINGS,
   SettingsSchema,
@@ -47,6 +53,27 @@ import { LoadingStatus } from '../../library/library-state';
 
 /** Maximum number of sync warnings appended to the "synced with warnings" notice. */
 const MAX_SURFACED_SYNC_WARNINGS = 3;
+
+/**
+ * Virtual dropdown value for the live Zotero (Better BibTeX) source. It is a
+ * SOURCE choice, not a storage type: it persists as `type: csl-json|biblatex`
+ * plus `sourceType: 'zotero'`, so no settings migration is needed.
+ */
+const SOURCE_OPTION_ZOTERO_BBT = 'zotero-bbt';
+
+/**
+ * The "Database source" dropdown: every way to get references is a
+ * first-class entry here — file formats, Readwise, and BOTH Zotero
+ * connections. No source hides behind a toggle on another source's card.
+ */
+const DATABASE_SOURCE_OPTIONS: Record<string, string> = {
+  [DATABASE_FORMATS.CslJson]: 'Better CSL JSON (file)',
+  [DATABASE_FORMATS.BibLaTeX]: 'Better BibTeX (file)',
+  [DATABASE_FORMATS.Hayagriva]: 'Hayagriva (YAML file)',
+  [DATABASE_FORMATS.Readwise]: 'Readwise',
+  [SOURCE_OPTION_ZOTERO_BBT]: 'Zotero (Better BibTeX)',
+  [DATABASE_FORMATS.ZoteroApi]: 'Zotero (local API)',
+};
 
 const SORT_ORDER_LABELS: Record<ReferenceListSortOrder, string> = {
   default: 'Default (file order)',
@@ -214,30 +241,22 @@ export class CitationSettingTab extends PluginSettingTab {
           });
       });
 
-    new Setting(card).setName('Database type').addDropdown((dropdown) => {
-      dropdown.addOptions(DATABASE_TYPE_LABELS);
-      dropdown.setValue(db.type);
+    new Setting(card).setName('Database source').addDropdown((dropdown) => {
+      dropdown.addOptions(DATABASE_SOURCE_OPTIONS);
+      dropdown.setValue(CitationSettingTab.sourceOptionFor(db));
       dropdown.onChange(async (value) => {
         const db = this.plugin.settings.databases[index];
-        db.type = value as DatabaseType;
-        if (value === DATABASE_FORMATS.Readwise) {
-          db.sourceType = DATA_SOURCE_TYPES.Readwise;
-          db.path = '';
-        } else {
-          // Preserve a live Zotero connection only across the CSL-JSON <->
-          // BibLaTeX switch (both are formats Zotero can export); clear it for
-          // any other format.
-          const keepZotero =
-            db.sourceType === DATA_SOURCE_TYPES.Zotero &&
-            (value === DATABASE_FORMATS.CslJson ||
-              value === DATABASE_FORMATS.BibLaTeX);
-          if (!keepZotero) delete db.sourceType;
-        }
+        CitationSettingTab.switchDatabaseSource(db, value);
         await this.plugin.saveSettings();
         this.display();
-        // Only reload for file-based sources — Readwise needs a token first
-        if (value !== DATABASE_FORMATS.Readwise) {
-          new Notice('Database format changed. Reloading library…');
+        // Live Better BibTeX and Readwise need a URL/token before a load can
+        // succeed, so re-render their fields and wait for input rather than
+        // firing a load that would just error.
+        const needsConnectionInput =
+          value === SOURCE_OPTION_ZOTERO_BBT ||
+          value === DATABASE_FORMATS.Readwise;
+        if (!needsConnectionInput) {
+          new Notice('Database source changed. Reloading library…');
           void this.plugin.libraryService.load();
         }
       });
@@ -245,59 +264,96 @@ export class CitationSettingTab extends PluginSettingTab {
 
     if (db.type === DATABASE_FORMATS.Readwise) {
       this.renderReadwiseFields(card, db, index);
+    } else if (db.type === DATABASE_FORMATS.ZoteroApi) {
+      this.renderZoteroApiFields(card, db, index);
+    } else if (CitationSettingTab.isLiveZotero(db)) {
+      this.renderZoteroExportFormatField(card, db, index);
+      this.renderZoteroFields(card, db, index);
     } else {
-      // Live Zotero connection is offered for the formats Better BibTeX can
-      // export on demand (CSL JSON / BibLaTeX).
-      const zoteroCapable =
-        db.type === DATABASE_FORMATS.CslJson ||
-        db.type === DATABASE_FORMATS.BibLaTeX;
-      // Treat a Zotero sourceType as live only on a capable format, so a stale
-      // flag on an incompatible format degrades to the file path field (which
-      // matches how resolveTransport then routes the source).
-      const isZotero =
-        zoteroCapable && db.sourceType === DATA_SOURCE_TYPES.Zotero;
-
-      // In file mode the path field comes first (keeps the file workflow
-      // front-and-centre); the live-Zotero toggle follows it.
-      if (!isZotero) {
-        this.renderFilePathField(card, db, index);
-      }
-      if (zoteroCapable) {
-        this.renderZoteroToggle(card, db, index);
-      }
-      if (isZotero) {
-        this.renderZoteroFields(card, db, index);
-      }
+      this.renderFilePathField(card, db, index);
     }
   }
 
-  /** Toggle that switches a CSL-JSON/BibLaTeX database to a live Zotero pull. */
-  private renderZoteroToggle(
+  /** True when the database is a live Zotero (Better BibTeX) pull. */
+  private static isLiveZotero(db: DatabaseConfig): boolean {
+    // Shared with SourceManager.resolveTransport — the rendered fields always
+    // match how the source is actually routed.
+    return isZoteroBbtConfig(db);
+  }
+
+  /** Which source-dropdown option represents the database's current config. */
+  private static sourceOptionFor(db: DatabaseConfig): string {
+    return CitationSettingTab.isLiveZotero(db)
+      ? SOURCE_OPTION_ZOTERO_BBT
+      : db.type;
+  }
+
+  /**
+   * Switch a database to a new source-dropdown option, preserving connection
+   * strings. `path` means something different for each source (file path, BBT
+   * URL, Readwise token, API base URL), so the outgoing value is stashed under
+   * its kind and the incoming kind's stashed value restored — switching source
+   * and back is lossless, and a mis-click never destroys a configured path.
+   */
+  private static switchDatabaseSource(
+    db: DatabaseConfig,
+    option: string,
+  ): void {
+    const outgoing = CitationSettingTab.sourceOptionFor(db);
+    const stash = { ...(db.sourcePaths ?? {}) };
+    stash[outgoing] = db.path;
+    db.sourcePaths = stash;
+    db.path = stash[option] ?? '';
+
+    if (option === SOURCE_OPTION_ZOTERO_BBT) {
+      // Live Better BibTeX pull: keep the current export format when BBT can
+      // serve it, otherwise default to CSL JSON.
+      if (!ZOTERO_EXPORT_FORMATS.has(db.type)) {
+        db.type = DATABASE_FORMATS.CslJson;
+      }
+      db.sourceType = DATA_SOURCE_TYPES.Zotero;
+      return;
+    }
+
+    db.type = option as DatabaseType;
+    if (option === DATABASE_FORMATS.Readwise) {
+      db.sourceType = DATA_SOURCE_TYPES.Readwise;
+    } else {
+      // File formats and the native Zotero API imply their transport.
+      delete db.sourceType;
+    }
+  }
+
+  /**
+   * Export-format sub-setting for a live Zotero (Better BibTeX) source: the
+   * SOURCE is chosen in the main dropdown; this only selects which format the
+   * pull-export URL serves (and therefore which parser runs).
+   */
+  private renderZoteroExportFormatField(
     card: HTMLElement,
     db: DatabaseConfig,
     index: number,
   ): void {
     new Setting(card)
-      // "Better BibTeX" is a product name, not a sentence to lower-case.
-      // eslint-disable-next-line obsidianmd/ui/sentence-case
-      .setName('Load live from Zotero (Better BibTeX)')
+      .setName('Export format')
       .setDesc(
-        'Fetch directly from a running Zotero via Better BibTeX instead of ' +
-          'reading an exported file — no manual re-export needed.',
+        'Format of the Better BibTeX pull export — must match the URL below ' +
+          '(.json ↔ CSL JSON, .biblatex ↔ BibLaTeX).',
       )
-      .addToggle((toggle) => {
-        toggle
-          .setValue(db.sourceType === DATA_SOURCE_TYPES.Zotero)
-          .onChange(async (value) => {
-            if (value) {
-              this.plugin.settings.databases[index].sourceType =
-                DATA_SOURCE_TYPES.Zotero;
-            } else {
-              delete this.plugin.settings.databases[index].sourceType;
-            }
-            await this.plugin.saveSettings();
-            this.display();
-          });
+      .addDropdown((dropdown) => {
+        dropdown.addOptions({
+          [DATABASE_FORMATS.CslJson]:
+            DATABASE_TYPE_LABELS[DATABASE_FORMATS.CslJson],
+          [DATABASE_FORMATS.BibLaTeX]:
+            DATABASE_TYPE_LABELS[DATABASE_FORMATS.BibLaTeX],
+        });
+        dropdown.setValue(db.type);
+        dropdown.onChange(async (value) => {
+          this.plugin.settings.databases[index].type = value as DatabaseType;
+          await this.plugin.saveSettings();
+          new Notice('Export format changed. Reloading library…');
+          void this.plugin.libraryService.load();
+        });
       });
   }
 
@@ -452,6 +508,174 @@ export class CitationSettingTab extends PluginSettingTab {
                 new Notice('Please enter the Better BibTeX export URL first.');
                 return;
               }
+              new Notice('Fetching from Zotero…');
+              await this.plugin.libraryService.load();
+            })();
+          });
+      });
+  }
+
+  /**
+   * Fields for a native Zotero local API source (Zotero 7+, no Better
+   * BibTeX): base URL, optional group/collection scope, the shared sync
+   * interval, and a test/sync button pair. The base URL is stored in
+   * `db.path` — empty means the default `http://127.0.0.1:23119`.
+   */
+  private renderZoteroApiFields(
+    card: HTMLElement,
+    db: DatabaseConfig,
+    index: number,
+  ): void {
+    const hint = card.createEl('p', { cls: 'setting-item-description' });
+    hint.setText(
+      'Reads your library straight from a running Zotero (7 or later) — no ' +
+        'Better BibTeX or file export required. In Zotero, enable Settings → ' +
+        'Advanced → "Allow other applications on this computer to ' +
+        'communicate with Zotero".',
+    );
+
+    new Setting(card)
+      .setName('Zotero API base URL')
+      .setDesc(
+        // eslint-disable-next-line obsidianmd/ui/sentence-case -- the URL is a literal, not prose
+        'Leave empty for the default local server (http://127.0.0.1:23119).',
+      )
+      .addText((text) => {
+        text
+          .setPlaceholder(ZOTERO_LOCAL_API_DEFAULT_BASE)
+          .setValue(db.path)
+          .onChange(
+            debounce(async (value: string) => {
+              this.plugin.settings.databases[index].path = value.trim();
+              await this.plugin.saveSettings();
+            }, 500),
+          );
+      });
+
+    new Setting(card)
+      .setName('Group library ID')
+      .setDesc(
+        'Numeric Zotero group id to load a group library. Leave empty for ' +
+          'your personal library.',
+      )
+      .addText((text) => {
+        text
+          .setPlaceholder('123456')
+          .setValue(db.zoteroApiGroupId ?? '')
+          .onChange(
+            debounce(async (value: string) => {
+              this.plugin.settings.databases[index].zoteroApiGroupId =
+                value.trim();
+              await this.plugin.saveSettings();
+            }, 500),
+          );
+      });
+
+    new Setting(card)
+      .setName('Collection key')
+      .setDesc(
+        'Restrict the import to one collection (the 8-character key from ' +
+          'the collection URL). Leave empty for the whole library.',
+      )
+      .addText((text) => {
+        text
+          .setPlaceholder('ABCD1234')
+          .setValue(db.zoteroApiCollection ?? '')
+          .onChange(
+            debounce(async (value: string) => {
+              this.plugin.settings.databases[index].zoteroApiCollection =
+                value.trim();
+              await this.plugin.saveSettings();
+            }, 500),
+          );
+      });
+
+    new Setting(card)
+      .setName('Import PDF annotations')
+      .setDesc(
+        'Fetch native Zotero PDF annotations (highlights, comments, colors, ' +
+          'page deep-links) for every entry. Available in templates via ' +
+          '{{annotations}} and {{attachments}}.',
+      )
+      .addToggle((toggle) => {
+        toggle
+          .setValue(db.zoteroImportAnnotations ?? false)
+          .onChange(async (value) => {
+            this.plugin.settings.databases[index].zoteroImportAnnotations =
+              value;
+            await this.plugin.saveSettings();
+            // Recreating the source (key includes this flag) happens on reload.
+            void this.plugin.libraryService.load();
+          });
+      });
+
+    new Setting(card)
+      .setName('Auto-sync interval (minutes)')
+      .setDesc(
+        // eslint-disable-next-line obsidianmd/ui/sentence-case -- "Better BibTeX" is a product name
+        'How often to re-fetch from Zotero. Set to 0 to disable (refresh manually). Shared with the Better BibTeX live connection.',
+      )
+      .addText((text) => {
+        text
+          .setValue(String(this.plugin.settings.zoteroSyncIntervalMinutes))
+          .onChange(
+            debounce(async (value: string) => {
+              const num = parseInt(value, 10);
+              if (!isNaN(num) && num >= READWISE_SYNC_INTERVAL_MIN_MINUTES) {
+                this.plugin.settings.zoteroSyncIntervalMinutes = Math.min(
+                  num,
+                  READWISE_SYNC_INTERVAL_MAX_MINUTES,
+                );
+                await this.plugin.saveSettings();
+              }
+            }, 500),
+          );
+        text.inputEl.type = 'number';
+        text.inputEl.min = String(READWISE_SYNC_INTERVAL_MIN_MINUTES);
+        text.inputEl.max = String(READWISE_SYNC_INTERVAL_MAX_MINUTES);
+        text.inputEl.setCssProps({ width: '80px' });
+      });
+
+    const statusEl = card.createDiv('zotero-api-status');
+    statusEl.setCssProps({ fontSize: '0.8em', marginTop: '5px' });
+
+    new Setting(card)
+      .addButton((button) => {
+        button.setButtonText('Test connection').onClick(() => {
+          void (async () => {
+            statusEl.setText('Connecting…');
+            statusEl.setCssProps({ color: 'var(--text-muted)' });
+            try {
+              const dbNow = this.plugin.settings.databases[index];
+              const client = new ZoteroLocalApiClient(
+                dbNow.path,
+                obsidianZoteroGet,
+              );
+              const result = await client.ping({
+                groupId: dbNow.zoteroApiGroupId?.trim() || undefined,
+                collectionKey: dbNow.zoteroApiCollection?.trim() || undefined,
+              });
+              statusEl.setText(
+                `Connected — ${result.totalItems} item${
+                  result.totalItems === 1 ? '' : 's'
+                } visible${result.apiVersion ? ` (API v${result.apiVersion})` : ''}.`,
+              );
+              statusEl.setCssProps({ color: 'var(--text-success)' });
+            } catch (e) {
+              statusEl.setText(
+                e instanceof Error ? e.message : 'Connection failed.',
+              );
+              statusEl.setCssProps({ color: 'var(--text-error)' });
+            }
+          })();
+        });
+      })
+      .addButton((button) => {
+        button
+          .setButtonText('Sync now')
+          .setCta()
+          .onClick(() => {
+            void (async () => {
               new Notice('Fetching from Zotero…');
               await this.plugin.libraryService.load();
             })();

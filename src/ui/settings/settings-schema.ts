@@ -7,6 +7,16 @@ const DATABASE_FORMAT_ENUM = Object.values(DATABASE_FORMATS) as [
   ...DatabaseType[],
 ];
 
+// The legacy single-database export settings describe a FILE export — the
+// API-backed formats (Readwise, Zotero local API) are only meaningful inside
+// `databases[]`. An out-of-range legacy value degrades to CSL JSON via
+// `.catch` instead of failing the whole settings parse.
+const FILE_DATABASE_FORMAT_ENUM = [
+  DATABASE_FORMATS.CslJson,
+  DATABASE_FORMATS.BibLaTeX,
+  DATABASE_FORMATS.Hayagriva,
+] as [DatabaseType, ...DatabaseType[]];
+
 export const CITATION_STYLE_PRESET_OPTIONS = [
   'custom',
   'textcite',
@@ -66,7 +76,9 @@ export function resolveSyncIntervalMs(minutes: number): number | undefined {
 
 export const SettingsSchema = z.object({
   citationExportPath: z.string(),
-  citationExportFormat: z.enum(DATABASE_FORMAT_ENUM),
+  citationExportFormat: z
+    .enum(FILE_DATABASE_FORMAT_ENUM)
+    .catch(DATABASE_FORMATS.CslJson),
   literatureNoteTitleTemplate: z.string().min(1),
   literatureNoteFolder: z.string(),
   // Legacy: kept for migration. New installs use only the path field.
@@ -108,6 +120,8 @@ export const SettingsSchema = z.object({
         type: z.enum(DATABASE_FORMAT_ENUM),
         path: z.string(),
         sourceType: z.string().optional(),
+        // Per-source-kind remembered connection strings (see DatabaseConfig).
+        sourcePaths: z.record(z.string()).optional(),
         // Readwise-only client-side import filters (optional, backward-compat).
         readwiseFilters: z
           .object({
@@ -124,6 +138,10 @@ export const SettingsSchema = z.object({
         zoteroExportNotes: z.boolean().optional(),
         // Zotero-only: fetch native PDF annotations via BBT JSON-RPC.
         zoteroImportAnnotations: z.boolean().optional(),
+        // Zotero local API only: group library id ('' = personal library).
+        zoteroApiGroupId: z.string().optional(),
+        // Zotero local API only: collection key ('' = whole library).
+        zoteroApiCollection: z.string().optional(),
       }),
     )
     .default([]),

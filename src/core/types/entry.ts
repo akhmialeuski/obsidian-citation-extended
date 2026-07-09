@@ -255,6 +255,17 @@ export abstract class Entry {
   }
 
   /**
+   * The `zotero://open-pdf/<prefix>/items/<key>` library segment for this
+   * entry's attachments: `library` for a personal library, `groups/<id>` for a
+   * group library. Overridden by the local-API adapter, which knows its group;
+   * the PDF-link template helpers read it so group-library deep links point at
+   * the right library instead of hard-coding `library`.
+   */
+  public get zoteroLibraryPrefix(): string {
+    return 'library';
+  }
+
+  /**
    * Zotero tags for the entry. Tags are exported as the `keywords` field by
    * Better BibTeX and as `keyword` in CSL-JSON, so `tags` is exposed as a
    * convenience alias over {@link keywords} for templates that prefer the
@@ -411,6 +422,7 @@ export abstract class Entry {
       URL: this.URL,
       year: this.yearString() || undefined,
       zoteroSelectURI: this.zoteroSelectURI,
+      zoteroLibraryPrefix: this.zoteroLibraryPrefix,
       zoteroId: this.zoteroId,
       date: this.dateString(),
 

@@ -1,8 +1,11 @@
 /**
- * Shared helpers for network-backed data sources (Readwise, Zotero). Both fetch
- * over HTTP, cancel in-flight work when the library load aborts, and poll on a
- * configurable interval — this module keeps that machinery in one place.
+ * Shared helpers for network-backed data sources (Readwise, Zotero). All fetch
+ * over HTTP, cancel in-flight work when the library load aborts, poll on a
+ * configurable interval, and keep a versioned JSON offline cache — this module
+ * keeps that machinery in one place.
  */
+
+import type { IFileSystem } from '../platform/platform-adapter';
 
 /** Characters not allowed in a cache filename segment. */
 const CACHE_NAME_SANITIZE_RE = /[^a-zA-Z0-9_-]/g;
@@ -28,6 +31,46 @@ export function sourceCacheFilePath(
   if (!cacheDir) return '';
   const stable = (databaseId ?? sourceKey).replace(CACHE_NAME_SANITIZE_RE, '-');
   return `${cacheDir}/${prefix}-${stable}.json`;
+}
+
+/**
+ * Read a versioned JSON cache file. Returns the parsed state when the file
+ * exists, parses, and passes `validate`; otherwise null — a missing,
+ * unreadable, or corrupt cache must behave exactly like no cache, so an
+ * outage still surfaces as a failure instead of silently replacing the
+ * library with an empty "success".
+ */
+export async function readVersionedJsonCache<T>(
+  fileSystem: IFileSystem | undefined,
+  cachePath: string | undefined,
+  validate: (parsed: unknown) => parsed is T,
+): Promise<T | null> {
+  if (!fileSystem || !cachePath) return null;
+  try {
+    if (!(await fileSystem.exists(cachePath))) return null;
+    const parsed: unknown = JSON.parse(await fileSystem.readFile(cachePath));
+    if (validate(parsed)) return parsed;
+  } catch {
+    // Missing or corrupt cache behaves exactly like no cache.
+  }
+  return null;
+}
+
+/**
+ * Serialize and write a JSON cache file. Best-effort: a failed write keeps
+ * the previous cache on disk and is never a load failure.
+ */
+export async function writeVersionedJsonCache(
+  fileSystem: IFileSystem | undefined,
+  cachePath: string | undefined,
+  state: unknown,
+): Promise<void> {
+  if (!fileSystem || !cachePath) return;
+  try {
+    await fileSystem.writeFile(cachePath, JSON.stringify(state));
+  } catch {
+    // Cache write failure is not critical.
+  }
 }
 
 /**

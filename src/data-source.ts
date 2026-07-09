@@ -1,4 +1,5 @@
-import { Entry, DatabaseType, ParseErrorInfo } from './core';
+import { DATABASE_FORMATS, Entry, DatabaseType, ParseErrorInfo } from './core';
+import type { DatabaseConfig } from './core';
 
 /**
  * Known built-in data source transport types.
@@ -9,7 +10,30 @@ export const DATA_SOURCE_TYPES = {
   VaultFile: 'vault-file',
   Readwise: 'readwise',
   Zotero: 'zotero',
+  ZoteroApi: 'zotero-api',
 } as const;
+
+/** Formats Better BibTeX can export, hence valid for the Zotero transport. */
+export const ZOTERO_EXPORT_FORMATS: ReadonlySet<string> = new Set([
+  DATABASE_FORMATS.CslJson,
+  DATABASE_FORMATS.BibLaTeX,
+]);
+
+/**
+ * True when a database config denotes a live Zotero (Better BibTeX) pull:
+ * the explicit zotero sourceType on a format BBT can actually export. A
+ * stale/hand-edited sourceType on an incompatible format (e.g. Hayagriva)
+ * degrades to file mode. Single predicate shared by transport routing
+ * (SourceManager) and the settings UI so the two can never disagree.
+ */
+export function isZoteroBbtConfig(
+  db: Pick<DatabaseConfig, 'type' | 'sourceType'>,
+): boolean {
+  return (
+    db.sourceType === DATA_SOURCE_TYPES.Zotero &&
+    ZOTERO_EXPORT_FORMATS.has(db.type)
+  );
+}
 
 /**
  * Discriminates the transport mechanism used by a data source.

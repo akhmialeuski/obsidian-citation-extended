@@ -24,7 +24,12 @@ import { DATABASE_FORMATS, WORKER_TASK_KINDS, convertToEntries } from '../core';
 import type { ParseErrorInfo, ReadwiseFilters } from '../core';
 import type { IFileSystem } from '../platform/platform-adapter';
 import { WorkerManager } from '../util';
-import { createLinkedAbortController, PeriodicSync } from './source-utils';
+import {
+  createLinkedAbortController,
+  PeriodicSync,
+  readVersionedJsonCache,
+  writeVersionedJsonCache,
+} from './source-utils';
 
 // Conversion helpers
 
@@ -274,6 +279,19 @@ interface CachedState {
 
 const EMPTY_CACHED_STATE: CachedState = { entries: null, lastSyncAt: null };
 
+/** Accept either the v1 envelope or the legacy bare-array cache. */
+function isReadwiseCachePayload(
+  parsed: unknown,
+): parsed is ReadwiseCacheStateV1 | ReadwiseEntryData[] {
+  if (Array.isArray(parsed)) return true;
+  return (
+    parsed !== null &&
+    typeof parsed === 'object' &&
+    (parsed as { version?: unknown }).version === 1 &&
+    Array.isArray((parsed as { entries?: unknown }).entries)
+  );
+}
+
 /**
  * Safety overlap subtracted from the stored cursor when it is USED as
  * `updatedAfter`. The cursor is captured from the local clock, while Readwise
@@ -451,13 +469,11 @@ export class ReadwiseSource implements DataSource {
       // matches — a failed write keeps the old cursor+base pair on disk,
       // and the next sync simply re-merges the same delta (idempotent).
       if (fetchErrors.length === 0) {
-        await this.writeCache(
-          JSON.stringify({
-            version: 1,
-            lastSyncAt: fetchStartedAt,
-            entries: fullEntries,
-          } satisfies ReadwiseCacheStateV1),
-        );
+        await this.writeCache({
+          version: 1,
+          lastSyncAt: fetchStartedAt,
+          entries: fullEntries,
+        });
       }
 
       return await this.runPipeline(fullEntries, fetchErrors, signal);
@@ -532,30 +548,32 @@ export class ReadwiseSource implements DataSource {
    * legitimately cached empty array (`[]`) is still a valid fallback.
    */
   private async readCachedState(): Promise<CachedState> {
-    const raw = await this.readCache();
-    if (raw === null) return EMPTY_CACHED_STATE;
-    try {
-      const parsed: unknown = JSON.parse(raw);
-      // Legacy format (pre-incremental-sync): bare entry array, no cursor.
-      if (Array.isArray(parsed)) {
-        return { entries: parsed as ReadwiseEntryData[], lastSyncAt: null };
-      }
-      if (
-        parsed !== null &&
-        typeof parsed === 'object' &&
-        (parsed as { version?: unknown }).version === 1 &&
-        Array.isArray((parsed as { entries?: unknown }).entries)
-      ) {
-        const v1 = parsed as ReadwiseCacheStateV1;
-        return {
-          entries: v1.entries,
-          lastSyncAt: typeof v1.lastSyncAt === 'string' ? v1.lastSyncAt : null,
-        };
-      }
-      return EMPTY_CACHED_STATE;
-    } catch {
-      return EMPTY_CACHED_STATE;
+    // Read the primary (stable-id) cache first, then fall back to the
+    // pre-upgrade path so an existing install's cache is not orphaned when the
+    // cache-filename scheme changes to the stable database id.
+    const parsed =
+      (await readVersionedJsonCache(
+        this.fileSystem,
+        this.cachePath,
+        isReadwiseCachePayload,
+      )) ??
+      (this.legacyCachePath && this.legacyCachePath !== this.cachePath
+        ? await readVersionedJsonCache(
+            this.fileSystem,
+            this.legacyCachePath,
+            isReadwiseCachePayload,
+          )
+        : null);
+    if (parsed === null) return EMPTY_CACHED_STATE;
+    // Legacy format (pre-incremental-sync): bare entry array, no cursor.
+    if (Array.isArray(parsed)) {
+      return { entries: parsed, lastSyncAt: null };
     }
+    return {
+      entries: parsed.entries,
+      lastSyncAt:
+        typeof parsed.lastSyncAt === 'string' ? parsed.lastSyncAt : null,
+    };
   }
 
   /**
@@ -585,38 +603,9 @@ export class ReadwiseSource implements DataSource {
     };
   }
 
-  /** Write entry data to the cache file (best-effort, errors are silent). */
-  private async writeCache(raw: string): Promise<void> {
-    if (!this.fileSystem || !this.cachePath) return;
-    try {
-      await this.fileSystem.writeFile(this.cachePath, raw);
-    } catch {
-      // Cache write failure is not critical
-    }
-  }
-
-  /** Read entry data from cache file, or null if unavailable. */
-  private async readCache(): Promise<string | null> {
-    const primary = await this.readCacheFrom(this.cachePath);
-    if (primary !== null) return primary;
-    // Fall back to the pre-upgrade path so an existing install's cache is not
-    // orphaned when the cache-filename scheme changes to the stable database id.
-    if (this.legacyCachePath && this.legacyCachePath !== this.cachePath) {
-      return this.readCacheFrom(this.legacyCachePath);
-    }
-    return null;
-  }
-
-  private async readCacheFrom(path?: string): Promise<string | null> {
-    if (!this.fileSystem || !path) return null;
-    try {
-      if (await this.fileSystem.exists(path)) {
-        return await this.fileSystem.readFile(path);
-      }
-    } catch {
-      // Cache read failure is not critical
-    }
-    return null;
+  /** Write the cache state to disk (best-effort, errors are silent). */
+  private writeCache(state: ReadwiseCacheStateV1): Promise<void> {
+    return writeVersionedJsonCache(this.fileSystem, this.cachePath, state);
   }
 
   /**

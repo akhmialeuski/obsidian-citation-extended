@@ -498,3 +498,65 @@ describe('SourceManager Zotero identity', () => {
     expect(factory.create).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('SourceManager Zotero local API transport', () => {
+  function makeApiDb(overrides: Partial<DatabaseConfig> = {}): DatabaseConfig {
+    return {
+      id: 'db-api',
+      name: 'Zotero API',
+      type: 'zotero-api',
+      path: '',
+      ...overrides,
+    };
+  }
+
+  it('routes zotero-api databases to the zotero-api transport', () => {
+    const factory = makeMockFactory();
+    const manager = new SourceManager(factory as never);
+
+    manager.syncSources([makeApiDb()]);
+
+    expect(factory.create).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'zotero-api', format: 'zotero-api' }),
+      expect.any(String),
+    );
+  });
+
+  it('recreates the source when the collection scope changes', () => {
+    const factory = makeMockFactory();
+    const manager = new SourceManager(factory as never);
+
+    manager.syncSources([makeApiDb()]);
+    const first = factory.create.mock.results[0].value as {
+      dispose: jest.Mock;
+    };
+    manager.syncSources([makeApiDb({ zoteroApiCollection: 'ABCD1234' })]);
+
+    expect(factory.create).toHaveBeenCalledTimes(2);
+    expect(first.dispose).toHaveBeenCalled();
+  });
+
+  it('keeps the source when the scope is unchanged', () => {
+    const factory = makeMockFactory();
+    const manager = new SourceManager(factory as never);
+
+    manager.syncSources([makeApiDb({ zoteroApiGroupId: '7' })]);
+    manager.syncSources([makeApiDb({ zoteroApiGroupId: '7' })]);
+
+    expect(factory.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('recreates the source when the annotations flag is toggled', () => {
+    const factory = makeMockFactory();
+    const manager = new SourceManager(factory as never);
+
+    manager.syncSources([makeApiDb({ zoteroImportAnnotations: false })]);
+    const first = factory.create.mock.results[0].value as {
+      dispose: jest.Mock;
+    };
+    manager.syncSources([makeApiDb({ zoteroImportAnnotations: true })]);
+
+    expect(factory.create).toHaveBeenCalledTimes(2);
+    expect(first.dispose).toHaveBeenCalled();
+  });
+});

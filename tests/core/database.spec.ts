@@ -4,6 +4,7 @@ import {
   resolveReadwiseFilters,
   resolveZoteroExportNotes,
   resolveZoteroImportAnnotations,
+  resolveZoteroApiScope,
 } from '../../src/core/types/database';
 import type { DatabaseConfig } from '../../src/core/types/database';
 
@@ -145,5 +146,38 @@ describe('resolveZoteroImportAnnotations', () => {
 
   it('returns false for an undefined id', () => {
     expect(resolveZoteroImportAnnotations(databases, undefined)).toBe(false);
+  });
+});
+
+describe('resolveZoteroApiScope', () => {
+  const databases: DatabaseConfig[] = [
+    {
+      id: 'db-api',
+      name: 'Zotero API',
+      type: 'zotero-api',
+      path: '',
+      zoteroApiGroupId: ' 4242 ',
+      zoteroApiCollection: 'ABCD1234',
+    },
+    { id: 'db-plain', name: 'Personal', type: 'zotero-api', path: '' },
+  ];
+
+  it('returns trimmed group and collection for a matching database', () => {
+    expect(resolveZoteroApiScope(databases, 'db-api')).toEqual({
+      groupId: '4242',
+      collectionKey: 'ABCD1234',
+    });
+  });
+
+  it('returns undefined fields when unset', () => {
+    expect(resolveZoteroApiScope(databases, 'db-plain')).toEqual({
+      groupId: undefined,
+      collectionKey: undefined,
+    });
+  });
+
+  it('returns an empty scope for unknown or missing ids', () => {
+    expect(resolveZoteroApiScope(databases, 'nope')).toEqual({});
+    expect(resolveZoteroApiScope(databases, undefined)).toEqual({});
   });
 });

@@ -607,7 +607,7 @@ describe('CitationSettingTab', () => {
 
       expect(plugin.libraryService.load).toHaveBeenCalled();
       expect(mockNotice).toHaveBeenCalledWith(
-        'Database format changed. Reloading library\u2026',
+        'Database source changed. Reloading library\u2026',
       );
     });
 
@@ -624,6 +624,64 @@ describe('CitationSettingTab', () => {
       await Promise.resolve();
       expect(plugin.settings.databases[0].path).toBe('/new/path.json');
       expect(plugin.saveSettings).toHaveBeenCalled();
+    });
+  });
+
+  // Source switching preserves connection strings
+  describe('switchDatabaseSource', () => {
+    const sw = (
+      CitationSettingTab as unknown as {
+        switchDatabaseSource: (
+          db: Record<string, unknown>,
+          option: string,
+        ) => void;
+      }
+    ).switchDatabaseSource;
+
+    it('stashes the outgoing path and restores each source-kind on switch-back', () => {
+      const db: Record<string, unknown> = {
+        name: 'X',
+        path: '/lib/refs.json',
+        type: 'csl-json',
+      };
+
+      // file → Readwise: the file path is stashed, not destroyed.
+      sw(db, 'readwise');
+      expect(db.type).toBe('readwise');
+      expect(db.sourceType).toBe('readwise');
+      expect(db.path).toBe('');
+      expect((db.sourcePaths as Record<string, string>)['csl-json']).toBe(
+        '/lib/refs.json',
+      );
+
+      // enter a token, then Readwise → Zotero BBT: the token is stashed.
+      db.path = 'rw-token-123';
+      sw(db, 'zotero-bbt');
+      expect(db.sourceType).toBe('zotero');
+      expect(db.path).toBe('');
+      expect((db.sourcePaths as Record<string, string>)['readwise']).toBe(
+        'rw-token-123',
+      );
+
+      // back to the original file format: the original path is restored.
+      sw(db, 'csl-json');
+      expect(db.type).toBe('csl-json');
+      expect(db.sourceType).toBeUndefined();
+      expect(db.path).toBe('/lib/refs.json');
+    });
+
+    it('defaults an incoming source with no stashed path to empty', () => {
+      const db: Record<string, unknown> = {
+        name: 'Y',
+        path: 'http://127.0.0.1:23119/api',
+        type: 'zotero-api',
+      };
+      sw(db, 'biblatex');
+      expect(db.type).toBe('biblatex');
+      expect(db.path).toBe('');
+      expect((db.sourcePaths as Record<string, string>)['zotero-api']).toBe(
+        'http://127.0.0.1:23119/api',
+      );
     });
   });
 
@@ -657,16 +715,17 @@ describe('CitationSettingTab', () => {
       expect(hasUrlField).toBe(true);
     });
 
-    it('shows the live-Zotero toggle and disabling it clears the sourceType', () => {
+    it('switching the source dropdown to a file format clears the sourceType', () => {
       plugin = zoteroPlugin();
       tab = new CitationSettingTab({} as never, plugin);
       tab.display();
 
-      const toggles = allComponents((s) => s.getToggleComponents()) as Array<{
-        triggerChange(v: boolean): void;
-      }>;
-      // First toggle on the card is the "Load live from Zotero" switch.
-      toggles[0].triggerChange(false);
+      const dropdowns = allComponents((s) =>
+        s.getDropdownComponents(),
+      ) as Array<{ triggerChange(v: string): void }>;
+      // First dropdown on the card is the "Database source" selector; picking
+      // an explicit file format leaves live mode.
+      dropdowns[0].triggerChange('csl-json');
       expect(plugin.settings.databases[0].sourceType).toBeUndefined();
     });
 
@@ -693,6 +752,25 @@ describe('CitationSettingTab', () => {
       );
     });
 
+    it('selecting the Zotero (Better BibTeX) source sets the sourceType', () => {
+      plugin = createMockPlugin({
+        databases: [
+          { id: 'f1', name: 'Library', type: 'csl-json', path: '/lib.json' },
+        ],
+      });
+      tab = new CitationSettingTab({} as never, plugin);
+      tab.display();
+
+      const dropdowns = allComponents((s) =>
+        s.getDropdownComponents(),
+      ) as Array<{ triggerChange(v: string): void }>;
+      dropdowns[0].triggerChange('zotero-bbt');
+      expect(plugin.settings.databases[0].sourceType).toBe('zotero');
+      // Format is preserved (csl-json is BBT-servable) and the path cleared.
+      expect(plugin.settings.databases[0].type).toBe('csl-json');
+      expect(plugin.settings.databases[0].path).toBe('');
+    });
+
     it('saves the export-notes flag and the URL, and exercises the buttons', () => {
       plugin = zoteroPlugin();
       tab = new CitationSettingTab({} as never, plugin);
@@ -701,12 +779,13 @@ describe('CitationSettingTab', () => {
       const toggles = allComponents((s) => s.getToggleComponents()) as Array<{
         triggerChange(v: boolean): void;
       }>;
-      // The second toggle is "Import notes".
-      toggles[1].triggerChange(true);
+      // The first toggle is "Import notes" (the live-Zotero switch is gone —
+      // the source is selected in the dropdown now).
+      toggles[0].triggerChange(true);
       expect(plugin.settings.databases[0].zoteroExportNotes).toBe(true);
 
-      // The third toggle is "Import PDF annotations".
-      toggles[2].triggerChange(true);
+      // The second toggle is "Import PDF annotations".
+      toggles[1].triggerChange(true);
       expect(plugin.settings.databases[0].zoteroImportAnnotations).toBe(true);
 
       const texts = allComponents((s) => s.getTextComponents()) as Array<{
@@ -724,6 +803,68 @@ describe('CitationSettingTab', () => {
       // Test connection + Sync now buttons (the first two on the page) — firing
       // their handlers covers the async branches; network is mocked and errors
       // are caught inside the handlers.
+      const buttons = allComponents((s) => s.getButtonComponents()) as Array<{
+        triggerClick(): void;
+      }>;
+      expect(() => {
+        buttons[0].triggerClick();
+        buttons[1].triggerClick();
+      }).not.toThrow();
+    });
+  });
+
+  // Zotero local API card
+  describe('renderDatabaseCard — Zotero local API', () => {
+    function apiPlugin(): CitationPlugin {
+      return createMockPlugin({
+        databases: [
+          {
+            id: 'za1',
+            name: 'Zotero API',
+            type: 'zotero-api',
+            path: '',
+            zoteroApiGroupId: '',
+            zoteroApiCollection: '',
+          },
+        ],
+      });
+    }
+
+    function allComponents(selector: (s: MockSettingInstance) => unknown[]) {
+      return getSettings().flatMap((s) => selector(s));
+    }
+
+    it('renders the local API fields without throwing', () => {
+      plugin = apiPlugin();
+      tab = new CitationSettingTab({} as never, plugin);
+      expect(() => tab.display()).not.toThrow();
+    });
+
+    it('saves base URL, group id, and collection key', () => {
+      plugin = apiPlugin();
+      tab = new CitationSettingTab({} as never, plugin);
+      tab.display();
+
+      const texts = allComponents((s) => s.getTextComponents()) as Array<{
+        triggerChange(v: string): void;
+      }>;
+      // Text fields in render order: database name (0), base URL (1),
+      // group id (2), collection key (3), sync interval (4).
+      texts[1].triggerChange(' http://127.0.0.1:23119 ');
+      expect(plugin.settings.databases[0].path).toBe('http://127.0.0.1:23119');
+      texts[2].triggerChange(' 4242 ');
+      expect(plugin.settings.databases[0].zoteroApiGroupId).toBe('4242');
+      texts[3].triggerChange('ABCD1234');
+      expect(plugin.settings.databases[0].zoteroApiCollection).toBe('ABCD1234');
+      texts[4].triggerChange('30');
+      expect(plugin.settings.zoteroSyncIntervalMinutes).toBe(30);
+    });
+
+    it('exercises the test-connection and sync buttons without throwing', () => {
+      plugin = apiPlugin();
+      tab = new CitationSettingTab({} as never, plugin);
+      tab.display();
+
       const buttons = allComponents((s) => s.getButtonComponents()) as Array<{
         triggerClick(): void;
       }>;

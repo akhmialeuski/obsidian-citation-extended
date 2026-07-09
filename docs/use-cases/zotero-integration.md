@@ -249,7 +249,7 @@ Deep learning allows computational models...
 Instead of exporting a file and watching it, the plugin can fetch the library **directly from a running Zotero** via Better BibTeX's pull-export endpoint. This removes the export step entirely — when you cite, the data comes straight from Zotero.
 
 1. In Zotero, right-click a library or collection → **Download Better BibTeX export…** and copy the URL (choose the **Better CSL JSON** or **BibLaTeX** variant).
-2. In plugin settings, add a database, set its **type** to match, and enable **Load live from Zotero (Better BibTeX)**.
+2. In plugin settings, add a database and set **Database source** to **Zotero (Better BibTeX)**. Pick the matching **Export format** (CSL JSON or BibLaTeX) on the card.
 3. Paste the URL into **Better BibTeX export URL** and click **Test connection** — it reports the Zotero and Better BibTeX versions on success.
 4. Optionally enable **Import notes** to pull Zotero child notes into `{{note}}`, and set an **Auto-sync interval** to re-fetch periodically.
 
@@ -293,6 +293,17 @@ Notes:
 - Works with both Better CSL JSON and BibLaTeX formats — annotations are fetched separately via the Better BibTeX JSON-RPC API, not from the export file.
 - Clicking an annotation link opens Zotero's PDF reader on the right page with the annotation selected.
 - The full field list is in [Template Variables: Zotero PDF Annotations](../templates/variables.md#annotations-source-agnostic).
+
+### Native local API (no Better BibTeX at all)
+
+If you don't use Better BibTeX — or want a connection that survives every Zotero update — the plugin can read a running Zotero (7 or later) through **Zotero's own local API**:
+
+1. In Zotero: **Settings → Advanced** → enable **"Allow other applications on this computer to communicate with Zotero"**.
+2. In plugin settings, add a database and set **Database source** to **Zotero (local API)**. Leave the base URL empty.
+3. Optionally enter a **Group library ID** or a **Collection key** to narrow the import.
+4. Click **Test connection**.
+
+Citation keys use Zotero's native Citation Key field when present (Zotero 8+ migrates Better BibTeX keys into it automatically), fall back to a `Citation Key:` line in Extra, and are generated (`lastnameYear`) otherwise. See [Data Sources: Zotero (local API)](../data-sources.md#zotero-local-api--no-better-bibtex-required) for the full comparison with the Better BibTeX connection.
 
 ### CSL-JSON Export
 

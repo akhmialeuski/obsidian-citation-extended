@@ -406,3 +406,17 @@ Group by color meaning (e.g. yellow = key claims, red = disagreements):
 
 For a source with no annotation data (or the Zotero toggle off), `annotations`
 is `[]` and every section above renders nothing.
+For non-Readwise entries this array is empty, so the loop renders nothing.
+
+### `entry.zotero` (Zotero local API)
+
+Entries loaded through the **Zotero (local API)** database type expose the Zotero-native identifiers under `entry.zotero`:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `{{entry.zotero.key}}` | Zotero item key | `W5JRT78A` |
+| `{{entry.zotero.version}}` | Zotero object version | `1287` |
+| `{{entry.zotero.dateAdded}}` | When the item was added to Zotero (ISO 8601) | `2026-01-15T10:30:00Z` |
+| `{{entry.zotero.dateModified}}` | Last modification in Zotero (ISO 8601) | `2026-02-01T08:00:00Z` |
+
+For these entries `{{zoteroId}}` also carries the item key, and `{{collections}}` contains the collection names resolved from your Zotero library.

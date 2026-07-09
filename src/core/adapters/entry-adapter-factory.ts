@@ -5,6 +5,7 @@ import { EntryDataBibLaTeX } from './biblatex-adapter';
 import { EntryCSLAdapter, EntryDataCSL } from './csl-adapter';
 import { HayagrivaAdapter, HayagrivaEntryData } from './hayagriva-adapter';
 import { ReadwiseAdapter, ReadwiseEntryData } from './readwise-adapter';
+import { ZoteroApiAdapter, ZoteroApiEntryData } from './zotero-api-adapter';
 import { UnsupportedFormatError } from '../errors';
 
 /**
@@ -28,6 +29,9 @@ const ENTRY_ADAPTERS: Record<DatabaseType, (entries: EntryData[]) => Entry[]> =
 
     [DATABASE_FORMATS.Readwise]: (entries) =>
       entries.map((e) => new ReadwiseAdapter(e as ReadwiseEntryData)),
+
+    [DATABASE_FORMATS.ZoteroApi]: (entries) =>
+      entries.map((e) => new ZoteroApiAdapter(e as ZoteroApiEntryData)),
   };
 
 /**

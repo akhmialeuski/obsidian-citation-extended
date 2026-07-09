@@ -22,6 +22,7 @@ describe('TemplateService', () => {
     citekey: 'test',
     type: 'book',
     zoteroSelectURI: 'zotero://select/items/@test',
+    zoteroLibraryPrefix: 'library',
     entry: {},
   };
 
@@ -1286,6 +1287,39 @@ describe('TemplateService', () => {
         );
         expect(result.ok).toBe(true);
         if (result.ok) expect(result.value).toBe(expected);
+      });
+    });
+
+    describe('Zotero PDF path helpers', () => {
+      const filesCtx = (prefix: string): TemplateContext =>
+        ({
+          ...mockContext,
+          files: ['/z/storage/ATT01234/paper.pdf'],
+          zoteroLibraryPrefix: prefix,
+        }) as unknown as TemplateContext;
+
+      it('builds a library-scoped open-pdf URI by default', () => {
+        expectOk(
+          service.render('{{zoteroPdfURI files}}', filesCtx('library')),
+          'zotero://open-pdf/library/items/ATT01234',
+        );
+      });
+
+      it('builds a group-scoped open-pdf URI from the entry prefix', () => {
+        expectOk(
+          service.render('{{zoteroPdfURI files}}', filesCtx('groups/4478')),
+          'zotero://open-pdf/groups/4478/items/ATT01234',
+        );
+      });
+
+      it('builds a group-scoped markdown link', () => {
+        expectOk(
+          service.render(
+            '{{zoteroPdfMarkdownLink files}}',
+            filesCtx('groups/4478'),
+          ),
+          '[paper](zotero://open-pdf/groups/4478/items/ATT01234)',
+        );
       });
     });
   });
