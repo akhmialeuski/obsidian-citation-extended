@@ -15,6 +15,8 @@
 - [Template System](#template-system)
 - [Note Service](#note-service)
 - [Batch Update](#batch-update)
+- [Readwise Integration](#readwise-integration)
+- [Annotation Model](#annotation-model)
 - [Settings & Configuration](#settings--configuration)
 - [Worker Protocol](#worker-protocol)
 - [Core Types](#core-types)
@@ -1137,6 +1139,74 @@ The `ReadwiseApiClient` handles HTTP 429 responses with automatic retry:
 
 ---
 
+## Annotation Model
+
+Annotation-like data from every source (Zotero PDF annotations, Readwise highlights, …) normalizes into one source-agnostic shape in `src/core/types/annotation.ts`. Consumers (templates, the notes layer) read only `entry.annotations` / `entry.attachments` — never a source-specific type and never a database directly. A source with no annotations yields `[]`, so templates guard with `{{#if annotationCount}}` and skip.
+
+```typescript
+interface Annotation {
+  id: string | null;         // Stable per-source id (used in deep links)
+  type: string;              // highlight | underline | note | image | ink | text | …
+  text: string;              // Highlighted/quoted text ('' for note/image-only)
+  comment: string;           // User's comment/note ('' when none)
+  color: string;             // Hex (#ffd400) or source-native token, or ''
+  colorName: string | null;  // Palette name (yellow/red/…), or null
+  page: number | null;       // 1-based page when derivable, else null
+  pageLabel: string;         // Reader-shown label (roman numerals, Kindle "location …", …)
+  tags: string[];
+  imagePath: string | null;  // Cached image path (image/area annotations), or null
+  openURI: string | null;    // Deep link that opens the source at this annotation
+  sortIndex: string;         // Opaque key; lexicographic order == document/reading order
+  dateModified: string | null;
+  source: string;            // 'zotero' | 'readwise' | …
+}
+
+interface AttachmentRef {
+  id: string | null;
+  path: string | null;
+  title: string | null;      // File basename without extension
+  openURI: string | null;
+  annotationCount: number;
+}
+```
+
+### Two Population Paths
+
+Both stay behind the source boundary, so consumers never learn where the data came from:
+
+| Path                 | Used by                     | Mechanism                                                                                          |
+| -------------------- | --------------------------- | -------------------------------------------------------------------------------------------------- |
+| **Getter override**  | Readwise (`ReadwiseAdapter`) | Annotations live in the parsed entry; the adapter overrides `get annotations()` and memoizes it     |
+| **Source injection** | Zotero (`ZoteroSource`)      | Annotations come from a separate call; the source calls `entry.setAnnotations(annotations, attachments)` |
+
+Injected `_annotations` / `_attachments` are own enumerable fields, so the `NormalizationPipeline`'s `Object.assign(clone, entry, …)` copies them and the prototype getter reads them off the clone — annotations survive tagging and deduplication.
+
+### Zotero PDF Annotation Flow
+
+When **Import PDF annotations** is enabled for a live Zotero (Better BibTeX) database, `ZoteroSource.load()` enriches the parsed entries with native annotations:
+
+```mermaid
+flowchart TD
+    PULL["fetchBibliography() → raw export"] --> PARSE["parseRaw → Entry[]"]
+    PARSE --> FR{"fullRefresh?"}
+    FR -->|No| RC["readCache()"]
+    FR -->|Yes| SKIP["skip cache read"]
+    RC --> REUSE{"cache raw == export\nAND cached attachments?"}
+    REUSE -->|Yes| ATTACH1["reuse cached attachments\n(no JSON-RPC)"]
+    REUSE -->|No| FETCH["client.fetchAttachmentsForCitekeys\n(batched item.attachments, 50/POST)"]
+    SKIP --> FETCH
+    FETCH --> NORM["normalizeZoteroAttachments\n→ setAnnotations(entry)"]
+    ATTACH1 --> WRITE
+    NORM --> WRITE["writeCache(raw, attachments)"]
+```
+
+- **Batching** — citekeys are fetched via batched JSON-RPC `item.attachments` (50 per POST). BBT answers each key independently: a citekey that cannot be resolved yields a per-key error while the rest succeed.
+- **Best-effort** — a transport failure (Zotero closed, HTTP error) degrades to a load warning (added to `parseErrors`), never a failed load; the bibliography stays usable. The last good attachment payload is carried forward so a failed fetch never clobbers the cache with an empty set.
+- **Reuse vs. refresh** — a periodic load whose export is byte-identical to the cache reuses the cached attachments (an annotation edit does not change the export body). The manual "Refresh citation database" (`fullRefresh`) always re-fetches so new highlights are picked up.
+- **Offline cache** — the cache carries an optional `attachments` payload written as an OPTIONAL superset on a `version: 1` record (a rolled-back build ignores unknown fields), keyed by the stable `databaseId` (see `sourceCacheFilePath`) with the pre-upgrade source-key path read as a fallback. A legacy-path hit triggers a one-time rewrite to the stable-id filename.
+
+---
+
 ## Settings & Configuration
 
 ### Zod Schema
@@ -1245,14 +1315,19 @@ abstract class Entry {
   keywords?: string[];
   _sourceDatabase?: string;      // Added by SourceTaggingStep
   _compositeCitekey?: string;    // Added by DeduplicationStep
+  _annotations?: Annotation[];   // Injected via setAnnotations (Zotero/BBT)
+  _attachments?: AttachmentRef[];// Injected via setAnnotations (Zotero/BBT)
 
-  // --- Inherited getters ---
+  // Inherited getters
   get citekey(): string;         // Alias for id
   get year(): number | undefined;
   get note(): string;
   get zoteroSelectURI(): string;
+  get annotations(): Annotation[];      // Source-agnostic annotations ([] when none)
+  get attachments(): AttachmentRef[];   // Source-agnostic attachments ([] when none)
+  get annotationCount(): number;        // annotations.length (for {{#if annotationCount}})
 
-  // --- Domain convenience methods ---
+  // Domain convenience methods
   yearString(): string;                        // Year as string, or ""
   dateString(): string | null;                 // ISO date "YYYY-MM-DD", or null
   lastname(): string | undefined;              // First author family/literal name
@@ -1260,13 +1335,16 @@ abstract class Entry {
   displayKey(): string;                        // Citekey with optional DB prefix
   toSearchDocument(): SearchDocument;          // Flat fields for MiniSearch indexing
   toTemplateContext(extras?): TemplateContext;  // All template shortcut fields
-  toJSON(): Record<string, unknown>;           // Full serialized entry
+  toJSON(): Record<string, unknown>;           // Full serialized entry (walks the whole prototype chain)
+  setAnnotations(a: Annotation[], t: AttachmentRef[]): void;  // Source injection path
 }
 ```
 
 Four format adapters normalize raw data → `Entry`: `CSLAdapter`, `BibLaTeXAdapter`, `HayagrivaAdapter`, `ReadwiseAdapter`.
 
 Domain convenience methods encapsulate presentation and transformation logic in the base class, keeping callers (TemplateService, SearchService, CitationSearchModal) decoupled from raw field-level details. When domain logic changes (e.g. how authors are formatted), only the Entry method needs updating — calling code stays unchanged.
+
+**Annotations are source-agnostic** (see [Annotation Model](#annotation-model)). `entry.annotations` / `entry.attachments` expose one interface regardless of origin, populated through two paths behind the source boundary: adapters whose annotation data lives in the parsed entry (Readwise) **override the getter**; sources whose annotations come from a separate call (Zotero via Better BibTeX JSON-RPC) **inject** them with `setAnnotations()`. `toJSON()` walks the entire prototype chain (not just the immediate prototype), so a multi-level adapter never loses inherited getters; the raw `_annotations` / `_attachments` backing fields are stripped from the serialized output.
 
 ### Result&lt;T, E&gt;
 
