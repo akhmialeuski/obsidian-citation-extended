@@ -431,7 +431,7 @@ describe('UIService', () => {
   });
 
   describe('registerCommands', () => {
-    it('registers 10 commands', () => {
+    it('registers 11 commands', () => {
       const { plugin, commands } = makePlugin({
         status: LoadingStatus.Idle,
         parseErrors: [],
@@ -440,9 +440,9 @@ describe('UIService', () => {
       const service = new UIService(plugin as never);
       service.init();
 
-      // 9 action commands from the registry + the references view command.
-      expect(commands).toHaveLength(10);
-      expect(plugin.addCommand).toHaveBeenCalledTimes(10);
+      // 10 action commands from the registry + the references view command.
+      expect(commands).toHaveLength(11);
+      expect(plugin.addCommand).toHaveBeenCalledTimes(11);
     });
 
     it('open-literature-note command opens search modal with OpenNoteAction', () => {

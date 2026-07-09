@@ -4,6 +4,7 @@ import { LibraryState } from './library/library-state';
 import type { LibraryLoadOptions } from './library/library.service';
 import type { ReferenceListSortOrder } from './library/sort-entries';
 import type { IVaultFile } from './platform/platform-adapter';
+import type { NoteLookupIndex } from './notes/note-lookup-index';
 import { SearchService } from './search/search.service';
 import {
   IntrospectionService,
@@ -11,19 +12,11 @@ import {
 } from './template/introspection.service';
 import { StoreSubscriber } from './library/library-store';
 
-// ---------------------------------------------------------------------------
-// Minimal store contract exposed through service interfaces
-// ---------------------------------------------------------------------------
-
 /** Read-only store contract exposed to consumers that need reactive library state. */
 export interface ILibraryStore {
   subscribe(fn: StoreSubscriber<LibraryState>): () => void;
   getState(): LibraryState;
 }
-
-// ---------------------------------------------------------------------------
-// Service interfaces -- allow the UI layer to depend on abstractions
-// ---------------------------------------------------------------------------
 
 /** Handlebars-based template compilation, rendering, and validation. */
 export interface ITemplateService {
@@ -46,10 +39,14 @@ export interface ITemplateService {
 /** Literature note CRUD — path resolution, lookup, creation, and opening. */
 export interface INoteService {
   getPathForCitekey(citekey: string, library: Library): string;
+  /** Shared lookup index for repeated findExistingLiteratureNoteFile calls. */
+  createNoteLookupIndex(): NoteLookupIndex;
   findExistingLiteratureNoteFile(
     citekey: string,
     library: Library,
+    index?: NoteLookupIndex,
   ): IVaultFile | null;
+  findCitekeyForFile(file: IVaultFile, library: Library): string | null;
   getOrCreateLiteratureNoteFile(
     citekey: string,
     library: Library,
@@ -89,10 +86,6 @@ export interface IUIService {
   dispose(): void;
 }
 
-// ---------------------------------------------------------------------------
-// Platform adapter re-export for convenience
-// ---------------------------------------------------------------------------
-
 export type {
   IPlatformAdapter,
   IFileSystem,
@@ -105,22 +98,10 @@ export type {
   IStatusBarItem,
 } from './platform/platform-adapter';
 
-// ---------------------------------------------------------------------------
-// Application services re-export
-// ---------------------------------------------------------------------------
-
 export type { ICitationService } from './application/citation.service';
 export type { IContentTemplateResolver } from './application/content-template-resolver';
 
-// ---------------------------------------------------------------------------
-// Data source registry re-export
-// ---------------------------------------------------------------------------
-
 export type { IDataSourceRegistry } from './sources/data-source-registry';
-
-// ---------------------------------------------------------------------------
-// Batch note update re-export
-// ---------------------------------------------------------------------------
 
 export type {
   IBatchNoteOrchestrator,

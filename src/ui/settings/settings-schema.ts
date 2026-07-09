@@ -1,11 +1,11 @@
 import { z } from 'zod';
 import { DATABASE_FORMATS, DatabaseType } from '../../core/types/database';
-
-// Zod-compatible tuple derived from DATABASE_FORMATS constants
-const DATABASE_FORMAT_ENUM = Object.values(DATABASE_FORMATS) as [
-  DatabaseType,
-  ...DatabaseType[],
-];
+import {
+  NOTE_UPDATE_MODES,
+  DEFAULT_NOTE_UPDATE_MODE,
+  UPDATE_CONFIRMATION_MODES,
+  DEFAULT_UPDATE_CONFIRMATION,
+} from '../../core/sync/note-update-mode';
 
 // The legacy single-database export settings describe a FILE export — the
 // API-backed formats (Readwise, Zotero local API) are only meaningful inside
@@ -74,6 +74,70 @@ export function resolveSyncIntervalMs(minutes: number): number | undefined {
   return Math.min(minutes, READWISE_SYNC_INTERVAL_MAX_MINUTES) * 60_000;
 }
 
+// Top-level enum fields carry `.catch(<default>)`: one stale or unknown value
+// (older build, hand-edited data.json) must clamp to its default instead of
+// failing the whole safeParse — which would discard EVERY other user setting.
+
+/** One configured database (see {@link quarantineInvalidDatabases}). */
+const DatabaseConfigSchema = z.object({
+  id: z.string().optional(),
+  name: z.string(),
+  // `type` is a plain string, not the known-format enum: a database written by
+  // a NEWER plugin build may carry a `type` this version does not recognize.
+  // Rejecting it would drop the element (quarantine) and the next save would
+  // persist the loss — permanently destroying the user's source config on a
+  // downgrade. Kept verbatim so it round-trips; an unrecognized type simply
+  // fails loudly at load time (reported as a source error) instead.
+  type: z.string().min(1),
+  path: z.string(),
+  sourceType: z.string().optional(),
+  // Per-source-kind remembered connection strings (see DatabaseConfig).
+  sourcePaths: z.record(z.string()).optional(),
+  // Readwise-only client-side import filters (optional, backward-compat).
+  readwiseFilters: z
+    .object({
+      categories: z.array(z.string()).optional(),
+      tags: z.array(z.string()).optional(),
+      minHighlights: z.number().min(READWISE_FILTER_MIN_HIGHLIGHTS).optional(),
+      readerLocations: z.array(z.string()).optional(),
+    })
+    .optional(),
+  // Zotero-only: include Zotero child notes in the pull export.
+  zoteroExportNotes: z.boolean().optional(),
+  // Zotero-only: fetch native PDF annotations via BBT JSON-RPC.
+  zoteroImportAnnotations: z.boolean().optional(),
+  // Zotero local API only: group library id ('' = personal library).
+  zoteroApiGroupId: z.string().optional(),
+  // Zotero local API only: collection key ('' = whole library).
+  zoteroApiCollection: z.string().optional(),
+});
+
+/**
+ * Drop invalid `databases[]` elements before the array parse instead of
+ * letting ONE bad element (unknown `type` from a newer build, a hand-edit)
+ * fail the whole settings parse — the caller would then fall back to raw,
+ * unvalidated settings, losing every schema protection for every field.
+ */
+function quarantineInvalidDatabases(value: unknown): unknown {
+  if (value === undefined) return value; // let `.default([])` apply
+  if (!Array.isArray(value)) {
+    console.warn(
+      'Citations: settings key "databases" is not an array — ignoring it.',
+    );
+    return [];
+  }
+  return value.filter((element, index) => {
+    const result = DatabaseConfigSchema.safeParse(element);
+    if (!result.success) {
+      console.warn(
+        `Citations: dropping invalid database config at index ${index}:`,
+        result.error.issues[0]?.message ?? 'unknown issue',
+      );
+    }
+    return result.success;
+  });
+}
+
 export const SettingsSchema = z.object({
   citationExportPath: z.string(),
   citationExportFormat: z
@@ -84,13 +148,17 @@ export const SettingsSchema = z.object({
   // Legacy: kept for migration. New installs use only the path field.
   literatureNoteContentTemplate: z.string().optional().default(''),
   literatureNoteContentTemplatePath: z.string().default(''),
-  citationStylePreset: z.enum(CITATION_STYLE_PRESET_OPTIONS).default('custom'),
+  citationStylePreset: z
+    .enum(CITATION_STYLE_PRESET_OPTIONS)
+    .default('custom')
+    .catch('custom'),
   markdownCitationTemplate: z.string().min(1),
   alternativeMarkdownCitationTemplate: z.string().min(1),
   // Reference list sorting
   referenceListSortOrder: z
     .enum(['default', 'year-desc', 'year-asc', 'author-asc'])
-    .default('default'),
+    .default('default')
+    .catch('default'),
   // Character used to replace disallowed filename characters during sanitization.
   // Must not itself contain any disallowed filename characters or forward slashes.
   filenameSanitizationReplacement: z
@@ -102,6 +170,19 @@ export const SettingsSchema = z.object({
     })
     .default('_'),
   autoCreateNoteOnCitation: z.boolean().default(false),
+  // How "Update literature note(s)" treats existing notes: smart sync
+  // (callout blocks + 3-way merge), frontmatter-only, or full overwrite.
+  // `.catch` also migrates the pre-release `preserve` mode (persist-marker
+  // model) to its successor `sync`, which is the default.
+  noteUpdateMode: z
+    .enum(NOTE_UPDATE_MODES)
+    .default(DEFAULT_NOTE_UPDATE_MODE)
+    .catch(DEFAULT_NOTE_UPDATE_MODE),
+  // When the diff review dialog is required before writing an update.
+  updateConfirmation: z
+    .enum(UPDATE_CONFIRMATION_MODES)
+    .default(DEFAULT_UPDATE_CONFIRMATION)
+    .catch(DEFAULT_UPDATE_CONFIRMATION),
   literatureNoteLinkDisplayTemplate: z.string().default(''),
   // Inline editor autocomplete: when enabled, typing `@`/`[@` shows a citekey
   // suggestion popover backed by the same search index as the search modal.
@@ -111,40 +192,12 @@ export const SettingsSchema = z.object({
   bibliographyEntryTemplate: z
     .string()
     .default('{{authorString}}{{#if year}} ({{year}}){{/if}}. {{title}}.'),
-  // Multi-source configuration
-  databases: z
-    .array(
-      z.object({
-        id: z.string().optional(),
-        name: z.string(),
-        type: z.enum(DATABASE_FORMAT_ENUM),
-        path: z.string(),
-        sourceType: z.string().optional(),
-        // Per-source-kind remembered connection strings (see DatabaseConfig).
-        sourcePaths: z.record(z.string()).optional(),
-        // Readwise-only client-side import filters (optional, backward-compat).
-        readwiseFilters: z
-          .object({
-            categories: z.array(z.string()).optional(),
-            tags: z.array(z.string()).optional(),
-            minHighlights: z
-              .number()
-              .min(READWISE_FILTER_MIN_HIGHLIGHTS)
-              .optional(),
-            readerLocations: z.array(z.string()).optional(),
-          })
-          .optional(),
-        // Zotero-only: include Zotero child notes in the pull export.
-        zoteroExportNotes: z.boolean().optional(),
-        // Zotero-only: fetch native PDF annotations via BBT JSON-RPC.
-        zoteroImportAnnotations: z.boolean().optional(),
-        // Zotero local API only: group library id ('' = personal library).
-        zoteroApiGroupId: z.string().optional(),
-        // Zotero local API only: collection key ('' = whole library).
-        zoteroApiCollection: z.string().optional(),
-      }),
-    )
-    .default([]),
+  // Multi-source configuration. Invalid elements are quarantined (dropped
+  // with a warning) rather than failing the whole settings parse.
+  databases: z.preprocess(
+    quarantineInvalidDatabases,
+    z.array(DatabaseConfigSchema).default([]),
+  ),
   disableAutomaticNoteCreation: z.boolean().default(false),
   // Template profiles for type-specific note templates
   templateProfiles: z
@@ -210,6 +263,8 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   referenceListSortOrder: 'default',
   filenameSanitizationReplacement: '_',
   autoCreateNoteOnCitation: false,
+  noteUpdateMode: DEFAULT_NOTE_UPDATE_MODE,
+  updateConfirmation: DEFAULT_UPDATE_CONFIRMATION,
   literatureNoteLinkDisplayTemplate: '',
   enableInlineSuggestions: true,
   bibliographyEntryTemplate:
@@ -229,5 +284,9 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
 };
 
 export function validateSettings(settings: unknown) {
+  // Per-field resilience lives in the schema itself (`.catch` on every
+  // top-level enum), so no pre-normalization pass is needed: a stale value —
+  // including the pre-release `preserve` note update mode — clamps to the
+  // field's default instead of failing the whole parse.
   return SettingsSchema.safeParse(settings);
 }

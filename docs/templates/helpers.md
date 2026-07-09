@@ -565,6 +565,42 @@ Wrap in `{{#if}}` to render the section only when PDFs exist:
 
 ---
 
+## Sync Block Helper
+
+### `syncBlock` (block helper)
+
+Renders a **plugin-owned callout** — the only body content the note update commands manage. The callout is terminated by a native Obsidian block ID with the `zc-` prefix:
+
+```handlebars
+{{#syncBlock "meta" title="Metadata"}}
+**Authors:** {{authorString}}
+**Year:** {{year}}
+{{/syncBlock}}
+```
+
+renders as:
+
+```markdown
+> [!note] Metadata
+> **Authors:** Smith, Jones
+> **Year:** 2023
+> ^zc-meta
+```
+
+Hash options:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `type` | `note` | Callout type (`note`, `quote`, `info`, custom, …) |
+| `title` | the block name | Callout title |
+| `collapsed` | `false` | Render collapsed (`[!type]-`) |
+
+On **Update literature note(s)** (Smart sync mode), each sync block is merged three-way against the last synced version: library changes and your edits combine automatically, and real conflicts go through the review dialog. Everything in the note *without* a `^zc-…` ID is user content and is never touched. Block names must be unique within a template and consist of letters, digits, `_` or `-`.
+
+See [Updating Literature Notes](../use-cases/updating-literature-notes.md) for the full workflow.
+
+---
+
 ## Quick Reference
 
 | Category   | Helper                   | Purpose                                            |
@@ -590,3 +626,4 @@ Wrap in `{{#if}}` to render the section only when PDFs exist:
 | Zotero     | `zoteroPdfURIs`          | `zotero://open-pdf` URI array for all PDFs         |
 | Zotero     | `zoteroPdfMarkdownLink`  | Markdown link `[name](zotero://...)` for first PDF |
 | Zotero     | `zoteroPdfMarkdownLinks` | Array of `[name](zotero://...)` links for all PDFs |
+| Sync       | `syncBlock`              | Plugin-owned callout kept in sync across updates   |

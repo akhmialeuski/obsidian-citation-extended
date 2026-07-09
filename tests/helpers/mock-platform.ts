@@ -40,6 +40,7 @@ export function createMockPlatformAdapter(
 
   const workspace: IWorkspaceAccess = {
     getActiveEditor: jest.fn().mockReturnValue(null),
+    getActiveFile: jest.fn().mockReturnValue(null),
     openFile: jest.fn().mockResolvedValue(undefined),
     getConfig: jest.fn().mockReturnValue(null),
     fileToLinktext: jest.fn().mockReturnValue('link'),

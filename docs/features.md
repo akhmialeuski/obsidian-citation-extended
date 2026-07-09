@@ -121,15 +121,30 @@ Insert several citations at once in a combined `[@key1; @key2; @key3]` format.
 
 ## Update All Literature Notes
 
-Re-renders every existing literature note using the current content template.
+Re-syncs every existing literature note with the current library data and content template.
 
 - **Command**: `Citations: Update all literature notes`
-- Only notes whose rendered content differs from their current content are written
-- Runs a dry-run preview first to count changes, then executes with progress notifications
-- If the library has not finished loading, the command shows "Library is not loaded yet" instead of running
-- Errors are logged to the console; a summary notification is shown when the batch completes
+- Honours the **Note update mode** setting:
+  - **Smart sync** (default) — manages only plugin-owned content: frontmatter keys rendered by the template and `{{#syncBlock}}` callouts (marked with native `^zc-…` block IDs). Each unit is merged **three-way** against the last synced snapshot, so library changes and your edits combine automatically; everything else in the note is user content and is never touched
+  - **Update frontmatter only** — merges frontmatter keys, never touches the body
+  - **Overwrite notes completely** — replaces the whole note with the fresh render
+- When you and the library changed the same thing, the note goes through the **review dialog**: both outcomes are previewed as diffs — *Apply (keep my edits)* applies the rest of the update but keeps your version of the conflicted parts, *Use library version* takes the library's version of them; plus *Skip* and *Apply/Skip all* (see the **Review changes before writing** setting)
+- The **first sync of a pre-existing note** that would append new blocks also goes through the review dialog — on notes created before sync blocks existed, appends may duplicate older unmarked text, so they need your consent
+- Scans, plans, and writes in a single pass, reporting progress notifications as it goes; if two entries resolve to the same note file, only the first is written and the second is reported (never silently merged)
+- Deleted sync blocks stay deleted (even across syncs where the template temporarily omits them); new blocks are appended; untouched notes are skipped
+- Summary notice: `Updated · Conflicts skipped · Skipped · Errors`
 
-**When to use:** After changing your content template and you want all existing notes to match the new template. The command skips notes that are already up to date, so it is safe to run repeatedly.
+**When to use:** After changing your content template, or after reference data changed in Zotero/Readwise. Safe to run at any time — user content outside sync blocks can never be lost. See [Updating Literature Notes](use-cases/updating-literature-notes.md) for the full guide.
+
+## Update Literature Note for Current File
+
+Updates a single literature note — the one open in the active pane — with the same sync semantics and review dialog as the batch command.
+
+- **Command**: `Citations: Update literature note for current file`
+- Matches the active file back to a library entry via the note identifier frontmatter field (when configured), the rendered title path, or an unambiguous basename match
+- Reports the outcome in a notice: updated, already up to date, conflicts skipped, or the error message
+
+**When to use:** After editing one reference in Zotero (fixing metadata, adding highlights) when you don't want to run the full batch update.
 
 ## Refresh Citation Database
 

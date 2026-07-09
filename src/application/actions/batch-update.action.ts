@@ -5,17 +5,17 @@ import type {
   ActionInvocationContext,
 } from './action.types';
 import type { IContentTemplateResolver } from '../content-template-resolver';
-import type { IBatchNoteOrchestrator } from '../../notes/batch/batch-update.types';
+import type {
+  BatchUpdateResult,
+  IBatchNoteOrchestrator,
+} from '../../notes/batch/batch-update.types';
 
 /**
- * Batch-updates all existing literature notes using the current content template.
- *
- * Flow:
- * 1. Resolves the template string via {@link IContentTemplateResolver}.
- * 2. Runs a dry-run preview to count what would change.
- * 3. If changes exist, executes the actual update with progress notifications.
- *
- * Only notes whose rendered content differs from their current content are written.
+ * Batch-updates all existing literature notes using the current content
+ * template, honouring the configured update mode ("Smart sync" merges
+ * plugin-owned callout blocks and frontmatter keys three-way, leaving all
+ * user content untouched) and confirmation policy (conflicting notes go
+ * through the diff review dialog).
  */
 export class BatchUpdateNotesAction extends ApplicationAction {
   readonly descriptor: ActionDescriptor = {
@@ -39,19 +39,49 @@ export class BatchUpdateNotesAction extends ApplicationAction {
     const { platform } = this.ctx;
 
     const templateStr = await this.contentTemplateResolver.resolve();
-    const request = { citekeys: ['*'], templateStr, dryRun: false };
+    const request = {
+      citekeys: ['*'],
+      templateStr,
+      dryRun: false,
+      mode: this.ctx.settings.noteUpdateMode,
+      confirmation: this.ctx.settings.updateConfirmation,
+    };
 
-    // Dry-run preview to count changes before writing anything
-    const preview = await this.orchestrator.preview(request);
+    platform.notifications.show('Citations: Updating literature notes…');
 
-    if (preview.libraryNotReady) {
+    // Single scan: execute() plans, reviews, and writes in one pass — no
+    // separate count-only preview (which would double the render+read+plan
+    // work over every note).
+    const result = await this.orchestrator.execute(request, (progress) => {
+      if (progress.current % 25 === 0 || progress.current === progress.total) {
+        platform.notifications.show(
+          `Citations: Scanned ${progress.current}/${progress.total} notes…`,
+        );
+      }
+    });
+
+    if (result.libraryNotReady) {
       platform.notifications.show('Citations: Library is not loaded yet.');
       return;
     }
 
-    const changeCount = preview.updated.length;
-
-    if (changeCount === 0) {
+    if (
+      result.updated.length === 0 &&
+      result.conflicts.length === 0 &&
+      result.errors.length === 0
+    ) {
+      // Smart sync only manages {{#syncBlock}} callouts and frontmatter keys.
+      // A template with no syncBlock section can never change note bodies —
+      // say so, or a user who just edited their template body would read
+      // "up to date" as the update having happened.
+      if (request.mode === 'sync' && !templateStr.includes('{{#syncBlock')) {
+        platform.notifications.show(
+          'Citations: All notes are already up to date. Note: Smart sync ' +
+            'only updates {{#syncBlock}} callouts and frontmatter keys — ' +
+            'your template has none, so note bodies are never modified.',
+        );
+        return;
+      }
       platform.notifications.show(
         'Citations: All notes are already up to date.',
       );
@@ -59,29 +89,31 @@ export class BatchUpdateNotesAction extends ApplicationAction {
     }
 
     platform.notifications.show(
-      `Citations: Updating ${changeCount} note${changeCount === 1 ? '' : 's'}…`,
+      `Citations: Batch update complete. ${BatchUpdateNotesAction.summarize(result)}`,
     );
 
-    const result = await this.orchestrator.execute(request, (progress) => {
-      if (progress.current % 10 === 0 || progress.current === progress.total) {
-        platform.notifications.show(
-          `Citations: Updated ${progress.current}/${progress.total} notes…`,
-        );
-      }
-    });
+    if (result.conflicts.length > 0) {
+      console.debug(
+        'Citations: notes left untouched with unresolved conflicts:',
+        result.conflicts,
+      );
+    }
+    if (result.errors.length > 0) {
+      console.warn('Citations batch update errors:', result.errors);
+    }
+  }
 
-    const summary = [
+  /** One-line summary for the completion notice. */
+  static summarize(result: BatchUpdateResult): string {
+    return [
       `Updated: ${result.updated.length}`,
+      result.conflicts.length
+        ? `Conflicts skipped: ${result.conflicts.length}`
+        : null,
       result.skipped.length ? `Skipped: ${result.skipped.length}` : null,
       result.errors.length ? `Errors: ${result.errors.length}` : null,
     ]
       .filter(Boolean)
       .join(' · ');
-
-    platform.notifications.show(`Citations: Batch update complete. ${summary}`);
-
-    if (result.errors.length > 0) {
-      console.warn('Citations batch update errors:', result.errors);
-    }
   }
 }

@@ -56,6 +56,7 @@
     "chokidar": "^3.5.3",
     "handlebars": "^4.7.7",
     "minisearch": "^7.2.0",
+    "node-diff3": "^3.2.1",
     "open": "^8.4.2",
     "unicode2latex": "^3.0.3",
     "zod": "^3.22.0"

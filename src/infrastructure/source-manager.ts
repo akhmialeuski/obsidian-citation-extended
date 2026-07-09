@@ -1,4 +1,4 @@
-import type { DatabaseConfig } from '../core';
+import type { DatabaseConfig, DatabaseType } from '../core';
 import type {
   DataSource,
   DataSourceLoadOptions,
@@ -102,7 +102,10 @@ export class SourceManager implements ISourceManager {
           {
             type: transport,
             path: db.path,
-            format: db.type,
+            // A preserved unknown `type` (from a newer build) has no parser;
+            // the source will fail loudly at load rather than being silently
+            // dropped from settings.
+            format: db.type as DatabaseType,
             databaseId: db.id,
           },
           sourceId,

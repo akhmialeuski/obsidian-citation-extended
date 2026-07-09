@@ -46,14 +46,45 @@ describe('Integration: Settings Migration & Validation', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects invalid database type', () => {
+  it('preserves a database with an unknown type instead of dropping it', () => {
     const settings = {
       ...DEFAULT_SETTINGS,
-      databases: [{ name: 'Test', type: 'invalid-format', path: '/test.xyz' }],
+      databases: [
+        // A type a NEWER plugin build understands. It must round-trip, not be
+        // dropped and then persisted away — that would destroy the user's
+        // source config on a downgrade.
+        { name: 'FromNewerBuild', type: 'some-future-format', path: '/x' },
+        { name: 'Good', type: 'csl-json', path: '/test.json' },
+      ],
     };
 
     const result = validateSettings(settings);
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.databases.map((db) => db.name)).toEqual([
+        'FromNewerBuild',
+        'Good',
+      ]);
+      expect(result.data.databases[0].type).toBe('some-future-format');
+    }
+  });
+
+  it('still quarantines a structurally broken database element', () => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      databases: [
+        { name: 'Broken', path: '/x' }, // no `type` at all
+        { name: 'Good', type: 'csl-json', path: '/test.json' },
+      ],
+    };
+
+    const result = validateSettings(settings);
+    // A genuinely unusable element (missing required field) is still dropped
+    // rather than failing the whole parse.
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.databases.map((db) => db.name)).toEqual(['Good']);
+    }
   });
 
   it('handles legacy settings with citationExportPath', () => {

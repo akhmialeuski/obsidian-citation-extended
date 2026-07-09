@@ -111,6 +111,43 @@ export { convertToEntries } from './adapters/entry-adapter-factory';
 // Parsing
 export { loadEntries } from './parsing/entry-parser';
 
+// Note sync (non-destructive note updates: sync blocks + 3-way merge)
+export {
+  SYNC_BLOCK_ID_PREFIX,
+  isValidSyncBlockName,
+  parseSyncBlocks,
+  hasSyncBlocks,
+  buildSyncBlock,
+  mergeText,
+  lineDiff,
+  splitFrontmatter,
+  syncFrontmatter,
+  planNoteSync,
+  baselineFromRender,
+  normalizeLineEndings,
+  NOTE_UPDATE_MODES,
+  NOTE_UPDATE_MODE_LABELS,
+  DEFAULT_NOTE_UPDATE_MODE,
+  UPDATE_CONFIRMATION_MODES,
+  UPDATE_CONFIRMATION_LABELS,
+  DEFAULT_UPDATE_CONFIRMATION,
+} from './sync';
+export type {
+  SyncBlock,
+  SyncBlockOptions,
+  DiffHunk,
+  NoteBaseline,
+  SyncConflict,
+  SyncSummary,
+  NoteSyncPlan,
+  NoteSyncInput,
+  NoteUpdateMode,
+  UpdateConfirmationMode,
+  NoteReviewItem,
+  ReviewDecision,
+  IUpdateReviewPresenter,
+} from './sync';
+
 // Existing core modules
 export { Result, ok, err } from './result';
 export {

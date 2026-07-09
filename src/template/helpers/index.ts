@@ -4,6 +4,7 @@ import { registerStringHelpers } from './string-helpers';
 import { registerPathHelpers } from './path-helpers';
 import { registerAuthorHelpers } from './author-helpers';
 import { registerDateHelpers } from './date-helpers';
+import { registerSyncBlockHelpers } from './sync-block-helpers';
 
 type HandlebarsInstance = ReturnType<typeof Handlebars.create>;
 
@@ -13,4 +14,5 @@ export function registerAllHelpers(hbs: HandlebarsInstance): void {
   registerPathHelpers(hbs);
   registerAuthorHelpers(hbs);
   registerDateHelpers(hbs);
+  registerSyncBlockHelpers(hbs);
 }

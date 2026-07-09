@@ -49,7 +49,13 @@ export interface DatabaseConfig {
   /** User-facing display name. Can be freely renamed without side effects. */
   name: string;
   path: string;
-  type: DatabaseType;
+  /**
+   * Bibliography format. Known values are {@link DatabaseType}; the widened
+   * `string` tolerates a value written by a newer plugin build (preserved on a
+   * downgrade rather than dropped) — such a value has no parser and fails
+   * loudly at load, but the config is never silently destroyed.
+   */
+  type: DatabaseType | (string & {});
   /** Transport type — auto-derived from path if omitted. */
   sourceType?: string;
   /**

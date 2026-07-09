@@ -1,4 +1,5 @@
 import { DatabaseConfig } from '../../core';
+import type { NoteUpdateMode, UpdateConfirmationMode } from '../../core';
 import type { TemplateProfile } from '../../domain/template-profile';
 import {
   DEFAULT_SETTINGS,
@@ -29,6 +30,9 @@ export class CitationsPluginSettings {
     DEFAULT_SETTINGS.alternativeMarkdownCitationTemplate;
   public autoCreateNoteOnCitation: boolean =
     DEFAULT_SETTINGS.autoCreateNoteOnCitation;
+  public noteUpdateMode: NoteUpdateMode = DEFAULT_SETTINGS.noteUpdateMode;
+  public updateConfirmation: UpdateConfirmationMode =
+    DEFAULT_SETTINGS.updateConfirmation;
   public literatureNoteLinkDisplayTemplate: string =
     DEFAULT_SETTINGS.literatureNoteLinkDisplayTemplate;
 

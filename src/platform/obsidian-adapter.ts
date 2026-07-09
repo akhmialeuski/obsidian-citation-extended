@@ -21,10 +21,6 @@ import type {
   IWorkspaceAccess,
 } from './platform-adapter';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 interface WorkspaceExt {
   activeEditor?: { editor?: IEditorProxy } | null;
 }
@@ -32,10 +28,6 @@ interface WorkspaceExt {
 interface VaultExt {
   getConfig(key: string): unknown;
 }
-
-// ---------------------------------------------------------------------------
-// Sub-adapter implementations
-// ---------------------------------------------------------------------------
 
 class ObsidianFileSystem implements IFileSystem {
   constructor(private app: App) {}
@@ -150,6 +142,10 @@ class ObsidianWorkspaceAccess implements IWorkspaceAccess {
     return (ext.activeEditor?.editor as IEditorProxy) ?? null;
   }
 
+  getActiveFile(): IVaultFile | null {
+    return this.app.workspace.getActiveFile();
+  }
+
   async openFile(file: IVaultFile, newPane: boolean): Promise<void> {
     const tFile = this.app.vault.getAbstractFileByPath(file.path);
     if (tFile instanceof TFile) {
@@ -201,10 +197,6 @@ class ObsidianNotificationService implements INotificationService {
     new Notice(message);
   }
 }
-
-// ---------------------------------------------------------------------------
-// Composite adapter
-// ---------------------------------------------------------------------------
 
 /**
  * Concrete {@link IPlatformAdapter} implementation backed by the Obsidian runtime.

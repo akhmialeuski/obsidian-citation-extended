@@ -362,7 +362,7 @@ describe('SettingsSchema', () => {
       expect(result.success).toBe(true);
     });
 
-    it('rejects a negative minHighlights', () => {
+    it('drops a database with a negative minHighlights (quarantine)', () => {
       const result = validateSettings({
         ...DEFAULT_SETTINGS,
         databases: [
@@ -375,7 +375,21 @@ describe('SettingsSchema', () => {
           },
         ],
       });
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.databases).toEqual([]);
+      }
+    });
+
+    it('ignores a non-array databases value (quarantine)', () => {
+      const result = validateSettings({
+        ...DEFAULT_SETTINGS,
+        databases: 'oops',
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.databases).toEqual([]);
+      }
     });
   });
 });
@@ -402,5 +416,86 @@ describe('resolveSyncIntervalMs', () => {
     expect(
       resolveSyncIntervalMs(READWISE_SYNC_INTERVAL_MAX_MINUTES),
     ).toBeLessThan(2 ** 31);
+  });
+});
+
+describe('note update settings', () => {
+  it('defaults to smart sync with review-on-conflicts', () => {
+    const result = validateSettings({ ...DEFAULT_SETTINGS });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.noteUpdateMode).toBe('sync');
+      expect(result.data.updateConfirmation).toBe('conflicts');
+    }
+  });
+
+  it('accepts every documented mode and confirmation value', () => {
+    for (const noteUpdateMode of ['sync', 'frontmatter', 'overwrite']) {
+      for (const updateConfirmation of ['conflicts', 'always', 'never']) {
+        const result = validateSettings({
+          ...DEFAULT_SETTINGS,
+          noteUpdateMode,
+          updateConfirmation,
+        });
+        expect(result.success).toBe(true);
+      }
+    }
+  });
+
+  it('clamps an unknown mode to the default without failing validation', () => {
+    // A single stale/unknown enum must not fail the whole safeParse (which
+    // would discard every other setting) — it is reset to the default instead.
+    const result = validateSettings({
+      ...DEFAULT_SETTINGS,
+      literatureNoteFolder: 'Kept',
+      noteUpdateMode: 'yolo',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.noteUpdateMode).toBe('sync');
+      // Unrelated settings survive the clamp.
+      expect(result.data.literatureNoteFolder).toBe('Kept');
+    }
+  });
+
+  it('clamps an unknown confirmation to the default without failing validation', () => {
+    const result = validateSettings({
+      ...DEFAULT_SETTINGS,
+      updateConfirmation: 'whenever',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.updateConfirmation).toBe('conflicts');
+    }
+  });
+
+  it('clamps every top-level enum independently of the others', () => {
+    // One stale enum value must never fail the whole parse — that would
+    // silently reset EVERY user setting to defaults.
+    const result = validateSettings({
+      ...DEFAULT_SETTINGS,
+      citationExportFormat: 'nonsense',
+      referenceListSortOrder: 'nonsense',
+      citationStylePreset: 'nonsense',
+      literatureNoteFolder: 'Kept',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.citationExportFormat).toBe('csl-json');
+      expect(result.data.referenceListSortOrder).toBe('default');
+      expect(result.data.citationStylePreset).toBe('custom');
+      expect(result.data.literatureNoteFolder).toBe('Kept');
+    }
+  });
+
+  it('migrates the legacy "preserve" mode to "sync"', () => {
+    const result = validateSettings({
+      ...DEFAULT_SETTINGS,
+      noteUpdateMode: 'preserve',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.noteUpdateMode).toBe('sync');
+    }
   });
 });

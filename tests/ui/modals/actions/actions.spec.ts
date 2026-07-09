@@ -7,6 +7,7 @@ import { InsertNoteLinkAction } from '../../../../src/application/actions/insert
 import { OpenNoteAction } from '../../../../src/application/actions/open-note.action';
 import { OpenNoteAtCursorAction } from '../../../../src/application/actions/open-note-at-cursor.action';
 import { BatchUpdateNotesAction } from '../../../../src/application/actions/batch-update.action';
+import { UpdateCurrentNoteAction } from '../../../../src/application/actions/update-current-note.action';
 import { ActionContext } from '../../../../src/application/actions/action.types';
 import { LiteratureNoteNotFoundError } from '../../../../src/core/errors';
 import type { IBatchNoteOrchestrator } from '../../../../src/notes/batch/batch-update.types';
@@ -57,6 +58,7 @@ function makeCtx(): ActionContext & { _editor: any } {
     platform: {
       workspace: {
         getActiveEditor: jest.fn(() => editor),
+        getActiveFile: jest.fn(() => null),
         getConfig: jest.fn(() => null),
         fileToLinktext: jest.fn(() => 'link'),
         openUrl: jest.fn(),
@@ -81,6 +83,8 @@ function makeCtx(): ActionContext & { _editor: any } {
       autoCreateNoteOnCitation: false,
       disableAutomaticNoteCreation: false,
       literatureNoteLinkDisplayTemplate: '',
+      noteUpdateMode: 'sync',
+      updateConfirmation: 'conflicts',
     },
     _editor: editor,
   } as unknown as ActionContext & {
@@ -695,9 +699,6 @@ describe('InsertMultiCitationAction', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// OpenNoteAtCursorAction
-// ---------------------------------------------------------------------------
 describe('OpenNoteAtCursorAction', () => {
   let ctx: ReturnType<typeof makeCtx>;
   let action: OpenNoteAtCursorAction;
@@ -819,9 +820,6 @@ describe('OpenNoteAtCursorAction', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// BatchUpdateNotesAction
-// ---------------------------------------------------------------------------
 describe('BatchUpdateNotesAction', () => {
   let ctx: ReturnType<typeof makeCtx>;
   let orchestrator: {
@@ -830,6 +828,8 @@ describe('BatchUpdateNotesAction', () => {
   };
   let resolver: { resolve: jest.Mock };
   let action: BatchUpdateNotesAction;
+
+  const EMPTY = { updated: [], skipped: [], conflicts: [], errors: [] };
 
   beforeEach(() => {
     ctx = makeCtx();
@@ -851,39 +851,63 @@ describe('BatchUpdateNotesAction', () => {
     expect(action.descriptor.icon).toBe('refresh-cw');
   });
 
-  it('shows "up to date" when preview returns 0 changes', async () => {
-    orchestrator.preview.mockResolvedValue({
-      updated: [],
-      skipped: [],
-      errors: [],
-    });
+  it('passes mode and confirmation from settings to the orchestrator', async () => {
+    orchestrator.execute.mockResolvedValue({ ...EMPTY });
+
+    await action.execute({});
+
+    expect(orchestrator.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'sync', confirmation: 'conflicts' }),
+      expect.any(Function),
+    );
+  });
+
+  it('does a single execute pass (no separate preview scan)', async () => {
+    orchestrator.execute.mockResolvedValue({ ...EMPTY });
 
     await action.execute({});
 
     expect(resolver.resolve).toHaveBeenCalled();
-    expect(orchestrator.preview).toHaveBeenCalled();
+    expect(orchestrator.preview).not.toHaveBeenCalled();
+    expect(orchestrator.execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows "up to date" with a syncBlock hint when the template has none', async () => {
+    // Default mode is 'sync' and the mocked template has no {{#syncBlock}}:
+    // the notice must explain that bodies are never modified in this setup.
+    orchestrator.execute.mockResolvedValue({ ...EMPTY });
+
+    await action.execute({});
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'Citations: Updating literature notes…',
+    );
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      expect.stringContaining('All notes are already up to date. Note:'),
+    );
+  });
+
+  it('shows the plain "up to date" notice when the template has syncBlocks', async () => {
+    resolver.resolve.mockResolvedValue('{{#syncBlock "meta"}}x{{/syncBlock}}');
+    orchestrator.execute.mockResolvedValue({ ...EMPTY });
+
+    await action.execute({});
+
     expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
       'Citations: All notes are already up to date.',
     );
-    expect(orchestrator.execute).not.toHaveBeenCalled();
   });
 
-  it('executes batch update when preview finds changes', async () => {
-    orchestrator.preview.mockResolvedValue({
-      updated: ['a', 'b', 'c'],
-      skipped: [],
-      errors: [],
-    });
+  it('shows the completion summary when execute finds changes', async () => {
     orchestrator.execute.mockResolvedValue({
+      ...EMPTY,
       updated: ['a', 'b', 'c'],
-      skipped: [],
-      errors: [],
     });
 
     await action.execute({});
 
     expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
-      'Citations: Updating 3 notes…',
+      'Citations: Updating literature notes…',
     );
     expect(orchestrator.execute).toHaveBeenCalled();
     expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
@@ -891,111 +915,239 @@ describe('BatchUpdateNotesAction', () => {
     );
   });
 
-  it('uses singular "note" for single change', async () => {
-    orchestrator.preview.mockResolvedValue({
-      updated: ['a'],
-      skipped: [],
-      errors: [],
-    });
+  it('reports a summary even when only conflicts were found', async () => {
+    const debugSpy = jest.spyOn(console, 'debug').mockImplementation();
     orchestrator.execute.mockResolvedValue({
-      updated: ['a'],
-      skipped: [],
-      errors: [],
+      ...EMPTY,
+      conflicts: [{ citekey: 'a', conflictIds: ['meta'] }],
     });
 
     await action.execute({});
 
     expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
-      'Citations: Updating 1 note…',
+      'Citations: Batch update complete. Updated: 0 · Conflicts skipped: 1',
     );
+    debugSpy.mockRestore();
   });
 
-  it('reports skipped and error counts in summary', async () => {
-    orchestrator.preview.mockResolvedValue({
-      updated: ['a'],
-      skipped: [],
-      errors: [],
-    });
+  it('reports conflicts, skips, and errors in the summary', async () => {
+    const debugSpy = jest.spyOn(console, 'debug').mockImplementation();
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
     orchestrator.execute.mockResolvedValue({
       updated: ['a'],
       skipped: ['b'],
-      errors: [{ citekey: 'c', error: 'fail' }],
+      conflicts: [{ citekey: 'c', conflictIds: ['meta'] }],
+      errors: [{ citekey: 'd', error: 'fail' }],
     });
-    const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
 
     await action.execute({});
 
     expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
-      'Citations: Batch update complete. Updated: 1 · Skipped: 1 · Errors: 1',
+      'Citations: Batch update complete. Updated: 1 · Conflicts skipped: 1 · Skipped: 1 · Errors: 1',
     );
-    expect(consoleSpy).toHaveBeenCalledWith(
+    expect(warnSpy).toHaveBeenCalledWith(
       'Citations batch update errors:',
       expect.any(Array),
     );
-    consoleSpy.mockRestore();
+    debugSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 
-  it('invokes progress callback during execution', async () => {
-    orchestrator.preview.mockResolvedValue({
-      updated: ['a'],
-      skipped: [],
-      errors: [],
+  it('shows library-not-ready and stops', async () => {
+    orchestrator.execute.mockResolvedValue({
+      ...EMPTY,
+      libraryNotReady: true,
     });
+
+    await action.execute({});
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'Citations: Library is not loaded yet.',
+    );
+  });
+
+  it('reports scan progress at milestones only', async () => {
     orchestrator.execute.mockImplementation(
       async (
         _req: unknown,
         onProgress: (p: { current: number; total: number }) => void,
       ) => {
-        // Simulate progress at current=10 (divisible by 10)
-        onProgress({ current: 10, total: 20 });
-        // Simulate progress at current=20 (equals total)
-        onProgress({ current: 20, total: 20 });
-        return { updated: ['a'], skipped: [], errors: [] };
+        onProgress({ current: 3, total: 50 });
+        onProgress({ current: 25, total: 50 });
+        onProgress({ current: 50, total: 50 });
+        return { ...EMPTY, updated: ['a'] };
       },
     );
 
     await action.execute({});
 
-    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
-      'Citations: Updated 10/20 notes…',
-    );
-    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
-      'Citations: Updated 20/20 notes…',
-    );
-  });
-
-  it('skips progress notification for non-milestone steps', async () => {
-    orchestrator.preview.mockResolvedValue({
-      updated: ['a'],
-      skipped: [],
-      errors: [],
-    });
-    orchestrator.execute.mockImplementation(
-      async (
-        _req: unknown,
-        onProgress: (p: { current: number; total: number }) => void,
-      ) => {
-        // Step 3 is not divisible by 10 and is not equal to total
-        onProgress({ current: 3, total: 20 });
-        return { updated: ['a'], skipped: [], errors: [] };
-      },
-    );
-
-    await action.execute({});
-
-    // The "Updated 3/20" message should NOT appear
-    const showCalls = (ctx.platform.notifications.show as jest.Mock).mock.calls;
-    const progressMsgs = showCalls.filter(
-      (c: string[]) =>
-        typeof c[0] === 'string' && c[0].includes('Updated 3/20'),
-    );
-    expect(progressMsgs).toHaveLength(0);
+    const messages = (
+      ctx.platform.notifications.show as jest.Mock
+    ).mock.calls.map((c: string[]) => c[0]);
+    expect(messages).toContain('Citations: Scanned 25/50 notes…');
+    expect(messages).toContain('Citations: Scanned 50/50 notes…');
+    expect(messages).not.toContain('Citations: Scanned 3/50 notes…');
   });
 });
 
-// ---------------------------------------------------------------------------
-// InsertCitationAction — additional coverage
-// ---------------------------------------------------------------------------
+describe('UpdateCurrentNoteAction', () => {
+  let ctx: ReturnType<typeof makeCtx>;
+  let orchestrator: { preview: jest.Mock; execute: jest.Mock };
+  let resolver: { resolve: jest.Mock };
+  let action: UpdateCurrentNoteAction;
+
+  const EMPTY = { updated: [], skipped: [], conflicts: [], errors: [] };
+  const activeFile = {
+    path: 'Reading notes/@test2024.md',
+    name: '@test2024.md',
+  };
+
+  beforeEach(() => {
+    ctx = makeCtx();
+    (ctx.platform.workspace.getActiveFile as jest.Mock).mockReturnValue(
+      activeFile,
+    );
+    (
+      ctx.noteService as unknown as Record<string, jest.Mock>
+    ).findCitekeyForFile = jest.fn(() => 'test2024');
+    orchestrator = { preview: jest.fn(), execute: jest.fn() };
+    resolver = { resolve: jest.fn().mockResolvedValue('{{title}}') };
+    action = new UpdateCurrentNoteAction(
+      ctx,
+      orchestrator as unknown as IBatchNoteOrchestrator,
+      resolver as unknown as IContentTemplateResolver,
+    );
+  });
+
+  it('has the correct descriptor', () => {
+    expect(action.descriptor.id).toBe('update-current-note');
+    expect(action.descriptor.name).toBe(
+      'Update literature note for current file',
+    );
+  });
+
+  it('notifies when there is no active file', async () => {
+    (ctx.platform.workspace.getActiveFile as jest.Mock).mockReturnValue(null);
+
+    await action.execute({});
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'Citations: No active file.',
+    );
+    expect(orchestrator.execute).not.toHaveBeenCalled();
+  });
+
+  it('notifies when the library is not loaded', async () => {
+    (ctx.libraryService as { library: null }).library = null;
+
+    await action.execute({});
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'Citations: Library is not loaded yet.',
+    );
+    expect(orchestrator.execute).not.toHaveBeenCalled();
+  });
+
+  it('notifies when the file matches no library entry', async () => {
+    (
+      ctx.noteService as unknown as Record<string, jest.Mock>
+    ).findCitekeyForFile.mockReturnValue(null);
+
+    await action.execute({});
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      expect.stringContaining('does not match any library entry'),
+    );
+    expect(orchestrator.execute).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a thrown match error as a notice instead of rejecting', async () => {
+    // findCitekeyForFile renders the title template for every entry; a broken
+    // template throws. The command runs fire-and-forget, so it must not reject.
+    (
+      ctx.noteService as unknown as Record<string, jest.Mock>
+    ).findCitekeyForFile.mockImplementation(() => {
+      throw new Error('bad title template');
+    });
+
+    await expect(action.execute({})).resolves.toBeUndefined();
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      expect.stringContaining('bad title template'),
+    );
+    expect(orchestrator.execute).not.toHaveBeenCalled();
+  });
+
+  it('reports library-not-ready from the orchestrator result', async () => {
+    orchestrator.execute.mockResolvedValue({ ...EMPTY, libraryNotReady: true });
+
+    await action.execute({});
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'Citations: Library is not loaded yet.',
+    );
+  });
+
+  it('updates the matched note with the configured mode and confirmation', async () => {
+    orchestrator.execute.mockResolvedValue({ ...EMPTY, updated: ['test2024'] });
+
+    await action.execute({});
+
+    expect(orchestrator.execute).toHaveBeenCalledWith({
+      citekeys: ['test2024'],
+      templateStr: '{{title}}',
+      dryRun: false,
+      mode: 'sync',
+      confirmation: 'conflicts',
+      // The active file is pinned so the orchestrator cannot re-resolve the
+      // citekey to a different file than the one on screen.
+      files: { test2024: activeFile },
+    });
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'Citations: Updated note for "test2024".',
+    );
+  });
+
+  it('reports unresolved conflicts', async () => {
+    orchestrator.execute.mockResolvedValue({
+      ...EMPTY,
+      conflicts: [{ citekey: 'test2024', conflictIds: ['meta', 'title'] }],
+    });
+
+    await action.execute({});
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      expect.stringContaining('conflicts: meta, title'),
+    );
+  });
+
+  it('reports errors from the orchestrator', async () => {
+    orchestrator.execute.mockResolvedValue({
+      ...EMPTY,
+      errors: [{ citekey: 'test2024', error: 'boom' }],
+    });
+
+    await action.execute({});
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      expect.stringContaining('boom'),
+    );
+  });
+
+  it('reports up-to-date when nothing changed', async () => {
+    orchestrator.execute.mockResolvedValue({
+      ...EMPTY,
+      skipped: ['test2024'],
+    });
+
+    await action.execute({});
+
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'Citations: Note for "test2024" is already up to date.',
+    );
+  });
+});
+
 describe('InsertCitationAction (additional)', () => {
   let ctx: ReturnType<typeof makeCtx>;
   let action: InsertCitationAction;
@@ -1030,9 +1182,6 @@ describe('InsertCitationAction (additional)', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// InsertNoteContentAction — additional coverage
-// ---------------------------------------------------------------------------
 describe('InsertNoteContentAction (additional)', () => {
   let ctx: ReturnType<typeof makeCtx>;
   let action: InsertNoteContentAction;
@@ -1066,9 +1215,6 @@ describe('InsertNoteContentAction (additional)', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// InsertNoteLinkAction — additional coverage
-// ---------------------------------------------------------------------------
 describe('InsertNoteLinkAction (additional)', () => {
   let ctx: ReturnType<typeof makeCtx>;
   let action: InsertNoteLinkAction;
@@ -1265,9 +1411,6 @@ describe('InsertNoteLinkAction (additional)', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// OpenNoteAction — additional coverage
-// ---------------------------------------------------------------------------
 describe('OpenNoteAction (additional)', () => {
   let ctx: ReturnType<typeof makeCtx>;
   let action: OpenNoteAction;
@@ -1353,9 +1496,6 @@ describe('OpenNoteAction (additional)', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// InsertSubsequentCitationAction — additional coverage
-// ---------------------------------------------------------------------------
 describe('InsertSubsequentCitationAction (additional)', () => {
   let ctx: ReturnType<typeof makeCtx>;
   let action: InsertSubsequentCitationAction;
