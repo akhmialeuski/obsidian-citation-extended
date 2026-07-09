@@ -168,7 +168,10 @@ export class ZoteroSource implements DataSource {
         // edit does NOT change the export body, so the manual "Refresh citation
         // database" (fullRefresh) must always re-fetch; skip the potentially
         // multi-MB cache read+parse on that path entirely.
-        const cached = options?.fullRefresh ? null : await this.readCache();
+        const cachedWithOrigin = options?.fullRefresh
+          ? null
+          : await this.readCacheWithOrigin();
+        const cached = cachedWithOrigin?.state ?? null;
         // When the export is byte-identical to the cached one the bibliography
         // did not change, so reuse the cached attachment payloads instead of
         // re-fetching every entry's attachments on every periodic load.
@@ -178,7 +181,11 @@ export class ZoteroSource implements DataSource {
             : undefined;
         if (reusableAttachments) {
           attachments = reusableAttachments;
-          attachmentsUnchanged = true;
+          // Skip the redundant rewrite only when the PRIMARY (stable-id) cache
+          // already holds this content. A hit from the legacy fallback path is
+          // written once below so the cache migrates to the stable-id filename;
+          // subsequent loads then hit the primary path and skip the write.
+          attachmentsUnchanged = cachedWithOrigin?.fromPrimary === true;
           ZoteroSource.attachAnnotations(result.entries, reusableAttachments);
         } else {
           try {
@@ -286,10 +293,23 @@ export class ZoteroSource implements DataSource {
    * orphaned by the cache-filename scheme change.
    */
   private async readCache(): Promise<ZoteroCacheStateV2 | null> {
+    return (await this.readCacheWithOrigin())?.state ?? null;
+  }
+
+  /**
+   * Like {@link readCache} but reports whether the hit came from the primary
+   * (stable-id) path or the legacy fallback, so the caller can migrate a
+   * legacy-path cache to the stable-id filename on the next successful write.
+   */
+  private async readCacheWithOrigin(): Promise<{
+    state: ZoteroCacheStateV2;
+    fromPrimary: boolean;
+  } | null> {
     const primary = await this.readCacheFrom(this.cachePath);
-    if (primary) return primary;
+    if (primary) return { state: primary, fromPrimary: true };
     if (this.legacyCachePath && this.legacyCachePath !== this.cachePath) {
-      return this.readCacheFrom(this.legacyCachePath);
+      const legacy = await this.readCacheFrom(this.legacyCachePath);
+      if (legacy) return { state: legacy, fromPrimary: false };
     }
     return null;
   }

@@ -452,6 +452,63 @@ describe('ZoteroSource annotation enrichment', () => {
     expect(fs.writeFile).not.toHaveBeenCalled();
   });
 
+  it('migrates a legacy-path cache to the stable-id path on reuse', async () => {
+    // On the first load after the cache-filename scheme change the primary
+    // (stable-id) path is empty but the legacy path holds a byte-identical
+    // export. Reuse must still happen (no JSON-RPC re-fetch), and the cache
+    // must be written once to the primary path so it migrates to the stable-id
+    // filename instead of depending on the legacy fallback forever.
+    const legacyPath = '/cache/zotero-cache-legacykey.json';
+    const newPath = '/cache/zotero-cache-newid.json';
+    const store: Record<string, string> = {
+      [legacyPath]: JSON.stringify({
+        version: 2,
+        format: DATABASE_FORMATS.CslJson,
+        raw: CSL,
+        attachments: { smith2023: [RAW_ATTACHMENT] },
+      }),
+    };
+    const fs = {
+      exists: jest.fn((p: string) => Promise.resolve(p in store)),
+      readFile: jest.fn((p: string) => Promise.resolve(store[p] ?? '')),
+      writeFile: jest.fn((p: string, d: string) => {
+        store[p] = d;
+        return Promise.resolve();
+      }),
+    } as unknown as IFileSystem;
+    const { client, fetchAttachmentsForCitekeys } = makeAnnotatingClient();
+    const source = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      fs,
+      newPath,
+      undefined,
+      true,
+      legacyPath,
+    );
+
+    await source.load();
+    await source.load();
+
+    // Reuse both times (byte-identical export) — no attachment re-fetch.
+    expect(fetchAttachmentsForCitekeys).not.toHaveBeenCalled();
+    // Migrated exactly once to the stable-id path; the second load hits the
+    // primary path and skips the redundant rewrite.
+    const primaryWrites = (fs.writeFile as jest.Mock).mock.calls.filter(
+      (c) => c[0] === newPath,
+    );
+    expect(primaryWrites).toHaveLength(1);
+    expect(JSON.parse(store[newPath])).toMatchObject({
+      version: 1,
+      format: DATABASE_FORMATS.CslJson,
+      raw: CSL,
+      attachments: { smith2023: [RAW_ATTACHMENT] },
+    });
+  });
+
   it('does not read the cache on a fullRefresh success path', async () => {
     const { client, fetchAttachmentsForCitekeys } = makeAnnotatingClient();
     const { fs } = createMockFileSystem(
