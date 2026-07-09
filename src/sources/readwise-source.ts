@@ -26,9 +26,7 @@ import type { IFileSystem } from '../platform/platform-adapter';
 import { WorkerManager } from '../util';
 import { createLinkedAbortController, PeriodicSync } from './source-utils';
 
-// ---------------------------------------------------------------------------
 // Conversion helpers
-// ---------------------------------------------------------------------------
 
 /** Convert a v2 Export highlight into a structured {@link ReadwiseHighlightItem}. */
 function exportHighlightToItem(h: ReadwiseHighlight): ReadwiseHighlightItem {
@@ -248,9 +246,7 @@ export function applyReadwiseFilters(
  */
 class ReadwiseOutageError extends Error {}
 
-// ---------------------------------------------------------------------------
 // Cache state
-// ---------------------------------------------------------------------------
 
 /**
  * Versioned on-disk cache payload. Legacy caches (written before incremental
@@ -299,9 +295,7 @@ function overlappedCursor(lastSyncAt: string): string | null {
   return new Date(timestamp - CURSOR_OVERLAP_MS).toISOString();
 }
 
-// ---------------------------------------------------------------------------
 // DataSource implementation
-// ---------------------------------------------------------------------------
 
 /**
  * Data source that loads bibliography entries from the Readwise API.
@@ -339,6 +333,12 @@ export class ReadwiseSource implements DataSource {
      */
     syncIntervalProvider?: () => number,
     private filters?: ReadwiseFilters,
+    /**
+     * Pre-upgrade cache path (keyed by the old volatile source key). Read as a
+     * fallback so an existing install's offline cache is not orphaned when the
+     * cache filename scheme changes to the stable database id.
+     */
+    private legacyCachePath?: string,
   ) {
     this.poller = syncIntervalProvider
       ? new PeriodicSync(syncIntervalProvider, 'ReadwiseSource')
@@ -597,10 +597,21 @@ export class ReadwiseSource implements DataSource {
 
   /** Read entry data from cache file, or null if unavailable. */
   private async readCache(): Promise<string | null> {
-    if (!this.fileSystem || !this.cachePath) return null;
+    const primary = await this.readCacheFrom(this.cachePath);
+    if (primary !== null) return primary;
+    // Fall back to the pre-upgrade path so an existing install's cache is not
+    // orphaned when the cache-filename scheme changes to the stable database id.
+    if (this.legacyCachePath && this.legacyCachePath !== this.cachePath) {
+      return this.readCacheFrom(this.legacyCachePath);
+    }
+    return null;
+  }
+
+  private async readCacheFrom(path?: string): Promise<string | null> {
+    if (!this.fileSystem || !path) return null;
     try {
-      if (await this.fileSystem.exists(this.cachePath)) {
-        return await this.fileSystem.readFile(this.cachePath);
+      if (await this.fileSystem.exists(path)) {
+        return await this.fileSystem.readFile(path);
       }
     } catch {
       // Cache read failure is not critical

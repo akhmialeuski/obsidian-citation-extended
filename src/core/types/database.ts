@@ -53,10 +53,16 @@ export interface DatabaseConfig {
   /** Readwise-only client-side import filters. */
   readwiseFilters?: ReadwiseFilters;
   /**
-   * Zotero-only: include Zotero notes and PDF annotations in the pull export
+   * Zotero-only: include Zotero child notes in the pull export
    * (`&exportNotes=true`). Surfaced in templates via `{{note}}`.
    */
   zoteroExportNotes?: boolean;
+  /**
+   * Zotero-only: fetch native PDF annotations (highlights, comments, colors,
+   * page deep-links) via the Better BibTeX JSON-RPC `item.attachments`
+   * method. Surfaced in templates via `{{annotations}}` / `{{attachments}}`.
+   */
+  zoteroImportAnnotations?: boolean;
 }
 
 /**
@@ -72,31 +78,42 @@ export function generateDatabaseId(): string {
 }
 
 /**
- * Resolve the per-database Readwise filters for a given database id.
+ * Find a database config by its stable id.
  *
  * Returns `undefined` when the id is missing or not found — so an absent id
- * never matches an id-less database (which would otherwise share filters).
+ * never matches an id-less database (which would otherwise share config). The
+ * single lookup all per-database resolvers below build on.
  */
+export function findDatabaseById(
+  databases: DatabaseConfig[],
+  databaseId: string | undefined,
+): DatabaseConfig | undefined {
+  if (!databaseId) return undefined;
+  return databases.find((db) => db.id === databaseId);
+}
+
+/** Resolve the per-database Readwise filters for a given database id. */
 export function resolveReadwiseFilters(
   databases: DatabaseConfig[],
   databaseId: string | undefined,
 ): ReadwiseFilters | undefined {
-  if (!databaseId) return undefined;
-  return databases.find((db) => db.id === databaseId)?.readwiseFilters;
+  return findDatabaseById(databases, databaseId)?.readwiseFilters;
 }
 
-/**
- * Resolve the "export notes" flag for a Zotero database by id.
- *
- * Returns `false` when the id is missing or not found — so an absent id never
- * inherits another database's setting (mirrors {@link resolveReadwiseFilters}).
- */
+/** Resolve the "export notes" flag for a Zotero database by id (default false). */
 export function resolveZoteroExportNotes(
   databases: DatabaseConfig[],
   databaseId: string | undefined,
 ): boolean {
-  if (!databaseId) return false;
+  return findDatabaseById(databases, databaseId)?.zoteroExportNotes ?? false;
+}
+
+/** Resolve the "import PDF annotations" flag for a Zotero database by id (default false). */
+export function resolveZoteroImportAnnotations(
+  databases: DatabaseConfig[],
+  databaseId: string | undefined,
+): boolean {
   return (
-    databases.find((db) => db.id === databaseId)?.zoteroExportNotes ?? false
+    findDatabaseById(databases, databaseId)?.zoteroImportAnnotations ?? false
   );
 }

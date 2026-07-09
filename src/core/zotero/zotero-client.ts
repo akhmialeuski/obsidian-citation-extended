@@ -55,6 +55,14 @@ export interface ZoteroVersions {
   betterbibtex: string;
 }
 
+/** Result of a bulk `item.attachments` fetch. */
+export interface ZoteroAttachmentsFetchResult {
+  /** Citekey → raw `item.attachments` result (array of attachment DTOs). */
+  attachmentsByCitekey: Map<string, unknown[]>;
+  /** Per-citekey JSON-RPC errors (e.g. citekey not found). Non-fatal. */
+  errors: Array<{ citekey: string; message: string }>;
+}
+
 /** Thrown when an in-flight request is cancelled via its AbortSignal. */
 export class ZoteroAbortError extends Error {
   constructor() {
@@ -174,6 +182,117 @@ export class ZoteroConnectorClient {
       zotero: payload.result?.zotero ?? 'unknown',
       betterbibtex: payload.result?.betterbibtex ?? 'unknown',
     };
+  }
+
+  /** Citekeys per JSON-RPC batch POST — bounded so huge libraries don't build megabyte request bodies. */
+  private static readonly ATTACHMENTS_BATCH_SIZE = 50;
+
+  /**
+   * Fetch attachments (with native PDF annotations) for many citekeys via
+   * batched JSON-RPC `item.attachments` calls.
+   *
+   * BBT answers each request in the batch independently, so a citekey that
+   * cannot be resolved yields a per-key error while the rest still succeed.
+   * Transport-level failures (Zotero closed, HTTP error) throw
+   * {@link ZoteroApiError} — callers should treat annotation enrichment as
+   * optional and degrade gracefully.
+   */
+  async fetchAttachmentsForCitekeys(
+    citekeys: string[],
+    opts?: { signal?: AbortSignal },
+  ): Promise<ZoteroAttachmentsFetchResult> {
+    const attachmentsByCitekey = new Map<string, unknown[]>();
+    const errors: Array<{ citekey: string; message: string }> = [];
+    if (citekeys.length === 0) {
+      return { attachmentsByCitekey, errors };
+    }
+
+    const url = this.jsonRpcUrl();
+    const batchSize = ZoteroConnectorClient.ATTACHMENTS_BATCH_SIZE;
+
+    for (let start = 0; start < citekeys.length; start += batchSize) {
+      this.throwIfAborted(opts?.signal);
+      const chunk = citekeys.slice(start, start + batchSize);
+      const requestBody = JSON.stringify(
+        chunk.map((citekey, i) => ({
+          jsonrpc: '2.0',
+          method: 'item.attachments',
+          params: [citekey],
+          id: start + i,
+        })),
+      );
+
+      let response: ZoteroHttpResponse;
+      try {
+        response = await this.post(url, requestBody, {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        });
+      } catch (e) {
+        throw new ZoteroApiError(
+          `Could not reach Zotero at ${this.safeOrigin()} while fetching annotations. (${
+            e instanceof Error ? e.message : String(e)
+          })`,
+        );
+      }
+
+      this.throwIfAborted(opts?.signal);
+
+      if (response.status < 200 || response.status >= 300) {
+        throw new ZoteroApiError(
+          `Zotero JSON-RPC returned HTTP ${response.status} while fetching annotations.`,
+          response.status,
+        );
+      }
+
+      const payload = await response.json();
+      // A single-element batch may be answered with a bare object.
+      const results = Array.isArray(payload) ? payload : [payload];
+      let unmapped = 0;
+      for (const entry of results) {
+        const item = entry as {
+          id?: unknown;
+          result?: unknown;
+          error?: { message?: string };
+        };
+        // JSON-RPC 2.0 requires the response to echo the request id. We send
+        // numeric ids; tolerate a numeric string too (some proxies re-encode
+        // it) so a well-formed-but-stringified id still maps to its citekey.
+        const index =
+          typeof item.id === 'number'
+            ? item.id
+            : typeof item.id === 'string' && /^\d+$/.test(item.id)
+              ? Number(item.id)
+              : NaN;
+        const citekey = citekeys[index];
+        if (citekey === undefined) {
+          // A result we cannot correlate back to a citekey (non-numeric or
+          // absent id). Count it so a wholesale id mismatch is visible in the
+          // log instead of silently dropping every annotation.
+          unmapped += 1;
+          continue;
+        }
+        if (item.error) {
+          errors.push({
+            citekey,
+            message: item.error.message ?? 'unknown JSON-RPC error',
+          });
+          continue;
+        }
+        attachmentsByCitekey.set(
+          citekey,
+          Array.isArray(item.result) ? item.result : [],
+        );
+      }
+      if (unmapped > 0) {
+        console.warn(
+          `ZoteroConnectorClient: ${unmapped} attachment result(s) had an ` +
+            'unrecognized JSON-RPC id and were skipped',
+        );
+      }
+    }
+
+    return { attachmentsByCitekey, errors };
   }
 
   /** Append the `exportNotes` flag to the pull URL without clobbering existing query params. */

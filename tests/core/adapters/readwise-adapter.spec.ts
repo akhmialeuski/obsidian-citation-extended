@@ -9,10 +9,6 @@ import {
   ReadwiseMode,
 } from '../../../src/core/adapters/readwise-adapter';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function makeEntryData(
   overrides: Partial<ReadwiseEntryData> = {},
 ): ReadwiseEntryData {
@@ -35,14 +31,106 @@ function makeEntryData(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe('ReadwiseAdapter', () => {
-  // -------------------------------------------------------------------------
-  // Constructor & Identity
-  // -------------------------------------------------------------------------
+  describe('annotations (uniform interface)', () => {
+    it('maps structured highlights into the shared Annotation shape', () => {
+      const adapter = new ReadwiseAdapter(
+        makeEntryData({
+          highlights: [
+            {
+              id: 'h1',
+              text: 'A key sentence.',
+              note: 'my thought',
+              location: 42,
+              locationType: 'page',
+              color: 'yellow',
+              highlightedAt: '2024-06-01T00:00:00Z',
+              url: 'https://readwise.io/open/h1',
+              tags: ['idea'],
+            },
+            {
+              id: 'h2',
+              text: 'Second one.',
+              note: null,
+              location: null,
+              locationType: 'none',
+              color: null,
+              highlightedAt: null,
+              url: null,
+              tags: [],
+            },
+          ],
+        }),
+      );
+
+      const anns = adapter.annotations;
+      expect(anns).toHaveLength(2);
+      expect(anns[0]).toMatchObject({
+        id: 'h1',
+        type: 'highlight',
+        text: 'A key sentence.',
+        comment: 'my thought',
+        colorName: 'yellow',
+        page: 42,
+        pageLabel: '42',
+        tags: ['idea'],
+        openURI: 'https://readwise.io/open/h1',
+        source: 'readwise',
+      });
+      // document order is preserved via sortIndex
+      expect(anns[0].sortIndex < anns[1].sortIndex).toBe(true);
+      // non-page location → no page number, empty label
+      expect(anns[1].page).toBeNull();
+      expect(anns[1].pageLabel).toBe('');
+      expect(anns[1].comment).toBe('');
+    });
+
+    it('preserves non-page positions (value AND type) in pageLabel', () => {
+      const adapter = new ReadwiseAdapter(
+        makeEntryData({
+          highlights: [
+            {
+              id: 'k1',
+              text: 'Kindle passage.',
+              note: null,
+              location: 1234,
+              locationType: 'location',
+              color: null,
+              highlightedAt: null,
+              url: null,
+              tags: [],
+            },
+            {
+              id: 'p1',
+              text: 'Podcast moment.',
+              note: null,
+              location: 90,
+              locationType: 'time_offset',
+              color: null,
+              highlightedAt: null,
+              url: null,
+              tags: [],
+            },
+          ],
+        }),
+      );
+
+      const anns = adapter.annotations;
+      // A Kindle/podcast position is not a page: page stays null, but the
+      // value and its type survive in pageLabel (the removed entry.highlights
+      // surface exposed this — dropping it silently would lose the position).
+      expect(anns[0].page).toBeNull();
+      expect(anns[0].pageLabel).toBe('location 1234');
+      expect(anns[1].page).toBeNull();
+      expect(anns[1].pageLabel).toBe('time_offset 90');
+    });
+
+    it('yields [] for an entry with no highlights (template skips)', () => {
+      const adapter = new ReadwiseAdapter(makeEntryData({ highlights: [] }));
+      expect(adapter.annotations).toEqual([]);
+      expect(adapter.toTemplateContext().annotationCount).toBe(0);
+    });
+  });
 
   describe('constructor and identity', () => {
     it('creates an adapter from entry data', () => {
@@ -78,10 +166,6 @@ describe('ReadwiseAdapter', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Type mapping
-  // -------------------------------------------------------------------------
-
   describe('type mapping', () => {
     const cases: Array<[string, string]> = [
       ['books', 'book'],
@@ -105,10 +189,6 @@ describe('ReadwiseAdapter', () => {
       expect(adapter.type).toBe(expected);
     });
   });
-
-  // -------------------------------------------------------------------------
-  // Author parsing
-  // -------------------------------------------------------------------------
 
   describe('author parsing', () => {
     it('parses "FirstName LastName and FirstName LastName" format', () => {
@@ -164,10 +244,6 @@ describe('ReadwiseAdapter', () => {
       ]);
     });
   });
-
-  // -------------------------------------------------------------------------
-  // Field mapping
-  // -------------------------------------------------------------------------
 
   describe('field mapping', () => {
     it('maps summary to abstract', () => {
@@ -241,10 +317,6 @@ describe('ReadwiseAdapter', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Undefined fields (fields not available from Readwise)
-  // -------------------------------------------------------------------------
-
   describe('unavailable fields', () => {
     let adapter: ReadwiseAdapter;
 
@@ -317,10 +389,6 @@ describe('ReadwiseAdapter', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Readwise-specific getters
-  // -------------------------------------------------------------------------
-
   describe('Readwise-specific getters', () => {
     it('returns readwiseUrl', () => {
       const adapter = new ReadwiseAdapter(
@@ -357,10 +425,6 @@ describe('ReadwiseAdapter', () => {
       expect(adapter.category).toBe('podcasts');
     });
   });
-
-  // -------------------------------------------------------------------------
-  // zoteroSelectURI override
-  // -------------------------------------------------------------------------
 
   describe('extended field mappings', () => {
     it('maps readable_title to titleShort', () => {
@@ -418,8 +482,11 @@ describe('ReadwiseAdapter', () => {
     });
   });
 
-  describe('structured highlights getter', () => {
-    it('returns the structured highlights array', () => {
+  describe('structured highlights via the uniform annotations interface', () => {
+    // Highlights are exposed primarily through the source-agnostic
+    // `annotations` interface shared with Zotero. A deprecated `highlights`
+    // getter is retained for back-compat (see its own describe block below).
+    it('exposes highlight data through annotations', () => {
       const adapter = new ReadwiseAdapter(
         makeEntryData({
           highlights: [
@@ -437,17 +504,17 @@ describe('ReadwiseAdapter', () => {
           ],
         }),
       );
-      expect(adapter.highlights).toHaveLength(1);
-      expect(adapter.highlights[0].text).toBe('first highlight');
-      expect(adapter.highlights[0].note).toBe('a note');
+      expect(adapter.annotations).toHaveLength(1);
+      expect(adapter.annotations[0].text).toBe('first highlight');
+      expect(adapter.annotations[0].comment).toBe('a note');
     });
 
     it('returns an empty array when highlights are absent (backward-compat)', () => {
       const adapter = new ReadwiseAdapter(makeEntryData());
-      expect(adapter.highlights).toEqual([]);
+      expect(adapter.annotations).toEqual([]);
     });
 
-    it('exposes highlights via toJSON for {{#each entry.highlights}}', () => {
+    it('exposes annotations via toJSON for {{entry.annotations}}', () => {
       const adapter = new ReadwiseAdapter(
         makeEntryData({
           highlights: [
@@ -466,8 +533,11 @@ describe('ReadwiseAdapter', () => {
         }),
       );
       const json = adapter.toJSON();
+      expect(Array.isArray(json.annotations)).toBe(true);
+      expect((json.annotations as unknown[]).length).toBe(1);
+      // The deprecated `highlights` surface is retained for back-compat, so it
+      // is also present on toJSON (raw legacy shape) alongside `annotations`.
       expect(Array.isArray(json.highlights)).toBe(true);
-      expect((json.highlights as unknown[]).length).toBe(1);
     });
   });
 
@@ -479,10 +549,6 @@ describe('ReadwiseAdapter', () => {
       expect(adapter.zoteroSelectURI).toBe('https://readwise.io/book/1');
     });
   });
-
-  // -------------------------------------------------------------------------
-  // Notes / highlights
-  // -------------------------------------------------------------------------
 
   describe('notes (highlights)', () => {
     it('sets _note from highlightsText', () => {
@@ -499,10 +565,6 @@ describe('ReadwiseAdapter', () => {
       expect(adapter.note).toBe('');
     });
   });
-
-  // -------------------------------------------------------------------------
-  // Domain methods from Entry base class
-  // -------------------------------------------------------------------------
 
   describe('inherited domain methods', () => {
     it('toTemplateContext returns all expected fields', () => {
@@ -565,10 +627,6 @@ describe('ReadwiseAdapter', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Mutable properties for NormalizationPipeline
-  // -------------------------------------------------------------------------
-
   describe('mutable properties for pipeline', () => {
     it('_sourceDatabase is initially undefined', () => {
       const adapter = new ReadwiseAdapter(makeEntryData());
@@ -590,6 +648,48 @@ describe('ReadwiseAdapter', () => {
       const adapter = new ReadwiseAdapter(makeEntryData());
       adapter._compositeCitekey = 'rw-12345@db-1';
       expect(adapter._compositeCitekey).toBe('rw-12345@db-1');
+    });
+  });
+
+  describe('highlights (deprecated back-compat surface)', () => {
+    const legacyHighlights = [
+      {
+        id: 'h1',
+        text: 'A key sentence.',
+        note: 'my thought',
+        location: 42,
+        locationType: 'page',
+        color: 'yellow',
+        highlightedAt: '2024-06-01T00:00:00Z',
+        url: 'https://readwise.io/open/h1',
+        tags: ['idea'],
+      },
+    ];
+
+    it('returns the raw highlight items in the legacy shape', () => {
+      const adapter = new ReadwiseAdapter(
+        makeEntryData({ highlights: legacyHighlights }),
+      );
+      // Old field names survive (note/location), NOT the annotations shape.
+      expect(adapter.highlights).toEqual(legacyHighlights);
+      expect(adapter.highlights[0].note).toBe('my thought');
+      expect(adapter.highlights[0].location).toBe(42);
+    });
+
+    it('returns [] when the entry has no highlights', () => {
+      expect(new ReadwiseAdapter(makeEntryData()).highlights).toEqual([]);
+      expect(
+        new ReadwiseAdapter(makeEntryData({ highlights: [] })).highlights,
+      ).toEqual([]);
+    });
+
+    it('is surfaced on toJSON so {{#each entry.highlights}} keeps rendering', () => {
+      const adapter = new ReadwiseAdapter(
+        makeEntryData({ highlights: legacyHighlights }),
+      );
+      const json = adapter.toJSON();
+      expect(Array.isArray(json.highlights)).toBe(true);
+      expect((json.highlights as unknown[]).length).toBe(1);
     });
   });
 });

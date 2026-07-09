@@ -108,6 +108,8 @@ describe('ZoteroSource.load', () => {
 
     expect(fs.writeFile).toHaveBeenCalled();
     expect(JSON.parse(written.value!)).toMatchObject({
+      // Version 1 (attachments are an optional superset) so a rolled-back
+      // build can still read the cache for offline fallback.
       version: 1,
       format: DATABASE_FORMATS.CslJson,
       raw: CSL,
@@ -139,6 +141,70 @@ describe('ZoteroSource.load', () => {
 
     expect(result.entries.map((e) => e.id)).toEqual(['smith2023', 'doe2024']);
     expect(result.parseErrors?.[0].message).toMatch(/using cache/);
+  });
+
+  it('falls back to the pre-upgrade (legacy) cache path when the new path is missing', async () => {
+    // After the cache-filename scheme change, the new (databaseId) path is
+    // empty on first launch; the legacy (source-key) file must still be read
+    // so the library is not orphaned into an empty offline load.
+    const legacyPath = '/cache/zotero-cache-legacykey.json';
+    const newPath = '/cache/zotero-cache-newid.json';
+    const store: Record<string, string> = {
+      [legacyPath]: JSON.stringify({
+        version: 1,
+        format: DATABASE_FORMATS.CslJson,
+        raw: CSL,
+      }),
+    };
+    const fs = {
+      exists: jest.fn((p: string) => Promise.resolve(p in store)),
+      readFile: jest.fn((p: string) => Promise.resolve(store[p] ?? '')),
+      writeFile: jest.fn((p: string, d: string) => {
+        store[p] = d;
+        return Promise.resolve();
+      }),
+    } as unknown as IFileSystem;
+    const client = makeClient(() =>
+      Promise.reject(new ZoteroApiError('Could not reach Zotero')),
+    );
+    const source = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      fs,
+      newPath,
+      undefined,
+      false,
+      legacyPath,
+    );
+
+    const result = await source.load();
+
+    expect(result.entries.map((e) => e.id)).toEqual(['smith2023', 'doe2024']);
+    expect(result.parseErrors?.[0].message).toMatch(/using cache/);
+  });
+
+  it('caches the raw export even when parsing throws (durability)', async () => {
+    const client = makeClient(() => Promise.resolve(CSL));
+    const worker = {
+      post: jest.fn(() => Promise.reject(new Error('parse boom'))),
+    };
+    const { fs, written } = createMockFileSystem();
+    const source = new ZoteroSource(
+      'z1',
+      client,
+      worker as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      fs,
+      '/cache/zotero.json',
+    );
+
+    await expect(source.load()).rejects.toThrow('parse boom');
+    expect(fs.writeFile).toHaveBeenCalled();
+    expect(JSON.parse(written.value!)).toMatchObject({ version: 1, raw: CSL });
   });
 
   it('throws when Zotero is unreachable and no cache exists', async () => {
@@ -191,5 +257,464 @@ describe('ZoteroSource.dispose', () => {
     );
     source.watch(jest.fn());
     expect(() => source.dispose()).not.toThrow();
+  });
+});
+
+describe('ZoteroSource annotation enrichment', () => {
+  const RAW_ATTACHMENT = {
+    open: 'zotero://open-pdf/library/items/ATTKEY01',
+    path: '/z/storage/ATTKEY01/paper.pdf',
+    annotations: [
+      {
+        key: 'ANNOT001',
+        annotationType: 'highlight',
+        annotationText: 'quoted text',
+        annotationColor: '#ffd400',
+        annotationPosition: { pageIndex: 3 },
+        annotationSortIndex: '00003|0|0',
+      },
+    ],
+  };
+
+  function makeAnnotatingClient(
+    attachmentsImpl?: jest.Mock,
+    bibliographyImpl: () => Promise<string> = () => Promise.resolve(CSL),
+  ) {
+    const fetchAttachmentsForCitekeys =
+      attachmentsImpl ??
+      jest.fn((citekeys: string[]) =>
+        Promise.resolve({
+          attachmentsByCitekey: new Map(
+            citekeys
+              .filter((k) => k === 'smith2023')
+              .map((k) => [k, [RAW_ATTACHMENT]]),
+          ),
+          errors: [],
+        }),
+      );
+    return {
+      client: {
+        fetchBibliography: jest.fn(bibliographyImpl),
+        fetchAttachmentsForCitekeys,
+        ping: jest.fn(),
+      } as never,
+      fetchAttachmentsForCitekeys,
+    };
+  }
+
+  it('attaches normalized annotations and attachments to matching entries', async () => {
+    const { client } = makeAnnotatingClient();
+    const source = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      undefined,
+      undefined,
+      undefined,
+      true,
+    );
+
+    const result = await source.load();
+
+    const smith = result.entries.find((e) => e.id === 'smith2023')!;
+    expect(smith.annotations).toHaveLength(1);
+    expect(smith.annotations[0].text).toBe('quoted text');
+    expect(smith.annotations[0].colorName).toBe('yellow');
+    expect(smith.annotations[0].page).toBe(4);
+    expect(smith.annotations[0].openURI).toBe(
+      'zotero://open-pdf/library/items/ATTKEY01?page=4&annotation=ANNOT001',
+    );
+    expect(smith.attachments).toHaveLength(1);
+    expect(smith.attachments[0].id).toBe('ATTKEY01');
+
+    // Uniform interface: an entry with no annotations yields [] (not
+    // undefined), so templates iterate/guard without special-casing.
+    const doe = result.entries.find((e) => e.id === 'doe2024')!;
+    expect(doe.annotations).toEqual([]);
+    expect(doe.attachments).toEqual([]);
+  });
+
+  it('exposes annotations through the template context', async () => {
+    const { client } = makeAnnotatingClient();
+    const source = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      undefined,
+      undefined,
+      undefined,
+      true,
+    );
+
+    const result = await source.load();
+    const smith = result.entries.find((e) => e.id === 'smith2023')!;
+    const context = smith.toTemplateContext();
+
+    expect(context.annotationCount).toBe(1);
+    expect(context.annotations![0].comment).toBe('');
+    const doeContext = result.entries
+      .find((e) => e.id === 'doe2024')!
+      .toTemplateContext();
+    expect(doeContext.annotationCount).toBe(0);
+  });
+
+  it('reuses cached attachments when the export is unchanged', async () => {
+    // Periodic polls with an unchanged library must not re-fetch every
+    // entry's attachments via JSON-RPC on each cycle.
+    const { client, fetchAttachmentsForCitekeys } = makeAnnotatingClient();
+    const { fs } = createMockFileSystem(
+      JSON.stringify({
+        version: 2,
+        format: DATABASE_FORMATS.CslJson,
+        raw: CSL,
+        attachments: { smith2023: [RAW_ATTACHMENT] },
+      }),
+    );
+    const source = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      fs,
+      '/cache/zotero.json',
+      undefined,
+      true,
+    );
+
+    const result = await source.load();
+
+    expect(fetchAttachmentsForCitekeys).not.toHaveBeenCalled();
+    const smith = result.entries.find((e) => e.id === 'smith2023')!;
+    expect(smith.annotations).toHaveLength(1);
+  });
+
+  it('re-fetches attachments on a fullRefresh even when the export is unchanged', async () => {
+    // A PDF-annotation edit does not change the export body, so the manual
+    // "Refresh citation database" (fullRefresh) must bypass the reuse path and
+    // re-fetch — otherwise new highlights would never appear.
+    const { client, fetchAttachmentsForCitekeys } = makeAnnotatingClient();
+    const { fs } = createMockFileSystem(
+      JSON.stringify({
+        version: 2,
+        format: DATABASE_FORMATS.CslJson,
+        raw: CSL,
+        attachments: { smith2023: [RAW_ATTACHMENT] },
+      }),
+    );
+    const source = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      fs,
+      '/cache/zotero.json',
+      undefined,
+      true,
+    );
+
+    await source.load(undefined, { fullRefresh: true });
+
+    expect(fetchAttachmentsForCitekeys).toHaveBeenCalled();
+  });
+
+  it('does not rewrite the cache when reusing unchanged attachments', async () => {
+    const { client } = makeAnnotatingClient();
+    const { fs } = createMockFileSystem(
+      JSON.stringify({
+        version: 1,
+        format: DATABASE_FORMATS.CslJson,
+        raw: CSL,
+        attachments: { smith2023: [RAW_ATTACHMENT] },
+      }),
+    );
+    const source = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      fs,
+      '/cache/zotero.json',
+      undefined,
+      true,
+    );
+
+    await source.load();
+
+    // The on-disk cache already holds this exact raw + attachments, so no
+    // redundant full-file rewrite should happen on the reuse path.
+    expect(fs.writeFile).not.toHaveBeenCalled();
+  });
+
+  it('migrates a legacy-path cache to the stable-id path on reuse', async () => {
+    // On the first load after the cache-filename scheme change the primary
+    // (stable-id) path is empty but the legacy path holds a byte-identical
+    // export. Reuse must still happen (no JSON-RPC re-fetch), and the cache
+    // must be written once to the primary path so it migrates to the stable-id
+    // filename instead of depending on the legacy fallback forever.
+    const legacyPath = '/cache/zotero-cache-legacykey.json';
+    const newPath = '/cache/zotero-cache-newid.json';
+    const store: Record<string, string> = {
+      [legacyPath]: JSON.stringify({
+        version: 2,
+        format: DATABASE_FORMATS.CslJson,
+        raw: CSL,
+        attachments: { smith2023: [RAW_ATTACHMENT] },
+      }),
+    };
+    const fs = {
+      exists: jest.fn((p: string) => Promise.resolve(p in store)),
+      readFile: jest.fn((p: string) => Promise.resolve(store[p] ?? '')),
+      writeFile: jest.fn((p: string, d: string) => {
+        store[p] = d;
+        return Promise.resolve();
+      }),
+    } as unknown as IFileSystem;
+    const { client, fetchAttachmentsForCitekeys } = makeAnnotatingClient();
+    const source = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      fs,
+      newPath,
+      undefined,
+      true,
+      legacyPath,
+    );
+
+    await source.load();
+    await source.load();
+
+    // Reuse both times (byte-identical export) — no attachment re-fetch.
+    expect(fetchAttachmentsForCitekeys).not.toHaveBeenCalled();
+    // Migrated exactly once to the stable-id path; the second load hits the
+    // primary path and skips the redundant rewrite.
+    const primaryWrites = (fs.writeFile as jest.Mock).mock.calls.filter(
+      (c) => c[0] === newPath,
+    );
+    expect(primaryWrites).toHaveLength(1);
+    expect(JSON.parse(store[newPath])).toMatchObject({
+      version: 1,
+      format: DATABASE_FORMATS.CslJson,
+      raw: CSL,
+      attachments: { smith2023: [RAW_ATTACHMENT] },
+    });
+  });
+
+  it('does not read the cache on a fullRefresh success path', async () => {
+    const { client, fetchAttachmentsForCitekeys } = makeAnnotatingClient();
+    const { fs } = createMockFileSystem(
+      JSON.stringify({
+        version: 1,
+        format: DATABASE_FORMATS.CslJson,
+        raw: CSL,
+        attachments: { smith2023: [RAW_ATTACHMENT] },
+      }),
+    );
+    const source = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      fs,
+      '/cache/zotero.json',
+      undefined,
+      true,
+    );
+
+    await source.load(undefined, { fullRefresh: true });
+
+    // fullRefresh always re-fetches, so the potentially multi-MB cache read is
+    // skipped entirely when the fetch succeeds.
+    expect(fetchAttachmentsForCitekeys).toHaveBeenCalled();
+    expect(fs.readFile).not.toHaveBeenCalled();
+  });
+
+  it('preserves the cached attachment payload when a fresh fetch fails', async () => {
+    const failing = jest.fn(() =>
+      Promise.reject(new ZoteroApiError('JSON-RPC broke')),
+    );
+    // The cache holds attachments for the PREVIOUS export; the new export
+    // differs so reuse does not apply and a fresh (failing) fetch is attempted.
+    const { fs, written } = createMockFileSystem(
+      JSON.stringify({
+        version: 2,
+        format: DATABASE_FORMATS.CslJson,
+        raw: 'previous-export-body',
+        attachments: { smith2023: [RAW_ATTACHMENT] },
+      }),
+    );
+    const { client } = makeAnnotatingClient(failing);
+    const source = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      fs,
+      '/cache/zotero.json',
+      undefined,
+      true,
+    );
+
+    await source.load();
+
+    // writeCache must carry the last good attachments forward, not clobber
+    // them with `undefined` — otherwise a later offline load loses annotations.
+    const persisted = JSON.parse(written.value!) as {
+      attachments?: Record<string, unknown[]>;
+    };
+    expect(persisted.attachments).toEqual({ smith2023: [RAW_ATTACHMENT] });
+  });
+
+  it('does not fetch attachments when the flag is off', async () => {
+    const { client, fetchAttachmentsForCitekeys } = makeAnnotatingClient();
+    const source = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+    );
+
+    await source.load();
+
+    expect(fetchAttachmentsForCitekeys).not.toHaveBeenCalled();
+  });
+
+  it('degrades to a load warning when the annotation fetch fails', async () => {
+    const failing = jest.fn(() =>
+      Promise.reject(new ZoteroApiError('JSON-RPC broke')),
+    );
+    const { client } = makeAnnotatingClient(failing);
+    const source = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      undefined,
+      undefined,
+      undefined,
+      true,
+    );
+
+    const result = await source.load();
+
+    expect(result.entries).toHaveLength(2);
+    expect(result.parseErrors).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining('PDF annotations unavailable'),
+      }),
+    ]);
+  });
+
+  it('caches attachments and re-attaches them on offline fallback', async () => {
+    const { fs } = createMockFileSystem();
+    const { client } = makeAnnotatingClient();
+    const online = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      fs,
+      '/cache/zotero.json',
+      undefined,
+      true,
+    );
+    await online.load();
+
+    const offlineClient = {
+      fetchBibliography: jest.fn(() =>
+        Promise.reject(new ZoteroApiError('Zotero closed')),
+      ),
+      fetchAttachmentsForCitekeys: jest.fn(),
+      ping: jest.fn(),
+    } as never;
+    const offline = new ZoteroSource(
+      'z1',
+      offlineClient,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      fs,
+      '/cache/zotero.json',
+      undefined,
+      true,
+    );
+
+    const result = await offline.load();
+
+    const smith = result.entries.find((e) => e.id === 'smith2023')!;
+    expect(smith.annotations).toHaveLength(1);
+    expect(smith.annotations[0].openURI).toContain('ATTKEY01');
+    expect(result.parseErrors![0].message).toContain('using cache');
+  });
+
+  it('accepts a V1 cache without annotations on offline fallback', async () => {
+    const v1 = JSON.stringify({ version: 1, format: 'csl-json', raw: CSL });
+    const { fs } = createMockFileSystem(v1);
+    const offlineClient = {
+      fetchBibliography: jest.fn(() =>
+        Promise.reject(new ZoteroApiError('Zotero closed')),
+      ),
+      fetchAttachmentsForCitekeys: jest.fn(),
+      ping: jest.fn(),
+    } as never;
+    const source = new ZoteroSource(
+      'z1',
+      offlineClient,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      fs,
+      '/cache/zotero.json',
+      undefined,
+      true,
+    );
+
+    const result = await source.load();
+
+    expect(result.entries).toHaveLength(2);
+    expect(
+      result.entries.find((e) => e.id === 'smith2023')!.annotations,
+    ).toEqual([]);
+  });
+
+  it('writes a version-1 cache including the attachments payload', async () => {
+    const { fs, written } = createMockFileSystem();
+    const { client } = makeAnnotatingClient();
+    const source = new ZoteroSource(
+      'z1',
+      client,
+      createMockWorkerManager() as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      fs,
+      '/cache/zotero.json',
+      undefined,
+      true,
+    );
+
+    await source.load();
+
+    const cache = JSON.parse(written.value!) as {
+      version: number;
+      attachments?: Record<string, unknown[]>;
+    };
+    // Version stays 1 so a rolled-back build can still read it; the attachments
+    // payload is an optional superset field.
+    expect(cache.version).toBe(1);
+    expect(cache.attachments!.smith2023).toHaveLength(1);
   });
 });

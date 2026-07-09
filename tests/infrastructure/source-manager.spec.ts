@@ -459,3 +459,42 @@ describe('SourceManager', () => {
     });
   });
 });
+
+describe('SourceManager Zotero identity', () => {
+  function makeZoteroDb(
+    overrides: Partial<DatabaseConfig> = {},
+  ): DatabaseConfig {
+    return {
+      id: 'db-zot',
+      name: 'Zotero live',
+      type: 'csl-json',
+      path: 'http://127.0.0.1:23119/better-bibtex/collection?/0/AB.json',
+      sourceType: 'zotero',
+      ...overrides,
+    };
+  }
+
+  it('recreates the source when zoteroImportAnnotations is toggled', () => {
+    const factory = makeMockFactory();
+    const manager = new SourceManager(factory as never);
+
+    manager.syncSources([makeZoteroDb({ zoteroImportAnnotations: false })]);
+    const first = factory.create.mock.results[0].value as {
+      dispose: jest.Mock;
+    };
+    manager.syncSources([makeZoteroDb({ zoteroImportAnnotations: true })]);
+
+    expect(factory.create).toHaveBeenCalledTimes(2);
+    expect(first.dispose).toHaveBeenCalled();
+  });
+
+  it('keeps the source when the annotation flag is unchanged', () => {
+    const factory = makeMockFactory();
+    const manager = new SourceManager(factory as never);
+
+    manager.syncSources([makeZoteroDb({ zoteroImportAnnotations: true })]);
+    manager.syncSources([makeZoteroDb({ zoteroImportAnnotations: true })]);
+
+    expect(factory.create).toHaveBeenCalledTimes(1);
+  });
+});

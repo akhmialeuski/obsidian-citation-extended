@@ -1,3 +1,5 @@
+import type { Annotation, AttachmentRef } from './annotation';
+
 export interface TemplateContext {
   citekey: string;
   abstract?: string;
@@ -11,6 +13,9 @@ export interface TemplateContext {
   keywords?: string[];
   tags?: string[];
   collections?: string[];
+  annotations?: Annotation[];
+  attachments?: AttachmentRef[];
+  annotationCount?: number;
   lastname?: string;
   language?: string;
   note?: string;

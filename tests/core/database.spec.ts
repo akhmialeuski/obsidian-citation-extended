@@ -1,11 +1,32 @@
 import {
   generateDatabaseId,
+  findDatabaseById,
   resolveReadwiseFilters,
   resolveZoteroExportNotes,
+  resolveZoteroImportAnnotations,
 } from '../../src/core/types/database';
 import type { DatabaseConfig } from '../../src/core/types/database';
 
 jest.mock('obsidian', () => ({}), { virtual: true });
+
+describe('findDatabaseById', () => {
+  const databases: DatabaseConfig[] = [
+    { id: 'db-a', name: 'A', type: 'csl-json', path: '/a' },
+    { id: 'db-b', name: 'B', type: 'csl-json', path: '/b' },
+  ] as DatabaseConfig[];
+
+  it('returns the matching database', () => {
+    expect(findDatabaseById(databases, 'db-b')?.name).toBe('B');
+  });
+
+  it('returns undefined for an unknown id', () => {
+    expect(findDatabaseById(databases, 'nope')).toBeUndefined();
+  });
+
+  it('returns undefined for a missing id (never matches an id-less database)', () => {
+    expect(findDatabaseById(databases, undefined)).toBeUndefined();
+  });
+});
 
 describe('generateDatabaseId', () => {
   it('returns string matching db-{timestamp}-{random4} format', () => {
@@ -94,5 +115,35 @@ describe('resolveZoteroExportNotes', () => {
 
   it('returns false for an undefined id', () => {
     expect(resolveZoteroExportNotes(databases, undefined)).toBe(false);
+  });
+});
+
+describe('resolveZoteroImportAnnotations', () => {
+  const databases: DatabaseConfig[] = [
+    {
+      id: 'db-z',
+      name: 'Zotero live',
+      type: 'csl-json',
+      path: 'http://127.0.0.1:23119/better-bibtex/collection?/0/AB.json',
+      sourceType: 'zotero',
+      zoteroImportAnnotations: true,
+    },
+    { id: 'db-z2', name: 'Zotero plain', type: 'biblatex', path: 'url' },
+  ];
+
+  it('returns the matching database flag', () => {
+    expect(resolveZoteroImportAnnotations(databases, 'db-z')).toBe(true);
+  });
+
+  it('returns false when the flag is unset', () => {
+    expect(resolveZoteroImportAnnotations(databases, 'db-z2')).toBe(false);
+  });
+
+  it('returns false for a non-matching id', () => {
+    expect(resolveZoteroImportAnnotations(databases, 'nope')).toBe(false);
+  });
+
+  it('returns false for an undefined id', () => {
+    expect(resolveZoteroImportAnnotations(databases, undefined)).toBe(false);
   });
 });

@@ -26,10 +26,6 @@ import { DATABASE_FORMATS } from '../../src/core/types/database';
 import type { IFileSystem } from '../../src/platform/platform-adapter';
 import { createMockPlatformAdapter } from '../helpers/mock-platform';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function makeExportBook(
   overrides: Partial<ReadwiseExportBook> = {},
 ): ReadwiseExportBook {
@@ -153,15 +149,7 @@ function createMockWorkerManager() {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe('ReadwiseSource', () => {
-  // -------------------------------------------------------------------------
-  // Constructor
-  // -------------------------------------------------------------------------
-
   describe('constructor', () => {
     it('creates a source with the given id', () => {
       const client = createMockClient();
@@ -170,10 +158,6 @@ describe('ReadwiseSource', () => {
       expect(source.id).toBe('rw-src-1');
     });
   });
-
-  // -------------------------------------------------------------------------
-  // load() — merged behavior (both APIs fetched in parallel)
-  // -------------------------------------------------------------------------
 
   describe('load (merged behavior)', () => {
     it('loads books from v2 API and converts to ReadwiseAdapter entries', async () => {
@@ -416,10 +400,6 @@ describe('ReadwiseSource', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // load() — reader document specifics
-  // -------------------------------------------------------------------------
-
   describe('load (reader document specifics)', () => {
     it('posts serialized reader entry data to the worker', async () => {
       const docs = [makeReaderDoc({ id: 'doc-1' })];
@@ -469,13 +449,13 @@ describe('ReadwiseSource', () => {
       const parent1 = result.entries.find(
         (e) => e.id === 'rd-parent-1',
       ) as ReadwiseAdapter;
-      expect(parent1.highlights).toHaveLength(1);
-      expect(parent1.highlights[0].text).toBe('Child highlight text');
+      expect(parent1.annotations).toHaveLength(1);
+      expect(parent1.annotations[0].text).toBe('Child highlight text');
 
       const parent2 = result.entries.find(
         (e) => e.id === 'rd-parent-2',
       ) as ReadwiseAdapter;
-      expect(parent2.highlights).toHaveLength(0);
+      expect(parent2.annotations).toHaveLength(0);
     });
 
     it('keeps orphan child documents (missing parent) as top-level entries', async () => {
@@ -543,10 +523,6 @@ describe('ReadwiseSource', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Error handling
-  // -------------------------------------------------------------------------
-
   describe('error handling', () => {
     it('collects API errors in parseErrors instead of throwing', async () => {
       const client = createMockClient({
@@ -601,10 +577,6 @@ describe('ReadwiseSource', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Highlight aggregation robustness
-  // -------------------------------------------------------------------------
-
   describe('highlight aggregation', () => {
     it('skips highlights with missing or blank text when aggregating', async () => {
       const base = makeExportBook().highlights[0];
@@ -627,10 +599,6 @@ describe('ReadwiseSource', () => {
       expect(result.entries[0].note).toBe('first\n\n---\n\nsecond');
     });
   });
-
-  // -------------------------------------------------------------------------
-  // Extended field mapping (Quick Wins)
-  // -------------------------------------------------------------------------
 
   describe('extended field mapping', () => {
     it('maps v2 book fields (readable_title, source, asin) to the entry', async () => {
@@ -679,10 +647,6 @@ describe('ReadwiseSource', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Structured highlights
-  // -------------------------------------------------------------------------
-
   describe('structured highlights', () => {
     it('builds a structured highlights array from v2 book highlights', async () => {
       const base = makeExportBook().highlights[0];
@@ -709,22 +673,19 @@ describe('ReadwiseSource', () => {
       const source = new ReadwiseSource('src-1', client, worker as never);
       const entry = (await source.load()).entries[0] as ReadwiseAdapter;
 
-      expect(entry.highlights).toHaveLength(1);
-      const h = entry.highlights[0];
+      expect(entry.annotations).toHaveLength(1);
+      const h = entry.annotations[0];
       expect(h.id).toBe('7');
       expect(h.text).toBe('HL text');
-      expect(h.note).toBe('HL note');
-      expect(h.location).toBe(55);
-      expect(h.locationType).toBe('page');
-      expect(h.color).toBe('blue');
-      expect(h.url).toBe('https://readwise.io/h/7');
+      expect(h.comment).toBe('HL note');
+      expect(h.page).toBe(55);
+      expect(h.pageLabel).toBe('55');
+      expect(h.colorName).toBe('blue');
+      expect(h.openURI).toBe('https://readwise.io/h/7');
       expect(h.tags).toEqual(['k1', 'k2']);
+      expect(h.source).toBe('readwise');
     });
   });
-
-  // -------------------------------------------------------------------------
-  // watch() and dispose()
-  // -------------------------------------------------------------------------
 
   describe('watch and dispose', () => {
     it('watch is a no-op and does not throw', () => {
@@ -831,10 +792,6 @@ describe('ReadwiseSource', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Cancellation (AbortSignal threading)
-  // -------------------------------------------------------------------------
-
   describe('cancellation', () => {
     it('passes an AbortSignal to both API calls', async () => {
       const client = createMockClient();
@@ -903,10 +860,6 @@ describe('ReadwiseSource', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Integration: NormalizationPipeline compatibility
-  // -------------------------------------------------------------------------
-
   describe('NormalizationPipeline compatibility', () => {
     it('entries have id and can be tagged with _sourceDatabase', async () => {
       const books = [makeExportBook({ user_book_id: 1 })];
@@ -931,10 +884,6 @@ describe('ReadwiseSource', () => {
     });
   });
 });
-
-// ---------------------------------------------------------------------------
-// applyReadwiseFilters (pure helper)
-// ---------------------------------------------------------------------------
 
 describe('applyReadwiseFilters', () => {
   it('returns all entries when no filters are given', () => {
@@ -1074,10 +1023,6 @@ describe('applyReadwiseFilters', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// ReadwiseSource with import filters
-// ---------------------------------------------------------------------------
-
 describe('ReadwiseSource with filters', () => {
   it('drops entries that do not match the configured filter', async () => {
     const book = makeExportBook({ category: 'books' });
@@ -1100,10 +1045,6 @@ describe('ReadwiseSource with filters', () => {
     expect(result.entries).toHaveLength(0);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Offline cache
-// ---------------------------------------------------------------------------
 
 describe('ReadwiseSource offline cache', () => {
   it('writes fetched data to the cache file after a successful load', async () => {
@@ -1180,6 +1121,45 @@ describe('ReadwiseSource offline cache', () => {
     expect(result.entries).toHaveLength(1);
     // The good cache must NOT be overwritten with the empty fetch result.
     expect(fs.writeFile).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the pre-upgrade (legacy) cache path when the new path is missing', async () => {
+    const cachedRaw = JSON.stringify([
+      makeReadwiseEntryData({ rawId: 'legacy' }),
+    ]);
+    const legacyPath = '/readwise-cache-legacykey.json';
+    const newPath = '/readwise-cache-newid.json';
+    const store: Record<string, string> = { [legacyPath]: cachedRaw };
+    const fs = createMockFileSystem({
+      exists: jest.fn((p: string) => Promise.resolve(p in store)),
+      readFile: jest.fn((p: string) => Promise.resolve(store[p] ?? '')),
+    });
+    const client = createMockClient({
+      fetchExportBooks: jest.fn().mockRejectedValue(new Error('down')),
+      fetchReaderDocuments: jest.fn().mockRejectedValue(new Error('down')),
+    } as unknown as Partial<ReadwiseApiClient>);
+    const worker = createMockWorkerManager();
+
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      newPath,
+      undefined,
+      undefined,
+      legacyPath,
+    );
+    const result = await source.load();
+    warnSpy.mockRestore();
+
+    // The pre-upgrade cache is read via the legacy path, so the library is not
+    // orphaned into an empty offline load after the filename scheme change.
+    expect(result.entries).toHaveLength(1);
+    expect(
+      result.parseErrors!.some((e) => e.message.includes('using cache')),
+    ).toBe(true);
   });
 
   it('throws on a total outage with no cache (so the prior library is preserved)', async () => {
@@ -1456,10 +1436,6 @@ describe('ReadwiseSource offline cache', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Periodic sync timer
-// ---------------------------------------------------------------------------
-
 describe('ReadwiseSource periodic sync', () => {
   it('invokes the callback when the polling interval fires', () => {
     jest.useFakeTimers();
@@ -1484,10 +1460,6 @@ describe('ReadwiseSource periodic sync', () => {
     jest.useRealTimers();
   });
 });
-
-// ---------------------------------------------------------------------------
-// Incremental sync (updatedAfter + delta merge)
-// ---------------------------------------------------------------------------
 
 describe('ReadwiseSource incremental sync', () => {
   const CURSOR = '2024-06-01T00:00:00.000Z';
@@ -1664,7 +1636,7 @@ describe('ReadwiseSource incremental sync', () => {
     ) as ReadwiseAdapter;
     expect(book1.title).toBe('Book One (renamed)');
     // Old highlight kept, new one added.
-    const texts = book1.highlights.map((h) => h.text);
+    const texts = book1.annotations.map((h) => h.text);
     expect(texts).toContain('old highlight');
     expect(texts).toContain('new highlight');
   });
@@ -1733,7 +1705,7 @@ describe('ReadwiseSource incremental sync', () => {
     expect(result.entries).toHaveLength(1);
     const parent = result.entries[0] as ReadwiseAdapter;
     expect(parent.citekey).toBe('rd-parent-1');
-    expect(parent.highlights.map((h) => h.text)).toContain(
+    expect(parent.annotations.map((h) => h.text)).toContain(
       'fresh child highlight',
     );
   });

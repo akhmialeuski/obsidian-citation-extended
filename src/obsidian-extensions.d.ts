@@ -13,6 +13,6 @@ export class VaultExt extends Vault {
  * Extended Workspace interface exposing `activeEditor` (available since Obsidian v1.x).
  * Supports Canvas text nodes, Lineage views, and other non-standard editor contexts.
  */
-export interface WorkspaceExt extends Workspace {
+export interface WorkspaceExt extends Omit<Workspace, 'activeEditor'> {
   activeEditor?: { editor?: Editor } | null;
 }

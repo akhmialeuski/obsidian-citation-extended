@@ -1,4 +1,5 @@
 import type { TemplateContext } from './template-context';
+import type { Annotation, AttachmentRef } from './annotation';
 
 export interface Author {
   given?: string;
@@ -111,6 +112,53 @@ export abstract class Entry {
    */
   public collections?: string[];
 
+  /** Injected annotations (see {@link setAnnotations}). */
+  protected _annotations?: Annotation[];
+  /** Injected attachments (see {@link setAnnotations}). */
+  protected _attachments?: AttachmentRef[];
+
+  /**
+   * Source-agnostic annotations for this entry ([] when none). The consumer
+   * (templates, notes layer) reads this ONE interface regardless of source.
+   *
+   * Two population paths, both behind the source boundary:
+   * - Adapters whose annotation data lives in the parsed entry (e.g. Readwise
+   *   highlights) override this getter.
+   * - Sources whose annotations come from a separate call (e.g. Zotero via
+   *   Better BibTeX JSON-RPC) inject them with {@link setAnnotations}.
+   */
+  public get annotations(): Annotation[] {
+    return this._annotations ?? [];
+  }
+
+  /** Source-agnostic attachments for this entry ([] when none). */
+  public get attachments(): AttachmentRef[] {
+    return this._attachments ?? [];
+  }
+
+  /**
+   * Number of annotations on this entry (0 when none). A real getter so both
+   * {@link toJSON} (introspection / `entry.annotationCount`) and
+   * {@link toTemplateContext} surface it uniformly — used for
+   * `{{#if annotationCount}}` guards.
+   */
+  public get annotationCount(): number {
+    return this.annotations.length;
+  }
+
+  /**
+   * Inject externally-fetched annotations/attachments (used by sources whose
+   * annotation data is not part of the parsed entry). Adapters that derive
+   * annotations from their own data override {@link annotations} instead.
+   */
+  public setAnnotations(
+    annotations: Annotation[],
+    attachments: AttachmentRef[],
+  ): void {
+    this._annotations = annotations;
+    this._attachments = attachments;
+  }
+
   public abstract eventPlace?: string;
 
   public abstract language?: string;
@@ -216,10 +264,8 @@ export abstract class Entry {
     return this.keywords;
   }
 
-  // ---------------------------------------------------------------------------
   // Domain convenience methods — encapsulate presentation logic so callers
   // remain decoupled from raw field details.
-  // ---------------------------------------------------------------------------
 
   /**
    * Publication year as a string, or empty string when unavailable.
@@ -347,6 +393,9 @@ export abstract class Entry {
       keywords: this.keywords,
       tags: this.tags,
       collections: this.collections,
+      annotations: this.annotations,
+      attachments: this.attachments,
+      annotationCount: this.annotationCount,
       lastname: this.lastname(),
       language: this.language,
       note: this.note,
@@ -374,20 +423,39 @@ export abstract class Entry {
   toJSON(): Record<string, unknown> {
     const jsonObj = { ...this } as Record<string, unknown>;
 
-    // add getter values
-    const proto = Object.getPrototypeOf(this) as object;
-    Object.entries(Object.getOwnPropertyDescriptors(proto))
-      .filter(([, descriptor]) => typeof descriptor.get == 'function')
-      .forEach(([key, descriptor]) => {
-        if (descriptor && key[0] !== '_') {
-          try {
-            const val = (this as unknown as Record<string, unknown>)[key];
-            jsonObj[key] = val;
-          } catch {
-            return;
-          }
+    // Add getter values from the ENTIRE prototype chain, not just the
+    // immediate prototype: an adapter may sit several levels below Entry
+    // (e.g. a specialized adapter extending EntryCSLAdapter), and walking
+    // one level would silently drop every inherited getter — all `entry.*`
+    // template fields would render empty for that adapter. Property reads
+    // dispatch dynamically, so the nearest override wins; `seen` just
+    // prevents re-reading the same key at farther levels.
+    const seen = new Set<string>();
+    for (
+      let proto = Object.getPrototypeOf(this) as object | null;
+      proto && proto !== Object.prototype;
+      proto = Object.getPrototypeOf(proto) as object | null
+    ) {
+      for (const [key, descriptor] of Object.entries(
+        Object.getOwnPropertyDescriptors(proto),
+      )) {
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (typeof descriptor.get !== 'function' || key[0] === '_') continue;
+        try {
+          jsonObj[key] = (this as unknown as Record<string, unknown>)[key];
+        } catch {
+          continue;
         }
-      });
+      }
+    }
+
+    // `annotations`/`attachments` are getters on Entry (or a subclass), so the
+    // dynamic-dispatch chain walk above already surfaced the correct values —
+    // no explicit re-assignment is needed. Only strip the raw backing fields
+    // that the `{ ...this }` spread copied verbatim, so they never leak.
+    delete jsonObj._annotations;
+    delete jsonObj._attachments;
 
     return jsonObj;
   }

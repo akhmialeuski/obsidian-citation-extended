@@ -9,8 +9,10 @@ export {
   DATABASE_FORMATS,
   DATABASE_TYPE_LABELS,
   generateDatabaseId,
+  findDatabaseById,
   resolveReadwiseFilters,
   resolveZoteroExportNotes,
+  resolveZoteroImportAnnotations,
 } from './types/database';
 export type { TemplateContext } from './types/template-context';
 export { WORKER_TASK_KINDS } from './types/worker-protocol';
@@ -55,13 +57,22 @@ export {
   ZoteroConnectorClient,
   ZoteroApiError,
   ZoteroAbortError,
+  ZOTERO_ANNOTATION_COLOR_NAMES,
+  zoteroColorName,
+  normalizeZoteroAttachments,
 } from './zotero';
 export type {
   ZoteroHttpResponse,
   ZoteroHttpGetFn,
   ZoteroHttpPostFn,
   ZoteroVersions,
+  ZoteroAttachmentsFetchResult,
+  NormalizedAttachments,
 } from './zotero';
+
+// Source-agnostic annotation model (Zotero, Readwise, and future sources all
+// normalize into this; consumers read only this interface).
+export type { Annotation, AttachmentRef } from './types/annotation';
 
 // Readwise incremental sync (delta merge)
 export {

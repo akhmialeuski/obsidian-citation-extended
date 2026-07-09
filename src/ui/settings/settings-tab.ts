@@ -87,10 +87,6 @@ export class CitationSettingTab extends PluginSettingTab {
     this.renderDisplaySection(containerEl);
   }
 
-  // ---------------------------------------------------------------------------
-  // Section 1: Citation databases
-  // ---------------------------------------------------------------------------
-
   private renderDatabaseSection(containerEl: HTMLElement): void {
     new Setting(containerEl).setName('Citation databases').setHeading();
     containerEl.createEl('p', {
@@ -337,16 +333,35 @@ export class CitationSettingTab extends PluginSettingTab {
       });
 
     new Setting(card)
-      .setName('Import notes & annotations')
+      .setName('Import notes')
       .setDesc(
-        'Include Zotero notes and PDF annotations in the export ' +
-          '(exportNotes=true). They become available via the {{note}} template variable.',
+        'Include Zotero child notes in the export (exportNotes=true). ' +
+          'They become available via the {{note}} template variable.',
       )
       .addToggle((toggle) => {
         toggle
           .setValue(db.zoteroExportNotes ?? false)
           .onChange(async (value) => {
             this.plugin.settings.databases[index].zoteroExportNotes = value;
+            await this.plugin.saveSettings();
+            // Recreating the source (key includes this flag) happens on reload.
+            void this.plugin.libraryService.load();
+          });
+      });
+
+    new Setting(card)
+      .setName('Import PDF annotations')
+      .setDesc(
+        'Fetch native Zotero PDF annotations (highlights, comments, colors, ' +
+          'page deep-links) for every entry. Available in templates via ' +
+          '{{annotations}} and {{attachments}}. Requires Better BibTeX.',
+      )
+      .addToggle((toggle) => {
+        toggle
+          .setValue(db.zoteroImportAnnotations ?? false)
+          .onChange(async (value) => {
+            this.plugin.settings.databases[index].zoteroImportAnnotations =
+              value;
             await this.plugin.saveSettings();
             // Recreating the source (key includes this flag) happens on reload.
             void this.plugin.libraryService.load();
@@ -365,11 +380,22 @@ export class CitationSettingTab extends PluginSettingTab {
             debounce(async (value: string) => {
               const num = parseInt(value, 10);
               if (!isNaN(num) && num >= READWISE_SYNC_INTERVAL_MIN_MINUTES) {
-                this.plugin.settings.zoteroSyncIntervalMinutes = Math.min(
+                // Clamp to the schema max so the saved value never overflows
+                // window.setInterval.
+                const clamped = Math.min(
                   num,
                   READWISE_SYNC_INTERVAL_MAX_MINUTES,
                 );
+                this.plugin.settings.zoteroSyncIntervalMinutes = clamped;
                 await this.plugin.saveSettings();
+                // Reflect a clamped value back into the field so the UI never
+                // disagrees with the saved value, and tell the user.
+                if (clamped !== num) {
+                  text.setValue(String(clamped));
+                  new Notice(
+                    `Sync interval capped at ${READWISE_SYNC_INTERVAL_MAX_MINUTES} minutes (1 week).`,
+                  );
+                }
               }
             }, 500),
           );
@@ -454,10 +480,6 @@ export class CitationSettingTab extends PluginSettingTab {
       return false;
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Database card field variants
-  // ---------------------------------------------------------------------------
 
   private renderFilePathField(
     card: HTMLElement,
@@ -788,10 +810,6 @@ export class CitationSettingTab extends PluginSettingTab {
       });
   }
 
-  // ---------------------------------------------------------------------------
-  // Section 2: Literature notes
-  // ---------------------------------------------------------------------------
-
   private renderLiteratureNotesSection(containerEl: HTMLElement): void {
     new Setting(containerEl).setName('Literature notes').setHeading();
 
@@ -886,10 +904,6 @@ export class CitationSettingTab extends PluginSettingTab {
         });
       });
   }
-
-  // ---------------------------------------------------------------------------
-  // Section 3: Markdown citations
-  // ---------------------------------------------------------------------------
 
   private renderCitationsSection(containerEl: HTMLElement): void {
     new Setting(containerEl)
@@ -991,10 +1005,6 @@ export class CitationSettingTab extends PluginSettingTab {
       });
   }
 
-  // ---------------------------------------------------------------------------
-  // Section 4: Display
-  // ---------------------------------------------------------------------------
-
   private renderDisplaySection(containerEl: HTMLElement): void {
     new Setting(containerEl).setName('Display').setHeading();
 
@@ -1032,10 +1042,6 @@ export class CitationSettingTab extends PluginSettingTab {
           );
       });
   }
-
-  // ---------------------------------------------------------------------------
-  // Reusable field builders
-  // ---------------------------------------------------------------------------
 
   private buildTextField<K extends keyof CitationsPluginSettingsType>(
     containerEl: HTMLElement,

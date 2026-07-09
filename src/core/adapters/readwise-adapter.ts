@@ -1,8 +1,5 @@
 import { Author, Entry } from '../types/entry';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+import type { Annotation } from '../types/annotation';
 
 /** Named constants for the Readwise API modes (avoids scattered string literals). */
 export const READWISE_MODES = {
@@ -63,8 +60,8 @@ export interface ReadwiseEntryData {
   tags: string[];
   publishedDate: string | null;
   updatedAt: string | null;
-  // --- Additional mapped fields (optional for backward-compat with cached
-  //     JSON written before these fields existed) ---------------------------
+  // Additional mapped fields (optional for backward-compat with cached
+  // JSON written before these fields existed).
   /** Cleaned/normalized title (v2 `readable_title`) → titleShort. */
   readableTitle?: string | null;
   /** Origin: "kindle"/"instapaper" (v2) or Reader source (v3) → source. */
@@ -84,10 +81,6 @@ export interface ReadwiseEntryData {
   /** Extra raw fields the adapter does not map but preserves in toJSON. */
   extra?: Record<string, unknown>;
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 /** Map Readwise / Reader category strings to standard reference types. */
 const CATEGORY_TYPE_MAP: Record<string, string> = {
@@ -147,10 +140,6 @@ function toDate(dateStr: string | null): Date | null {
   return new Date(ms);
 }
 
-// ---------------------------------------------------------------------------
-// Adapter
-// ---------------------------------------------------------------------------
-
 /**
  * Adapter that maps Readwise-specific data to the standard {@link Entry}
  * interface.  Works for both Readwise v2 Export entries (highlights) and
@@ -180,8 +169,6 @@ export class ReadwiseAdapter extends Entry {
     }
   }
 
-  // -- Identity -------------------------------------------------------------
-
   get id(): string {
     return this._id ?? this.citekey;
   }
@@ -195,8 +182,6 @@ export class ReadwiseAdapter extends Entry {
       ? `rw-${this.data.rawId}`
       : `rd-${this.data.rawId}`;
   }
-
-  // -- Standard Entry fields ------------------------------------------------
 
   get type(): string {
     return mapCategoryToType(this.data.category);
@@ -290,14 +275,10 @@ export class ReadwiseAdapter extends Entry {
     return undefined;
   }
 
-  // -- Overridden base-class getters ----------------------------------------
-
   /** Returns the Readwise web URL instead of a zotero:// select URI. */
   public override get zoteroSelectURI(): string {
     return this.data.readwiseUrl;
   }
-
-  // -- Readwise-specific getters --------------------------------------------
 
   /** URL to the entry on the Readwise web app. */
   get readwiseUrl(): string {
@@ -348,11 +329,80 @@ export class ReadwiseAdapter extends Entry {
   }
 
   /**
-   * Structured list of highlights with per-item metadata (text, note,
-   * location, color, tags). Empty array when the entry has no highlights.
-   * Iterate in templates via `{{#each entry.highlights}}`.
+   * Readwise highlights ARE annotations — exposed through the source-agnostic
+   * {@link Entry.annotations} interface (the same one Zotero maps into), so
+   * `{{annotations}}` works uniformly across sources. Derived from the parsed
+   * entry data (no external fetch), memoized because sort/search touch it.
+   */
+  get annotations(): Annotation[] {
+    return this.memo('annotations', () =>
+      (this.data.highlights ?? []).map((h, index) =>
+        readwiseHighlightToAnnotation(h, index),
+      ),
+    );
+  }
+
+  /**
+   * Legacy Readwise-only highlight list, kept for backward compatibility so
+   * existing templates that iterate `{{#each entry.highlights}}` keep
+   * rendering after the switch to the unified {@link annotations} surface.
+   *
+   * @deprecated Use {@link annotations} (`{{#each annotations}}`) instead — the
+   * source-agnostic replacement shared with Zotero. This getter returns the raw
+   * highlight items (`text`, `note`, `location`, `locationType`, `color`,
+   * `highlightedAt`, `url`, `tags`) and will be removed in a future release.
    */
   get highlights(): ReadwiseHighlightItem[] {
     return this.data.highlights ?? [];
   }
+}
+
+/** Zero-pad an index so lexicographic sort equals highlight order. */
+function orderKey(index: number): string {
+  return String(index).padStart(8, '0');
+}
+
+/** Map one Readwise highlight into the source-agnostic annotation shape. */
+function readwiseHighlightToAnnotation(
+  h: ReadwiseHighlightItem,
+  index: number,
+): Annotation {
+  const hasLocation = h.location != null;
+  const isPage = h.locationType === 'page' && hasLocation;
+  return {
+    id: h.id || null,
+    type: 'highlight',
+    text: h.text ?? '',
+    comment: h.note ?? '',
+    // Readwise stores a palette NAME (e.g. "yellow"), not a hex value.
+    color: '',
+    colorName: h.color ?? null,
+    // A real page becomes a numeric `page`; every other kind of position
+    // (Kindle "location", Reader "order", podcast "time_offset") is preserved
+    // in `pageLabel` — value AND type — so it is not silently dropped the way
+    // the removed `entry.highlights` surface never dropped it.
+    page: isPage ? h.location : null,
+    pageLabel: readwiseLocationLabel(h.location, h.locationType, isPage),
+    tags: h.tags ?? [],
+    imagePath: null,
+    openURI: h.url ?? null,
+    sortIndex: orderKey(index),
+    dateModified: h.highlightedAt ?? null,
+    source: 'readwise',
+  };
+}
+
+/**
+ * Human-readable position label for a Readwise highlight. Pages render as the
+ * bare number ("42"); non-page kinds keep their type so a template can tell a
+ * Kindle location from a page ("location 1234", "order 5", "time_offset 90").
+ */
+function readwiseLocationLabel(
+  location: number | null,
+  locationType: string | null,
+  isPage: boolean,
+): string {
+  if (location == null) return '';
+  if (isPage) return String(location);
+  return `${locationType ?? 'location'} ${location}`;
 }

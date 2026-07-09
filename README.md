@@ -23,6 +23,7 @@ For detailed setup instructions, see [Getting Started](docs/getting-started.md).
 - **Insert markdown citation** — insert [Pandoc-style citations][3] with presets (textcite, parencite)
 - **Inline citation autocomplete** — type `@` or `[@` to get a suggestion popover backed by the same fuzzy search index
 - **References sidebar** — a side panel listing every reference cited in the active note, with one-click navigation and "copy bibliography"
+- **Zotero PDF annotation import** — pull native Zotero highlights into templates as structured data (text, comment, color, page, tags) with `zotero://` deep links that open the PDF at the exact annotation
 - **Readwise integration** — import highlights and documents from Readwise as citable entries
 - **Refresh citation database** — manually reload all sources
 
@@ -53,6 +54,7 @@ Full documentation is in the [docs/](docs/index.md) directory.
 This plugin accesses the network only when **you** configure it to, and it never sends telemetry or analytics.
 
 - **Readwise API (`readwise.io`)** — contacted **only** if you add a Readwise data source and supply your own API token, in order to fetch your highlights (v2) and documents (v3) as citable entries. If you set a sync interval, the plugin re-fetches from this endpoint on that schedule; otherwise it fetches on demand. Your token is stored locally in plugin settings and sent only to Readwise for authentication.
+- **Local Zotero (`127.0.0.1:23119`)** — contacted **only** if you enable a live Zotero (Better BibTeX) database, to pull the bibliography export and (when "Import PDF annotations" is on) your PDF annotations via the Better BibTeX JSON-RPC endpoint. This is loopback-only traffic to Zotero running on the same machine; nothing crosses the network.
 - **Documentation links (`github.com`)** — the settings screen links to the plugin's documentation. These open in your browser **when you click them**; the plugin makes no automatic requests to GitHub.
 
 All bibliography parsing happens locally. Nothing leaves your vault unless you explicitly enable the Readwise integration above.

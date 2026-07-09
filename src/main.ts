@@ -18,6 +18,7 @@ import { LocalFileSource } from './sources/local-file-source';
 import { VaultFileSource } from './sources/vault-file-source';
 import { ReadwiseSource } from './sources/readwise-source';
 import { ZoteroSource } from './sources/zotero-source';
+import { sourceCacheFilePath } from './sources/source-utils';
 import { SourceManager } from './infrastructure/source-manager';
 import { TemplateProfileRegistry } from './domain/template-profile-registry';
 import {
@@ -48,6 +49,7 @@ import {
   ReadwiseApiClient,
   resolveReadwiseFilters,
   resolveZoteroExportNotes,
+  resolveZoteroImportAnnotations,
   ZoteroConnectorClient,
 } from './core';
 import LoadWorker from 'web-worker:./worker';
@@ -162,10 +164,10 @@ export default class CitationPlugin extends Plugin {
     );
 
     // Register Readwise source type — token lives in db.path (passed via def.path).
-    // Each Readwise database gets its own cache file keyed by the stable source
-    // id, so multiple Readwise databases never collide on a single shared cache.
+    // Each Readwise database gets its own cache file keyed by the stable
+    // database id (see sourceCacheFilePath), so it survives config-flag toggles
+    // and upgrades and never collides on a single shared cache.
     const readwiseCacheDir = this.manifest?.dir ?? '';
-    const cacheNameSanitizeRe = /[^a-zA-Z0-9_-]/g;
     registry.register(
       DATA_SOURCE_TYPES.Readwise,
       (def, id) =>
@@ -174,9 +176,12 @@ export default class CitationPlugin extends Plugin {
           new ReadwiseApiClient(def.path, obsidianHttpGet),
           workerManager,
           platformAdapter.fileSystem,
-          readwiseCacheDir
-            ? `${readwiseCacheDir}/readwise-cache-${id.replace(cacheNameSanitizeRe, '-')}.json`
-            : '',
+          sourceCacheFilePath(
+            readwiseCacheDir,
+            'readwise-cache',
+            def.databaseId,
+            id,
+          ),
           // Interval PROVIDER (not a snapshot): the source re-reads it on
           // every poll cycle, so settings changes apply without recreating
           // the source. Clamp at point of use: a persisted out-of-range value
@@ -188,12 +193,21 @@ export default class CitationPlugin extends Plugin {
           // Resolve per-database filters from settings via the generic
           // databaseId, keeping source-specific config off DataSourceDefinition.
           resolveReadwiseFilters(this.settings.databases, def.databaseId),
+          // Legacy cache path (keyed by the volatile source key) so a
+          // pre-upgrade cache is still read after the switch to databaseId.
+          sourceCacheFilePath(
+            readwiseCacheDir,
+            'readwise-cache',
+            undefined,
+            id,
+          ),
         ),
     );
 
     // Register Zotero (Better BibTeX) source type — def.path holds the pull
-    // export URL; def.format selects the parser (CSL JSON or BibLaTeX). Each
-    // gets its own offline cache keyed by the stable source id.
+    // export URL; def.format selects the parser (CSL JSON or BibLaTeX). The
+    // offline cache is keyed by the stable database id (see sourceCacheFilePath)
+    // so it survives config-flag toggles and upgrades.
     registry.register(
       DATA_SOURCE_TYPES.Zotero,
       (def, id) =>
@@ -208,13 +222,23 @@ export default class CitationPlugin extends Plugin {
           def.format,
           resolveZoteroExportNotes(this.settings.databases, def.databaseId),
           platformAdapter.fileSystem,
-          readwiseCacheDir
-            ? `${readwiseCacheDir}/zotero-cache-${id.replace(cacheNameSanitizeRe, '-')}.json`
-            : '',
+          sourceCacheFilePath(
+            readwiseCacheDir,
+            'zotero-cache',
+            def.databaseId,
+            id,
+          ),
           // Interval provider (not a snapshot): re-read every poll cycle so a
           // settings change applies without recreating the source.
           () =>
             resolveSyncIntervalMs(this.settings.zoteroSyncIntervalMinutes) ?? 0,
+          resolveZoteroImportAnnotations(
+            this.settings.databases,
+            def.databaseId,
+          ),
+          // Legacy cache path (keyed by the volatile source key) so a
+          // pre-upgrade cache is still read after the switch to databaseId.
+          sourceCacheFilePath(readwiseCacheDir, 'zotero-cache', undefined, id),
         ),
     );
 
