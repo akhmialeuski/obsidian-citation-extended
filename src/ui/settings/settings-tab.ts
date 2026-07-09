@@ -380,11 +380,22 @@ export class CitationSettingTab extends PluginSettingTab {
             debounce(async (value: string) => {
               const num = parseInt(value, 10);
               if (!isNaN(num) && num >= READWISE_SYNC_INTERVAL_MIN_MINUTES) {
-                this.plugin.settings.zoteroSyncIntervalMinutes = Math.min(
+                // Clamp to the schema max so the saved value never overflows
+                // window.setInterval.
+                const clamped = Math.min(
                   num,
                   READWISE_SYNC_INTERVAL_MAX_MINUTES,
                 );
+                this.plugin.settings.zoteroSyncIntervalMinutes = clamped;
                 await this.plugin.saveSettings();
+                // Reflect a clamped value back into the field so the UI never
+                // disagrees with the saved value, and tell the user.
+                if (clamped !== num) {
+                  text.setValue(String(clamped));
+                  new Notice(
+                    `Sync interval capped at ${READWISE_SYNC_INTERVAL_MAX_MINUTES} minutes (1 week).`,
+                  );
+                }
               }
             }, 500),
           );

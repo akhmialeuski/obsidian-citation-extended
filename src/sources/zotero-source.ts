@@ -25,15 +25,17 @@ import { createLinkedAbortController, PeriodicSync } from './source-utils';
  * in. Lets Obsidian keep serving the library when Zotero is closed, and lets a
  * later format change be detected (a stale-format cache is simply ignored).
  *
- * V2 adds the raw `item.attachments` responses (per citekey) so annotations
- * survive offline loads. A V1 cache is still accepted — it simply carries no
- * annotations.
+ * The optional `attachments` payload (raw `item.attachments` responses per
+ * citekey) lets annotations survive offline loads. It is written as an OPTIONAL
+ * field on a `version: 1` cache — a superset a rolled-back build (which accepts
+ * only version 1 and ignores unknown fields) can still read. `version: 2` is
+ * still accepted on read for forward tolerance.
  */
 interface ZoteroCacheStateV2 {
   version: 1 | 2;
   format: DatabaseType;
   raw: string;
-  /** Citekey → raw BBT `item.attachments` result. Absent in V1 caches. */
+  /** Citekey → raw BBT `item.attachments` result. Absent when not fetched. */
   attachments?: Record<string, unknown[]>;
 }
 
@@ -83,6 +85,12 @@ export class ZoteroSource implements DataSource {
     syncIntervalProvider?: () => number,
     /** Fetch native PDF annotations and attach them to entries. */
     private importAnnotations = false,
+    /**
+     * Pre-upgrade cache path (keyed by the old volatile source key). Read as a
+     * fallback so an existing install's offline cache is not orphaned when the
+     * cache filename scheme changes to the stable database id.
+     */
+    private legacyCachePath?: string,
   ) {
     this.poller = syncIntervalProvider
       ? new PeriodicSync(syncIntervalProvider, 'ZoteroSource')
@@ -137,29 +145,40 @@ export class ZoteroSource implements DataSource {
         throw new Error(`Failed to load from Zotero: ${message}`);
       }
 
-      const result = await this.parseRaw(raw, this.format, [], signal);
+      // Parse the fresh export. If the worker throws on a good export, still
+      // persist the raw export (carrying any prior attachments forward) so a
+      // later offline load serves the newest export rather than an older one.
+      let result: DataSourceLoadResult;
+      try {
+        result = await this.parseRaw(raw, this.format, [], signal);
+      } catch (parseError) {
+        const prior = this.importAnnotations ? await this.readCache() : null;
+        await this.writeCache(raw, prior?.attachments);
+        throw parseError;
+      }
 
       // Annotation enrichment is best-effort: a failure downgrades to a load
       // warning so the bibliography itself stays usable.
       let attachments: Record<string, unknown[]> | undefined;
+      // True when the on-disk cache already holds this exact raw + attachments,
+      // so rewriting it would be a redundant full-file write every poll cycle.
+      let attachmentsUnchanged = false;
       if (this.importAnnotations) {
-        const cached = await this.readCache();
+        // Only read the cache when it can actually be reused. A PDF-annotation
+        // edit does NOT change the export body, so the manual "Refresh citation
+        // database" (fullRefresh) must always re-fetch; skip the potentially
+        // multi-MB cache read+parse on that path entirely.
+        const cached = options?.fullRefresh ? null : await this.readCache();
         // When the export is byte-identical to the cached one the bibliography
         // did not change, so reuse the cached attachment payloads instead of
-        // re-fetching every entry's attachments on every (periodic) load.
-        //
-        // BUT a PDF-annotation edit in Zotero does NOT change the export body,
-        // so a `fullRefresh` (the manual "Refresh citation database" command)
-        // must bypass this reuse and re-fetch — otherwise new highlights would
-        // never surface until an unrelated bibliographic field changed.
+        // re-fetching every entry's attachments on every periodic load.
         const reusableAttachments =
-          !options?.fullRefresh &&
-          cached?.raw === raw &&
-          cached?.format === this.format
+          cached?.raw === raw && cached?.format === this.format
             ? cached.attachments
             : undefined;
         if (reusableAttachments) {
           attachments = reusableAttachments;
+          attachmentsUnchanged = true;
           ZoteroSource.attachAnnotations(result.entries, reusableAttachments);
         } else {
           try {
@@ -179,13 +198,18 @@ export class ZoteroSource implements DataSource {
             // Carry the last good attachment payload forward so writeCache does
             // not clobber it with nothing — a later offline load then still has
             // annotations for the (unchanged) citekeys instead of an empty set.
-            attachments = cached?.attachments;
+            // Read lazily here since we skip the reuse read on a fullRefresh.
+            const prior = cached ?? (await this.readCache());
+            attachments = prior?.attachments;
           }
         }
       }
 
-      // Persist the successful export (and annotations) for offline use.
-      await this.writeCache(raw, attachments);
+      // Persist the successful export (and annotations) for offline use, unless
+      // the cache already holds exactly this content.
+      if (!attachmentsUnchanged) {
+        await this.writeCache(raw, attachments);
+      }
 
       return result;
     } finally {
@@ -256,14 +280,28 @@ export class ZoteroSource implements DataSource {
     };
   }
 
-  /** Read and validate the cache file, or null when missing/corrupt/stale. */
+  /**
+   * Read and validate the cache, or null when missing/corrupt/stale. Falls
+   * back to the pre-upgrade path so an existing install's offline cache is not
+   * orphaned by the cache-filename scheme change.
+   */
   private async readCache(): Promise<ZoteroCacheStateV2 | null> {
-    if (!this.fileSystem || !this.cachePath) return null;
+    const primary = await this.readCacheFrom(this.cachePath);
+    if (primary) return primary;
+    if (this.legacyCachePath && this.legacyCachePath !== this.cachePath) {
+      return this.readCacheFrom(this.legacyCachePath);
+    }
+    return null;
+  }
+
+  /** Read+validate a single cache file, or null when missing/corrupt/stale. */
+  private async readCacheFrom(
+    path?: string,
+  ): Promise<ZoteroCacheStateV2 | null> {
+    if (!this.fileSystem || !path) return null;
     try {
-      if (!(await this.fileSystem.exists(this.cachePath))) return null;
-      const parsed: unknown = JSON.parse(
-        await this.fileSystem.readFile(this.cachePath),
-      );
+      if (!(await this.fileSystem.exists(path))) return null;
+      const parsed: unknown = JSON.parse(await this.fileSystem.readFile(path));
       if (
         parsed !== null &&
         typeof parsed === 'object' &&
@@ -290,7 +328,10 @@ export class ZoteroSource implements DataSource {
       await this.fileSystem.writeFile(
         this.cachePath,
         JSON.stringify({
-          version: 2,
+          // Keep version 1: the annotations payload is an OPTIONAL superset, so
+          // a rolled-back build (which accepts only version === 1 and ignores
+          // unknown fields) can still read this cache for its offline fallback.
+          version: 1,
           format: this.format,
           raw,
           ...(attachments ? { attachments } : {}),

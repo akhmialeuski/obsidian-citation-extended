@@ -670,6 +670,29 @@ describe('CitationSettingTab', () => {
       expect(plugin.settings.databases[0].sourceType).toBeUndefined();
     });
 
+    it('clamps the Zotero sync interval, reflects it back, and shows a Notice', async () => {
+      plugin = zoteroPlugin();
+      tab = new CitationSettingTab({} as never, plugin);
+      tab.display();
+
+      const texts = allComponents((s) => s.getTextComponents()) as Array<{
+        triggerChange(v: string): void;
+        inputEl: HTMLInputElement;
+      }>;
+      // Text field index 2 is the Zotero "Auto-sync interval" field.
+      texts[2].triggerChange('20000');
+
+      // The clamp + save is synchronous within onChange.
+      expect(plugin.settings.zoteroSyncIntervalMinutes).toBe(10080);
+      // The reflect-back and Notice run after the awaited saveSettings.
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(texts[2].inputEl.value).toBe('10080');
+      expect(mockNotice).toHaveBeenCalledWith(
+        expect.stringContaining('capped'),
+      );
+    });
+
     it('saves the export-notes flag and the URL, and exercises the buttons', () => {
       plugin = zoteroPlugin();
       tab = new CitationSettingTab({} as never, plugin);

@@ -290,6 +290,39 @@ describe('ZoteroConnectorClient.fetchAttachmentsForCitekeys', () => {
     expect(result.attachmentsByCitekey.size).toBe(0);
   });
 
+  it('maps a result whose id is a numeric STRING (proxy re-encoding)', async () => {
+    const post = jest.fn((_url: string, _body: string) =>
+      Promise.resolve(
+        jsonResponse(200, [{ jsonrpc: '2.0', id: '0', result: [ATTACHMENT] }]),
+      ),
+    ) as unknown as jest.MockedFunction<ZoteroHttpPostFn>;
+    const client = makeClient(post);
+
+    const result = await client.fetchAttachmentsForCitekeys(['smith2023']);
+
+    expect(result.attachmentsByCitekey.get('smith2023')).toEqual([ATTACHMENT]);
+  });
+
+  it('warns instead of silently dropping when a result id cannot be mapped', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const post = jest.fn((_url: string, _body: string) =>
+      Promise.resolve(
+        jsonResponse(200, [
+          { jsonrpc: '2.0', id: 'nope', result: [ATTACHMENT] },
+        ]),
+      ),
+    ) as unknown as jest.MockedFunction<ZoteroHttpPostFn>;
+    const client = makeClient(post);
+
+    const result = await client.fetchAttachmentsForCitekeys(['a2020']);
+
+    expect(result.attachmentsByCitekey.size).toBe(0);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('unrecognized JSON-RPC id'),
+    );
+    warn.mockRestore();
+  });
+
   it('throws ZoteroApiError on a non-2xx response', async () => {
     const post = jest.fn((_url: string, _body: string) =>
       Promise.resolve(jsonResponse(500, {})),

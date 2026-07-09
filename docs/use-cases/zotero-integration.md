@@ -292,7 +292,7 @@ Notes:
 
 - Works with both Better CSL JSON and BibLaTeX formats — annotations are fetched separately via the Better BibTeX JSON-RPC API, not from the export file.
 - Clicking an annotation link opens Zotero's PDF reader on the right page with the annotation selected.
-- The full field list is in [Template Variables: Zotero PDF Annotations](../templates/variables.md#zotero-pdf-annotations).
+- The full field list is in [Template Variables: Zotero PDF Annotations](../templates/variables.md#annotations-source-agnostic).
 
 ### CSL-JSON Export
 

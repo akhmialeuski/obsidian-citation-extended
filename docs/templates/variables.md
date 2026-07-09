@@ -312,7 +312,7 @@ For entries with no highlights the array is empty, so the loop renders nothing.
 source that carries annotation-like data maps it into the same shape, so your
 template never depends on where the data came from:
 
-- **Zotero** (live Better BibTeX connection, **Import PDF annotations** enabled — see [Data Sources](../data-sources.md#live-zotero-connection-better-bibtex)) → native PDF highlights, comments, and **image/area annotations**, with `source: "zotero"`.
+- **Zotero** (live Better BibTeX connection, **Import PDF annotations** enabled — see [Data Sources](../data-sources.md#zotero-better-bibtex-live-connection)) → native PDF highlights, comments, and **image/area annotations**, with `source: "zotero"`.
 - **Readwise** → each highlight (text + your note + color + tags), with `source: "readwise"`.
 - **Any future source** implements the same mapping — no template change needed.
 
@@ -324,34 +324,34 @@ safe — you never have to special-case a source or a missing field.
 
 Each item is one annotation, in document order:
 
-| Property | Description | Example |
-|----------|-------------|---------|
-| `text` | Highlighted / quoted text (**empty** for note- and image-only annotations) | `A key finding.` |
-| `comment` | Your comment/note on the annotation | `Compare with Smith 2020` |
-| `type` | `highlight`, `underline`, `note`, `image`, `ink`, … (source's own term) | `highlight` |
-| `color` | Raw color (hex for Zotero; empty for Readwise, which uses a name) | `#ffd400` |
-| `colorName` | Palette name (`yellow`, `red`, …), or null when unknown | `yellow` |
-| `page` | 1-based page number, or null | `12` |
-| `pageLabel` | Page label as shown (may be roman numerals) | `xii` |
-| `openURI` | Link that opens the source **at this annotation**, or null | `zotero://open-pdf/library/items/KEY?page=12&annotation=ANNOT` |
-| `imagePath` | Absolute path to the cached image (**image/area annotations**), or null | `/…/storage/…/IMG.png` |
-| `tags` | Tags on the annotation | `["method"]` |
-| `dateModified` | ISO timestamp, or null | `2026-01-15T10:30:00Z` |
-| `id` | Stable per-source id (used in deep links), or null | `ABCD1234` |
-| `sortIndex` | Opaque document-order key | `00011\|001234\|00100` |
-| `source` | Which source produced it | `zotero` |
+| Property       | Description                                                                | Example                                                        |
+| -------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `text`         | Highlighted / quoted text (**empty** for note- and image-only annotations) | `A key finding.`                                               |
+| `comment`      | Your comment/note on the annotation                                        | `Compare with Smith 2020`                                      |
+| `type`         | `highlight`, `underline`, `note`, `image`, `ink`, … (source's own term)    | `highlight`                                                    |
+| `color`        | Raw color (hex for Zotero; empty for Readwise, which uses a name)          | `#ffd400`                                                      |
+| `colorName`    | Palette name (`yellow`, `red`, …), or null when unknown                    | `yellow`                                                       |
+| `page`         | 1-based page number, or null                                               | `12`                                                           |
+| `pageLabel`    | Page label as shown (may be roman numerals)                                | `xii`                                                          |
+| `openURI`      | Link that opens the source **at this annotation**, or null                 | `zotero://open-pdf/library/items/KEY?page=12&annotation=ANNOT` |
+| `imagePath`    | Absolute path to the cached image (**image/area annotations**), or null    | `/…/storage/…/IMG.png`                                         |
+| `tags`         | Tags on the annotation                                                     | `["method"]`                                                   |
+| `dateModified` | ISO timestamp, or null                                                     | `2026-01-15T10:30:00Z`                                         |
+| `id`           | Stable per-source id (used in deep links), or null                         | `ABCD1234`                                                     |
+| `sortIndex`    | Opaque document-order key                                                  | `00011\|001234\|00100`                                         |
+| `source`       | Which source produced it                                                   | `zotero`                                                       |
 
 ### `attachments` Array
 
 One item per source attachment (e.g. a PDF). Empty when none.
 
-| Property | Description |
-|----------|-------------|
-| `id` | Per-source attachment id |
-| `path` | Absolute file path |
-| `title` | File basename without extension |
-| `openURI` | Link opening the attachment in the source |
-| `annotationCount` | Number of annotations on this attachment |
+| Property          | Description                               |
+| ----------------- | ----------------------------------------- |
+| `id`              | Per-source attachment id                  |
+| `path`            | Absolute file path                        |
+| `title`           | File basename without extension           |
+| `openURI`         | Link opening the attachment in the source |
+| `annotationCount` | Number of annotations on this attachment  |
 
 ### `annotationCount`
 

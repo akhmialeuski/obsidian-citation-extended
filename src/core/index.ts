@@ -9,6 +9,7 @@ export {
   DATABASE_FORMATS,
   DATABASE_TYPE_LABELS,
   generateDatabaseId,
+  findDatabaseById,
   resolveReadwiseFilters,
   resolveZoteroExportNotes,
   resolveZoteroImportAnnotations,

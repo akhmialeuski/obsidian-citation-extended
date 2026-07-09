@@ -109,10 +109,15 @@ function pageOf(position: unknown, pageLabel: string): number | null {
       // fall through to the page label
     }
   }
-  const numericLabel = parseInt(pageLabel, 10);
-  return Number.isFinite(numericLabel) && String(numericLabel) === pageLabel
-    ? numericLabel
-    : null;
+  // Accept a purely-numeric page label, including zero-padded forms like
+  // "007" (a strict String(parseInt(x)) === x round-trip would reject those).
+  // Roman numerals, "12a", and empty labels stay null so pageLabel carries them.
+  const trimmed = pageLabel.trim();
+  if (/^\d+$/.test(trimmed)) {
+    const numericLabel = parseInt(trimmed, 10);
+    if (Number.isFinite(numericLabel)) return numericLabel;
+  }
+  return null;
 }
 
 function tagsOf(raw: unknown): string[] {
@@ -132,13 +137,15 @@ function tagsOf(raw: unknown): string[] {
 /** Build the `zotero://open-pdf` deep link for an annotation. */
 function buildOpenURI(
   attachmentOpen: string | null,
-  attachmentKey: string | null,
   page: number | null,
   annotationKey: string | null,
 ): string | null {
-  const base =
-    attachmentOpen ??
-    (attachmentKey ? `zotero://open-pdf/library/items/${attachmentKey}` : null);
+  // Only BBT's authoritative `open` URI carries the correct library scope
+  // (personal `/library/items/` vs. group `/groups/<id>/items/`). When it is
+  // absent we cannot know the scope, so we emit no deep link rather than a
+  // fabricated `/library/items/<key>` that opens the wrong item for a group
+  // library.
+  const base = attachmentOpen;
   if (!base) return null;
 
   const params: string[] = [];
@@ -193,7 +200,7 @@ export function normalizeZoteroAttachments(
           dateModified: strOrNull(a.dateModified),
           tags: tagsOf(a.tags),
           imagePath: strOrNull(a.annotationImagePath),
-          openURI: buildOpenURI(open, key, page, annotationKey),
+          openURI: buildOpenURI(open, page, annotationKey),
           source: 'zotero',
         } satisfies Annotation;
       });
@@ -209,7 +216,11 @@ export function normalizeZoteroAttachments(
       openURI: open,
       annotationCount: normalized.length,
     });
-    annotations.push(...normalized);
+    // Append one-by-one rather than `push(...normalized)`: spreading a very
+    // large array as call arguments overflows the engine's argument limit and
+    // throws RangeError, which would break the "never throws" contract for an
+    // attachment carrying an extreme number of annotations.
+    for (const annotation of normalized) annotations.push(annotation);
   }
 
   return { attachments, annotations };

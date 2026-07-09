@@ -59,6 +59,16 @@ To use more than one bibliography source (e.g. personal library + shared team li
 
 A load that exceeds this timeout is **not** retried automatically — the parse may still be running in the background, and a retry would queue another parse behind it. If you hit the timeout, raise the value and re-run **Refresh library** (or reopen the vault). Out-of-range values typed in the field are clamped to the valid range.
 
+### Live Zotero (Better BibTeX) settings
+
+Shown per database when using the live Zotero connection (a Better BibTeX pull-export URL as the database path). These require Zotero running with the Better BibTeX plugin.
+
+| Setting                          | Description                                                                                                                                                                                                                                                            | Default |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| **Import notes**                 | Include Zotero child notes in the export (`exportNotes=true`). They become available via the `{{note}}` template variable                                                                                                                                             | `false` |
+| **Import PDF annotations**       | Fetch native Zotero PDF annotations (highlights, comments, colors, page deep-links) for every entry via the Better BibTeX JSON-RPC API. Exposed in templates as `{{annotations}}`, `{{attachments}}`, and `{{annotationCount}}`. Requires Better BibTeX. Toggling recreates the source | `false` |
+| **Auto-sync interval (minutes)** | How often to re-fetch from Zotero. Set to `0` to disable (refresh manually). Maximum `10080` (1 week) — larger values are clamped                                                                                                                                     | `0`     |
+
 ---
 
 ## Readwise Integration

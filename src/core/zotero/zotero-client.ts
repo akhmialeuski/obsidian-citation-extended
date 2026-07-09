@@ -248,15 +248,30 @@ export class ZoteroConnectorClient {
       const payload = await response.json();
       // A single-element batch may be answered with a bare object.
       const results = Array.isArray(payload) ? payload : [payload];
+      let unmapped = 0;
       for (const entry of results) {
         const item = entry as {
           id?: unknown;
           result?: unknown;
           error?: { message?: string };
         };
-        const index = typeof item.id === 'number' ? item.id : NaN;
+        // JSON-RPC 2.0 requires the response to echo the request id. We send
+        // numeric ids; tolerate a numeric string too (some proxies re-encode
+        // it) so a well-formed-but-stringified id still maps to its citekey.
+        const index =
+          typeof item.id === 'number'
+            ? item.id
+            : typeof item.id === 'string' && /^\d+$/.test(item.id)
+              ? Number(item.id)
+              : NaN;
         const citekey = citekeys[index];
-        if (citekey === undefined) continue;
+        if (citekey === undefined) {
+          // A result we cannot correlate back to a citekey (non-numeric or
+          // absent id). Count it so a wholesale id mismatch is visible in the
+          // log instead of silently dropping every annotation.
+          unmapped += 1;
+          continue;
+        }
         if (item.error) {
           errors.push({
             citekey,
@@ -267,6 +282,12 @@ export class ZoteroConnectorClient {
         attachmentsByCitekey.set(
           citekey,
           Array.isArray(item.result) ? item.result : [],
+        );
+      }
+      if (unmapped > 0) {
+        console.warn(
+          `ZoteroConnectorClient: ${unmapped} attachment result(s) had an ` +
+            'unrecognized JSON-RPC id and were skipped',
         );
       }
     }

@@ -193,6 +193,14 @@ export default class CitationPlugin extends Plugin {
           // Resolve per-database filters from settings via the generic
           // databaseId, keeping source-specific config off DataSourceDefinition.
           resolveReadwiseFilters(this.settings.databases, def.databaseId),
+          // Legacy cache path (keyed by the volatile source key) so a
+          // pre-upgrade cache is still read after the switch to databaseId.
+          sourceCacheFilePath(
+            readwiseCacheDir,
+            'readwise-cache',
+            undefined,
+            id,
+          ),
         ),
     );
 
@@ -228,6 +236,9 @@ export default class CitationPlugin extends Plugin {
             this.settings.databases,
             def.databaseId,
           ),
+          // Legacy cache path (keyed by the volatile source key) so a
+          // pre-upgrade cache is still read after the switch to databaseId.
+          sourceCacheFilePath(readwiseCacheDir, 'zotero-cache', undefined, id),
         ),
     );
 

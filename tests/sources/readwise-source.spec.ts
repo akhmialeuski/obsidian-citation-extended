@@ -1123,6 +1123,45 @@ describe('ReadwiseSource offline cache', () => {
     expect(fs.writeFile).not.toHaveBeenCalled();
   });
 
+  it('falls back to the pre-upgrade (legacy) cache path when the new path is missing', async () => {
+    const cachedRaw = JSON.stringify([
+      makeReadwiseEntryData({ rawId: 'legacy' }),
+    ]);
+    const legacyPath = '/readwise-cache-legacykey.json';
+    const newPath = '/readwise-cache-newid.json';
+    const store: Record<string, string> = { [legacyPath]: cachedRaw };
+    const fs = createMockFileSystem({
+      exists: jest.fn((p: string) => Promise.resolve(p in store)),
+      readFile: jest.fn((p: string) => Promise.resolve(store[p] ?? '')),
+    });
+    const client = createMockClient({
+      fetchExportBooks: jest.fn().mockRejectedValue(new Error('down')),
+      fetchReaderDocuments: jest.fn().mockRejectedValue(new Error('down')),
+    } as unknown as Partial<ReadwiseApiClient>);
+    const worker = createMockWorkerManager();
+
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    const source = new ReadwiseSource(
+      's',
+      client,
+      worker as never,
+      fs,
+      newPath,
+      undefined,
+      undefined,
+      legacyPath,
+    );
+    const result = await source.load();
+    warnSpy.mockRestore();
+
+    // The pre-upgrade cache is read via the legacy path, so the library is not
+    // orphaned into an empty offline load after the filename scheme change.
+    expect(result.entries).toHaveLength(1);
+    expect(
+      result.parseErrors!.some((e) => e.message.includes('using cache')),
+    ).toBe(true);
+  });
+
   it('throws on a total outage with no cache (so the prior library is preserved)', async () => {
     const fs = createMockFileSystem({
       exists: jest.fn().mockResolvedValue(false),

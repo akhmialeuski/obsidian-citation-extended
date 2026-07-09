@@ -133,6 +133,42 @@ describe('normalizeZoteroAttachments', () => {
     expect(annotations[0].page).toBe(42);
   });
 
+  it('accepts a zero-padded numeric page label and keeps the page deep link', () => {
+    const { annotations } = normalizeZoteroAttachments([
+      {
+        ...ATTACHMENT,
+        annotations: [
+          {
+            ...HIGHLIGHT,
+            annotationPosition: undefined,
+            annotationPageLabel: '007',
+          },
+        ],
+      },
+    ]);
+    expect(annotations[0].page).toBe(7);
+    expect(annotations[0].openURI).toBe(
+      'zotero://open-pdf/library/items/ATTKEY01?page=7&annotation=ANNOT001',
+    );
+  });
+
+  it('keeps page null for a non-numeric label with digits (e.g. "12a")', () => {
+    const { annotations } = normalizeZoteroAttachments([
+      {
+        ...ATTACHMENT,
+        annotations: [
+          {
+            ...HIGHLIGHT,
+            annotationPosition: undefined,
+            annotationPageLabel: '12a',
+          },
+        ],
+      },
+    ]);
+    expect(annotations[0].page).toBeNull();
+    expect(annotations[0].pageLabel).toBe('12a');
+  });
+
   it('keeps page null for non-numeric labels (roman numerals)', () => {
     const { annotations } = normalizeZoteroAttachments([
       {
@@ -153,7 +189,7 @@ describe('normalizeZoteroAttachments', () => {
     );
   });
 
-  it('derives the attachment key from a storage path when open is absent', () => {
+  it('derives the attachment key from a storage path but omits the deep link when open is absent', () => {
     const { attachments, annotations } = normalizeZoteroAttachments([
       {
         path: 'C:\\Users\\u\\Zotero\\storage\\WINKEY99\\file.pdf',
@@ -161,9 +197,9 @@ describe('normalizeZoteroAttachments', () => {
       },
     ]);
     expect(attachments[0].id).toBe('WINKEY99');
-    expect(annotations[0].openURI).toBe(
-      'zotero://open-pdf/library/items/WINKEY99?page=12&annotation=ANNOT001',
-    );
+    // Without BBT's authoritative `open` URI the library scope (personal vs.
+    // group) is unknown, so no possibly-wrong deep link is fabricated.
+    expect(annotations[0].openURI).toBeNull();
   });
 
   it('produces no deep link when neither open URI nor storage key exist', () => {
@@ -252,5 +288,23 @@ describe('normalizeZoteroAttachments', () => {
       ],
       annotations: [],
     });
+  });
+
+  it('does not overflow for an attachment with a very large annotation count', () => {
+    // `annotations.push(...normalized)` would throw RangeError past the
+    // engine's argument limit; the per-item append must tolerate an extreme
+    // count and keep the "never throws" contract.
+    const many = Array.from({ length: 200_000 }, (_, i) => ({
+      ...HIGHLIGHT,
+      key: `A${i}`,
+      annotationSortIndex: String(i).padStart(8, '0'),
+    }));
+    let result: ReturnType<typeof normalizeZoteroAttachments> | undefined;
+    expect(() => {
+      result = normalizeZoteroAttachments([
+        { ...ATTACHMENT, annotations: many },
+      ]);
+    }).not.toThrow();
+    expect(result!.annotations).toHaveLength(200_000);
   });
 });

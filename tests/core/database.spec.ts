@@ -1,5 +1,6 @@
 import {
   generateDatabaseId,
+  findDatabaseById,
   resolveReadwiseFilters,
   resolveZoteroExportNotes,
   resolveZoteroImportAnnotations,
@@ -7,6 +8,25 @@ import {
 import type { DatabaseConfig } from '../../src/core/types/database';
 
 jest.mock('obsidian', () => ({}), { virtual: true });
+
+describe('findDatabaseById', () => {
+  const databases: DatabaseConfig[] = [
+    { id: 'db-a', name: 'A', type: 'csl-json', path: '/a' },
+    { id: 'db-b', name: 'B', type: 'csl-json', path: '/b' },
+  ] as DatabaseConfig[];
+
+  it('returns the matching database', () => {
+    expect(findDatabaseById(databases, 'db-b')?.name).toBe('B');
+  });
+
+  it('returns undefined for an unknown id', () => {
+    expect(findDatabaseById(databases, 'nope')).toBeUndefined();
+  });
+
+  it('returns undefined for a missing id (never matches an id-less database)', () => {
+    expect(findDatabaseById(databases, undefined)).toBeUndefined();
+  });
+});
 
 describe('generateDatabaseId', () => {
   it('returns string matching db-{timestamp}-{random4} format', () => {
