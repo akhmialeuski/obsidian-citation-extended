@@ -121,6 +121,9 @@ In addition to the aggregated `{{note}}` string, Readwise highlights are exposed
 
 Each item has: `text`, `comment` (your note), `page`/`pageLabel`, `colorName`, `tags`, `openURI`, `source` (`readwise`) — see [Template Variables → Annotations](../templates/variables.md#annotations-source-agnostic).
 
+> [!warning] Migrating from `entry.highlights`
+> Earlier versions exposed a Readwise-only `{{#each entry.highlights}}` list. That surface is **deprecated** but still works, so existing templates keep rendering. Migrate to `{{#each annotations}}` and remap the fields: `note` → `comment`, `location` → `page`/`pageLabel`, `color` → `colorName`. The `highlights` surface will be removed in a future release.
+
 ## Expected Output
 
 After syncing, a Readwise book entry like "Atomic Habits" appears in search as:

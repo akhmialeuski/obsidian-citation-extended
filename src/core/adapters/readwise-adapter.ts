@@ -329,12 +329,10 @@ export class ReadwiseAdapter extends Entry {
   }
 
   /**
-   * Readwise highlights ARE annotations — exposed ONLY through the
-   * source-agnostic {@link Entry.annotations} interface (the same one Zotero
-   * maps into), so `{{annotations}}` works uniformly across sources and there
-   * is no second, Readwise-specific template surface for the same data.
-   * Derived from the parsed entry data (no external fetch), memoized because
-   * sort/search touch it.
+   * Readwise highlights ARE annotations — exposed through the source-agnostic
+   * {@link Entry.annotations} interface (the same one Zotero maps into), so
+   * `{{annotations}}` works uniformly across sources. Derived from the parsed
+   * entry data (no external fetch), memoized because sort/search touch it.
    */
   get annotations(): Annotation[] {
     return this.memo('annotations', () =>
@@ -342,6 +340,20 @@ export class ReadwiseAdapter extends Entry {
         readwiseHighlightToAnnotation(h, index),
       ),
     );
+  }
+
+  /**
+   * Legacy Readwise-only highlight list, kept for backward compatibility so
+   * existing templates that iterate `{{#each entry.highlights}}` keep
+   * rendering after the switch to the unified {@link annotations} surface.
+   *
+   * @deprecated Use {@link annotations} (`{{#each annotations}}`) instead — the
+   * source-agnostic replacement shared with Zotero. This getter returns the raw
+   * highlight items (`text`, `note`, `location`, `locationType`, `color`,
+   * `highlightedAt`, `url`, `tags`) and will be removed in a future release.
+   */
+  get highlights(): ReadwiseHighlightItem[] {
+    return this.data.highlights ?? [];
   }
 }
 

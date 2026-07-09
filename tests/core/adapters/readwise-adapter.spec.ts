@@ -483,9 +483,9 @@ describe('ReadwiseAdapter', () => {
   });
 
   describe('structured highlights via the uniform annotations interface', () => {
-    // There is deliberately NO separate `entry.highlights` template surface:
-    // highlights are exposed only through the source-agnostic `annotations`
-    // interface shared with Zotero (and any future source).
+    // Highlights are exposed primarily through the source-agnostic
+    // `annotations` interface shared with Zotero. A deprecated `highlights`
+    // getter is retained for back-compat (see its own describe block below).
     it('exposes highlight data through annotations', () => {
       const adapter = new ReadwiseAdapter(
         makeEntryData({
@@ -535,8 +535,9 @@ describe('ReadwiseAdapter', () => {
       const json = adapter.toJSON();
       expect(Array.isArray(json.annotations)).toBe(true);
       expect((json.annotations as unknown[]).length).toBe(1);
-      // No duplicate surface: the raw highlights array is not re-exported.
-      expect(json.highlights).toBeUndefined();
+      // The deprecated `highlights` surface is retained for back-compat, so it
+      // is also present on toJSON (raw legacy shape) alongside `annotations`.
+      expect(Array.isArray(json.highlights)).toBe(true);
     });
   });
 
@@ -647,6 +648,48 @@ describe('ReadwiseAdapter', () => {
       const adapter = new ReadwiseAdapter(makeEntryData());
       adapter._compositeCitekey = 'rw-12345@db-1';
       expect(adapter._compositeCitekey).toBe('rw-12345@db-1');
+    });
+  });
+
+  describe('highlights (deprecated back-compat surface)', () => {
+    const legacyHighlights = [
+      {
+        id: 'h1',
+        text: 'A key sentence.',
+        note: 'my thought',
+        location: 42,
+        locationType: 'page',
+        color: 'yellow',
+        highlightedAt: '2024-06-01T00:00:00Z',
+        url: 'https://readwise.io/open/h1',
+        tags: ['idea'],
+      },
+    ];
+
+    it('returns the raw highlight items in the legacy shape', () => {
+      const adapter = new ReadwiseAdapter(
+        makeEntryData({ highlights: legacyHighlights }),
+      );
+      // Old field names survive (note/location), NOT the annotations shape.
+      expect(adapter.highlights).toEqual(legacyHighlights);
+      expect(adapter.highlights[0].note).toBe('my thought');
+      expect(adapter.highlights[0].location).toBe(42);
+    });
+
+    it('returns [] when the entry has no highlights', () => {
+      expect(new ReadwiseAdapter(makeEntryData()).highlights).toEqual([]);
+      expect(
+        new ReadwiseAdapter(makeEntryData({ highlights: [] })).highlights,
+      ).toEqual([]);
+    });
+
+    it('is surfaced on toJSON so {{#each entry.highlights}} keeps rendering', () => {
+      const adapter = new ReadwiseAdapter(
+        makeEntryData({ highlights: legacyHighlights }),
+      );
+      const json = adapter.toJSON();
+      expect(Array.isArray(json.highlights)).toBe(true);
+      expect((json.highlights as unknown[]).length).toBe(1);
     });
   });
 });

@@ -75,4 +75,35 @@ describe('Entry.toJSON prototype-chain walk', () => {
     expect(json._attachments).toBeUndefined();
     expect((json.annotations as unknown[]).length).toBe(1);
   });
+
+  it('exposes annotationCount as a getter on toJSON (0 by default)', () => {
+    const adapter = new EntryCSLAdapter(DATA);
+    expect(adapter.annotationCount).toBe(0);
+    expect(adapter.toJSON().annotationCount).toBe(0);
+
+    adapter.setAnnotations(
+      [
+        {
+          id: 'a1',
+          type: 'highlight',
+          text: 't',
+          comment: '',
+          color: '',
+          colorName: null,
+          page: null,
+          pageLabel: '',
+          tags: [],
+          imagePath: null,
+          openURI: null,
+          sortIndex: '0',
+          dateModified: null,
+          source: 'zotero',
+        },
+      ],
+      [],
+    );
+    expect(adapter.annotationCount).toBe(1);
+    expect(adapter.toJSON().annotationCount).toBe(1);
+    expect(adapter.toTemplateContext().annotationCount).toBe(1);
+  });
 });

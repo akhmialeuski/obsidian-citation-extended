@@ -137,6 +137,16 @@ export abstract class Entry {
   }
 
   /**
+   * Number of annotations on this entry (0 when none). A real getter so both
+   * {@link toJSON} (introspection / `entry.annotationCount`) and
+   * {@link toTemplateContext} surface it uniformly — used for
+   * `{{#if annotationCount}}` guards.
+   */
+  public get annotationCount(): number {
+    return this.annotations.length;
+  }
+
+  /**
    * Inject externally-fetched annotations/attachments (used by sources whose
    * annotation data is not part of the parsed entry). Adapters that derive
    * annotations from their own data override {@link annotations} instead.
@@ -385,7 +395,7 @@ export abstract class Entry {
       collections: this.collections,
       annotations: this.annotations,
       attachments: this.attachments,
-      annotationCount: this.annotations.length,
+      annotationCount: this.annotationCount,
       lastname: this.lastname(),
       language: this.language,
       note: this.note,

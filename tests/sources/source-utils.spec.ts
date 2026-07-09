@@ -44,4 +44,27 @@ describe('sourceCacheFilePath', () => {
   it('returns an empty string when caching is disabled (no directory)', () => {
     expect(sourceCacheFilePath('', 'zotero-cache', 'db-1', 'k')).toBe('');
   });
+
+  it('supports the readwise-cache prefix, keyed by the stable database id', () => {
+    // Readwise sources were migrated onto this helper so their offline cache
+    // survives filter toggles and source-key shape changes (previously the
+    // cache was keyed by the volatile source key and orphaned on both).
+    expect(
+      sourceCacheFilePath('/dir', 'readwise-cache', 'db-1', 'source-key'),
+    ).toBe('/dir/readwise-cache-db-1.json');
+
+    const beforeToggle = sourceCacheFilePath(
+      '/dir',
+      'readwise-cache',
+      'db-1',
+      'key-v1',
+    );
+    const afterToggle = sourceCacheFilePath(
+      '/dir',
+      'readwise-cache',
+      'db-1',
+      'key-v2',
+    );
+    expect(beforeToggle).toBe(afterToggle);
+  });
 });
