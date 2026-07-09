@@ -15,6 +15,7 @@
 - [Template System](#template-system)
 - [Note Service](#note-service)
 - [Batch Update](#batch-update)
+- [Note Sync](#note-sync)
 - [Readwise Integration](#readwise-integration)
 - [Annotation Model](#annotation-model)
 - [Settings & Configuration](#settings--configuration)
@@ -125,12 +126,12 @@ The system follows Clean Architecture: business logic (`application/`, `domain/`
 
 | Layer              | Directory             | Depends on Obsidian? | Responsibility                                                    |
 | ------------------ | --------------------- | -------------------- | ----------------------------------------------------------------- |
-| **Core**           | `src/core/`           | No                   | Entry types, parsers, Result, errors, adapters                    |
+| **Core**           | `src/core/`           | No                   | Entry types, parsers, Result, errors, adapters, note-sync planner (`sync/`) |
 | **Domain**         | `src/domain/`         | No                   | TemplateProfile, NoteKind, TemplateProfileRegistry                |
 | **Application**    | `src/application/`    | No                   | CitationService, ActionRegistry, Actions, ContentTemplateResolver |
 | **Library**        | `src/library/`        | No                   | LibraryService, LibraryStore, SearchService                       |
 | **Template**       | `src/template/`       | No                   | TemplateService, Handlebars helpers, IntrospectionService         |
-| **Notes**          | `src/notes/`          | No                   | NoteService, BatchNoteOrchestrator                                |
+| **Notes**          | `src/notes/`          | No                   | NoteService, BatchNoteOrchestrator, BaselineStore, NoteLookupIndex |
 | **Infrastructure** | `src/infrastructure/` | No                   | SourceManager, NormalizationPipeline                              |
 | **Search**         | `src/search/`         | No                   | MiniSearch wrapper                                                |
 | **Platform**       | `src/platform/`       | **Yes**              | IPlatformAdapter interfaces + ObsidianPlatformAdapter             |
@@ -664,7 +665,7 @@ flowchart TD
         CTX["Build ActionContext\n(citationService, platform,\nnoteService, libraryService,\ntemplateService, settings)"]
         REG["Create ActionRegistry"]
         CTX --> REG
-        REG --> REG_ACTIONS["Register 9 actions"]
+        REG --> REG_ACTIONS["Register 10 actions"]
     end
 
     REG_ACTIONS --> CR["CommandRegistry"]
@@ -716,6 +717,7 @@ classDiagram
     class OpenNoteAtCursorAction
     class RefreshLibraryAction
     class BatchUpdateNotesAction
+    class UpdateCurrentNoteAction
 
     ApplicationAction <|-- SearchModalAction
     SearchModalAction <|-- OpenNoteAction
@@ -727,6 +729,7 @@ classDiagram
     ApplicationAction <|-- OpenNoteAtCursorAction
     ApplicationAction <|-- RefreshLibraryAction
     ApplicationAction <|-- BatchUpdateNotesAction
+    ApplicationAction <|-- UpdateCurrentNoteAction
 ```
 
 ### Registered Actions
@@ -742,6 +745,7 @@ classDiagram
 | Open Note at Cursor   | `open-note-at-cursor`            | Yes     | No   | Yes    | Direct      |
 | Refresh Library       | `update-bib-data`                | Yes     | No   | No     | Direct      |
 | Batch Update Notes    | `batch-update-notes`             | Yes     | No   | No     | Direct      |
+| Update Current Note   | `update-current-note`            | Yes     | No   | No     | Direct      |
 
 ### ActionContext
 
@@ -798,12 +802,13 @@ flowchart TD
         CACHE -->|No| COMPILE --> RENDER
     end
 
-    subgraph Helpers["Registered Helpers (5 groups)"]
+    subgraph Helpers["Registered Helpers (6 groups)"]
         H1["Logic: eq, ne, gt, lt, gte, lte,\nand, or, not"]
         H2["String: replace, truncate,\nmatch, quote"]
         H3["Author: formatNames, join, split"]
         H4["Date: currentDate\n(YYYY-MM-DD tokens)"]
         H5["Path: urlEncode, basename,\nfilename, dirname,\npdfLink, pdfMarkdownLink"]
+        H6["Sync: syncBlock (plugin-owned\ncallout with ^zc- block ID)"]
     end
 
     E --> VARS
@@ -938,11 +943,11 @@ The 5-level lookup handles real-world scenarios:
 
 ## Batch Update
 
-`BatchNoteOrchestrator` performs bulk updates of existing literature notes when the content template changes.
+`BatchNoteOrchestrator` performs bulk (and single-note) updates of existing literature notes. Updates are **non-destructive**: instead of replacing the file, the orchestrator asks the pure planner (see [Note Sync](#note-sync)) what may change, then writes clean changes directly and routes anything in doubt through the review dialog. The batch command (`['*']`) and the "Update literature note for current file" command share this one entry point.
 
 ```mermaid
 flowchart TD
-    START["BatchUpdateNotesAction.execute()"]
+    START["BatchUpdateNotesAction / UpdateCurrentNoteAction"]
 
     START --> CHECK{"library loaded?"}
     CHECK -->|No| EARLY["return { libraryNotReady: true }\n→ Notice: 'Library is not loaded yet'"]
@@ -950,23 +955,30 @@ flowchart TD
     RESOLVE --> NOTIFY["Notice: 'Updating literature notes…'"]
     NOTIFY --> EXEC["orchestrator.execute(request, onProgress)\n— single pass: plan, review, write"]
 
-    subgraph Loop["For each citekey"]
+    subgraph Loop["For each citekey (one shared NoteLookupIndex)"]
         ENTRY["Look up entry in Library"]
-        FIND["Find existing note file"]
-        RENDER["Render new content\ntemplateService.render(templateStr, variables)"]
-        READ["Read current content\nvault.read(file)"]
-        DIFF{"newContent\n===\ncurrentContent?"}
-        WRITE["vault.modify(file, newContent)\n→ updated[]"]
-        SKIP["→ skipped[]"]
-
-        ENTRY --> FIND --> RENDER --> READ --> DIFF
-        DIFF -->|Different| WRITE
-        DIFF -->|Same| SKIP
+        FIND["Resolve note file\n(request.files pin OR findExistingLiteratureNoteFile)"]
+        SEEN{"path already\ntargeted this run?"}
+        RENDER["Render content + read note\n+ load baseline (BaselineStore)"]
+        PLAN["planNoteSync(rendered, current, baseline, mode)\n→ content / contentTakeTheirs / conflicts / baseline"]
+        DECIDE{"needs review?\nconflicts OR 'always'\nOR first-sync into legacy note"}
+        WRITE["vault.modify + baselines.set\n→ updated[]"]
+        QUEUE["push to review queue"]
+        SEEN -->|Yes| ERR["→ errors[] (already targeted)"]
+        SEEN -->|No| RENDER
+        ENTRY --> FIND --> SEEN
+        RENDER --> PLAN --> DECIDE
+        DECIDE -->|No| WRITE
+        DECIDE -->|Yes| QUEUE
     end
 
     EXEC --> Loop
-    Loop --> RESULT["BatchUpdateResult\n{ updated[], skipped[], conflicts[], errors[], libraryNotReady? }"]
+    Loop --> REVIEW["Review queue (sequential):\npresenter.review → apply / take-theirs / skip / apply-all / skip-all\n(re-read + re-plan before writing — TOCTOU guard)"]
+    REVIEW --> FLUSH["baselines.flush() once"]
+    FLUSH --> RESULT["BatchUpdateResult\n{ updated[], skipped[], conflicts[], errors[], libraryNotReady? }"]
 ```
+
+When review is impossible (dry-run, `confirmation: 'never'`, or no presenter), clean non-conflicting changes are still written, conflicts are reported untouched, and a first sync that would inject plugin content into a non-empty legacy note is reported rather than written without consent.
 
 ### Request / Result Types
 
@@ -996,6 +1008,87 @@ interface BatchUpdateProgress {
 
 ---
 
+## Note Sync
+
+Note updates are **non-destructive**: the plugin re-renders a note's template and merges the result into the existing file instead of overwriting it. The pure logic lives in `src/core/sync/` (no I/O, fully unit-tested); `BatchNoteOrchestrator` (Notes layer) applies the plans and routes anything in doubt through an injected presenter (Obsidian modal in production, mock in tests).
+
+### Three ideas combined
+
+1. **Inverted ownership** — the plugin marks *its* content, never the user's. It manages exactly two things: (a) frontmatter keys its template renders, and (b) **sync blocks** — callouts terminated by a native Obsidian block ID `^zc-<name>`. Everything without a `^zc-…` ID (headings, paragraphs, the user's own callouts) is user content and is never touched.
+2. **Three-way merge** — a per-note **baseline** (the last snapshot the plugin rendered) lets the planner tell "the library changed" apart from "the user edited". Non-overlapping edits merge automatically (git-style, via `node-diff3`); overlapping edits become conflicts instead of silent overwrites.
+3. **Review-friendly output** — every plan carries both a safe default (`content`, keep-my-edits) and a `contentTakeTheirs` alternative, so the UI can preview exactly what each button writes.
+
+### Module map (`src/core/sync/`)
+
+| Module                | Key exports                                | Responsibility                                                    |
+| --------------------- | ------------------------------------------ | ----------------------------------------------------------------- |
+| `sync-blocks.ts`      | `parseSyncBlocks`, `buildSyncBlock`        | Parse and emit `^zc-` callout blocks; prototype-safe block names |
+| `frontmatter-sync.ts` | `splitFrontmatter`, `syncFrontmatter`      | Per-key three-way merge preserving the note's exact YAML layout  |
+| `merge3.ts`           | `mergeText`, `lineDiff`                    | diff3 line merge + two-way diff for the review UI (`node-diff3`) |
+| `note-sync.ts`        | `planNoteSync`, `baselineFromRender`       | The planner: assembles the whole-note plan from the units above  |
+| `note-update-mode.ts` | mode + confirmation enums                  | Shared mode/confirmation constants (notes and UI layers)         |
+| `review.ts`           | `NoteReviewItem`, `IUpdateReviewPresenter` | The review port: the contract between orchestrator and UI        |
+
+The whole subsystem has **zero** Obsidian imports; `merge3.ts` depends only on the tiny `node-diff3` package (typed locally in `src/node-diff3.d.ts`).
+
+### Sync blocks
+
+The `{{#syncBlock "name" type="quote" title="…" collapsed=true}}…{{/syncBlock}}` helper renders a callout whose last line is `> ^zc-name`. The ID is native Obsidian (invisible in reading view, linkable and embeddable). The parser bounds each block precisely so it never eats neighbouring content:
+
+- The block starts at its OWN callout header (`> [!…]`), so a user callout stacked directly above is never absorbed, and two adjacent plugin blocks stay separate (the walk-back stops at a previous `^zc-…` line).
+- Callouts indented up to 3 spaces are still recognized (valid Markdown), so an indented block is not mistaken for a user deletion.
+- `buildSyncBlock` escapes inner lines that would misparse once quoted (a leading `[!` reads as a callout header, a leading `^zc-` as a terminator), keeping the block span stable across re-syncs.
+- Names colliding with `Object.prototype` members (`__proto__`, `constructor`, `prototype`) are never treated as plugin blocks, so a JSON baseline map cannot be polluted.
+
+### Planner decision matrix (per unit)
+
+For each sync block and each plugin-owned frontmatter key, `planNoteSync` compares three versions — `base` (baseline), `ours` (the note now), `theirs` (the fresh render):
+
+| Situation                                | Result                          |
+| ---------------------------------------- | ------------------------------- |
+| `ours == theirs`                         | already in sync                 |
+| `theirs == base` (user edited)           | keep ours                       |
+| `ours == base` (library changed)         | take theirs (refresh)           |
+| both changed, non-overlapping lines      | auto-merge (diff3)              |
+| both changed, overlapping lines          | conflict -> review              |
+| no baseline, `ours != theirs`            | conflict -> review (first sync) |
+| in note, not in render, `ours == base`   | remove (pristine block dropped) |
+| in note, not in render, `ours != base`   | conflict (edited block dropped) |
+| in render, not in note, previously known | stay deleted (tombstone)        |
+| in render, not in note, never seen       | append (new content)            |
+
+Deletions are remembered as tombstones (`deletedBlocks` / `deletedKeys`) and carried forward across renders that temporarily omit a unit, so a template conditional flipping false never resurrects content the user deleted. Re-adding a tombstoned unit by hand releases the tombstone. All body lines outside sync blocks are copied through byte-for-byte (after CRLF→LF normalization at the planner boundary).
+
+### Baseline store
+
+`BaselineStore` persists one JSON file (`note-baselines.json`) in the plugin directory mapping citekey → baseline. Baselines are recorded at note creation (`NoteService.getOrCreateLiteratureNoteFile`) and after every update, so new notes get automatic merges from day one; a pre-existing note has no baseline and surfaces its differing units once (through review), after which a baseline is stored. The store is the merge safety net, so it is hardened against destroying itself:
+
+| Invariant                                | Purpose                                                   |
+| ---------------------------------------- | --------------------------------------------------------- |
+| Per-key dirty tracking + merge-on-flush  | preserves a baseline another device advanced concurrently |
+| Never persist over an unreadable file    | backs it up (`.corrupt`) before the first overwrite       |
+| Newer on-disk version -> read-only       | never downgrade-destroys a newer build's file             |
+| Missing/corrupt file seeds from cache    | never shrinks the store to just this session's keys       |
+| Serialized flushes, null-prototype maps  | no concurrent-flush clobber; no prototype pollution       |
+| Note path stamped per baseline           | a citekey resolving elsewhere degrades to first-sync      |
+
+The store also flushes on `onunload` (best effort) so baseline changes left dirty by a failed flush are not lost.
+
+### Review port and confirmation policy
+
+Conflicts (or every change, when configured) open `UpdateReviewModal` through the `IUpdateReviewPresenter` port. The modal previews the line diff for each resolution the user can pick — **Apply (keep my edits)** / **Use library version** / **Skip**, plus **Apply all / Skip all** for batch queues (the bulk apply button carries the same keep-my-edits clarification when conflicts exist). The `Review changes before writing` setting selects when the dialog appears: `conflicts` (default), `always`, or `never` (conflicted notes are skipped and reported). Before writing a reviewed note the orchestrator re-reads and re-plans it, so edits made while the dialog was open are never clobbered (TOCTOU guard); if a new conflict appeared since the reviewed diff, the note is skipped instead.
+
+A first sync that would introduce plugin content into a **non-empty legacy note** — appended sync blocks (which can duplicate unmarked body text) or newly added frontmatter keys — always requires consent: it is routed through review, and when review is impossible it is reported rather than written silently.
+
+### Modes
+
+| Mode          | Body                                         | Frontmatter                       |
+| ------------- | -------------------------------------------- | --------------------------------- |
+| `sync`        | sync blocks merged three-way; rest untouched | keys merged three-way             |
+| `frontmatter` | left entirely alone                          | keys merged three-way             |
+| `overwrite`   | whole note replaced by the render            | whole note replaced by the render |
+
+---
 
 ## Readwise Integration
 

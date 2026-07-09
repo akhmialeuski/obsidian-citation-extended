@@ -178,20 +178,30 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
           continue;
         }
 
-        // First sync of a pre-existing, non-empty note that would APPEND
-        // blocks: on legacy notes the appended content usually duplicates
-        // unmarked body text, so it needs the user's eyes even though it is
-        // not a merge conflict.
-        const firstSyncAppend =
+        // First sync of a pre-existing, non-empty note that would introduce
+        // plugin-owned content it does not yet carry. Two flavours, neither a
+        // merge conflict but both a silent modification of a note the plugin
+        // never synced before, so both need the user's eyes:
+        //   - appended callout blocks, which on legacy notes usually duplicate
+        //     unmarked body text, and
+        //   - newly added frontmatter keys, which rewrite the note's metadata.
+        // Overwrite/frontmatter modes are excluded: overwrite is wholesale by
+        // design, and frontmatter mode's entire contract IS to manage keys.
+        const firstSyncIntoNonEmptyNote =
           request.mode === 'sync' &&
           priorBaseline === null &&
-          plan.summary.blocksAppended.length > 0 &&
           current.trim() !== '';
+        const firstSyncAppend =
+          firstSyncIntoNonEmptyNote && plan.summary.blocksAppended.length > 0;
+        const firstSyncFrontmatter =
+          firstSyncIntoNonEmptyNote &&
+          plan.summary.frontmatterKeysUpdated.length > 0;
+        const firstSyncNeedsConsent = firstSyncAppend || firstSyncFrontmatter;
 
         const needsReview =
           plan.conflicts.length > 0 ||
           request.confirmation === 'always' ||
-          firstSyncAppend;
+          firstSyncNeedsConsent;
 
         // Direct write path: no review needed, or review is impossible
         // (dry-run / 'never' / no presenter). We only write when there is a
@@ -215,13 +225,17 @@ export class BatchNoteOrchestrator implements IBatchNoteOrchestrator {
             result.updated.push(citekey);
             continue;
           }
-          if (firstSyncAppend) {
-            // The safety gate wins over 'never': appending blocks into a
-            // non-empty legacy note can duplicate its body text, so when no
-            // review is possible we skip and report rather than silently
-            // append without the consent the review would have obtained.
+          if (firstSyncNeedsConsent) {
+            // The safety gate wins over 'never': introducing plugin content
+            // into a non-empty legacy note (appended blocks can duplicate its
+            // body text; new frontmatter keys silently rewrite its metadata)
+            // needs consent, so when no review is possible we skip and report
+            // rather than write without the approval the review would obtain.
+            // Append takes precedence in the reported reason as the higher risk.
             this.reportConflict(result, citekey, [
-              'first-sync-append-needs-review',
+              firstSyncAppend
+                ? 'first-sync-append-needs-review'
+                : 'first-sync-frontmatter-needs-review',
             ]);
             continue;
           }

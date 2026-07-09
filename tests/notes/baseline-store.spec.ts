@@ -227,6 +227,64 @@ describe('BaselineStore', () => {
     warn.mockRestore();
   });
 
+  it('stops overwriting when a newer version appears mid-session', async () => {
+    // Loaded cleanly at version 1, but another device upgrades the on-disk
+    // format before our flush. The flush's merge read must detect the newer
+    // version and refuse to write — the load-time guard cannot have fired.
+    const warn = jest.spyOn(console, 'warn').mockImplementation();
+    const { fs, written } = makeFileSystem(
+      JSON.stringify({ version: 1, baselines: {} }),
+    );
+    const store = new BaselineStore(fs, '/plugin/baselines.json');
+    await store.set('smith2023', BASELINE); // healthy load at version 1
+
+    const newer = JSON.stringify({ version: 2, baselines: {} });
+    written.value = newer; // external upgrade after our load
+
+    await store.flush();
+
+    expect(written.value).toBe(newer); // left intact, never overwritten
+    expect(fs.writeFile).not.toHaveBeenCalled();
+
+    // The session is now read-only: a later flush is a no-op too.
+    await store.set('doe2020', OTHER);
+    await store.flush();
+    expect(fs.writeFile).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('starts fresh on a valid but unrecognized store shape', async () => {
+    // Valid JSON, but not the { version, baselines } shape (a hand-edit or an
+    // unrelated file synced into place). It parses but is unusable → read as
+    // empty and backed up before the next write, never merged as real data.
+    const warn = jest.spyOn(console, 'warn').mockImplementation();
+    const original = JSON.stringify({ note: 'not a baseline store' });
+    const files: Record<string, string> = {
+      '/plugin/baselines.json': original,
+    };
+    const fs = {
+      exists: jest.fn((p: string) => Promise.resolve(p in files)),
+      readFile: jest.fn((p: string) => Promise.resolve(files[p])),
+      writeFile: jest.fn((p: string, data: string) => {
+        files[p] = data;
+        return Promise.resolve();
+      }),
+    } as unknown as IFileSystem;
+    const store = new BaselineStore(fs, '/plugin/baselines.json');
+
+    expect(await store.get('smith2023')).toBeNull(); // degraded to empty
+    await store.set('smith2023', BASELINE);
+    await store.flush();
+
+    // The unrecognized original is preserved; a fresh valid store is written.
+    expect(files['/plugin/baselines.json.corrupt']).toBe(original);
+    expect(
+      (JSON.parse(files['/plugin/baselines.json']) as BaselineFileShape)
+        .baselines.smith2023,
+    ).toEqual(BASELINE);
+    warn.mockRestore();
+  });
+
   it('records a baseline from rendered note content', async () => {
     const { fs } = makeFileSystem();
     const store = new BaselineStore(fs, '/plugin/baselines.json');

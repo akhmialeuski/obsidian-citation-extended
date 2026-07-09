@@ -189,6 +189,28 @@ describe('BatchNoteOrchestrator', () => {
     expect(result.errors).toEqual([{ citekey: 'key1', error: 'boom' }]);
   });
 
+  it('records an error when reading a note throws', async () => {
+    // An exception mid-plan (e.g. a failed vault read) is caught per citekey
+    // so one unreadable note never aborts the whole batch.
+    const read = jest.fn().mockRejectedValue(new Error('EIO: read failed'));
+    const modify = jest.fn();
+    const vault = { read, modify } as unknown as IVaultAccess;
+    orchestrator = new BatchNoteOrchestrator(
+      makeLibraryService(makeLibrary({ key1: {} })),
+      makeNoteService({ key1: makeFile('n/key1.md') }),
+      makeTemplateService(() => ({ ok: true, value: note(2024) })),
+      vault,
+      makeBaselineStore({ key1: baselineFor(2023) }),
+    );
+
+    const result = await orchestrator.execute(REQUEST);
+
+    expect(result.errors).toEqual([
+      { citekey: 'key1', error: 'EIO: read failed' },
+    ]);
+    expect(modify).not.toHaveBeenCalled();
+  });
+
   it('skips notes that are already up to date', async () => {
     orchestrator = new BatchNoteOrchestrator(
       makeLibraryService(makeLibrary({ key1: {} })),
@@ -449,6 +471,83 @@ describe('BatchNoteOrchestrator', () => {
 
       expect(result.updated).toEqual(['a', 'b']);
       expect(presenter.review).toHaveBeenCalledTimes(1);
+    });
+
+    it('applies the blanket skip after "skip-all"', async () => {
+      const presenter = makePresenter(['skip-all']);
+      const modify = jest.fn();
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(makeLibrary({ a: {}, b: {} })),
+        makeNoteService({ a: makeFile('n/a.md'), b: makeFile('n/b.md') }),
+        makeTemplateService(() => ({ ok: true, value: note(2024) })),
+        makeVault({ 'n/a.md': conflicted, 'n/b.md': conflicted }, modify),
+        makeBaselineStore({ a: baselineFor(2023), b: baselineFor(2023) }),
+        presenter,
+      );
+
+      const result = await orchestrator.execute({
+        ...REQUEST,
+        citekeys: ['a', 'b'],
+      });
+
+      // The dialog is shown once; the blanket skip covers the remaining note.
+      expect(presenter.review).toHaveBeenCalledTimes(1);
+      expect(modify).not.toHaveBeenCalled();
+      // Both are conflicted, so each is reported as a conflict, not a plain skip.
+      expect(result.conflicts).toEqual([
+        { citekey: 'a', conflictIds: ['meta'] },
+        { citekey: 'b', conflictIds: ['meta'] },
+      ]);
+    });
+
+    it('records an error when writing a reviewed note throws', async () => {
+      const presenter = makePresenter(['apply']);
+      const modify = jest
+        .fn()
+        .mockRejectedValue(new Error('EROFS: read-only fs'));
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(makeLibrary({ key1: {} })),
+        makeNoteService({ key1: makeFile('n/key1.md') }),
+        makeTemplateService(() => ({ ok: true, value: note(2024) })),
+        makeVault({ 'n/key1.md': conflicted }, modify),
+        makeBaselineStore({ key1: baselineFor(2023) }),
+        presenter,
+      );
+
+      const result = await orchestrator.execute(REQUEST);
+
+      // A failed write during the review pass is caught per note, not fatal.
+      expect(result.errors).toEqual([
+        { citekey: 'key1', error: 'EROFS: read-only fs' },
+      ]);
+    });
+
+    it('skips a reviewed note edited during review to match the render', async () => {
+      const presenter = makePresenter(['apply']);
+      const modify = jest.fn();
+      // Scan sees the old note; during review the user edits it to exactly the
+      // new render, so the re-plan finds nothing left to change.
+      const read = jest
+        .fn()
+        .mockResolvedValueOnce(note(2023)) // scan (queued via 'always')
+        .mockResolvedValueOnce(note(2024)); // re-read: already equals render
+      const vault = { read, modify } as unknown as IVaultAccess;
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(makeLibrary({ key1: {} })),
+        makeNoteService({ key1: makeFile('n/key1.md') }),
+        makeTemplateService(() => ({ ok: true, value: note(2024) })),
+        vault,
+        makeBaselineStore({ key1: baselineFor(2023) }),
+        presenter,
+      );
+
+      const result = await orchestrator.execute({
+        ...REQUEST,
+        confirmation: 'always',
+      });
+
+      expect(modify).not.toHaveBeenCalled();
+      expect(result.skipped).toEqual(['key1']);
     });
 
     it('routes clean changes through review when confirmation is "always"', async () => {
@@ -743,6 +842,90 @@ describe('BatchNoteOrchestrator', () => {
       expect(result.updated).toEqual([]);
       expect(result.conflicts).toEqual([
         { citekey: 'key1', conflictIds: ['first-sync-append-needs-review'] },
+      ]);
+    });
+
+    it('routes a first-sync frontmatter addition into a note through review', async () => {
+      // Legacy note with a body but no frontmatter, no baseline, and a template
+      // that renders only frontmatter (no {{#syncBlock}}). Adding the keys is
+      // not a conflict, but it silently rewrites the note's metadata on the
+      // first sync, so it needs the user's consent just like a block append.
+      const presenter = makePresenter(['skip']);
+      const modify = jest.fn();
+      const legacyNote = '# My note\n\nOld unmarked metadata text.';
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(makeLibrary({ key1: {} })),
+        makeNoteService({ key1: makeFile('n/key1.md') }),
+        makeTemplateService(() => ({
+          ok: true,
+          value: '---\nyear: 2024\n---\n',
+        })),
+        makeVault({ 'n/key1.md': legacyNote }, modify),
+        makeBaselineStore(), // no baseline: first sync
+        presenter,
+      );
+
+      const result = await orchestrator.execute(REQUEST);
+
+      expect(presenter.review).toHaveBeenCalledTimes(1);
+      expect(modify).not.toHaveBeenCalled(); // user chose skip
+      expect(result.updated).toEqual([]);
+      expect(result.skipped).toEqual(['key1']);
+    });
+
+    it('applies a first-sync frontmatter addition when the user consents', async () => {
+      const presenter = makePresenter(['apply']);
+      const modify = jest.fn().mockResolvedValue(undefined);
+      const legacyNote = '# My note\n\nOld unmarked metadata text.';
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(makeLibrary({ key1: {} })),
+        makeNoteService({ key1: makeFile('n/key1.md') }),
+        makeTemplateService(() => ({
+          ok: true,
+          value: '---\nyear: 2024\n---\n',
+        })),
+        makeVault({ 'n/key1.md': legacyNote }, modify),
+        makeBaselineStore(),
+        presenter,
+      );
+
+      const result = await orchestrator.execute(REQUEST);
+
+      expect(result.updated).toEqual(['key1']);
+      const written = (modify.mock.calls[0] as [IVaultFile, string])[1];
+      expect(written).toContain('year: 2024');
+      expect(written).toContain('Old unmarked metadata text.');
+    });
+
+    it('does not silently add first-sync frontmatter when review is disabled', async () => {
+      const modify = jest.fn();
+      const legacyNote = '# My note\n\nOld unmarked metadata text.';
+      orchestrator = new BatchNoteOrchestrator(
+        makeLibraryService(makeLibrary({ key1: {} })),
+        makeNoteService({ key1: makeFile('n/key1.md') }),
+        makeTemplateService(() => ({
+          ok: true,
+          value: '---\nyear: 2024\n---\n',
+        })),
+        makeVault({ 'n/key1.md': legacyNote }, modify),
+        makeBaselineStore(), // no baseline: first sync
+        // no presenter
+      );
+
+      const result = await orchestrator.execute({
+        ...REQUEST,
+        confirmation: 'never',
+      });
+
+      // The safety gate wins over 'never': rather than silently rewriting the
+      // note's metadata, the addition is reported for the user instead.
+      expect(modify).not.toHaveBeenCalled();
+      expect(result.updated).toEqual([]);
+      expect(result.conflicts).toEqual([
+        {
+          citekey: 'key1',
+          conflictIds: ['first-sync-frontmatter-needs-review'],
+        },
       ]);
     });
   });

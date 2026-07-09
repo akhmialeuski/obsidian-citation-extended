@@ -90,7 +90,10 @@ jest.mock(
   { virtual: true },
 );
 
-import { UpdateReviewModal } from '../../../src/ui/modals/update-review-modal';
+import {
+  ModalUpdateReviewPresenter,
+  UpdateReviewModal,
+} from '../../../src/ui/modals/update-review-modal';
 
 function makeItem(overrides: Partial<NoteReviewItem> = {}): NoteReviewItem {
   return {
@@ -211,12 +214,37 @@ describe('UpdateReviewModal', () => {
     expect(buttons(single.modal).map((b) => b.textContent)).not.toContain(
       'Apply all',
     );
+    expect(buttons(single.modal).map((b) => b.textContent)).not.toContain(
+      'Apply all (keep my edits)',
+    );
     single.modal.close();
     await expect(single.decision).resolves.toBe('skip');
 
+    // makeItem() is conflicted, so the bulk button carries the keep-my-edits
+    // clarification (see below) rather than a bare "Apply all".
     const bulk = openModal(makeItem(), 3);
-    clickButton(bulk.modal, 'Apply all');
+    clickButton(bulk.modal, 'Apply all (keep my edits)');
     await expect(bulk.decision).resolves.toBe('apply-all');
+  });
+
+  it('clarifies the bulk apply button by conflict state', async () => {
+    // With conflicts, "Apply all" applies the keep-my-edits resolution to every
+    // remaining note, so the label must say so — a bare "Apply all" reads as
+    // "accept all the library changes", the opposite of what it does.
+    const conflicted = openModal(makeItem({ conflictIds: ['meta'] }), 2);
+    const conflictedLabels = buttons(conflicted.modal).map(
+      (b) => b.textContent,
+    );
+    expect(conflictedLabels).toContain('Apply all (keep my edits)');
+    expect(conflictedLabels).not.toContain('Apply all');
+
+    // A clean change (no conflicts) keeps the plain label.
+    const clean = openModal(makeItem({ conflictIds: [] }), 2);
+    const cleanLabels = buttons(clean.modal).map((b) => b.textContent);
+    expect(cleanLabels).toContain('Apply all');
+    expect(cleanLabels).not.toContain('Apply all (keep my edits)');
+    clickButton(clean.modal, 'Apply all');
+    await expect(clean.decision).resolves.toBe('apply-all');
   });
 
   it('resolves "skip" when closed without a choice', async () => {
@@ -270,5 +298,27 @@ describe('UpdateReviewModal', () => {
     );
     const fold = modal.contentEl.querySelector('.citation-diff-line.is-fold');
     expect(fold?.textContent).toContain('unchanged lines');
+  });
+
+  it('presenter opens a modal and resolves with the chosen decision', async () => {
+    // The presenter builds the modal internally; render it for real (so its
+    // buttons exist) and recover the instance from the spy to click one.
+    const realOnOpen = UpdateReviewModal.prototype.onOpen;
+    const spy = jest
+      .spyOn(UpdateReviewModal.prototype, 'onOpen')
+      .mockImplementation(function (this: UpdateReviewModal) {
+        realOnOpen.call(this);
+      });
+
+    try {
+      const presenter = new ModalUpdateReviewPresenter({} as never);
+      const decision = presenter.review(makeItem(), 2);
+      const modal = spy.mock.instances[0] as unknown as UpdateReviewModal;
+      expect(modal).toBeDefined();
+      clickButton(modal, 'Apply (keep my edits)');
+      await expect(decision).resolves.toBe('apply');
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

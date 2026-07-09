@@ -101,8 +101,15 @@ export class UpdateReviewModal extends Modal {
       const bulk = new Setting(contentEl).setDesc(
         `${this.remaining} more note${this.remaining === 1 ? '' : 's'} waiting for review.`,
       );
+      // "Apply all" applies the keep-my-edits resolution to every remaining
+      // note (see the orchestrator's apply-all handling), so it must carry the
+      // same clarification as the single-note button — a bare "Apply all"
+      // reads as "accept all the library changes", the opposite of what it does.
+      const applyAllLabel = hasConflicts
+        ? 'Apply all (keep my edits)'
+        : 'Apply all';
       bulk.addButton((b) =>
-        b.setButtonText('Apply all').onClick(() => this.finish('apply-all')),
+        b.setButtonText(applyAllLabel).onClick(() => this.finish('apply-all')),
       );
       bulk.addButton((b) =>
         b.setButtonText('Skip all').onClick(() => this.finish('skip-all')),
