@@ -1,6 +1,6 @@
 {
   "name": "obsidian-citation-extended",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Extended functionality to automatically search and insert citations from a Zotero library.",
   "main": "main.js",
   "scripts": {
