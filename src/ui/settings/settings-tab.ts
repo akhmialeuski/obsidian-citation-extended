@@ -473,7 +473,6 @@ export class CitationSettingTab extends PluginSettingTab {
           void (async () => {
             const url = this.plugin.settings.databases[index].path;
             if (!url) {
-              // eslint-disable-next-line obsidianmd/ui/sentence-case -- "Better BibTeX" is a product name
               new Notice('Please enter the Better BibTeX export URL first.');
               return;
             }
@@ -507,7 +506,6 @@ export class CitationSettingTab extends PluginSettingTab {
             void (async () => {
               const url = this.plugin.settings.databases[index].path;
               if (!url) {
-                // eslint-disable-next-line obsidianmd/ui/sentence-case -- "Better BibTeX" is a product name
                 new Notice('Please enter the Better BibTeX export URL first.');
                 return;
               }
@@ -540,7 +538,6 @@ export class CitationSettingTab extends PluginSettingTab {
     new Setting(card)
       .setName('Zotero API base URL')
       .setDesc(
-        // eslint-disable-next-line obsidianmd/ui/sentence-case -- the URL is a literal, not prose
         'Leave empty for the default local server (http://127.0.0.1:23119).',
       )
       .addText((text) => {
@@ -615,7 +612,6 @@ export class CitationSettingTab extends PluginSettingTab {
     new Setting(card)
       .setName('Auto-sync interval (minutes)')
       .setDesc(
-        // eslint-disable-next-line obsidianmd/ui/sentence-case -- "Better BibTeX" is a product name
         'How often to re-fetch from Zotero. Set to 0 to disable (refresh manually). Shared with the Better BibTeX live connection.',
       )
       .addText((text) => {

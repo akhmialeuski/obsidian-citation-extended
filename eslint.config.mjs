@@ -2,8 +2,46 @@ import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import obsidianmd from 'eslint-plugin-obsidianmd';
 import prettier from 'eslint-plugin-prettier';
+import eslintComments from '@eslint-community/eslint-plugin-eslint-comments';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import globals from 'globals';
+
+// Product and format names that legitimately keep their casing in UI text, so
+// obsidianmd/ui/sentence-case accepts them without an eslint-disable (a setting
+// label may say "Better BibTeX" or "Zotero" without violating sentence case).
+const UI_BRAND_NAMES = [
+    'Obsidian',
+    'Zotero',
+    'Better BibTeX',
+    'BibTeX',
+    'BibLaTeX',
+    'CSL JSON',
+    'Readwise',
+    'Mendeley',
+    'Hayagriva',
+    'Kindle',
+    'Instapaper',
+    'Reader',
+];
+
+// All-caps acronyms that are correct as-is in UI text.
+const UI_ACRONYMS = [
+    'API',
+    'URL',
+    'URI',
+    'PDF',
+    'HTTP',
+    'HTTPS',
+    'JSON',
+    'CSL',
+    'ID',
+    'YAML',
+    'UI',
+    'BBT',
+    'ISBN',
+    'ASIN',
+    'DOI',
+];
 
 export default tseslint.config(
     eslint.configs.recommended,
@@ -12,6 +50,12 @@ export default tseslint.config(
         plugins: {
             prettier,
             obsidianmd,
+            '@eslint-community/eslint-comments': eslintComments,
+        },
+        linterOptions: {
+            // A stale eslint-disable that no longer suppresses anything is itself
+            // an error, so suppressions cannot silently rot.
+            reportUnusedDisableDirectives: 'error',
         },
         languageOptions: {
             globals: {
@@ -57,6 +101,7 @@ export default tseslint.config(
             // -import / -no-unsanitized, which flood this codebase with
             // unrelated findings.
             'obsidianmd/no-unsupported-api': 'error', // API calls newer than manifest.minAppVersion
+            'obsidianmd/no-global-this': 'error', // prefer window/activeWindow (see core override)
             'obsidianmd/prefer-window-timers': 'error', // window.setTimeout over bare global timers
             'obsidianmd/no-tfile-tfolder-cast': 'error',
             'obsidianmd/no-view-references-in-plugin': 'error',
@@ -73,7 +118,30 @@ export default tseslint.config(
             'obsidianmd/commands/no-plugin-name-in-command-name': 'error',
             'obsidianmd/settings-tab/no-manual-html-headings': 'warn',
             'obsidianmd/settings-tab/no-problematic-settings-headings': 'warn',
-            'obsidianmd/ui/sentence-case': 'warn',
+            // UI text must be sentence case; product names and acronyms are
+            // allow-listed and literal URLs are ignored, so legitimate strings
+            // pass without an eslint-disable.
+            'obsidianmd/ui/sentence-case': [
+                'error',
+                {
+                    brands: UI_BRAND_NAMES,
+                    acronyms: UI_ACRONYMS,
+                    ignoreRegex: ['https?://\\S+'],
+                },
+            ],
+
+            // Guideline rules must not be silenced with an inline eslint-disable,
+            // and any directive that remains has to explain itself. This mirrors
+            // the Obsidian review bot so such issues are caught locally by
+            // `npm run lint` instead of only in review.
+            '@eslint-community/eslint-comments/no-restricted-disable': [
+                'error',
+                'obsidianmd',
+            ],
+            '@eslint-community/eslint-comments/require-description': [
+                'error',
+                { ignore: [] },
+            ],
 
             // Prefer Obsidian's createDiv()/createSpan() shorthand over
             // createEl('div'|'span'). 0.3.0 ships the rule logic but does not
@@ -106,6 +174,16 @@ export default tseslint.config(
         ],
     },
     {
+        // The core layer is environment-neutral: it runs in the renderer, in a
+        // Web Worker, and under the Node-based Jest env (where window and
+        // activeWindow do not exist). Its retry-backoff timer therefore uses
+        // globalThis, which resolves in all three, so no-global-this is off here.
+        files: ['src/core/**/*.ts'],
+        rules: {
+            'obsidianmd/no-global-this': 'off',
+        },
+    },
+    {
         // Test code (specs + shared mocks/helpers). Jest mocks and the mock
         // platform/obsidian adapters are intentionally `any`-typed, so the
         // type-checked safety rules — which only matter for shipped src/ code —
@@ -119,10 +197,16 @@ export default tseslint.config(
             '@typescript-eslint/no-unsafe-return': 'off',
             '@typescript-eslint/no-unsafe-argument': 'off',
             'no-restricted-syntax': 'off',
-            // Obsidian runtime guidelines don't apply to jsdom test code.
+            // Obsidian runtime guidelines don't apply to Node-based test code,
+            // which legitimately stubs `global`/`globalThis` for mocking.
             'obsidianmd/prefer-window-timers': 'off',
+            'obsidianmd/no-global-this': 'off',
             // Mock fixtures use arbitrary titles, not user-facing UI text.
             'obsidianmd/ui/sentence-case': 'off',
+            // Test files silence no-explicit-any for mocks with bare directives;
+            // they are not shipped and not covered by the review guidelines.
+            '@eslint-community/eslint-comments/require-description': 'off',
+            '@eslint-community/eslint-comments/no-restricted-disable': 'off',
         },
     },
 );
