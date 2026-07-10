@@ -1,6 +1,7 @@
 import { FileSystemAdapter, Notice, Plugin } from 'obsidian';
 import {
   obsidianHttpGet,
+  obsidianSchedule,
   obsidianZoteroGet,
   obsidianZoteroPost,
 } from './platform/obsidian-http';
@@ -179,7 +180,7 @@ export default class CitationPlugin extends Plugin {
       (def, id) =>
         new ReadwiseSource(
           id,
-          new ReadwiseApiClient(def.path, obsidianHttpGet),
+          new ReadwiseApiClient(def.path, obsidianHttpGet, obsidianSchedule),
           workerManager,
           platformAdapter.fileSystem,
           sourceCacheFilePath(

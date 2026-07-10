@@ -1,6 +1,16 @@
 import { requestUrl } from 'obsidian';
-import type { HttpGetFn } from '../core';
+import type { HttpGetFn, ScheduleFn } from '../core';
 import type { ZoteroHttpGetFn, ZoteroHttpPostFn } from '../core';
+
+/**
+ * {@link ScheduleFn} backed by the renderer's `window` timers. Provided by the
+ * platform layer so the core Readwise client never touches a global timer
+ * directly; its rate-limit back-off is scheduled and cancelled here.
+ */
+export const obsidianSchedule: ScheduleFn = (handler, delayMs) => {
+  const id = window.setTimeout(handler, delayMs);
+  return () => window.clearTimeout(id);
+};
 
 /**
  * {@link HttpGetFn} implementation backed by Obsidian's built-in

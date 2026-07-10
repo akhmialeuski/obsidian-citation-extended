@@ -9,9 +9,7 @@
  * `requestUrl`).
  */
 
-// ---------------------------------------------------------------------------
 // HTTP abstraction
-// ---------------------------------------------------------------------------
 
 /** Minimal HTTP response surface used by the client. */
 export interface HttpResponse {
@@ -30,9 +28,15 @@ export type HttpGetFn = (
   headers: Record<string, string>,
 ) => Promise<HttpResponse>;
 
-// ---------------------------------------------------------------------------
+/**
+ * Schedules `handler` to run after `delayMs` and returns a function that
+ * cancels the pending call. Injected (like {@link HttpGetFn}) so this core
+ * client never references a global timer directly: the caller supplies the
+ * host's scheduler — the active window in Obsidian, a test double under Jest.
+ */
+export type ScheduleFn = (handler: () => void, delayMs: number) => () => void;
+
 // Error
-// ---------------------------------------------------------------------------
 
 /** Error thrown by {@link ReadwiseApiClient} on API failures. */
 export class ReadwiseApiError extends Error {
@@ -46,9 +50,7 @@ export class ReadwiseApiError extends Error {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Response types — Readwise API v2 (Export)
-// ---------------------------------------------------------------------------
 
 export interface ReadwiseHighlight {
   id: number;
@@ -83,9 +85,7 @@ export interface ReadwiseExportBook {
   num_highlights: number;
 }
 
-// ---------------------------------------------------------------------------
 // Response types — Reader API v3
-// ---------------------------------------------------------------------------
 
 export interface ReadwiseReaderDocument {
   id: string;
@@ -113,9 +113,7 @@ export interface ReadwiseReaderDocument {
   notes: string;
 }
 
-// ---------------------------------------------------------------------------
 // Internal pagination response shape
-// ---------------------------------------------------------------------------
 
 /** Common shape of a cursor-paginated Readwise response. */
 interface PageResponse<T> {
@@ -123,9 +121,7 @@ interface PageResponse<T> {
   results: T[];
 }
 
-// ---------------------------------------------------------------------------
 // Client
-// ---------------------------------------------------------------------------
 
 const READWISE_API_V2 = 'https://readwise.io/api/v2';
 const READER_API_V3 = 'https://readwise.io/api/v3';
@@ -167,11 +163,10 @@ export class ReadwiseApiClient {
   constructor(
     private readonly token: string,
     private readonly httpGet: HttpGetFn,
+    private readonly schedule: ScheduleFn,
   ) {}
 
-  // -------------------------------------------------------------------------
   // Public API
-  // -------------------------------------------------------------------------
 
   /**
    * Validate the API token against the Readwise auth endpoint.
@@ -238,9 +233,7 @@ export class ReadwiseApiClient {
     );
   }
 
-  // -------------------------------------------------------------------------
   // Private helpers
-  // -------------------------------------------------------------------------
 
   /**
    * Fetch every page of a cursor-paginated endpoint and concatenate results.
@@ -472,16 +465,14 @@ export class ReadwiseApiClient {
         return;
       }
 
-      // Use `globalThis` rather than `window` so this core HTTP client stays
-      // environment-neutral (the core layer must not assume a DOM/renderer
-      // context). `globalThis.setTimeout` returns a numeric handle in the
-      // Electron renderer where the client runs.
-      const timer = globalThis.setTimeout(resolve, ms);
+      // Timer scheduling is injected so this core client stays environment
+      // neutral: the caller supplies the host's timer (see ScheduleFn).
+      const cancel = this.schedule(() => resolve(), ms);
 
       signal?.addEventListener(
         'abort',
         () => {
-          globalThis.clearTimeout(timer);
+          cancel();
           reject(signal.reason as Error);
         },
         { once: true },

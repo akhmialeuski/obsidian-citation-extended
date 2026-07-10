@@ -51,7 +51,7 @@ export class CitationsPluginSettings {
   public disableAutomaticNoteCreation: boolean =
     DEFAULT_SETTINGS.disableAutomaticNoteCreation;
   public templateProfiles: TemplateProfile[] =
-    DEFAULT_SETTINGS.templateProfiles as TemplateProfile[];
+    DEFAULT_SETTINGS.templateProfiles;
 
   // Note identifier (frontmatter-based lookup)
   public noteIdentifierField: string = DEFAULT_SETTINGS.noteIdentifierField;

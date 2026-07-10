@@ -174,16 +174,6 @@ export default tseslint.config(
         ],
     },
     {
-        // The core layer is environment-neutral: it runs in the renderer, in a
-        // Web Worker, and under the Node-based Jest env (where window and
-        // activeWindow do not exist). Its retry-backoff timer therefore uses
-        // globalThis, which resolves in all three, so no-global-this is off here.
-        files: ['src/core/**/*.ts'],
-        rules: {
-            'obsidianmd/no-global-this': 'off',
-        },
-    },
-    {
         // Test code (specs + shared mocks/helpers). Jest mocks and the mock
         // platform/obsidian adapters are intentionally `any`-typed, so the
         // type-checked safety rules — which only matter for shipped src/ code —

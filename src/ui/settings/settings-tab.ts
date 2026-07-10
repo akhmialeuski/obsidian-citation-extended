@@ -9,7 +9,6 @@ import {
 
 import CitationPlugin from '../../main';
 import {
-  DatabaseType,
   DatabaseConfig,
   ReadwiseFilters,
   DATABASE_TYPE_LABELS,
@@ -25,6 +24,7 @@ import {
 import type { NoteUpdateMode, UpdateConfirmationMode } from '../../core';
 import {
   obsidianHttpGet,
+  obsidianSchedule,
   obsidianZoteroGet,
   obsidianZoteroPost,
 } from '../../platform/obsidian-http';
@@ -318,7 +318,7 @@ export class CitationSettingTab extends PluginSettingTab {
       return;
     }
 
-    db.type = option as DatabaseType;
+    db.type = option;
     if (option === DATABASE_FORMATS.Readwise) {
       db.sourceType = DATA_SOURCE_TYPES.Readwise;
     } else {
@@ -352,7 +352,7 @@ export class CitationSettingTab extends PluginSettingTab {
         });
         dropdown.setValue(db.type);
         dropdown.onChange(async (value) => {
-          this.plugin.settings.databases[index].type = value as DatabaseType;
+          this.plugin.settings.databases[index].type = value;
           await this.plugin.saveSettings();
           new Notice('Export format changed. Reloading library…');
           void this.plugin.libraryService.load();
@@ -824,7 +824,11 @@ export class CitationSettingTab extends PluginSettingTab {
             statusEl.setText('Validating...');
             statusEl.setCssProps({ color: 'var(--text-muted)' });
             try {
-              const client = new ReadwiseApiClient(token, obsidianHttpGet);
+              const client = new ReadwiseApiClient(
+                token,
+                obsidianHttpGet,
+                obsidianSchedule,
+              );
               const valid = await client.validateToken();
               if (valid) {
                 statusEl.setText('Token is valid. Loading library…');
