@@ -67,5 +67,5 @@ export function registerWorkerRpc(scope: WorkerRpcScope): void {
 // In the real Web Worker `self` is always defined; the guard only matters in
 // unit tests, where this module is imported in a Node context.
 if (typeof self !== 'undefined') {
-  registerWorkerRpc(self as unknown as WorkerRpcScope);
+  registerWorkerRpc(self);
 }

@@ -135,7 +135,7 @@ class ObsidianWorkspaceAccess implements IWorkspaceAccess {
   getActiveEditor(): IEditorProxy | null {
     // Standard MarkdownView approach
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (view?.editor) return view.editor as unknown as IEditorProxy;
+    if (view?.editor) return view.editor;
 
     // Fallback: activeEditor supports Canvas text nodes, Lineage, etc.
     const ext = this.app.workspace as unknown as WorkspaceExt;

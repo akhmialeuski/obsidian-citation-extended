@@ -2,7 +2,8 @@
  * @jest-environment jsdom
  *
  * jsdom provides `window`, matching Obsidian's Electron renderer where the
- * client runs. The rate-limit `sleep()` uses `window.setTimeout`.
+ * client runs. The rate-limit `sleep()` is driven by the injected schedule
+ * (see beforeEach), which uses the ambient timers so jest fake timers apply.
  */
 jest.mock('obsidian', () => ({}), { virtual: true });
 jest.mock('web-worker:../../src/worker', () => ({ default: class {} }), {
@@ -18,9 +19,7 @@ import {
   HttpResponse,
 } from '../../../src/core/readwise/readwise-api-client';
 
-// ---------------------------------------------------------------------------
 // Helpers
-// ---------------------------------------------------------------------------
 
 function makeExportBook(
   overrides: Partial<ReadwiseExportBook> = {},
@@ -101,9 +100,7 @@ function mockHttpResponse(
   };
 }
 
-// ---------------------------------------------------------------------------
 // Tests
-// ---------------------------------------------------------------------------
 
 describe('ReadwiseApiClient', () => {
   let client: ReadwiseApiClient;
@@ -111,12 +108,17 @@ describe('ReadwiseApiClient', () => {
 
   beforeEach(() => {
     mockHttpGet = jest.fn();
-    client = new ReadwiseApiClient('test-token-abc', mockHttpGet);
+    client = new ReadwiseApiClient(
+      'test-token-abc',
+      mockHttpGet,
+      (handler, delayMs) => {
+        const id = setTimeout(handler, delayMs);
+        return () => clearTimeout(id);
+      },
+    );
   });
 
-  // -------------------------------------------------------------------------
   // ReadwiseApiError
-  // -------------------------------------------------------------------------
 
   describe('ReadwiseApiError', () => {
     it('is an instance of Error', () => {
@@ -135,9 +137,7 @@ describe('ReadwiseApiClient', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
   // validateToken
-  // -------------------------------------------------------------------------
 
   describe('validateToken', () => {
     it('returns true for 204 response', async () => {
@@ -177,9 +177,7 @@ describe('ReadwiseApiClient', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
   // fetchExportBooks
-  // -------------------------------------------------------------------------
 
   describe('fetchExportBooks', () => {
     it('returns books from single page', async () => {
@@ -253,9 +251,7 @@ describe('ReadwiseApiClient', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
   // fetchReaderDocuments
-  // -------------------------------------------------------------------------
 
   describe('fetchReaderDocuments', () => {
     it('returns documents from single page', async () => {
@@ -318,9 +314,7 @@ describe('ReadwiseApiClient', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
   // Rate limiting
-  // -------------------------------------------------------------------------
 
   describe('rate limiting', () => {
     beforeEach(() => {
@@ -410,9 +404,7 @@ describe('ReadwiseApiClient', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
   // Transient failures (5xx / network)
-  // -------------------------------------------------------------------------
 
   describe('transient failures', () => {
     beforeEach(() => {
@@ -521,9 +513,7 @@ describe('ReadwiseApiClient', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
   // Error handling
-  // -------------------------------------------------------------------------
 
   describe('error handling', () => {
     it('throws ReadwiseApiError with status code for non-retryable responses', async () => {
@@ -540,9 +530,7 @@ describe('ReadwiseApiClient', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
   // Malformed responses
-  // -------------------------------------------------------------------------
 
   describe('malformed responses', () => {
     it('throws ReadwiseApiError when the body is not valid JSON', async () => {
@@ -609,9 +597,7 @@ describe('ReadwiseApiClient', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
   // Pagination safety
-  // -------------------------------------------------------------------------
 
   describe('pagination safety', () => {
     it('stops paginating when the server repeats a cursor', async () => {
@@ -645,9 +631,7 @@ describe('ReadwiseApiClient', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
   // Authorization header
-  // -------------------------------------------------------------------------
 
   describe('authorization', () => {
     it('sends Authorization header with Token prefix', async () => {

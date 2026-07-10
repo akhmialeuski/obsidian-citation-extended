@@ -100,6 +100,7 @@ export type { ReadwiseDeltaInput } from './readwise/readwise-delta';
 export type {
   HttpResponse,
   HttpGetFn,
+  ScheduleFn,
   ReadwiseHighlight,
   ReadwiseExportBook,
   ReadwiseReaderDocument,

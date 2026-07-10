@@ -167,10 +167,8 @@ export class UIService implements IUIService {
       if (!leaf) return;
       await leaf.setViewState({ type: REFERENCES_VIEW_TYPE, active: true });
     }
-    // revealLeaf has existed since early Obsidian; only its Promise return type
-    // was added in 1.7.2, which the lint rule keys on. `void` is safe on both,
-    // so we keep minAppVersion at 1.4.0 rather than bump it for a return type.
-    // eslint-disable-next-line obsidianmd/no-unsupported-api
+    // revealLeaf returns Promise<void> (Obsidian 1.7.2+, matching
+    // minAppVersion); we only need the side effect, so fire-and-forget.
     void workspace.revealLeaf(leaf);
   }
 
