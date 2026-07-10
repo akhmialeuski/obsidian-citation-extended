@@ -2,13 +2,12 @@ name: Release Plugin
 
 # Runs automatically when a version tag is pushed (created by `npm run release`).
 # Builds the plugin, attaches the Obsidian-required assets to a GitHub release,
-# and attaches a build-provenance attestation to each asset.
+# attaches a build-provenance attestation to each asset, and publishes the
+# curated release notes from docs/releases/<version>.md. Notes are never
+# auto-generated: a release with no curated notes file fails on purpose.
 on:
   push:
     tags:
-      # standard-version emits plain semver tags here (e.g. 0.7.0); the
-      # v-prefixed pattern also covers the tool's default prefix, so the
-      # release fires regardless of which form the tag takes.
       - '[0-9]+.[0-9]+.[0-9]+'
       - 'v[0-9]+.[0-9]+.[0-9]+'
 
@@ -21,6 +20,28 @@ jobs:
       attestations: write # required by attest-build-provenance
     steps:
       - uses: actions/checkout@v4
+
+      # Resolve the version from the tag (with or without a leading "v"), the
+      # release title, and the curated release-notes file that must accompany it.
+      - name: Resolve release metadata
+        id: meta
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          {
+            echo "version=$version"
+            echo "title=v$version"
+            echo "notes=docs/releases/$version.md"
+          } >> "$GITHUB_OUTPUT"
+
+      # Fail fast (before the slow build) if the curated notes are missing, so a
+      # release never goes out with empty or auto-generated notes.
+      - name: Require curated release notes
+        run: |
+          notes="${{ steps.meta.outputs.notes }}"
+          if [ ! -f "$notes" ]; then
+            echo "::error::Missing release notes file '$notes'. Write it and commit before pushing the tag."
+            exit 1
+          fi
 
       - name: Use Node.js
         uses: actions/setup-node@v4
@@ -47,11 +68,12 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
+          name: ${{ steps.meta.outputs.title }}
+          body_path: ${{ steps.meta.outputs.notes }}
           files: |
             dist/main.js
             dist/manifest.json
             dist/styles.css
-          generate_release_notes: true
           draft: false
           prerelease: false
         env:
