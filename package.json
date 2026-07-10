@@ -1,6 +1,6 @@
 {
   "name": "obsidian-citation-extended",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Extended functionality to automatically search and insert citations from a Zotero library.",
   "main": "main.js",
   "scripts": {
@@ -55,7 +55,7 @@
   "dependencies": {
     "@retorquere/bibtex-parser": "^6.4.19",
     "chokidar": "^3.5.3",
-    "handlebars": "^4.7.7",
+    "handlebars": "^4.7.9",
     "minisearch": "^7.2.0",
     "node-diff3": "^3.2.1",
     "open": "^8.4.2",
