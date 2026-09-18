@@ -22,7 +22,7 @@ For detailed setup instructions, see [Getting Started](docs/getting-started.md).
 - **Insert literature note content** — insert rendered template content at cursor
 - **Insert markdown citation** — insert [Pandoc-style citations][3] with presets (textcite, parencite)
 - **Inline citation autocomplete** — type `@` or `[@` to get a suggestion popover backed by the same fuzzy search index
-- **References sidebar** — a side panel listing every reference cited in the active note, with one-click navigation and "copy bibliography"
+- **References sidebar** — a side panel listing every reference cited in the active note, with one-click navigation, Cmd/Ctrl-click to jump to a citation in the note, and "copy bibliography"
 - **Zotero PDF annotation import** — pull native Zotero highlights into templates as structured data (text, comment, color, page, tags) with `zotero://` deep links that open the PDF at the exact annotation
 - **Native Zotero connection** — read a running Zotero (7+) through its built-in local API: no Better BibTeX, no export files, native citation keys, group libraries and collection scoping
 - **Non-destructive note updates** — re-sync literature notes with the library: the plugin owns only its `{{#syncBlock}}` callouts and template frontmatter keys, merges changes three-way (yours + the library's) against the last synced snapshot, and shows a diff review dialog on real conflicts. Your own content is never touched

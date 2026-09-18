@@ -1,6 +1,7 @@
 import {
   extractCitekeyAtCursor,
   extractCitekeysFromText,
+  findCitekeyOccurrences,
 } from '../../src/application/citekey-extractor';
 import type { IEditorProxy } from '../../src/platform/platform-adapter';
 
@@ -116,5 +117,116 @@ describe('extractCitekeysFromText', () => {
       'third',
       'fourth',
     ]);
+  });
+});
+
+describe('findCitekeyOccurrences', () => {
+  /** The text each reported span actually covers. */
+  const slices = (text: string, citekey: string): string[] =>
+    findCitekeyOccurrences(text, citekey).map((o) =>
+      text.slice(o.start, o.end),
+    );
+
+  it('returns nothing for a citekey the text does not mention', () => {
+    expect(findCitekeyOccurrences('[@a] and @b', 'c')).toEqual([]);
+  });
+
+  it('returns nothing for a blank citekey', () => {
+    expect(findCitekeyOccurrences('[@a]', '   ')).toEqual([]);
+  });
+
+  it('locates a bare @key', () => {
+    const text = 'As shown by @smith2020 earlier.';
+    expect(findCitekeyOccurrences(text, 'smith2020')).toEqual([
+      { start: 12, end: 22 },
+    ]);
+    expect(slices(text, 'smith2020')).toEqual(['@smith2020']);
+  });
+
+  it('locates a @key at the very start of the text', () => {
+    expect(slices('@smith2020 opened the field.', 'smith2020')).toEqual([
+      '@smith2020',
+    ]);
+  });
+
+  it('locates a Pandoc single citation', () => {
+    expect(slices('see [@smith2020] here', 'smith2020')).toEqual([
+      '@smith2020',
+    ]);
+  });
+
+  it('locates one member of a Pandoc group without the surrounding bracket', () => {
+    const text = 'see [@a2020; @b2021, p. 3] here';
+    expect(slices(text, 'b2021')).toEqual(['@b2021']);
+    expect(slices(text, 'a2020')).toEqual(['@a2020']);
+  });
+
+  it('locates a wiki-link citation', () => {
+    expect(slices('see [[@smith2020]] here', 'smith2020')).toEqual([
+      '@smith2020',
+    ]);
+  });
+
+  it('locates a wiki-link citation that carries an alias', () => {
+    expect(slices('see [[@smith2020|Smith (2020)]] here', 'smith2020')).toEqual(
+      ['@smith2020'],
+    );
+  });
+
+  it('returns every occurrence in document order across mixed forms', () => {
+    const text = '[[@a]] then @a again, plus [@a; @b] and finally [@a].';
+    const found = findCitekeyOccurrences(text, 'a');
+    expect(found).toHaveLength(4);
+    expect(found.map((o) => o.start)).toEqual(
+      [...found.map((o) => o.start)].sort((x, y) => x - y),
+    );
+    expect(slices(text, 'a')).toEqual(['@a', '@a', '@a', '@a']);
+  });
+
+  it('spans multiple lines with offsets into the whole document', () => {
+    const text = 'First [@a2020].\nSecond @a2020 here.';
+    const found = findCitekeyOccurrences(text, 'a2020');
+    expect(found).toHaveLength(2);
+    expect(text.slice(found[1].start, found[1].end)).toBe('@a2020');
+    expect(found[1].start).toBeGreaterThan(text.indexOf('\n'));
+  });
+
+  it('does not match a citekey that is only a prefix of the one in the text', () => {
+    expect(findCitekeyOccurrences('[@smith2020a]', 'smith2020')).toEqual([]);
+  });
+
+  it('ignores an e-mail address that looks like a bare citation', () => {
+    expect(
+      findCitekeyOccurrences('write to name@example.com', 'example.com'),
+    ).toEqual([]);
+  });
+
+  it('handles citekeys with special characters', () => {
+    expect(slices('[@doe:2023-review]', 'doe:2023-review')).toEqual([
+      '@doe:2023-review',
+    ]);
+  });
+
+  // The panel lists what extractCitekeysFromText finds and jumps with
+  // findCitekeyOccurrences. If the two scans ever disagree, a listed citation
+  // becomes un-jumpable, so pin the agreement itself.
+  it('finds at least one occurrence of every citekey the extractor lists', () => {
+    const text = [
+      'Intro [[@wiki2020]] and [[@aliased2021|Alias]].',
+      'Body @bare2022, then [@group2023; @other2024, p. 7].',
+      'Tail [@single2025].',
+    ].join('\n');
+
+    const listed = extractCitekeysFromText(text);
+    expect(listed.length).toBeGreaterThan(0);
+    for (const citekey of listed) {
+      const found = findCitekeyOccurrences(text, citekey);
+      expect(found.length).toBeGreaterThan(0);
+      for (const occurrence of found) {
+        expect(text.slice(occurrence.start, occurrence.end)).toBe(
+          `@${citekey}`,
+        );
+      }
+    }
   });
 });

@@ -14,12 +14,14 @@ jest.mock(
     },
     MarkdownView: class {},
     Notice: jest.fn(),
+    Platform: { isMacOS: false },
     setIcon: jest.fn(),
     WorkspaceLeaf: class {},
   }),
   { virtual: true },
 );
 
+import { Notice, Platform } from 'obsidian';
 import {
   ReferencesView,
   REFERENCES_VIEW_TYPE,
@@ -81,10 +83,34 @@ interface StoreHook {
   unsubscribe: jest.Mock;
 }
 
+/**
+ * Editor double with real offset arithmetic, so the line/ch a jump lands on is
+ * checked against the document rather than against a stubbed conversion.
+ */
+function makeEditor(content: string) {
+  return {
+    getValue: () => content,
+    offsetToPos: (offset: number) => {
+      const before = content.slice(0, offset);
+      const lastBreak = before.lastIndexOf('\n');
+      return {
+        line: before.split('\n').length - 1,
+        ch: offset - (lastBreak + 1),
+      };
+    },
+    setSelection: jest.fn(),
+    scrollIntoView: jest.fn(),
+    focus: jest.fn(),
+  };
+}
+
 function makeView(opts: {
   library?: Record<string, unknown> | null;
   content?: string | null;
   renderOk?: boolean;
+  /** Serve the editor via workspace.activeEditor, as when the sidebar has focus. */
+  viaActiveEditor?: boolean;
+  filePath?: string;
 }) {
   const onOpenCitekey = jest.fn();
   const storeHook: StoreHook = { fire: () => {}, unsubscribe: jest.fn() };
@@ -116,22 +142,43 @@ function makeView(opts: {
   const view = new ReferencesView({} as any, deps as any);
 
   const editorContent = opts.content;
+  const editor = editorContent != null ? makeEditor(editorContent) : null;
+  const file = { path: opts.filePath ?? 'Note.md', extension: 'md' };
+  const fileInfo = editor ? { editor, file } : null;
+  const viaActiveEditor = opts.viaActiveEditor === true;
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (view as any).app = {
     workspace: {
       on: jest.fn(() => ({})),
-      getActiveViewOfType: jest.fn(() =>
-        editorContent != null
-          ? { editor: { getValue: () => editorContent } }
-          : null,
-      ),
-      getActiveFile: jest.fn(() => null),
+      getActiveViewOfType: jest.fn(() => (viaActiveEditor ? null : fileInfo)),
+      activeEditor: viaActiveEditor ? fileInfo : null,
+      // With the sidebar focused there is no active markdown VIEW, so the
+      // panel renders from the file on disk — the state a jump must survive.
+      getActiveFile: jest.fn(() => (viaActiveEditor ? file : null)),
     },
-    vault: { cachedRead: jest.fn() },
+    vault: { cachedRead: jest.fn(() => Promise.resolve(editorContent ?? '')) },
   };
 
-  return { view, deps, onOpenCitekey, storeHook };
+  return { view, deps, onOpenCitekey, storeHook, editor, file };
 }
+
+/** Dispatch a click carrying the jump modifier for the simulated platform. */
+function jumpClick(el: HTMLElement | null): void {
+  el?.dispatchEvent(
+    new MouseEvent(
+      'click',
+      Platform.isMacOS ? { metaKey: true } : { ctrlKey: true },
+    ),
+  );
+}
+
+const items = (view: ReferencesView): HTMLElement[] =>
+  Array.from(
+    contentEl(view).querySelectorAll<HTMLElement>(
+      '.citation-extended-ref-item',
+    ),
+  );
 
 const contentEl = (view: ReferencesView): HTMLElement =>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -244,6 +291,198 @@ describe('ReferencesView', () => {
     copyBtn?.dispatchEvent(new MouseEvent('click'));
     await Promise.resolve();
     expect(writeText).toHaveBeenCalledWith('Rendered ref');
+  });
+
+  describe('modifier-click jumps to the citation in the note (#88)', () => {
+    const entries = {
+      a: createMockEntry({ id: 'a', title: 'Aye' }),
+      b: createMockEntry({ id: 'b', title: 'Bee' }),
+    };
+
+    beforeEach(() => {
+      (Platform as { isMacOS: boolean }).isMacOS = false;
+      (Notice as unknown as jest.Mock).mockClear();
+    });
+
+    it('selects the occurrence, scrolls to it, and focuses the editor', async () => {
+      const content = 'Intro.\nAs shown in [@a] this holds.';
+      const { view, editor, onOpenCitekey } = makeView({
+        library: { entries },
+        content,
+      });
+      await view.onOpen();
+
+      jumpClick(items(view)[0]);
+
+      const at = content.indexOf('@a');
+      expect(editor!.setSelection).toHaveBeenCalledWith(
+        { line: 1, ch: at - content.indexOf('\n') - 1 },
+        { line: 1, ch: at - content.indexOf('\n') + 1 },
+      );
+      expect(editor!.scrollIntoView).toHaveBeenCalledWith(
+        expect.objectContaining({
+          from: expect.anything(),
+          to: expect.anything(),
+        }),
+        true,
+      );
+      expect(editor!.focus).toHaveBeenCalled();
+      // The jump replaces the open action; it does not also open the note.
+      expect(onOpenCitekey).not.toHaveBeenCalled();
+    });
+
+    it('leaves a plain click opening the literature note', async () => {
+      const { view, editor, onOpenCitekey } = makeView({
+        library: { entries },
+        content: '[@a]',
+      });
+      await view.onOpen();
+
+      items(view)[0].dispatchEvent(new MouseEvent('click'));
+
+      expect(onOpenCitekey).toHaveBeenCalledWith('a');
+      expect(editor!.setSelection).not.toHaveBeenCalled();
+    });
+
+    it('uses Cmd on macOS and ignores Ctrl there', async () => {
+      (Platform as { isMacOS: boolean }).isMacOS = true;
+      const { view, editor, onOpenCitekey } = makeView({
+        library: { entries },
+        content: '[@a]',
+      });
+      await view.onOpen();
+
+      // Ctrl-click on macOS is a right-click, never the jump gesture.
+      items(view)[0].dispatchEvent(new MouseEvent('click', { ctrlKey: true }));
+      expect(editor!.setSelection).not.toHaveBeenCalled();
+      expect(onOpenCitekey).toHaveBeenCalledWith('a');
+
+      items(view)[0].dispatchEvent(new MouseEvent('click', { metaKey: true }));
+      expect(editor!.setSelection).toHaveBeenCalled();
+    });
+
+    it('ignores Cmd off macOS', async () => {
+      const { view, editor, onOpenCitekey } = makeView({
+        library: { entries },
+        content: '[@a]',
+      });
+      await view.onOpen();
+
+      items(view)[0].dispatchEvent(new MouseEvent('click', { metaKey: true }));
+
+      expect(editor!.setSelection).not.toHaveBeenCalled();
+      expect(onOpenCitekey).toHaveBeenCalledWith('a');
+    });
+
+    it('advances through every occurrence and wraps around', async () => {
+      const content = '[@a] then @a again and finally [[@a]].';
+      const { view, editor } = makeView({ library: { entries }, content });
+      await view.onOpen();
+
+      const starts: number[] = [];
+      for (let i = 0; i < 4; i++) {
+        jumpClick(items(view)[0]);
+        const call = editor!.setSelection.mock.calls[i];
+        starts.push(call[0].ch);
+      }
+
+      const [first, second, third, wrapped] = starts;
+      expect(second).toBeGreaterThan(first);
+      expect(third).toBeGreaterThan(second);
+      expect(wrapped).toBe(first);
+    });
+
+    it('reports the position while cycling, and stays quiet for a lone citation', async () => {
+      const { view } = makeView({
+        library: { entries },
+        content: '[@a] and @a, plus [@b].',
+      });
+      await view.onOpen();
+      const notice = Notice as unknown as jest.Mock;
+
+      jumpClick(items(view)[0]);
+      expect(notice).toHaveBeenCalledWith('Citation 1 of 2');
+      jumpClick(items(view)[0]);
+      expect(notice).toHaveBeenCalledWith('Citation 2 of 2');
+
+      notice.mockClear();
+      jumpClick(items(view)[1]);
+      expect(notice).not.toHaveBeenCalled();
+    });
+
+    it('restarts the cycle when a different citation is clicked', async () => {
+      const content = '[@a] then @a again. Also [@b].';
+      const { view, editor } = makeView({ library: { entries }, content });
+      await view.onOpen();
+
+      jumpClick(items(view)[0]);
+      jumpClick(items(view)[0]);
+      jumpClick(items(view)[1]);
+      jumpClick(items(view)[0]);
+
+      const calls = editor!.setSelection.mock.calls;
+      // Back on 'a' after visiting 'b': first occurrence again, not the third.
+      expect(calls[3][0]).toEqual(calls[0][0]);
+    });
+
+    it('jumps to a citekey that is missing from the library', async () => {
+      const { view, editor, onOpenCitekey } = makeView({
+        library: { entries: {} },
+        content: 'see [@ghost] here',
+      });
+      await view.onOpen();
+
+      jumpClick(items(view)[0]);
+
+      expect(editor!.setSelection).toHaveBeenCalled();
+      // A missing entry still has no literature note to open.
+      expect(onOpenCitekey).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the last markdown editor when the sidebar has focus', async () => {
+      const { view, editor } = makeView({
+        library: { entries },
+        content: 'text [@a] here',
+        viaActiveEditor: true,
+      });
+      await view.onOpen();
+
+      jumpClick(items(view)[0]);
+
+      expect(editor!.setSelection).toHaveBeenCalled();
+    });
+
+    it('notifies when no editor is available', async () => {
+      const { view } = makeView({ library: { entries }, content: '[@a]' });
+      await view.onOpen();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const workspace = (view as any).app.workspace;
+      workspace.getActiveViewOfType = jest.fn(() => null);
+      workspace.activeEditor = null;
+
+      jumpClick(items(view)[0]);
+
+      expect(Notice as unknown as jest.Mock).toHaveBeenCalledWith(
+        expect.stringMatching(/Open a note in the editor/i),
+      );
+    });
+
+    it('notifies when the citation is no longer in the note', async () => {
+      const { view, editor } = makeView({
+        library: { entries },
+        content: '[@a]',
+      });
+      await view.onOpen();
+      // The note changed under a stale panel.
+      editor!.getValue = () => 'nothing cited here any more';
+
+      jumpClick(items(view)[0]);
+
+      expect(Notice as unknown as jest.Mock).toHaveBeenCalledWith(
+        expect.stringMatching(/No occurrence of @a/),
+      );
+      expect(editor!.setSelection).not.toHaveBeenCalled();
+    });
   });
 
   it('unsubscribes and clears the timer on close', async () => {
