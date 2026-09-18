@@ -8,6 +8,7 @@ const mockNoticeFn = jest.fn();
 
 let mockAdapterWrite: jest.Mock;
 let mockAdapterExists: jest.Mock;
+let mockAdapterRead: jest.Mock;
 let mockGetAbstractFileByPath: jest.Mock;
 let mockGetMarkdownFiles: jest.Mock;
 let mockVaultCreate: jest.Mock;
@@ -89,8 +90,26 @@ function makeTFolder(folderPath: string): TFolder {
 }
 
 function createMockApp(): App {
-  mockAdapterWrite = jest.fn().mockResolvedValue(undefined);
-  mockAdapterExists = jest.fn().mockResolvedValue(true);
+  // One in-memory store keyed by VAULT-RELATIVE path, shared by read/write/
+  // exists — the round trip the offline caches and the baseline store depend
+  // on. A double that resolves them independently cannot show a mismatch.
+  const vaultFiles = new Map<string, string>();
+  mockAdapterWrite = jest.fn((path: string, content: string) => {
+    vaultFiles.set(path, content);
+    return Promise.resolve();
+  });
+  mockAdapterExists = jest.fn((path: string) =>
+    Promise.resolve(vaultFiles.has(path)),
+  );
+  mockAdapterRead = jest.fn((path: string) =>
+    vaultFiles.has(path)
+      ? Promise.resolve(vaultFiles.get(path)!)
+      : Promise.reject(
+          Object.assign(new Error(`ENOENT: no such file, open '${path}'`), {
+            code: 'ENOENT',
+          }),
+        ),
+  );
   mockGetAbstractFileByPath = jest.fn().mockReturnValue(null);
   mockGetMarkdownFiles = jest.fn().mockReturnValue([]);
   mockVaultCreate = jest.fn();
@@ -102,13 +121,23 @@ function createMockApp(): App {
   });
   mockFileToLinktext = jest.fn().mockReturnValue('link-text');
   mockVaultGetConfig = jest.fn().mockReturnValue(null);
-  mockReadLocalFile = jest
-    .fn()
-    .mockResolvedValue(new TextEncoder().encode('file content').buffer);
+  // FileSystemAdapter.readLocalFile is a STATIC helper that takes an absolute
+  // OS path. The old double accepted anything, which is why issue #87 — the
+  // adapter reading vault-relative cache paths through it — passed its tests.
+  mockReadLocalFile = jest.fn((path: string) =>
+    path.startsWith('/')
+      ? Promise.resolve(new TextEncoder().encode('file content').buffer)
+      : Promise.reject(
+          Object.assign(new Error(`ENOENT: no such file, open '${path}'`), {
+            code: 'ENOENT',
+          }),
+        ),
+  );
 
   return {
     vault: {
       adapter: {
+        read: mockAdapterRead,
         write: mockAdapterWrite,
         exists: mockAdapterExists,
         getBasePath: () => '/vault',
@@ -178,18 +207,50 @@ describe('ObsidianPlatformAdapter', () => {
 
   describe('ObsidianFileSystem', () => {
     describe('readFile', () => {
-      it('reads a local file and returns UTF-8 string', async () => {
-        const content = await adapter.fileSystem.readFile('/some/path.bib');
+      const cachePath = '.obsidian/plugins/citations/readwise-cache.json';
 
-        expect(mockReadLocalFile).toHaveBeenCalledWith('/some/path.bib');
-        expect(content).toBe('file content');
+      it('reads a vault-relative path through the vault adapter', async () => {
+        await adapter.fileSystem.writeFile(cachePath, '{"version":1}');
+
+        const content = await adapter.fileSystem.readFile(cachePath);
+
+        expect(mockAdapterRead).toHaveBeenCalledWith(cachePath);
+        expect(content).toBe('{"version":1}');
+      });
+
+      it('round-trips what writeFile stored (issue #87)', async () => {
+        // The offline caches and the note-baseline store all write and then
+        // read back the SAME path. Reading through
+        // FileSystemAdapter.readLocalFile resolved that path against the OS
+        // root instead of the vault, so every cache was write-only: exists()
+        // reported a hit and the read that followed threw ENOENT.
+        await adapter.fileSystem.writeFile(cachePath, 'cached');
+
+        expect(await adapter.fileSystem.exists(cachePath)).toBe(true);
+        await expect(adapter.fileSystem.readFile(cachePath)).resolves.toBe(
+          'cached',
+        );
+      });
+
+      it('never routes reads through the desktop-only static helper', async () => {
+        await adapter.fileSystem.writeFile(cachePath, 'cached');
+        await adapter.fileSystem.readFile(cachePath);
+
+        expect(mockReadLocalFile).not.toHaveBeenCalled();
       });
 
       it('handles empty file content', async () => {
-        mockReadLocalFile.mockResolvedValue(new ArrayBuffer(0));
+        await adapter.fileSystem.writeFile(cachePath, '');
 
-        const content = await adapter.fileSystem.readFile('/empty.txt');
-        expect(content).toBe('');
+        expect(await adapter.fileSystem.readFile(cachePath)).toBe('');
+      });
+
+      it('propagates a missing file instead of returning empty text', async () => {
+        // readVersionedJsonCache distinguishes "no cache" from "cache read"
+        // by this rejection; swallowing it would fabricate an empty library.
+        await expect(
+          adapter.fileSystem.readFile('.obsidian/plugins/citations/gone.json'),
+        ).rejects.toThrow(/ENOENT/);
       });
     });
 

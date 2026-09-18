@@ -29,12 +29,21 @@ interface VaultExt {
   getConfig(key: string): unknown;
 }
 
+/**
+ * {@link IFileSystem} over the vault's {@link DataAdapter}.
+ *
+ * Read, write, and exists must all go through `vault.adapter` so they agree
+ * on what a path means. `FileSystemAdapter.readLocalFile` is a static helper
+ * for ABSOLUTE OS paths outside the vault (drag-and-drop imports) and is
+ * desktop-only; reading through it while writing through the adapter made
+ * every cache write-only — `exists()` reported the file, the read that
+ * followed threw, and the caller treated it as a cache miss.
+ */
 class ObsidianFileSystem implements IFileSystem {
   constructor(private app: App) {}
 
   async readFile(path: string): Promise<string> {
-    const buffer = await FileSystemAdapter.readLocalFile(path);
-    return new TextDecoder('utf-8').decode(buffer);
+    return this.app.vault.adapter.read(path);
   }
 
   async writeFile(path: string, content: string): Promise<void> {
