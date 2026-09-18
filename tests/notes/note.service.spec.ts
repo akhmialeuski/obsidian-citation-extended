@@ -390,6 +390,62 @@ describe('NoteService', () => {
       expect(result).toBe(outsideFile);
       expect(platform.vault.create).not.toHaveBeenCalled();
     });
+
+    it.each(['', '/'])(
+      'finds a note in a subfolder when the note folder is the vault root (%p)',
+      async (noteFolder) => {
+        // The same root-spelling trap as #256 on the folder-scoped pass:
+        // normalizePath maps both '' and '/' to '/', which is a prefix of no
+        // vault-relative path, so the scoped basename search matched nothing.
+        settings.literatureNoteFolder = noteFolder;
+        const nested: IVaultFile = {
+          path: 'Subfolder/My Title.md',
+          name: 'My Title.md',
+        };
+
+        (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(
+          null,
+        );
+        (platform.vault.isFile as jest.Mock).mockReturnValue(false);
+        (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([
+          nested,
+        ]);
+
+        const result = await noteService.getOrCreateLiteratureNoteFile(
+          'citekey1',
+          library,
+        );
+
+        expect(result).toBe(nested);
+        expect(platform.vault.create).not.toHaveBeenCalled();
+      },
+    );
+
+    it('does not match a sibling folder that merely shares the name prefix', () => {
+      // 'Reading notes archive' must not be treated as inside 'Reading notes'.
+      const sibling: IVaultFile = {
+        path: 'Reading notes archive/My Title.md',
+        name: 'My Title.md',
+      };
+
+      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(null);
+      (platform.vault.isFile as jest.Mock).mockReturnValue(false);
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([sibling]);
+
+      // Found only by the vault-wide pass, never by the folder-scoped one —
+      // observable through the warning that pass logs.
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        expect(
+          noteService.findExistingLiteratureNoteFile('citekey1', library),
+        ).toBe(sibling);
+        expect(warn).toHaveBeenCalledWith(
+          expect.stringContaining('outside the literature note folder'),
+        );
+      } finally {
+        warn.mockRestore();
+      }
+    });
   });
 
   describe('findExistingLiteratureNoteFile', () => {

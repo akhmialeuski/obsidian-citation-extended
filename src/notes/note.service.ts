@@ -4,6 +4,7 @@ import { INoteService, ITemplateService, IPlatformAdapter } from '../container';
 import { IVaultFile } from '../platform/platform-adapter';
 import type { IBaselineStore } from './baseline-store';
 import { NoteLookupIndex } from './note-lookup-index';
+import { isPathInVaultFolder, vaultFolderScope } from './vault-folder-scope';
 import {
   Library,
   LiteratureNoteNotFoundError,
@@ -201,23 +202,23 @@ export class NoteService implements INoteService {
    * First file with the given basename under `rootFolder` ('' = whole
    * vault), matching case-insensitively. Handles notes the user moved into
    * a different subfolder — found instead of duplicated.
+   *
+   * The scope is resolved through {@link vaultFolderScope} rather than by
+   * comparing normalized paths here: Obsidian's `normalizePath` turns every
+   * root spelling into '/', so a hand-rolled `=== ''` check for "whole vault"
+   * silently scopes the search to a prefix nothing can match.
    */
   private findNoteInSubfolders(
     expectedBasename: string,
     rootFolder: string,
     index: NoteLookupIndex,
   ): IVaultFile | null {
-    const normalizedRoot = this.platform
-      .normalizePath(rootFolder)
-      .toLowerCase();
+    const scope = vaultFolderScope(rootFolder, (p) =>
+      this.platform.normalizePath(p),
+    );
 
     for (const file of index.byBasename(expectedBasename.toLowerCase())) {
-      const inFolder =
-        normalizedRoot === ''
-          ? true
-          : file.path.toLowerCase().startsWith(normalizedRoot + '/') ||
-            file.path.toLowerCase() === normalizedRoot;
-      if (inFolder) return file;
+      if (isPathInVaultFolder(file.path, scope)) return file;
     }
     return null;
   }
