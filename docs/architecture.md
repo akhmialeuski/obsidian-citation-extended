@@ -124,21 +124,21 @@ The system follows Clean Architecture: business logic (`application/`, `domain/`
 
 ## Layer Map
 
-| Layer              | Directory             | Depends on Obsidian? | Responsibility                                                    |
-| ------------------ | --------------------- | -------------------- | ----------------------------------------------------------------- |
-| **Core**           | `src/core/`           | No                   | Entry types, parsers, Result, errors, adapters, note-sync planner (`sync/`) |
-| **Domain**         | `src/domain/`         | No                   | TemplateProfile, NoteKind, TemplateProfileRegistry                |
-| **Application**    | `src/application/`    | No                   | CitationService, ActionRegistry, Actions, ContentTemplateResolver |
-| **Library**        | `src/library/`        | No                   | LibraryService, LibraryStore, SearchService                       |
-| **Template**       | `src/template/`       | No                   | TemplateService, Handlebars helpers, IntrospectionService         |
-| **Notes**          | `src/notes/`          | No                   | NoteService, BatchNoteOrchestrator, BaselineStore, NoteLookupIndex |
-| **Infrastructure** | `src/infrastructure/` | No                   | SourceManager, NormalizationPipeline                              |
-| **Search**         | `src/search/`         | No                   | MiniSearch wrapper                                                |
-| **Platform**       | `src/platform/`       | **Yes**              | IPlatformAdapter interfaces + ObsidianPlatformAdapter             |
-| **Sources**        | `src/sources/`        | **Yes**              | LocalFileSource, VaultFileSource, DataSourceRegistry              |
-| **Services**       | `src/services/`       | **Yes**              | CommandRegistry, ContextMenuHandler                               |
-| **UI**             | `src/ui/`             | **Yes**              | Modals, SettingsTab, UIService                                    |
-| **Entry point**    | `src/main.ts`         | **Yes**              | Composition root, settings migration, DI wiring                   |
+| Layer              | Directory             | Depends on Obsidian? | Responsibility                                                                       |
+| ------------------ | --------------------- | -------------------- | ------------------------------------------------------------------------------------ |
+| **Core**           | `src/core/`           | No                   | Entry types, parsers, Result, errors, adapters, note-sync planner (`sync/`)          |
+| **Domain**         | `src/domain/`         | No                   | TemplateProfile, NoteKind, TemplateProfileRegistry                                   |
+| **Application**    | `src/application/`    | No                   | CitationService, ActionRegistry, Actions, ContentTemplateResolver                    |
+| **Library**        | `src/library/`        | No                   | LibraryService, LibraryStore, SearchService                                          |
+| **Template**       | `src/template/`       | No                   | TemplateService, Handlebars helpers, IntrospectionService                            |
+| **Notes**          | `src/notes/`          | No                   | NoteService, BatchNoteOrchestrator, BaselineStore, NoteLookupIndex, vaultFolderScope |
+| **Infrastructure** | `src/infrastructure/` | No                   | SourceManager, NormalizationPipeline                                                 |
+| **Search**         | `src/search/`         | No                   | MiniSearch wrapper                                                                   |
+| **Platform**       | `src/platform/`       | **Yes**              | IPlatformAdapter interfaces + ObsidianPlatformAdapter                                |
+| **Sources**        | `src/sources/`        | **Yes**              | LocalFileSource, VaultFileSource, DataSourceRegistry                                 |
+| **Services**       | `src/services/`       | **Yes**              | CommandRegistry, ContextMenuHandler                                                  |
+| **UI**             | `src/ui/`             | **Yes**              | Modals, SettingsTab, UIService                                                       |
+| **Entry point**    | `src/main.ts`         | **Yes**              | Composition root, settings migration, DI wiring                                      |
 
 ---
 

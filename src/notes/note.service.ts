@@ -5,6 +5,11 @@ import { IVaultFile } from '../platform/platform-adapter';
 import type { IBaselineStore } from './baseline-store';
 import { NoteLookupIndex } from './note-lookup-index';
 import {
+  isPathInVaultFolder,
+  isVaultRoot,
+  vaultFolderScope,
+} from './vault-folder-scope';
+import {
   Library,
   LiteratureNoteNotFoundError,
   EntryNotFoundError,
@@ -163,16 +168,17 @@ export class NoteService implements INoteService {
    * path and create each level in order.
    */
   private async ensureFolderExists(folderPath: string): Promise<void> {
-    if (!folderPath || folderPath === '/' || folderPath === '.') return;
+    if (isVaultRoot(folderPath)) return;
 
     const normalized = this.platform.normalizePath(folderPath);
+    if (isVaultRoot(normalized)) return;
     const existing = this.platform.vault.getAbstractFileByPath(normalized);
     if (existing && this.platform.vault.isFolder(normalized)) return;
     if (existing) return; // Path exists but is a file — let vault.create handle the error
 
     // Recursively ensure parent folders exist first
     const parent = path.dirname(normalized);
-    if (parent && parent !== normalized && parent !== '.' && parent !== '/') {
+    if (parent !== normalized && !isVaultRoot(parent)) {
       await this.ensureFolderExists(parent);
     }
 
@@ -198,28 +204,30 @@ export class NoteService implements INoteService {
   }
 
   /**
-   * First file with the given basename under `rootFolder` ('' = whole
-   * vault), matching case-insensitively. Handles notes the user moved into
-   * a different subfolder — found instead of duplicated.
+   * Every file with the given basename under `rootFolder` ('' = whole vault),
+   * matched case-insensitively, in vault enumeration order. Handles notes the
+   * user moved into a different subfolder — found instead of duplicated.
+   *
+   * All matches are returned rather than the first, because how many there
+   * are decides whether a match may be used: see
+   * {@link findExistingLiteratureNoteFile}.
+   *
+   * The scope is resolved through {@link vaultFolderScope} rather than by
+   * comparing normalized paths here: Obsidian's `normalizePath` turns every
+   * root spelling into '/', so a hand-rolled `=== ''` check for "whole vault"
+   * silently scopes the search to a prefix nothing can match.
    */
-  private findNoteInSubfolders(
+  private findNotesInSubfolders(
     expectedBasename: string,
     rootFolder: string,
     index: NoteLookupIndex,
-  ): IVaultFile | null {
-    const normalizedRoot = this.platform
-      .normalizePath(rootFolder)
-      .toLowerCase();
-
-    for (const file of index.byBasename(expectedBasename.toLowerCase())) {
-      const inFolder =
-        normalizedRoot === ''
-          ? true
-          : file.path.toLowerCase().startsWith(normalizedRoot + '/') ||
-            file.path.toLowerCase() === normalizedRoot;
-      if (inFolder) return file;
-    }
-    return null;
+  ): IVaultFile[] {
+    const scope = vaultFolderScope(rootFolder, (p) =>
+      this.platform.normalizePath(p),
+    );
+    return index
+      .byBasename(expectedBasename.toLowerCase())
+      .filter((file) => isPathInVaultFolder(file.path, scope));
   }
 
   /**
@@ -299,25 +307,37 @@ export class NoteService implements INoteService {
     }
 
     // Basename search: look for a file with the same basename anywhere
-    // under the literature note folder (handles manually moved notes)
+    // under the literature note folder (handles manually moved notes).
+    // Every file in that folder is one the user declared a literature note,
+    // so the first match is taken even when several subfolders hold one.
     const expectedBasename = path.basename(notePath);
-    const found = this.findNoteInSubfolders(
+    const [inNoteFolder] = this.findNotesInSubfolders(
       expectedBasename,
       this.settings.literatureNoteFolder,
       index,
     );
-    if (found) {
-      return found;
+    if (inNoteFolder) {
+      return inNoteFolder;
     }
 
     // Vault-wide search: look for the file anywhere in the vault (#256).
     // This handles notes moved completely outside the literature note folder.
-    const vaultWide = this.findNoteInSubfolders(expectedBasename, '', index);
-    if (vaultWide) {
+    // Out there a basename match is a guess about an arbitrary note the user
+    // never designated, and a wrong guess is written to by a batch update, so
+    // it is accepted only when unambiguous — the rule findCitekeyForFile
+    // already applies to the reverse lookup. Several matches fall through to
+    // the frontmatter identifier below, which can still resolve them exactly.
+    const vaultWide = this.findNotesInSubfolders(expectedBasename, '', index);
+    if (vaultWide.length === 1) {
       console.warn(
-        `Citations: note "${expectedBasename}" found outside the literature note folder at "${vaultWide.path}". Using vault-wide match.`,
+        `Citations: note "${expectedBasename}" found outside the literature note folder at "${vaultWide[0].path}". Using vault-wide match.`,
       );
-      return vaultWide;
+      return vaultWide[0];
+    }
+    if (vaultWide.length > 1) {
+      console.warn(
+        `Citations: ${vaultWide.length} notes named "${expectedBasename}" exist outside the literature note folder — none was used, to avoid updating an unrelated note.`,
+      );
     }
 
     // Frontmatter-based lookup (#53): when a noteIdentifierField is

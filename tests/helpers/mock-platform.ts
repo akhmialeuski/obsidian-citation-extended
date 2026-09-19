@@ -8,6 +8,7 @@ import type {
   INotificationService,
   IStatusBarItem,
 } from '../../src/platform/platform-adapter';
+import { normalizePathLikeObsidian } from './normalize-path';
 
 /**
  * Creates a fully-mocked IPlatformAdapter for use in tests.
@@ -58,7 +59,9 @@ export function createMockPlatformAdapter(
     vault,
     workspace,
     notifications,
-    normalizePath: jest.fn((p: string) => p),
+    // Mirrors Obsidian's real normalizePath (notably '' -> '/'), so path
+    // handling is exercised against host semantics rather than identity.
+    normalizePath: jest.fn(normalizePathLikeObsidian),
     resolvePath: jest.fn((p: string) => `/vault/${p}`),
     addStatusBarItem: jest.fn(
       (): IStatusBarItem => ({
