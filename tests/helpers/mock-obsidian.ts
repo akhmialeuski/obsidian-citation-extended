@@ -9,6 +9,7 @@
  */
 
 import { Entry, Author } from '../../src/core/types/entry';
+import { normalizePathLikeObsidian } from './normalize-path';
 
 /** Reusable obsidian mock factory for jest.mock() */
 export const OBSIDIAN_MOCK = {
@@ -68,7 +69,10 @@ export const OBSIDIAN_MOCK = {
   TFolder: class {
     path = '';
   },
-  normalizePath: (p: string) => p,
+  // Host semantics, not identity: a template that hands out a pass-through
+  // normalizer teaches the mistake behind issue #86 to every test copied
+  // from it.
+  normalizePath: normalizePathLikeObsidian,
   debounce: (fn: (...args: unknown[]) => void) => fn,
   Events: class {
     on() {}

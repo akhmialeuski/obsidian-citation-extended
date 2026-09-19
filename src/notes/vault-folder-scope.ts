@@ -14,8 +14,25 @@
  */
 
 /**
+ * True when `folder` denotes the vault root itself.
+ *
+ * Note handling asks this twice — once about a raw folder setting and once
+ * about its normalized form — and folder creation asks it again, so the list
+ * of spellings that mean "the root" lives here instead of being re-typed at
+ * each site.
+ */
+export function isVaultRoot(folder: string): boolean {
+  return folder === '' || folder === '/' || folder === '.' || folder === './';
+}
+
+/**
  * Lowercased path prefix that scopes a vault search to `folder`, or `null`
  * when `folder` denotes the vault root (i.e. search the whole vault).
+ *
+ * `folder` is used verbatim apart from normalization, because the same
+ * setting builds the note path it has to match: trimming here but not in
+ * `getPathForCitekey` would scope the search to `reading notes` while notes
+ * are written to `  reading notes/`, and every lookup would miss.
  *
  * @param folder        Raw folder setting; may be empty, `/`, `.` or a real path.
  * @param normalizePath Platform path normalizer (Obsidian's `normalizePath`).
@@ -24,17 +41,14 @@ export function vaultFolderScope(
   folder: string,
   normalizePath: (path: string) => string,
 ): string | null {
-  // Normalizing an empty/blank folder yields '/', which is indistinguishable
-  // from a user who literally configured the vault root — both mean "whole
-  // vault", so neither needs to reach the normalizer.
-  if (!folder.trim()) return null;
+  // A root folder never reaches the normalizer: normalizing '' yields '/',
+  // which is indistinguishable from a user who configured the root literally.
+  if (isVaultRoot(folder)) return null;
 
-  const normalized = normalizePath(folder).trim();
-  // '/' is normalizePath's root marker; '.' and './' survive normalization
-  // untouched but mean the same thing to a user typing a folder setting.
-  if (normalized === '' || normalized === '/' || normalized === '.') {
-    return null;
-  }
+  const normalized = normalizePath(folder);
+  // Normalization can still land on the root ('//' collapses to '/'), and a
+  // normalizer that blanks its input leaves ''.
+  if (isVaultRoot(normalized)) return null;
   return normalized.toLowerCase();
 }
 

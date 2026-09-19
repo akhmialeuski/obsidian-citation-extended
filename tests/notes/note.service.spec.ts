@@ -420,32 +420,6 @@ describe('NoteService', () => {
         expect(platform.vault.create).not.toHaveBeenCalled();
       },
     );
-
-    it('does not match a sibling folder that merely shares the name prefix', () => {
-      // 'Reading notes archive' must not be treated as inside 'Reading notes'.
-      const sibling: IVaultFile = {
-        path: 'Reading notes archive/My Title.md',
-        name: 'My Title.md',
-      };
-
-      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(null);
-      (platform.vault.isFile as jest.Mock).mockReturnValue(false);
-      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([sibling]);
-
-      // Found only by the vault-wide pass, never by the folder-scoped one —
-      // observable through the warning that pass logs.
-      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-      try {
-        expect(
-          noteService.findExistingLiteratureNoteFile('citekey1', library),
-        ).toBe(sibling);
-        expect(warn).toHaveBeenCalledWith(
-          expect.stringContaining('outside the literature note folder'),
-        );
-      } finally {
-        warn.mockRestore();
-      }
-    });
   });
 
   describe('findExistingLiteratureNoteFile', () => {
@@ -494,6 +468,125 @@ describe('NoteService', () => {
         library,
       );
       expect(result).toBeNull();
+    });
+
+    it('does not match a sibling folder that merely shares the name prefix', () => {
+      // 'Reading notes archive' must not be treated as inside 'Reading notes'.
+      const sibling: IVaultFile = {
+        path: 'Reading notes archive/My Title.md',
+        name: 'My Title.md',
+      };
+
+      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(null);
+      (platform.vault.isFile as jest.Mock).mockReturnValue(false);
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([sibling]);
+
+      // Found only by the vault-wide pass, never by the folder-scoped one —
+      // observable through the warning that pass logs.
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        expect(
+          noteService.findExistingLiteratureNoteFile('citekey1', library),
+        ).toBe(sibling);
+        expect(warn).toHaveBeenCalledWith(
+          expect.stringContaining('outside the literature note folder'),
+        );
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('scopes the folder search to the folder setting verbatim', () => {
+      // The folder setting builds the note path as typed, so a setting with
+      // stray whitespace stores notes under that exact name. Normalizing it
+      // differently for the search would push every lookup into the
+      // vault-wide pass, which reaches notes the user never designated.
+      settings.literatureNoteFolder = '  Reading notes';
+      const nested: IVaultFile = {
+        path: '  Reading notes/archive/My Title.md',
+        name: 'My Title.md',
+      };
+
+      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(null);
+      (platform.vault.isFile as jest.Mock).mockReturnValue(false);
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([nested]);
+
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        expect(
+          noteService.findExistingLiteratureNoteFile('citekey1', library),
+        ).toBe(nested);
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('leaves an ambiguous vault-wide basename match unused', () => {
+      // Two unrelated notes share the rendered basename and neither sits in
+      // the literature note folder. Adopting either is a coin flip, and a
+      // batch update writes to whichever was adopted.
+      const moved: IVaultFile = {
+        path: 'Projects/My Title.md',
+        name: 'My Title.md',
+      };
+      const unrelated: IVaultFile = {
+        path: 'Archive/My Title.md',
+        name: 'My Title.md',
+      };
+
+      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(null);
+      (platform.vault.isFile as jest.Mock).mockReturnValue(false);
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([
+        moved,
+        unrelated,
+      ]);
+
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        expect(
+          noteService.findExistingLiteratureNoteFile('citekey1', library),
+        ).toBeNull();
+        expect(warn).toHaveBeenCalledWith(
+          expect.stringContaining('none was used'),
+        );
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('resolves an ambiguous basename through the frontmatter identifier', () => {
+      // The identifier field names the note exactly, so an ambiguous basename
+      // must fall through to it instead of short-circuiting on a guess.
+      settings.noteIdentifierField = 'citekey';
+      const decoy: IVaultFile = {
+        path: 'Projects/My Title.md',
+        name: 'My Title.md',
+      };
+      const tagged: IVaultFile = {
+        path: 'Archive/My Title.md',
+        name: 'My Title.md',
+      };
+
+      (platform.vault.getAbstractFileByPath as jest.Mock).mockReturnValue(null);
+      (platform.vault.isFile as jest.Mock).mockReturnValue(false);
+      (platform.vault.getMarkdownFiles as jest.Mock).mockReturnValue([
+        decoy,
+        tagged,
+      ]);
+      (platform.vault.getFrontmatter as jest.Mock).mockImplementation(
+        (file: IVaultFile) =>
+          file === tagged ? { citekey: 'citekey1' } : null,
+      );
+
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        expect(
+          noteService.findExistingLiteratureNoteFile('citekey1', library),
+        ).toBe(tagged);
+      } finally {
+        warn.mockRestore();
+      }
     });
 
     it('returns null when path matches a non-file abstract file', () => {

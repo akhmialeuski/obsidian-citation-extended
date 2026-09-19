@@ -294,7 +294,7 @@ Use forward slashes in the title template to organize notes into subfolders:
 
 This creates notes like `Reading notes/article-journal/@smith2023.md`. Missing folders are created automatically.
 
-The plugin searches recursively in subfolders when opening notes, so manually moved notes are still found. If a note is moved completely outside the literature note folder (e.g. into a project-specific folder), the plugin performs a vault-wide search as a last resort before creating a duplicate.
+The plugin searches recursively in subfolders when opening notes, so manually moved notes are still found. If a note is moved completely outside the literature note folder (e.g. into a project-specific folder), the plugin performs a vault-wide search as a last resort before creating a duplicate. That last resort applies only when exactly one note in the vault carries the expected name — when several do, the plugin creates the note rather than risk writing to an unrelated one.
 
 See [Template Examples: Subfolder Organization](templates/examples.md#subfolder-organization) for more patterns.
 

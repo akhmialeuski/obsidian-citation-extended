@@ -1,75 +1,8 @@
-import type {
-  IPlatformAdapter,
-  IFileSystem,
-  IVaultAccess,
-  IVaultFile,
-  IWorkspaceAccess,
+import {
+  createMockPlatformAdapter,
   IEditorProxy,
-  INotificationService,
-  IStatusBarItem,
-} from '../../src/platform/platform-adapter';
-
-/**
- * Creates a fully-mocked IPlatformAdapter for use in tests.
- * Each sub-interface is independently mockable.
- */
-export function createMockPlatformAdapter(
-  overrides: Partial<IPlatformAdapter> = {},
-): IPlatformAdapter {
-  const fileSystem: IFileSystem = {
-    readFile: jest.fn().mockResolvedValue(''),
-    writeFile: jest.fn().mockResolvedValue(undefined),
-    exists: jest.fn().mockResolvedValue(false),
-    createFolder: jest.fn().mockResolvedValue(undefined),
-    getBasePath: jest.fn().mockReturnValue('/vault'),
-    ...(overrides.fileSystem as Partial<IFileSystem>),
-  };
-
-  const vault: IVaultAccess = {
-    getAbstractFileByPath: jest.fn().mockReturnValue(null),
-    getMarkdownFiles: jest.fn().mockReturnValue([]),
-    create: jest.fn().mockResolvedValue({ path: 'new.md', name: 'new.md' }),
-    read: jest.fn().mockResolvedValue(''),
-    createFolder: jest.fn().mockResolvedValue(undefined),
-    isFile: jest.fn().mockReturnValue(true),
-    isFolder: jest.fn().mockReturnValue(false),
-    modify: jest.fn().mockResolvedValue(undefined),
-    getFrontmatter: jest.fn().mockReturnValue(null),
-    ...(overrides.vault as Partial<IVaultAccess>),
-  };
-
-  const workspace: IWorkspaceAccess = {
-    getActiveEditor: jest.fn().mockReturnValue(null),
-    getActiveFile: jest.fn().mockReturnValue(null),
-    openFile: jest.fn().mockResolvedValue(undefined),
-    getConfig: jest.fn().mockReturnValue(null),
-    fileToLinktext: jest.fn().mockReturnValue('link'),
-    openUrl: jest.fn(),
-    ...(overrides.workspace as Partial<IWorkspaceAccess>),
-  };
-
-  const notifications: INotificationService = {
-    show: jest.fn(),
-    ...(overrides.notifications as Partial<INotificationService>),
-  };
-
-  return {
-    fileSystem,
-    vault,
-    workspace,
-    notifications,
-    normalizePath: jest.fn((p: string) => p),
-    resolvePath: jest.fn((p: string) => `/vault/${p}`),
-    addStatusBarItem: jest.fn(
-      (): IStatusBarItem => ({
-        setText: jest.fn(),
-        addClass: jest.fn(),
-        removeClass: jest.fn(),
-      }),
-    ),
-    ...overrides,
-  };
-}
+  IVaultFile,
+} from '../helpers/mock-platform';
 
 describe('IPlatformAdapter mock factory', () => {
   it('creates a valid mock with all sub-interfaces', () => {
@@ -152,9 +85,14 @@ describe('IPlatformAdapter mock factory', () => {
     expect(item.removeClass).toHaveBeenCalledWith('mod-error');
   });
 
-  it('normalizePath passes through by default', () => {
+  it('normalizePath applies Obsidian semantics, not a pass-through', () => {
     const adapter = createMockPlatformAdapter();
+    // An already-normal path is unchanged, which is what makes a
+    // pass-through double look correct until a path needs real work.
     expect(adapter.normalizePath('some/path')).toBe('some/path');
+    expect(adapter.normalizePath('/a//b/')).toBe('a/b');
+    // The case issue #86 turned on: the root is '/', never ''.
+    expect(adapter.normalizePath('')).toBe('/');
   });
 
   it('vault.create returns a file reference', async () => {
