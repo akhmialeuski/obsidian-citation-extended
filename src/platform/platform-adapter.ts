@@ -4,17 +4,37 @@
  * ported without depending on Obsidian directly.
  */
 
+/**
+ * Storage access for plugin-managed files (offline caches, the note-baseline
+ * store).
+ *
+ * Every `path` here is vault-relative, e.g. `.obsidian/plugins/<id>/cache.json`,
+ * and an implementation normalizes it, so a caller may join path segments
+ * without collapsing the separators itself. `readFile`, `writeFile`, and
+ * `exists` resolve that path the same way: an implementation that resolves one
+ * of them differently (against the OS root, say) silently breaks the
+ * write-then-read round trip these callers depend on. To turn a vault-relative
+ * path into an absolute OS path, use {@link IPlatformAdapter.resolvePath}.
+ */
 export interface IFileSystem {
-  /** Read a file and return its content as a UTF-8 string. */
+  /** Read a vault-relative file and return its content as a UTF-8 string. */
   readFile(path: string): Promise<string>;
 
-  /** Write UTF-8 content to a file, creating it if it does not exist. */
+  /** Write UTF-8 content to a vault-relative file, creating it if absent. */
   writeFile(path: string, content: string): Promise<void>;
 
-  /** Return true when the path exists on the underlying storage. */
+  /** Return true when the vault-relative path exists on the underlying storage. */
   exists(path: string): Promise<boolean>;
 
-  /** Create a folder (and any missing ancestors) at the given path. */
+  /**
+   * Create a folder (and any missing ancestors) at the vault-relative path.
+   *
+   * Only folders the host application can see. The Obsidian implementation
+   * uses the Vault API, which does not reach hidden folders, so this cannot
+   * create a directory under the plugin's own `manifest.dir` the way the
+   * three methods above read and write files there. Plugin storage has no
+   * need for it — `manifest.dir` already exists.
+   */
   createFolder(path: string): Promise<void>;
 
   /** Absolute path to the root of the current vault / workspace. */
