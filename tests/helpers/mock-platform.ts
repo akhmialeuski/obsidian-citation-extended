@@ -21,7 +21,6 @@ export function createMockPlatformAdapter(
     readFile: jest.fn().mockResolvedValue(''),
     writeFile: jest.fn().mockResolvedValue(undefined),
     exists: jest.fn().mockResolvedValue(false),
-    createFolder: jest.fn().mockResolvedValue(undefined),
     getBasePath: jest.fn().mockReturnValue('/vault'),
     ...(overrides.fileSystem as Partial<IFileSystem>),
   };

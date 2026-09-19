@@ -10,11 +10,16 @@
  *
  * Every `path` here is vault-relative, e.g. `.obsidian/plugins/<id>/cache.json`,
  * and an implementation normalizes it, so a caller may join path segments
- * without collapsing the separators itself. `readFile`, `writeFile`, and
- * `exists` resolve that path the same way: an implementation that resolves one
- * of them differently (against the OS root, say) silently breaks the
- * write-then-read round trip these callers depend on. To turn a vault-relative
- * path into an absolute OS path, use {@link IPlatformAdapter.resolvePath}.
+ * without collapsing the separators itself. All three accessors resolve that
+ * path the same way: an implementation that resolves one of them differently
+ * (against the OS root, say) silently breaks the write-then-read round trip
+ * these callers depend on. To turn a vault-relative path into an absolute OS
+ * path, use {@link IPlatformAdapter.resolvePath}.
+ *
+ * Creating a folder is deliberately absent. These files live in the plugin
+ * directory, which Obsidian creates, and a vault folder belongs to
+ * {@link IVaultAccess.createFolder}, whose Vault API keeps the new folder in
+ * the vault index.
  */
 export interface IFileSystem {
   /** Read a vault-relative file and return its content as a UTF-8 string. */
@@ -25,17 +30,6 @@ export interface IFileSystem {
 
   /** Return true when the vault-relative path exists on the underlying storage. */
   exists(path: string): Promise<boolean>;
-
-  /**
-   * Create a folder (and any missing ancestors) at the vault-relative path.
-   *
-   * Only folders the host application can see. The Obsidian implementation
-   * uses the Vault API, which does not reach hidden folders, so this cannot
-   * create a directory under the plugin's own `manifest.dir` the way the
-   * three methods above read and write files there. Plugin storage has no
-   * need for it — `manifest.dir` already exists.
-   */
-  createFolder(path: string): Promise<void>;
 
   /** Absolute path to the root of the current vault / workspace. */
   getBasePath(): string;
