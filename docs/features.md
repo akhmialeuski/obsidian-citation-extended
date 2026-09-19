@@ -79,10 +79,13 @@ A side panel that lists every reference cited in the active note.
 - Scans the active note for `[@citekey]`, `[@a; @b]` multi-cite groups, `[[@citekey]]`, and bare `@citekey`
 - Each entry is rendered with the configurable **Bibliography entry template** (see [Configuration](configuration.md))
 - Click an entry to open (or create) its literature note
+- **Cmd-click** (macOS) or **Ctrl-click** (Windows/Linux) an entry to jump to that citation *in the current note* — it is selected and scrolled into view
 - Use the **copy** button in the panel header to copy the formatted bibliography to the clipboard
 - Updates automatically as you switch notes or edit citations; references not found in the library are shown as missing
 
 **How it works:** Open the panel from the ribbon or command palette. It reads the current note, resolves each citekey against your library, and renders a live bibliography you can navigate or copy.
+
+**Finding a citation in the note:** Cmd/Ctrl-clicking an entry moves the editor cursor to that citekey instead of opening its literature note. When the citekey appears more than once, each further Cmd/Ctrl-click on the same entry advances to the next occurrence and wraps around after the last, with a `Citation 2 of 3` notice to keep your place. Clicking a different entry starts again at that citation's first occurrence. This also works for citekeys shown as missing from the library — handy for tracking down a typo.
 
 ## Open Literature Note for Citation at Cursor
 

@@ -2,13 +2,19 @@ import {
   ItemView,
   MarkdownView,
   Notice,
+  Platform,
   WorkspaceLeaf,
   setIcon,
+  setTooltip,
 } from 'obsidian';
+import type { Editor } from 'obsidian';
 import type { Entry } from '../../core';
 import type { ILibraryService, ITemplateService } from '../../container';
 import type { CitationsPluginSettings } from '../settings/settings';
-import { extractCitekeysFromText } from '../../application/citekey-extractor';
+import {
+  extractCitekeysFromText,
+  findCitekeyOccurrences,
+} from '../../application/citekey-extractor';
 import { LoadingStatus } from '../../library/library-state';
 
 /** Stable identifier used to register and reveal the references leaf. */
@@ -37,6 +43,20 @@ export class ReferencesView extends ItemView {
   private refreshTimer: number | null = null;
   /** Rendered reference strings of the last refresh, for the copy button. */
   private lastRendered: string[] = [];
+  /**
+   * Which occurrence the next modifier-click on `citekey` should jump to.
+   *
+   * Keyed by the note it was established in, not reset on refresh: clicking
+   * inside the sidebar can make this leaf the active one, which refreshes the
+   * panel — a cycle reset there would pin every click to the first occurrence.
+   * A note always has a path here, because an editor without one cannot be
+   * recognized on the next click and so never establishes a cycle.
+   */
+  private jumpCursor: {
+    citekey: string;
+    filePath: string;
+    index: number;
+  } | null = null;
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -171,14 +191,122 @@ export class ReferencesView extends ItemView {
         ? 'citation-extended-ref-item'
         : 'citation-extended-ref-item is-missing',
     });
+    setTooltip(item, ReferencesView.itemTooltip(found));
     item.createDiv({ cls: 'citation-extended-ref-text', text });
     item.createDiv({
       cls: 'citation-extended-ref-key',
       text: found ? `@${citekey}` : `@${citekey} (not in library)`,
     });
 
-    if (found) {
-      item.addEventListener('click', () => this.deps.onOpenCitekey(citekey));
+    item.addEventListener('click', (evt: MouseEvent) => {
+      // The jump gesture works for a citekey that is missing from the library
+      // too — a typo is exactly the one you want to locate in the note.
+      if (ReferencesView.isJumpModifier(evt)) {
+        evt.preventDefault();
+        this.jumpToCitation(citekey);
+        return;
+      }
+      if (found) this.deps.onOpenCitekey(citekey);
+    });
+  }
+
+  /**
+   * True when the click carries the platform's primary modifier — Cmd on
+   * macOS, Ctrl elsewhere. Obsidian binds that key to "open in a new tab" for
+   * links; inside this panel it is deliberately repurposed for the in-note
+   * jump requested in issue #88, so the gesture shadows the host convention
+   * rather than following it. Ctrl on macOS is a right-click, so the two
+   * platforms cannot share one modifier.
+   */
+  private static isJumpModifier(evt: MouseEvent): boolean {
+    return Platform.isMacOS ? evt.metaKey : evt.ctrlKey;
+  }
+
+  private static itemTooltip(found: boolean): string {
+    const jump = Platform.isMacOS ? 'Cmd-click' : 'Ctrl-click';
+    return found
+      ? `Click to open the literature note, ${jump} to find this citation in the note`
+      : `${jump} to find this citation in the note`;
+  }
+
+  /**
+   * The markdown editor the panel's references came from, with its file path.
+   *
+   * `getActiveViewOfType` follows focus, which moves to this sidebar leaf on
+   * click; `workspace.activeEditor` keeps pointing at the last markdown editor
+   * (and also covers Canvas text nodes), so it is the reliable fallback. The
+   * same two-step chain lives in `ObsidianWorkspaceAccess.getActiveEditor`
+   * (src/platform/obsidian-adapter.ts); this view needs the full `Editor` and
+   * the file path, neither of which `IEditorProxy` carries, so the chain is
+   * kept in step by hand and the two must be changed together.
+   *
+   * `filePath` is null when the editor has no backing file. That is an absent
+   * identity rather than a path, so it is never reported as an empty string,
+   * which would compare equal across two unrelated editors.
+   */
+  private getTargetEditor(): {
+    editor: Editor;
+    filePath: string | null;
+  } | null {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (view?.editor) {
+      return { editor: view.editor, filePath: view.file?.path ?? null };
+    }
+    const active = this.app.workspace.activeEditor;
+    if (active?.editor) {
+      return { editor: active.editor, filePath: active.file?.path ?? null };
+    }
+    return null;
+  }
+
+  /**
+   * Select the next occurrence of `citekey` in the active note and scroll it
+   * into view. Repeated calls for the same citekey in the same note advance
+   * through its occurrences and wrap around; a different citekey (or a
+   * different note) starts again at the first one.
+   */
+  private jumpToCitation(citekey: string): void {
+    const target = this.getTargetEditor();
+    if (!target) {
+      new Notice('Open a note in the editor to jump to a citation.');
+      return;
+    }
+
+    const occurrences = findCitekeyOccurrences(
+      target.editor.getValue(),
+      citekey,
+    );
+    if (occurrences.length === 0) {
+      // Possible when the panel is showing a stale scan, or when the note is
+      // open in reading view and was edited elsewhere.
+      this.jumpCursor = null;
+      new Notice(`No occurrence of @${citekey} found in this note.`);
+      return;
+    }
+
+    const cursor = this.jumpCursor;
+    const index =
+      cursor &&
+      cursor.citekey === citekey &&
+      cursor.filePath === target.filePath
+        ? (cursor.index + 1) % occurrences.length
+        : 0;
+    // A cycle is remembered only for an editor with a file to key it by: an
+    // unidentifiable editor restarts at the first occurrence every time,
+    // rather than inheriting the position of an unrelated one.
+    this.jumpCursor =
+      target.filePath === null
+        ? null
+        : { citekey, filePath: target.filePath, index };
+
+    const from = target.editor.offsetToPos(occurrences[index].start);
+    const to = target.editor.offsetToPos(occurrences[index].end);
+    target.editor.setSelection(from, to);
+    target.editor.scrollIntoView({ from, to }, true);
+    target.editor.focus();
+
+    if (occurrences.length > 1) {
+      new Notice(`Citation ${index + 1} of ${occurrences.length}`);
     }
   }
 

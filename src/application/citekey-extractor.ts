@@ -98,3 +98,86 @@ export function extractCitekeysFromText(text: string): string[] {
 
   return ordered;
 }
+
+/** Character offsets of one citation token within a block of text. */
+export interface CitekeyOccurrence {
+  /** Offset of the leading `@`, or of the citekey itself when there is none. */
+  readonly start: number;
+  /** Offset one past the last character of the citekey. */
+  readonly end: number;
+}
+
+/**
+ * Extend a span left over an immediately preceding `@` so the reported range
+ * covers the citation token the user sees (`@smith2020`), not just the key.
+ */
+function spanFromKeyStart(
+  text: string,
+  keyStart: number,
+  keyLength: number,
+): CitekeyOccurrence {
+  const start = text[keyStart - 1] === '@' ? keyStart - 1 : keyStart;
+  return { start, end: keyStart + keyLength };
+}
+
+/**
+ * Locate every occurrence of one citekey in `text`, in document order.
+ *
+ * Runs the same {@link CITEKEY_TOKEN_RE} scan as
+ * {@link extractCitekeysFromText}, so what the references panel lists and what
+ * this resolves to can never drift apart: a citekey the panel shows always has
+ * at least one occurrence here, in every form the panel recognizes —
+ * `[[@key]]`, `[[@key|alias]]`, a Pandoc group member in `[@a; @b]`, or a bare
+ * `@key`. Inside a group, only the matching key's own span is reported, not the
+ * whole bracket.
+ *
+ * Pure function over text, so callers can feed it live editor content or a
+ * file read from the vault.
+ */
+export function findCitekeyOccurrences(
+  text: string,
+  citekey: string,
+): CitekeyOccurrence[] {
+  const target = citekey.trim();
+  if (!target) return [];
+
+  const occurrences: CitekeyOccurrence[] = [];
+
+  CITEKEY_TOKEN_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = CITEKEY_TOKEN_RE.exec(text)) !== null) {
+    if (m[1] !== undefined) {
+      // Wiki link `[[@key]]` — the raw key starts right after the `[[@`, and
+      // extractCitekeysFromText trims it, so skip the same leading blanks.
+      if (m[1].trim() !== target) continue;
+      const leading = m[1].length - m[1].trimStart().length;
+      occurrences.push(
+        spanFromKeyStart(text, m.index + 3 + leading, target.length),
+      );
+    } else if (m[2] !== undefined) {
+      // Pandoc group `[@a; @b]` — the body starts one char past the `[`.
+      const bodyStart = m.index + 1;
+      GROUP_CITEKEY_RE.lastIndex = 0;
+      let inner: RegExpExecArray | null;
+      while ((inner = GROUP_CITEKEY_RE.exec(m[2])) !== null) {
+        if (inner[1] !== target) continue;
+        // inner.index points at the `@`; the key follows it.
+        occurrences.push(
+          spanFromKeyStart(text, bodyStart + inner.index + 1, target.length),
+        );
+      }
+    } else if (m[3] !== undefined) {
+      // Bare `@key` — the match may carry a leading boundary character.
+      if (m[3] !== target) continue;
+      occurrences.push(
+        spanFromKeyStart(
+          text,
+          m.index + m[0].length - target.length,
+          target.length,
+        ),
+      );
+    }
+  }
+
+  return occurrences;
+}
