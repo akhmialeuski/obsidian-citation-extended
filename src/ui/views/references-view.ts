@@ -5,6 +5,7 @@ import {
   Platform,
   WorkspaceLeaf,
   setIcon,
+  setTooltip,
 } from 'obsidian';
 import type { Editor } from 'obsidian';
 import type { Entry } from '../../core';
@@ -48,6 +49,8 @@ export class ReferencesView extends ItemView {
    * Keyed by the note it was established in, not reset on refresh: clicking
    * inside the sidebar can make this leaf the active one, which refreshes the
    * panel — a cycle reset there would pin every click to the first occurrence.
+   * A note always has a path here, because an editor without one cannot be
+   * recognized on the next click and so never establishes a cycle.
    */
   private jumpCursor: {
     citekey: string;
@@ -187,8 +190,8 @@ export class ReferencesView extends ItemView {
       cls: found
         ? 'citation-extended-ref-item'
         : 'citation-extended-ref-item is-missing',
-      attr: { title: ReferencesView.itemTooltip(found) },
     });
+    setTooltip(item, ReferencesView.itemTooltip(found));
     item.createDiv({ cls: 'citation-extended-ref-text', text });
     item.createDiv({
       cls: 'citation-extended-ref-key',
@@ -208,9 +211,12 @@ export class ReferencesView extends ItemView {
   }
 
   /**
-   * True when the click carries the platform's "secondary target" modifier —
-   * Cmd on macOS, Ctrl elsewhere, matching Obsidian's own open-in-new-pane
-   * gesture. Ctrl on macOS is a right-click, so the two cannot be merged.
+   * True when the click carries the platform's primary modifier — Cmd on
+   * macOS, Ctrl elsewhere. Obsidian binds that key to "open in a new tab" for
+   * links; inside this panel it is deliberately repurposed for the in-note
+   * jump requested in issue #88, so the gesture shadows the host convention
+   * rather than following it. Ctrl on macOS is a right-click, so the two
+   * platforms cannot share one modifier.
    */
   private static isJumpModifier(evt: MouseEvent): boolean {
     return Platform.isMacOS ? evt.metaKey : evt.ctrlKey;
@@ -228,16 +234,27 @@ export class ReferencesView extends ItemView {
    *
    * `getActiveViewOfType` follows focus, which moves to this sidebar leaf on
    * click; `workspace.activeEditor` keeps pointing at the last markdown editor
-   * (and also covers Canvas text nodes), so it is the reliable fallback.
+   * (and also covers Canvas text nodes), so it is the reliable fallback. The
+   * same two-step chain lives in `ObsidianWorkspaceAccess.getActiveEditor`
+   * (src/platform/obsidian-adapter.ts); this view needs the full `Editor` and
+   * the file path, neither of which `IEditorProxy` carries, so the chain is
+   * kept in step by hand and the two must be changed together.
+   *
+   * `filePath` is null when the editor has no backing file. That is an absent
+   * identity rather than a path, so it is never reported as an empty string,
+   * which would compare equal across two unrelated editors.
    */
-  private getTargetEditor(): { editor: Editor; filePath: string } | null {
+  private getTargetEditor(): {
+    editor: Editor;
+    filePath: string | null;
+  } | null {
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (view?.editor) {
-      return { editor: view.editor, filePath: view.file?.path ?? '' };
+      return { editor: view.editor, filePath: view.file?.path ?? null };
     }
     const active = this.app.workspace.activeEditor;
     if (active?.editor) {
-      return { editor: active.editor, filePath: active.file?.path ?? '' };
+      return { editor: active.editor, filePath: active.file?.path ?? null };
     }
     return null;
   }
@@ -274,7 +291,13 @@ export class ReferencesView extends ItemView {
       cursor.filePath === target.filePath
         ? (cursor.index + 1) % occurrences.length
         : 0;
-    this.jumpCursor = { citekey, filePath: target.filePath, index };
+    // A cycle is remembered only for an editor with a file to key it by: an
+    // unidentifiable editor restarts at the first occurrence every time,
+    // rather than inheriting the position of an unrelated one.
+    this.jumpCursor =
+      target.filePath === null
+        ? null
+        : { citekey, filePath: target.filePath, index };
 
     const from = target.editor.offsetToPos(occurrences[index].start);
     const to = target.editor.offsetToPos(occurrences[index].end);

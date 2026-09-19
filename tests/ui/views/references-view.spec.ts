@@ -16,12 +16,13 @@ jest.mock(
     Notice: jest.fn(),
     Platform: { isMacOS: false },
     setIcon: jest.fn(),
+    setTooltip: jest.fn(),
     WorkspaceLeaf: class {},
   }),
   { virtual: true },
 );
 
-import { Notice, Platform } from 'obsidian';
+import { Notice, Platform, setTooltip } from 'obsidian';
 import {
   ReferencesView,
   REFERENCES_VIEW_TYPE,
@@ -29,9 +30,7 @@ import {
 import { LoadingStatus } from '../../../src/library/library-state';
 import { createMockEntry } from '../../helpers/mock-obsidian';
 
-// ---------------------------------------------------------------------------
 // Polyfill Obsidian-specific HTMLElement helpers for jsdom
-// ---------------------------------------------------------------------------
 beforeAll(() => {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const proto = HTMLElement.prototype as any;
@@ -74,9 +73,7 @@ beforeAll(() => {
   /* eslint-enable @typescript-eslint/no-explicit-any */
 });
 
-// ---------------------------------------------------------------------------
 // Harness
-// ---------------------------------------------------------------------------
 
 interface StoreHook {
   fire: (status: LoadingStatus) => void;
@@ -110,7 +107,8 @@ function makeView(opts: {
   renderOk?: boolean;
   /** Serve the editor via workspace.activeEditor, as when the sidebar has focus. */
   viaActiveEditor?: boolean;
-  filePath?: string;
+  /** Give the editor no backing file, as a Canvas text node has none. */
+  fileless?: boolean;
 }) {
   const onOpenCitekey = jest.fn();
   const storeHook: StoreHook = { fire: () => {}, unsubscribe: jest.fn() };
@@ -143,7 +141,18 @@ function makeView(opts: {
 
   const editorContent = opts.content;
   const editor = editorContent != null ? makeEditor(editorContent) : null;
-  const file = { path: opts.filePath ?? 'Note.md', extension: 'md' };
+  // The note is read through a getter so a test can switch notes on one view
+  // instance, the way the workspace does when the user opens another file.
+  const note = { path: 'Note.md' };
+  const file =
+    opts.fileless === true
+      ? null
+      : {
+          get path() {
+            return note.path;
+          },
+          extension: 'md',
+        };
   const fileInfo = editor ? { editor, file } : null;
   const viaActiveEditor = opts.viaActiveEditor === true;
 
@@ -160,7 +169,7 @@ function makeView(opts: {
     vault: { cachedRead: jest.fn(() => Promise.resolve(editorContent ?? '')) },
   };
 
-  return { view, deps, onOpenCitekey, storeHook, editor, file };
+  return { view, deps, onOpenCitekey, storeHook, editor, file, note };
 }
 
 /** Dispatch a click carrying the jump modifier for the simulated platform. */
@@ -184,9 +193,7 @@ const contentEl = (view: ReferencesView): HTMLElement =>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (view as any).contentEl as HTMLElement;
 
-// ---------------------------------------------------------------------------
 // Tests
-// ---------------------------------------------------------------------------
 
 describe('ReferencesView', () => {
   it('exposes the view type, display text, and icon', () => {
@@ -240,6 +247,26 @@ describe('ReferencesView', () => {
     const item = contentEl(view).querySelector('.citation-extended-ref-item');
     expect(item?.className).toContain('is-missing');
     expect(contentEl(view).textContent).toMatch(/not in library/);
+  });
+
+  it('offers both gestures through an Obsidian tooltip on every item', async () => {
+    const entries = { a: createMockEntry({ id: 'a', title: 'Aye' }) };
+    const { view } = makeView({
+      library: { entries },
+      content: '[@a] and [@ghost]',
+    });
+    await view.onOpen();
+
+    const [found, missing] = items(view);
+    const tooltip = setTooltip as jest.Mock;
+    expect(tooltip).toHaveBeenCalledWith(
+      found,
+      'Click to open the literature note, Ctrl-click to find this citation in the note',
+    );
+    expect(tooltip).toHaveBeenCalledWith(
+      missing,
+      'Ctrl-click to find this citation in the note',
+    );
   });
 
   it('opens the literature note when a found item is clicked', async () => {
@@ -423,6 +450,46 @@ describe('ReferencesView', () => {
       const calls = editor!.setSelection.mock.calls;
       // Back on 'a' after visiting 'b': first occurrence again, not the third.
       expect(calls[3][0]).toEqual(calls[0][0]);
+    });
+
+    it('restarts the cycle when the note under the panel changes', async () => {
+      // The cycle is keyed by note path precisely so that the same citekey in
+      // a different note starts over instead of resuming the old position.
+      const content = '[@a] then @a again, and @a once more.';
+      const { view, editor, note } = makeView({
+        library: { entries },
+        content,
+      });
+      await view.onOpen();
+
+      jumpClick(items(view)[0]);
+      jumpClick(items(view)[0]);
+      const calls = editor!.setSelection.mock.calls;
+      expect(calls[1][0]).not.toEqual(calls[0][0]);
+
+      note.path = 'Another note.md';
+      jumpClick(items(view)[0]);
+
+      expect(calls[2][0]).toEqual(calls[0][0]);
+    });
+
+    it('never resumes a cycle in an editor with no file to key it by', async () => {
+      // Without a path there is nothing to recognize the editor by on the next
+      // click, so no cycle is remembered rather than one being shared with an
+      // unrelated editor.
+      const { view, editor } = makeView({
+        library: { entries },
+        content: '[@a] then @a again, and @a once more.',
+        fileless: true,
+      });
+      await view.onOpen();
+
+      jumpClick(items(view)[0]);
+      jumpClick(items(view)[0]);
+
+      const calls = editor!.setSelection.mock.calls;
+      expect(calls).toHaveLength(2);
+      expect(calls[1][0]).toEqual(calls[0][0]);
     });
 
     it('jumps to a citekey that is missing from the library', async () => {

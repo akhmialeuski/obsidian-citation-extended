@@ -11,6 +11,7 @@ Practical, step-by-step guides for common workflows with Obsidian Citation Exten
 - [Updating Literature Notes](updating-literature-notes.md) — Re-sync notes with the library via three-way merge, without ever losing manual edits
 - [Multi-Citation Workflow](multi-citation-workflow.md) — Insert multiple citations at once or append to existing ones
 - [Navigating from Citation to Note](navigating-from-citation-to-note.md) — Jump from a citation in your text directly to its literature note
+- [Reviewing the References of a Note](reviewing-references-in-a-note.md) — List everything the active note cites, and jump from the sidebar back to each citation in the text
 
 ### Linking and PDF Access
 
