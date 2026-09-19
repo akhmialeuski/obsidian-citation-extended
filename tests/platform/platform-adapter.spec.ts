@@ -86,9 +86,13 @@ describe('IPlatformAdapter mock factory', () => {
   it('fileSystem methods are callable', async () => {
     const adapter = createMockPlatformAdapter();
 
-    const content = await adapter.fileSystem.readFile('/test');
+    // Vault-relative, per the IFileSystem contract — an absolute OS path
+    // here would document the very mix-up that made every cache write-only
+    // (issue #87).
+    const cachePath = '.obsidian/plugins/citation-extended/cache.json';
+    const content = await adapter.fileSystem.readFile(cachePath);
     expect(content).toBe('');
-    expect(adapter.fileSystem.readFile).toHaveBeenCalledWith('/test');
+    expect(adapter.fileSystem.readFile).toHaveBeenCalledWith(cachePath);
 
     expect(adapter.fileSystem.getBasePath()).toBe('/vault');
   });

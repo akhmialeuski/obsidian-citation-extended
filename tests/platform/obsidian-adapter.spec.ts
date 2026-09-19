@@ -1,14 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-// ---------------------------------------------------------------------------
 // Module mocks
-// ---------------------------------------------------------------------------
 
 const mockNoticeFn = jest.fn();
 
 let mockAdapterWrite: jest.Mock;
 let mockAdapterExists: jest.Mock;
 let mockAdapterRead: jest.Mock;
+let mockAdapterMkdir: jest.Mock;
 let mockGetAbstractFileByPath: jest.Mock;
 let mockGetMarkdownFiles: jest.Mock;
 let mockVaultCreate: jest.Mock;
@@ -61,7 +60,11 @@ jest.mock(
     SuggestModal: class {},
     TFile: MockTFile,
     TFolder: MockTFolder,
-    normalizePath: (p: string) => p,
+    // Stands in for obsidian's normalizePath: collapse separator runs and
+    // strip the leading/trailing ones. An identity stub cannot show whether
+    // the adapter normalizes at all.
+    normalizePath: (p: string) =>
+      p.replace(/[\\/]+/g, '/').replace(/^\/+|\/+$/g, ''),
   }),
   { virtual: true },
 );
@@ -69,10 +72,9 @@ jest.mock(
 import * as nodePath from 'path';
 import { ObsidianPlatformAdapter } from '../../src/platform/obsidian-adapter';
 import { App, Plugin, TFile, TFolder, FileSystemAdapter } from 'obsidian';
+import { createVaultFileStore } from '../helpers/mock-obsidian';
 
-// ---------------------------------------------------------------------------
 // Factory helpers
-// ---------------------------------------------------------------------------
 
 /** Create a mock TFile with instanceof support */
 function makeTFile(filePath: string, fileName: string): TFile {
@@ -90,26 +92,14 @@ function makeTFolder(folderPath: string): TFolder {
 }
 
 function createMockApp(): App {
-  // One in-memory store keyed by VAULT-RELATIVE path, shared by read/write/
+  // One in-memory store keyed by vault-relative path, shared by read/write/
   // exists — the round trip the offline caches and the baseline store depend
   // on. A double that resolves them independently cannot show a mismatch.
-  const vaultFiles = new Map<string, string>();
-  mockAdapterWrite = jest.fn((path: string, content: string) => {
-    vaultFiles.set(path, content);
-    return Promise.resolve();
-  });
-  mockAdapterExists = jest.fn((path: string) =>
-    Promise.resolve(vaultFiles.has(path)),
-  );
-  mockAdapterRead = jest.fn((path: string) =>
-    vaultFiles.has(path)
-      ? Promise.resolve(vaultFiles.get(path)!)
-      : Promise.reject(
-          Object.assign(new Error(`ENOENT: no such file, open '${path}'`), {
-            code: 'ENOENT',
-          }),
-        ),
-  );
+  const vaultFiles = createVaultFileStore();
+  mockAdapterWrite = vaultFiles.write;
+  mockAdapterExists = vaultFiles.exists;
+  mockAdapterRead = vaultFiles.read;
+  mockAdapterMkdir = vaultFiles.mkdir;
   mockGetAbstractFileByPath = jest.fn().mockReturnValue(null);
   mockGetMarkdownFiles = jest.fn().mockReturnValue([]);
   mockVaultCreate = jest.fn();
@@ -140,6 +130,7 @@ function createMockApp(): App {
         read: mockAdapterRead,
         write: mockAdapterWrite,
         exists: mockAdapterExists,
+        mkdir: mockAdapterMkdir,
         getBasePath: () => '/vault',
       } as unknown as FileSystemAdapter,
       getAbstractFileByPath: mockGetAbstractFileByPath,
@@ -172,9 +163,7 @@ function createMockPlugin(): Plugin {
   } as unknown as Plugin;
 }
 
-// ---------------------------------------------------------------------------
 // Tests
-// ---------------------------------------------------------------------------
 
 describe('ObsidianPlatformAdapter', () => {
   let app: App;
@@ -188,9 +177,7 @@ describe('ObsidianPlatformAdapter', () => {
     adapter = new ObsidianPlatformAdapter(app, plugin);
   });
 
-  // -----------------------------------------------------------------------
   // Constructor
-  // -----------------------------------------------------------------------
 
   describe('constructor', () => {
     it('exposes all sub-adapters', () => {
@@ -201,9 +188,7 @@ describe('ObsidianPlatformAdapter', () => {
     });
   });
 
-  // -----------------------------------------------------------------------
-  // ObsidianFileSystem (lines 40-79)
-  // -----------------------------------------------------------------------
+  // ObsidianFileSystem
 
   describe('ObsidianFileSystem', () => {
     describe('readFile', () => {
@@ -278,6 +263,44 @@ describe('ObsidianPlatformAdapter', () => {
       });
     });
 
+    describe('path normalization', () => {
+      it('normalizes a path before handing it to the vault adapter', async () => {
+        // DataAdapter.read/write/exists are all typed `normalizedPath`, and
+        // Obsidian's docs ask for normalizePath() beforehand.
+        await adapter.fileSystem.writeFile(
+          '.obsidian//plugins/citations/cache.json',
+          'cached',
+        );
+
+        expect(mockAdapterWrite).toHaveBeenCalledWith(
+          '.obsidian/plugins/citations/cache.json',
+          'cached',
+        );
+      });
+
+      it('round-trips when writer and reader spell the path differently', async () => {
+        // A caller joins `manifest.dir` with a filename, so a stray separator
+        // is one string concatenation away. Normalizing on only one side of
+        // the round trip recreates issue #87 on a different axis: the write
+        // lands on one key and the read looks for another.
+        await adapter.fileSystem.writeFile(
+          '.obsidian//plugins/citations/cache.json',
+          'cached',
+        );
+
+        expect(
+          await adapter.fileSystem.exists(
+            '.obsidian/plugins//citations/cache.json',
+          ),
+        ).toBe(true);
+        await expect(
+          adapter.fileSystem.readFile(
+            '/.obsidian/plugins/citations/cache.json',
+          ),
+        ).resolves.toBe('cached');
+      });
+    });
+
     describe('createFolder', () => {
       it('creates folder when it does not exist', async () => {
         mockGetAbstractFileByPath.mockReturnValue(null);
@@ -285,6 +308,20 @@ describe('ObsidianPlatformAdapter', () => {
         await adapter.fileSystem.createFolder('notes/subfolder');
 
         expect(mockVaultCreateFolder).toHaveBeenCalledWith('notes/subfolder');
+      });
+
+      it('creates folders through the Vault API, not the data adapter', async () => {
+        // Obsidian asks plugins to prefer the Vault API for visible vault
+        // content: it caches lookups and serializes operations. The price is
+        // that it cannot see hidden folders, which is why createFolder is
+        // documented as unusable for the plugin's own directory while
+        // read/write/exists serve it through the adapter.
+        mockGetAbstractFileByPath.mockReturnValue(null);
+
+        await adapter.fileSystem.createFolder('Literature/Notes');
+
+        expect(mockVaultCreateFolder).toHaveBeenCalledWith('Literature/Notes');
+        expect(mockAdapterMkdir).not.toHaveBeenCalled();
       });
 
       it('does nothing when folder already exists (TFolder)', async () => {
@@ -361,9 +398,7 @@ describe('ObsidianPlatformAdapter', () => {
     });
   });
 
-  // -----------------------------------------------------------------------
-  // ObsidianVaultAccess (lines 81-110)
-  // -----------------------------------------------------------------------
+  // ObsidianVaultAccess
 
   describe('ObsidianVaultAccess', () => {
     describe('getAbstractFileByPath', () => {
@@ -530,9 +565,7 @@ describe('ObsidianPlatformAdapter', () => {
     });
   });
 
-  // -----------------------------------------------------------------------
-  // ObsidianWorkspaceAccess (lines 112-151)
-  // -----------------------------------------------------------------------
+  // ObsidianWorkspaceAccess
 
   describe('ObsidianWorkspaceAccess', () => {
     describe('getActiveEditor', () => {
@@ -697,9 +730,7 @@ describe('ObsidianPlatformAdapter', () => {
     });
   });
 
-  // -----------------------------------------------------------------------
-  // ObsidianNotificationService (lines 153-157)
-  // -----------------------------------------------------------------------
+  // ObsidianNotificationService
 
   describe('ObsidianNotificationService', () => {
     it('creates a Notice with the given message', () => {
@@ -716,9 +747,7 @@ describe('ObsidianPlatformAdapter', () => {
     });
   });
 
-  // -----------------------------------------------------------------------
-  // ObsidianPlatformAdapter (lines 168-206)
-  // -----------------------------------------------------------------------
+  // ObsidianPlatformAdapter
 
   describe('normalizePath', () => {
     it('delegates to obsidian normalizePath', () => {

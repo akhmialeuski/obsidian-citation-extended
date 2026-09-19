@@ -30,30 +30,46 @@ interface VaultExt {
 }
 
 /**
- * {@link IFileSystem} over the vault's {@link DataAdapter}.
+ * {@link IFileSystem} over the vault's `DataAdapter` (`app.vault.adapter`).
  *
- * Read, write, and exists must all go through `vault.adapter` so they agree
+ * The files this serves live under the plugin's `manifest.dir`, inside the
+ * hidden config folder, and Obsidian's Vault API only reaches what the app
+ * displays — a hidden folder is the adapter API's job. So `readFile`,
+ * `writeFile`, and `exists` all go through `vault.adapter` and therefore agree
  * on what a path means. `FileSystemAdapter.readLocalFile` is a static helper
- * for ABSOLUTE OS paths outside the vault (drag-and-drop imports) and is
+ * for absolute OS paths outside the vault (drag-and-drop imports) and is
  * desktop-only; reading through it while writing through the adapter made
  * every cache write-only — `exists()` reported the file, the read that
  * followed threw, and the caller treated it as a cache miss.
+ *
+ * `createFolder` is the deliberate exception: it stays on the Vault API, which
+ * Obsidian recommends for visible vault content because it caches lookups and
+ * serializes operations. That preference is also its limit — it cannot create
+ * a folder inside the config directory, and plugin storage never asks it to,
+ * because `manifest.dir` already exists.
+ *
+ * Every method normalizes its path first: the adapter's own signatures name
+ * the parameter `normalizedPath`, and a caller that joins strings can hand in
+ * a duplicated separator that would otherwise make the write and the read
+ * land on two different keys.
  */
 class ObsidianFileSystem implements IFileSystem {
   constructor(private app: App) {}
 
   async readFile(path: string): Promise<string> {
-    return this.app.vault.adapter.read(path);
+    return this.app.vault.adapter.read(normalizePath(path));
   }
 
   async writeFile(path: string, content: string): Promise<void> {
-    await this.app.vault.adapter.write(path, content);
+    await this.app.vault.adapter.write(normalizePath(path), content);
   }
 
   async exists(path: string): Promise<boolean> {
-    return this.app.vault.adapter.exists(path);
+    return this.app.vault.adapter.exists(normalizePath(path));
   }
 
+  // Vault API, not the adapter: see the class doc for the trade-off it buys
+  // and the hidden-folder limit it imposes.
   async createFolder(path: string): Promise<void> {
     const normalized = normalizePath(path);
     const existing = this.app.vault.getAbstractFileByPath(normalized);

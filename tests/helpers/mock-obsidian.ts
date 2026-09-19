@@ -197,3 +197,49 @@ export function createMockDataSource(
     dispose: jest.fn(),
   };
 }
+
+/**
+ * A `vault.adapter` double backed by one in-memory map of vault-relative
+ * paths, mirroring how the real `DataAdapter` resolves every operation
+ * against one vault.
+ *
+ * Read, write and exists MUST share a store. A double that answers them
+ * independently — read resolving '' for anything, exists resolving a constant
+ * — cannot express a write-then-read mismatch, which is how issue #87 (reads
+ * routed through an absolute-path helper while writes went to the vault)
+ * passed its tests for three releases.
+ */
+export interface VaultFileStore {
+  /** The backing store, for seeding a file or asserting on what was written. */
+  files: Map<string, string>;
+  read: jest.Mock<Promise<string>, [string]>;
+  write: jest.Mock<Promise<void>, [string, string]>;
+  exists: jest.Mock<Promise<boolean>, [string]>;
+  mkdir: jest.Mock<Promise<void>, [string]>;
+}
+
+/** Build a {@link VaultFileStore} with an empty vault. */
+export function createVaultFileStore(): VaultFileStore {
+  const files = new Map<string, string>();
+  return {
+    files,
+    read: jest.fn((path: string) =>
+      files.has(path)
+        ? Promise.resolve(files.get(path) as string)
+        : // The real adapter rejects for a missing file, and the offline-cache
+          // and baseline callers rely on that rejection to tell "no cache"
+          // from "cache read".
+          Promise.reject(
+            Object.assign(new Error(`ENOENT: no such file, open '${path}'`), {
+              code: 'ENOENT',
+            }),
+          ),
+    ),
+    write: jest.fn((path: string, content: string) => {
+      files.set(path, content);
+      return Promise.resolve();
+    }),
+    exists: jest.fn((path: string) => Promise.resolve(files.has(path))),
+    mkdir: jest.fn((_path: string) => Promise.resolve()),
+  };
+}
