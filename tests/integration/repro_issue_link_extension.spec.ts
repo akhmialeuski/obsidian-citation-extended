@@ -130,7 +130,6 @@ describe('Bug Reproduction: Incorrect Markdown Link Extension', () => {
         readFile: jest.fn(),
         writeFile: jest.fn(),
         exists: jest.fn(),
-        createFolder: jest.fn(),
         getBasePath: jest.fn().mockReturnValue('/vault'),
       },
       addStatusBarItem: jest.fn(() => ({

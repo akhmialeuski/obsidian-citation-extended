@@ -7,7 +7,6 @@ const mockNoticeFn = jest.fn();
 let mockAdapterWrite: jest.Mock;
 let mockAdapterExists: jest.Mock;
 let mockAdapterRead: jest.Mock;
-let mockAdapterMkdir: jest.Mock;
 let mockGetAbstractFileByPath: jest.Mock;
 let mockGetMarkdownFiles: jest.Mock;
 let mockVaultCreate: jest.Mock;
@@ -99,7 +98,6 @@ function createMockApp(): App {
   mockAdapterWrite = vaultFiles.write;
   mockAdapterExists = vaultFiles.exists;
   mockAdapterRead = vaultFiles.read;
-  mockAdapterMkdir = vaultFiles.mkdir;
   mockGetAbstractFileByPath = jest.fn().mockReturnValue(null);
   mockGetMarkdownFiles = jest.fn().mockReturnValue([]);
   mockVaultCreate = jest.fn();
@@ -130,7 +128,6 @@ function createMockApp(): App {
         read: mockAdapterRead,
         write: mockAdapterWrite,
         exists: mockAdapterExists,
-        mkdir: mockAdapterMkdir,
         getBasePath: () => '/vault',
       } as unknown as FileSystemAdapter,
       getAbstractFileByPath: mockGetAbstractFileByPath,
@@ -298,79 +295,6 @@ describe('ObsidianPlatformAdapter', () => {
             '/.obsidian/plugins/citations/cache.json',
           ),
         ).resolves.toBe('cached');
-      });
-    });
-
-    describe('createFolder', () => {
-      it('creates folder when it does not exist', async () => {
-        mockGetAbstractFileByPath.mockReturnValue(null);
-
-        await adapter.fileSystem.createFolder('notes/subfolder');
-
-        expect(mockVaultCreateFolder).toHaveBeenCalledWith('notes/subfolder');
-      });
-
-      it('creates folders through the Vault API, not the data adapter', async () => {
-        // Obsidian asks plugins to prefer the Vault API for visible vault
-        // content: it caches lookups and serializes operations. The price is
-        // that it cannot see hidden folders, which is why createFolder is
-        // documented as unusable for the plugin's own directory while
-        // read/write/exists serve it through the adapter.
-        mockGetAbstractFileByPath.mockReturnValue(null);
-
-        await adapter.fileSystem.createFolder('Literature/Notes');
-
-        expect(mockVaultCreateFolder).toHaveBeenCalledWith('Literature/Notes');
-        expect(mockAdapterMkdir).not.toHaveBeenCalled();
-      });
-
-      it('does nothing when folder already exists (TFolder)', async () => {
-        const folder = makeTFolder('notes/subfolder');
-        mockGetAbstractFileByPath.mockReturnValue(folder);
-
-        await adapter.fileSystem.createFolder('notes/subfolder');
-
-        expect(mockVaultCreateFolder).not.toHaveBeenCalled();
-      });
-
-      it('does nothing when path points to an existing non-folder entity', async () => {
-        // Return something that is NOT TFolder but is truthy — the code returns early
-        const file = { path: 'notes/subfolder', name: 'subfolder' };
-        mockGetAbstractFileByPath.mockReturnValue(file);
-
-        await adapter.fileSystem.createFolder('notes/subfolder');
-
-        expect(mockVaultCreateFolder).not.toHaveBeenCalled();
-      });
-
-      it('swallows "Folder already exists" error', async () => {
-        mockGetAbstractFileByPath.mockReturnValue(null);
-        mockVaultCreateFolder.mockRejectedValue(
-          new Error('Folder already exists'),
-        );
-
-        await expect(
-          adapter.fileSystem.createFolder('notes/subfolder'),
-        ).resolves.toBeUndefined();
-      });
-
-      it('rethrows non-"Folder already exists" errors', async () => {
-        mockGetAbstractFileByPath.mockReturnValue(null);
-        mockVaultCreateFolder.mockRejectedValue(new Error('Permission denied'));
-
-        await expect(
-          adapter.fileSystem.createFolder('notes/subfolder'),
-        ).rejects.toThrow('Permission denied');
-      });
-
-      it('rethrows when error has no message property', async () => {
-        mockGetAbstractFileByPath.mockReturnValue(null);
-        // Throw an object without a message property to cover the || '' branch
-        mockVaultCreateFolder.mockRejectedValue({ code: 'UNKNOWN' });
-
-        await expect(
-          adapter.fileSystem.createFolder('notes/subfolder'),
-        ).rejects.toEqual({ code: 'UNKNOWN' });
       });
     });
 

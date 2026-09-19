@@ -219,7 +219,6 @@ export interface VaultFileStore {
   read: jest.Mock<Promise<string>, [string]>;
   write: jest.Mock<Promise<void>, [string, string]>;
   exists: jest.Mock<Promise<boolean>, [string]>;
-  mkdir: jest.Mock<Promise<void>, [string]>;
 }
 
 /** Build a {@link VaultFileStore} with an empty vault. */
@@ -244,6 +243,5 @@ export function createVaultFileStore(): VaultFileStore {
       return Promise.resolve();
     }),
     exists: jest.fn((path: string) => Promise.resolve(files.has(path))),
-    mkdir: jest.fn((_path: string) => Promise.resolve()),
   };
 }

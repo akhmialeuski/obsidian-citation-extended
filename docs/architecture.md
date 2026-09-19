@@ -217,7 +217,6 @@ classDiagram
         +readFile(path): Promise~string~
         +writeFile(path, content): Promise~void~
         +exists(path): Promise~boolean~
-        +createFolder(path): Promise~void~
         +getBasePath(): string
     }
 
@@ -274,14 +273,16 @@ classDiagram
 
 `ObsidianPlatformAdapter` delegates to internal sub-adapters:
 
-| Sub-adapter                   | Wraps                    | Notes                                                                                                                                                                                 |
-| ----------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ObsidianFileSystem`          | `Vault.adapter`, `Vault` | UTF-8 read/write/exists on vault-relative paths via the adapter API, `createFolder` via the Vault API, `FileSystemAdapter` only for `getBasePath()`                                   |
-| `ObsidianVaultAccess`         | `App.vault`              | Maps `TFile`/`TFolder` → `IVaultFile`                                                                                                                                                 |
-| `ObsidianWorkspaceAccess`     | `App.workspace`          | **Canvas fallback**: tries `MarkdownView`, then `activeEditor?.editor` for Canvas/Lineage editors. **URL opening**: Electron `shell.openExternal` on desktop, `window.open` on mobile |
-| `ObsidianNotificationService` | `Notice`                 | Transient toast messages                                                                                                                                                              |
+| Sub-adapter                   | Wraps           | Notes                                                                                                                                                                                 |
+| ----------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ObsidianFileSystem`          | `Vault.adapter` | UTF-8 read/write/exists on vault-relative paths via the adapter API, `FileSystemAdapter` only for `getBasePath()`                                                                     |
+| `ObsidianVaultAccess`         | `App.vault`     | Maps `TFile`/`TFolder` → `IVaultFile`, owns folder creation                                                                                                                           |
+| `ObsidianWorkspaceAccess`     | `App.workspace` | **Canvas fallback**: tries `MarkdownView`, then `activeEditor?.editor` for Canvas/Lineage editors. **URL opening**: Electron `shell.openExternal` on desktop, `window.open` on mobile |
+| `ObsidianNotificationService` | `Notice`        | Transient toast messages                                                                                                                                                              |
 
-Every `IFileSystem` path is vault-relative. The plugin-managed files it serves, meaning the Zotero, Zotero API and Readwise offline caches together with `note-baselines.json`, live under `manifest.dir`, which resolves to `.obsidian/plugins/citation-extended/`. `readFile`, `writeFile` and `exists` reach them through `vault.adapter`, because Obsidian's Vault API only grants access to files the application displays and the config folder is hidden from it. `createFolder` is the deliberate exception. It stays on the Vault API, which Obsidian recommends for visible vault content because it caches lookups and serializes operations, and it therefore cannot create a directory inside the plugin folder. Nothing asks it to, since `manifest.dir` already exists. An absolute OS path comes only from `IPlatformAdapter.resolvePath`, and `src/sources/local-file-source.ts` is its single consumer, for `.bib` files the user keeps outside the vault. Letting that path space split in two is what made every offline cache write-only until [#87](https://github.com/akhmialeuski/obsidian-citation-extended/issues/87).
+Every `IFileSystem` path is vault-relative. The plugin-managed files it serves, meaning the Zotero, Zotero API and Readwise offline caches together with `note-baselines.json`, live under `manifest.dir`, which resolves to `.obsidian/plugins/citation-extended/`. `readFile`, `writeFile` and `exists` reach them through `vault.adapter`, because Obsidian's Vault API only grants access to files the application displays and the config folder is hidden from it. An absolute OS path comes only from `IPlatformAdapter.resolvePath`, and `src/sources/local-file-source.ts` is its single consumer, for `.bib` files the user keeps outside the vault. Letting that path space split in two is what made every offline cache write-only until [#87](https://github.com/akhmialeuski/obsidian-citation-extended/issues/87).
+
+Creating a folder is not part of this interface. The plugin directory already exists, so plugin storage never needs one, and a vault folder belongs to `IVaultAccess.createFolder`, which uses the Vault API that Obsidian recommends for visible content because it caches lookups, serializes operations and keeps the new folder in the vault index. `NoteService` is the only caller.
 
 All services are testable without Obsidian via `createMockPlatformAdapter()` in `tests/helpers/`.
 

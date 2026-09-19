@@ -76,7 +76,6 @@ function createAdapter(): {
         read: store.read,
         write: store.write,
         exists: store.exists,
-        mkdir: store.mkdir,
       },
     },
   } as unknown as App;
