@@ -59,11 +59,14 @@ jest.mock(
     SuggestModal: class {},
     TFile: MockTFile,
     TFolder: MockTFolder,
-    // Stands in for obsidian's normalizePath: collapse separator runs and
-    // strip the leading/trailing ones. An identity stub cannot show whether
-    // the adapter normalizes at all.
-    normalizePath: (p: string) =>
-      p.replace(/[\\/]+/g, '/').replace(/^\/+|\/+$/g, ''),
+    // The shared approximation of obsidian's normalizePath, pulled in here
+    // rather than closed over because a jest.mock factory is hoisted above
+    // the imports. An identity stub cannot show whether the adapter
+    // normalizes at all, and a second local copy would drift from the one
+    // every other double uses.
+    normalizePath: jest.requireActual<
+      typeof import('../helpers/normalize-path')
+    >('../helpers/normalize-path').normalizePathLikeObsidian,
   }),
   { virtual: true },
 );
