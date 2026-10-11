@@ -36,6 +36,11 @@ export interface ActionDescriptor {
   readonly showInCommandPalette: boolean;
   readonly showInContextMenu: boolean;
   readonly requiresEditor: boolean;
+  /**
+   * The action acts on the citekey under the cursor, so its context menu item
+   * names it (`Open literature note @smith2023`). Absent means it does not.
+   */
+  readonly usesCitekey?: boolean;
 }
 
 /**

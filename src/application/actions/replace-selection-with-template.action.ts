@@ -11,14 +11,15 @@ import {
 } from '../template-selection-dialog';
 
 /**
- * Opens the "Replace selection with template" dialog for the selected text of
- * the literature note in the active editor. Available from the command palette
- * and from the editor context menu whenever text is selected.
+ * Opens the "Insert or replace with template output" dialog for the literature
+ * note in the active editor: it replaces the selected text, or inserts at the
+ * cursor when nothing is selected. Available from the command palette, and
+ * from the editor context menu whenever text is selected.
  */
 export class ReplaceSelectionWithTemplateAction extends ApplicationAction {
   readonly descriptor: ActionDescriptor = {
     id: 'replace-selection-with-template',
-    name: 'Replace selection with template output',
+    name: 'Insert or replace with template output',
     icon: 'wand-2',
     showInCommandPalette: true,
     showInContextMenu: true,
@@ -34,6 +35,7 @@ export class ReplaceSelectionWithTemplateAction extends ApplicationAction {
     super(ctx);
   }
 
+  /** Shown in the context menu only on a selection; the palette inserts too. */
   isVisible(invocation: ActionInvocationContext): boolean {
     return (invocation.selectedText ?? '') !== '';
   }
@@ -42,13 +44,13 @@ export class ReplaceSelectionWithTemplateAction extends ApplicationAction {
     const { platform } = this.ctx;
 
     const editor = platform.workspace.getActiveEditor();
-    const text = editor?.getSelection() ?? '';
-    if (!editor || text === '') {
+    if (!editor) {
       platform.notifications.show(
-        'Citations: Select the text to replace first.',
+        'Citations: Open the literature note in the editor first.',
       );
       return;
     }
+    const text = editor.getSelection();
 
     const note = this.resolveActiveNote();
     if (!note) return;

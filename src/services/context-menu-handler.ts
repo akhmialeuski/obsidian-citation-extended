@@ -30,10 +30,11 @@ export class ContextMenuHandler {
         if (!citekey && selectedText === '') return;
 
         const invocation = { citekey, selectedText };
-        const suffix = citekey ? ` @${citekey}` : '';
 
         for (const action of this.actionRegistry.getContextMenuActions()) {
           if (action.isVisible(invocation) && action.isEnabled(invocation)) {
+            const suffix =
+              action.descriptor.usesCitekey && citekey ? ` @${citekey}` : '';
             menu.addItem((item) => {
               item
                 .setTitle(`${action.descriptor.name}${suffix}`)

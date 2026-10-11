@@ -1573,7 +1573,7 @@ describe('ReplaceSelectionWithTemplateAction', () => {
   it('is an editor command shown in the palette and the context menu', () => {
     expect(action.descriptor).toMatchObject({
       id: 'replace-selection-with-template',
-      name: 'Replace selection with template output',
+      name: 'Insert or replace with template output',
       showInCommandPalette: true,
       showInContextMenu: true,
       requiresEditor: true,
@@ -1601,18 +1601,21 @@ describe('ReplaceSelectionWithTemplateAction', () => {
     });
   });
 
-  it('asks for a selection when nothing is selected', async () => {
+  // Issue #93: links must be insertable where the note has no such text yet.
+  it('opens the dialog to insert at the cursor when nothing is selected', async () => {
     ctx._editor.getSelection.mockReturnValue('');
     await action.execute({});
-    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
-      'Citations: Select the text to replace first.',
-    );
-    expect(presenter.open).not.toHaveBeenCalled();
+    expect(presenter.open).toHaveBeenCalledTimes(1);
+    const dialog = presenter.open.mock.calls[0][0] as TemplateSelectionDialog;
+    expect(dialog.inserts).toBe(true);
   });
 
-  it('asks for a selection when there is no editor', async () => {
+  it('asks for the note in the editor when there is no editor', async () => {
     (ctx.platform.workspace.getActiveEditor as jest.Mock).mockReturnValue(null);
     await action.execute({});
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'Citations: Open the literature note in the editor first.',
+    );
     expect(presenter.open).not.toHaveBeenCalled();
   });
 

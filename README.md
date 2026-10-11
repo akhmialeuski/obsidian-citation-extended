@@ -26,7 +26,7 @@ For detailed setup instructions, see [Getting Started](docs/getting-started.md).
 - **Zotero PDF annotation import** — pull native Zotero highlights into templates as structured data (text, comment, color, page, tags) with `zotero://` deep links that open the PDF at the exact annotation
 - **Native Zotero connection** — read a running Zotero (7+) through its built-in local API: no Better BibTeX, no export files, native citation keys, group libraries and collection scoping
 - **Non-destructive note updates** — re-sync literature notes with the library: the plugin owns only its `{{#syncBlock}}` callouts and template frontmatter keys, merges changes three-way (yours + the library's) against the last synced snapshot, and shows a diff review dialog on real conflicts. Your own content is never touched
-- **Replace selection with template output**: select outdated text in a note (such as PDF links from before a new attachment), extract the template part that produced it, edit it or load a saved profile, preview the result, and replace only the selection
+- **Insert or replace with template output**: select outdated text in a note (such as PDF links from before a new attachment), extract the template part that produced it, edit it or load a saved profile, preview the result, and replace only the selection; with nothing selected, insert the output at the cursor
 - **Readwise integration** — import highlights and documents from Readwise as citable entries
 - **Refresh citation database** — manually reload all sources
 

@@ -2,6 +2,7 @@
 import type { TemplateSelectionDialog } from '../../../src/application/template-selection-dialog';
 import type { FragmentProfile } from '../../../src/domain/fragment-profile';
 import type { TemplateFragmentMatch } from '../../../src/template/template-fragment-locator';
+import { lineDiff } from '../../../src/core';
 
 const notices: string[] = [];
 
@@ -195,14 +196,23 @@ import { ProfileSuggest } from '../../../src/ui/suggest/profile-suggest';
 
 const SELECTION = 'PDF: [PDF](zotero://one)';
 
-function makeDialog(profiles: FragmentProfile[] = []) {
+function makeDialog(profiles: FragmentProfile[] = [], text = SELECTION) {
   const state = { profiles };
+  const selection = {
+    citekey: 'smith2023',
+    filePath: 'Reading notes/@smith2023.md',
+    text,
+  };
   const dialog = {
-    selection: {
-      citekey: 'smith2023',
-      filePath: 'Reading notes/@smith2023.md',
-      text: SELECTION,
+    selection,
+    get inserts(): boolean {
+      return selection.text === '';
     },
+    diff: jest.fn((output: string) =>
+      selection.text === ''
+        ? [{ kind: 'added', lines: output.split('\n') }]
+        : lineDiff(selection.text, output),
+    ),
     templateSources: jest.fn(() => ['citation-content-template.md']),
     extract: jest.fn(
       (): Promise<TemplateFragmentMatch | null> =>
@@ -380,7 +390,7 @@ describe('ReplaceSelectionModal', () => {
     expect(notices).toEqual(['Citations: Profile "pdf-links" saved.']);
   });
 
-  it('loads a picked profile and renames it on Save', async () => {
+  it('loads a picked profile and updates it on Save', async () => {
     const profile = { id: 'p1', name: 'pdf-links', template: 'PDF: {{x}}' };
     const dialog = makeDialog([profile]);
     const { modal, suggest } = openModal(dialog);
@@ -388,14 +398,109 @@ describe('ReplaceSelectionModal', () => {
     expect(nameInput(modal).value).toBe('pdf-links');
     expect(textarea(modal).value).toBe('PDF: {{x}}');
 
-    type(nameInput(modal), 'pdf-list');
+    type(textarea(modal), 'PDF: {{x}} edited');
     button(modal, 'Save').click();
     await flush();
     expect(dialog.saveProfile).toHaveBeenCalledWith(
       'p1',
+      'pdf-links',
+      'PDF: {{x}} edited',
+    );
+  });
+
+  // Saving a variant under a new name must not overwrite the picked profile;
+  // only the pencil of a profile row renames.
+  it('saves a different name typed after a pick as a new profile', async () => {
+    const profile = { id: 'p1', name: 'pdf-links', template: 'PDF: {{x}}' };
+    const dialog = makeDialog([profile]);
+    const { modal, suggest } = openModal(dialog);
+    suggest.selectSuggestion({ kind: 'profile', profile });
+
+    type(nameInput(modal), 'pdf-list');
+    button(modal, 'Save').click();
+    await flush();
+    expect(dialog.saveProfile).toHaveBeenCalledWith(
+      '',
       'pdf-list',
       'PDF: {{x}}',
     );
+  });
+
+  it('keeps the picked profile when its own name is typed back', async () => {
+    const profile = { id: 'p1', name: 'pdf-links', template: 'PDF: {{x}}' };
+    const dialog = makeDialog([profile]);
+    const { modal, suggest } = openModal(dialog);
+    suggest.selectSuggestion({ kind: 'profile', profile });
+
+    type(nameInput(modal), 'pdf-links ');
+    button(modal, 'Save').click();
+    await flush();
+    expect(dialog.saveProfile).toHaveBeenCalledWith(
+      'p1',
+      'pdf-links ',
+      'PDF: {{x}}',
+    );
+  });
+
+  // Issue #93: with nothing selected the output is inserted at the cursor.
+  it('inserts at the cursor when nothing is selected', () => {
+    const dialog = makeDialog([], '');
+    const { modal } = openModal(dialog);
+    expect(modal.titleEl.textContent).toBe('Insert template output');
+    expect(
+      modal.contentEl.querySelector('.citation-fragment-quote')?.textContent,
+    ).toBe('Nothing is selected: Apply inserts the output at the cursor.');
+    expect(button(modal, 'Extract').disabled).toBe(true);
+
+    type(textarea(modal), 'PDF: {{x}}');
+    const lines = [
+      ...modal.contentEl.querySelectorAll('.citation-diff-line'),
+    ].map((l) => l.textContent);
+    expect(lines).toEqual(['+ PDF: two links']);
+    button(modal, 'Apply').click();
+    expect(dialog.apply).toHaveBeenCalledWith('PDF: two links');
+  });
+
+  it('shows a failed template read instead of losing it', async () => {
+    const dialog = makeDialog();
+    dialog.extract.mockRejectedValue(new Error('EACCES'));
+    const { modal } = openModal(dialog);
+    button(modal, 'Extract').click();
+    await flush();
+    const status = modal.contentEl.querySelector('.citation-fragment-status');
+    expect(status?.classList.contains('is-warning')).toBe(true);
+    expect(status?.textContent).toBe(
+      'Could not read citation-content-template.md: EACCES',
+    );
+  });
+
+  // A partial selection is widened by the dialog model; the quote and the
+  // preview must show what Apply will now replace.
+  it('shows the selection widened to whole lines by an extract', async () => {
+    const dialog = makeDialog([], '[PDF](zotero://one)');
+    dialog.extract.mockImplementation(() => {
+      dialog.selection.text = SELECTION;
+      return Promise.resolve({
+        template: 'PDF: {{x}}',
+        firstLine: 9,
+        lastLine: 9,
+      });
+    });
+    const { modal } = openModal(dialog);
+    button(modal, 'Extract').click();
+    await flush();
+    expect(
+      modal.contentEl.querySelector('.citation-fragment-quote')?.textContent,
+    ).toBe(SELECTION);
+    expect(
+      modal.contentEl.querySelector('.citation-fragment-status')?.textContent,
+    ).toBe(
+      'Extracted from citation-content-template.md, line 9. The selection now covers whole lines.',
+    );
+    const lines = [
+      ...modal.contentEl.querySelectorAll('.citation-diff-line'),
+    ].map((l) => l.textContent);
+    expect(lines).toEqual([`- ${SELECTION}`, '+ PDF: two links']);
   });
 
   it('starts a new profile from the create row', () => {

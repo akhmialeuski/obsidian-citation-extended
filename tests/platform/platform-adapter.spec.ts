@@ -47,6 +47,7 @@ describe('IPlatformAdapter mock factory', () => {
       getSelection: jest.fn().mockReturnValue('selected'),
       getCursor: jest.fn().mockReturnValue({ line: 0, ch: 0 }),
       setCursor: jest.fn(),
+      setSelection: jest.fn(),
       replaceSelection: jest.fn(),
       replaceRange: jest.fn(),
       getLine: jest.fn().mockReturnValue(''),

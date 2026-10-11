@@ -1,18 +1,21 @@
 import { App, ButtonComponent, Modal, Notice, Setting } from 'obsidian';
-import { lineDiff } from '../../core';
 import type {
   ITemplateSelectionPresenter,
   TemplateSelectionDialog,
 } from '../../application/template-selection-dialog';
-import type { FragmentProfile } from '../../domain/fragment-profile';
+import {
+  findProfile,
+  type FragmentProfile,
+} from '../../domain/fragment-profile';
 import { renderLineDiff } from '../render-line-diff';
 import { ProfileSuggest } from '../suggest/profile-suggest';
 
 /**
- * The "Replace selection with template" dialog. Shows the selected text, lets
- * the user extract the template part that produced it from a template set in
- * the settings or load a fragment profile, edit the template with a live diff
- * preview, save it as a profile, and replace the selection with its output.
+ * The "Insert or replace with template output" dialog. Shows the selected
+ * text, lets the user extract the template part that produced it from a
+ * template set in the settings or load a fragment profile, edit the template
+ * with a live diff preview, save it as a profile, and replace the selection
+ * with its output. With nothing selected, the output is inserted at the cursor.
  */
 export class ReplaceSelectionModal extends Modal {
   /** Profile the name field refers to; '' while the name is new. */
@@ -20,7 +23,10 @@ export class ReplaceSelectionModal extends Modal {
   private profileName = '';
   private template = '';
   private rendered: string | null = null;
+  /** Set by the pencil of a profile row: a typed name then renames it. */
+  private renaming = false;
 
+  private quoteEl!: HTMLElement;
   private nameInput!: HTMLInputElement;
   private templateInput!: HTMLTextAreaElement;
   private statusEl!: HTMLElement;
@@ -40,22 +46,31 @@ export class ReplaceSelectionModal extends Modal {
     const { contentEl } = this;
     const { selection } = this.dialog;
     contentEl.addClass('citation-fragment-modal');
-    this.titleEl.setText('Replace selection with template');
+    const { inserts } = this.dialog;
+    this.titleEl.setText(
+      inserts ? 'Insert template output' : 'Replace selection with template',
+    );
 
     contentEl.createEl('p', {
       cls: 'citation-fragment-meta',
       text: `@${selection.citekey} · ${selection.filePath}`,
     });
-    contentEl.createDiv({
+    this.quoteEl = contentEl.createDiv({
       cls: 'citation-fragment-quote',
-      text: selection.text,
+      text: inserts
+        ? 'Nothing is selected: Apply inserts the output at the cursor.'
+        : selection.text,
     });
 
     const sources = this.dialog.templateSources();
     let sourcePath = sources[0] ?? '';
     new Setting(contentEl)
       .setName('Extract from')
-      .setDesc('Templates from the plugin settings.')
+      .setDesc(
+        inserts
+          ? 'Select text in the note to extract the template that produced it.'
+          : 'Templates from the plugin settings.',
+      )
       .addDropdown((dropdown) => {
         for (const path of sources) dropdown.addOption(path, path);
         dropdown.setValue(sourcePath).onChange((value) => {
@@ -65,7 +80,7 @@ export class ReplaceSelectionModal extends Modal {
       .addButton((button) =>
         button
           .setButtonText('Extract')
-          .setDisabled(sources.length === 0)
+          .setDisabled(inserts || sources.length === 0)
           .onClick(() => void this.extract(sourcePath)),
       );
 
@@ -75,6 +90,12 @@ export class ReplaceSelectionModal extends Modal {
       .addText((text) => {
         this.nameInput = text.inputEl;
         text.setPlaceholder('Name or profile').onChange((value) => {
+          // A different name typed after picking a profile starts a new
+          // profile; only the pencil of a profile row makes it a rename.
+          const picked = findProfile(this.dialog.profiles(), this.profileId);
+          if (!this.renaming && value.trim() !== picked?.name) {
+            this.profileId = '';
+          }
           this.profileName = value;
           this.refresh();
         });
@@ -86,10 +107,12 @@ export class ReplaceSelectionModal extends Modal {
             pick: (profile) => this.loadProfile(profile),
             create: (name) => {
               this.profileId = '';
+              this.renaming = false;
               this.setName(name);
             },
             rename: (profile) => {
               this.loadProfile(profile);
+              this.renaming = true;
               this.nameInput.focus();
               this.nameInput.select();
             },
@@ -148,7 +171,17 @@ export class ReplaceSelectionModal extends Modal {
   }
 
   private async extract(sourcePath: string): Promise<void> {
-    const match = await this.dialog.extract(sourcePath);
+    const before = this.dialog.selection.text;
+    let match;
+    try {
+      match = await this.dialog.extract(sourcePath);
+    } catch (e) {
+      this.setStatus(
+        'is-warning',
+        `Could not read ${sourcePath}: ${(e as Error).message}`,
+      );
+      return;
+    }
     if (!match) {
       this.setStatus(
         'is-warning',
@@ -156,12 +189,18 @@ export class ReplaceSelectionModal extends Modal {
       );
       return;
     }
+    const widened = this.dialog.selection.text !== before;
+    if (widened) this.quoteEl.setText(this.dialog.selection.text);
     this.setTemplate(match.template);
     const lines =
       match.firstLine === match.lastLine
         ? `line ${match.firstLine}`
         : `lines ${match.firstLine} to ${match.lastLine}`;
-    this.setStatus('is-ok', `Extracted from ${sourcePath}, ${lines}.`);
+    this.setStatus(
+      'is-ok',
+      `Extracted from ${sourcePath}, ${lines}.` +
+        (widened ? ' The selection now covers whole lines.' : ''),
+    );
   }
 
   private async save(): Promise<void> {
@@ -172,6 +211,7 @@ export class ReplaceSelectionModal extends Modal {
         this.template,
       );
       this.profileId = saved.id;
+      this.renaming = false;
       new Notice(`Citations: Profile "${saved.name}" saved.`);
     } catch (e) {
       new Notice(`Citations: ${(e as Error).message}`);
@@ -187,6 +227,7 @@ export class ReplaceSelectionModal extends Modal {
 
   private loadProfile(profile: FragmentProfile): void {
     this.profileId = profile.id;
+    this.renaming = false;
     this.setName(profile.name);
     this.setTemplate(profile.template);
     this.setStatus('is-ok', `Loaded profile "${profile.name}".`);
@@ -222,10 +263,7 @@ export class ReplaceSelectionModal extends Modal {
       const result = this.dialog.render(this.template);
       if (result.ok) {
         this.rendered = result.value;
-        renderLineDiff(
-          this.previewEl,
-          lineDiff(this.dialog.selection.text, result.value),
-        );
+        renderLineDiff(this.previewEl, this.dialog.diff(result.value));
       } else {
         this.previewEl.createDiv({
           cls: 'citation-diff-line is-removed',

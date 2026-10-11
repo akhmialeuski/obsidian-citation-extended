@@ -4,16 +4,46 @@ import { TemplateSelectionDialog } from '../../src/application/template-selectio
 import { TemplateService } from '../../src/template/template.service';
 import { CitationsPluginSettings } from '../../src/ui/settings/settings';
 import type { IContentTemplateResolver } from '../../src/application/content-template-resolver';
-import type { IEditorProxy } from '../../src/platform/platform-adapter';
+import type {
+  IEditorPosition,
+  IEditorProxy,
+} from '../../src/platform/platform-adapter';
 import type { TemplateContext } from '../../src/core';
 
 const TEMPLATE = ['# {{title}}', '', 'Year: {{year}}'].join('\n');
 
-function makeDialog(selection = 'Year: 2023') {
+const NOTE = ['# Main paper', '', 'Year: 2023'];
+
+/** The note text between two positions, as the editor's getSelection returns it. */
+function textBetween(
+  note: string[],
+  from: IEditorPosition,
+  to: IEditorPosition,
+): string {
+  if (from.line === to.line) return note[from.line].slice(from.ch, to.ch);
+  return [
+    note[from.line].slice(from.ch),
+    ...note.slice(from.line + 1, to.line),
+    note[to.line].slice(0, to.ch),
+  ].join('\n');
+}
+
+/** A dialog over `note` with the selection from `from` to `to` (whole line 2 by default). */
+function makeDialog(
+  note: string[] = NOTE,
+  from: IEditorPosition = { line: 2, ch: 0 },
+  to: IEditorPosition = { line: 2, ch: note[2]?.length ?? 0 },
+) {
   const settings = new CitationsPluginSettings();
   settings.fragmentProfiles = [{ id: 'p1', name: 'year', template: 'Y' }];
   const saveSettings = jest.fn(() => Promise.resolve());
-  const editor = { replaceSelection: jest.fn() } as unknown as IEditorProxy;
+  const editor = {
+    replaceSelection: jest.fn(),
+    getCursor: jest.fn((which: 'from' | 'to') => (which === 'to' ? to : from)),
+    getLine: jest.fn((line: number) => note[line]),
+    setSelection: jest.fn(),
+  };
+  const selection = textBetween(note, from, to);
   const resolver = {
     listTemplateSources: jest.fn(() => ['notes.md']),
     readTemplate: jest.fn(() => Promise.resolve(TEMPLATE)),
@@ -25,7 +55,7 @@ function makeDialog(selection = 'Year: 2023') {
       text: selection,
     },
     { title: 'Main paper', year: 2024 } as unknown as TemplateContext,
-    editor,
+    editor as unknown as IEditorProxy,
     new TemplateService(settings),
     resolver,
     settings,
@@ -51,8 +81,71 @@ describe('TemplateSelectionDialog', () => {
   });
 
   it('returns null when the selection is not in the template', async () => {
-    const { dialog } = makeDialog('nothing like this');
+    const { dialog, editor } = makeDialog(
+      ['nothing like this'],
+      { line: 0, ch: 8 },
+      { line: 0, ch: 12 },
+    );
     await expect(dialog.extract('notes.md')).resolves.toBeNull();
+    expect(editor.setSelection).not.toHaveBeenCalled();
+    expect(dialog.selection.text).toBe('like');
+  });
+
+  // Extract returns whole template lines; replacing only part of a note line
+  // with them would duplicate the line's literal text ("Year: Year: 2024").
+  it('widens a partial selection to whole lines when extract matches', async () => {
+    const { dialog, editor } = makeDialog(
+      NOTE,
+      { line: 2, ch: 6 },
+      { line: 2, ch: 10 },
+    );
+    expect(dialog.selection.text).toBe('2023');
+    await expect(dialog.extract('notes.md')).resolves.toMatchObject({
+      template: 'Year: {{year}}',
+    });
+    expect(editor.setSelection).toHaveBeenCalledWith(
+      { line: 2, ch: 0 },
+      { line: 2, ch: 10 },
+    );
+    expect(dialog.selection.text).toBe('Year: 2023');
+  });
+
+  it('leaves out a line the selection only reaches at its start', async () => {
+    const { dialog, editor } = makeDialog(
+      [...NOTE, 'Notes'],
+      { line: 2, ch: 0 },
+      { line: 3, ch: 0 },
+    );
+    expect(dialog.selection.text).toBe('Year: 2023\n');
+    await dialog.extract('notes.md');
+    expect(editor.setSelection).toHaveBeenCalledWith(
+      { line: 2, ch: 0 },
+      { line: 2, ch: 10 },
+    );
+    expect(dialog.selection.text).toBe('Year: 2023');
+  });
+
+  it('inserts with nothing selected and does not extract', async () => {
+    const { dialog, resolver } = makeDialog(
+      NOTE,
+      { line: 1, ch: 0 },
+      { line: 1, ch: 0 },
+    );
+    expect(dialog.inserts).toBe(true);
+    await expect(dialog.extract('notes.md')).resolves.toBeNull();
+    expect(resolver.readTemplate).not.toHaveBeenCalled();
+    expect(dialog.diff('Year: 2024')).toEqual([
+      { kind: 'added', lines: ['Year: 2024'] },
+    ]);
+  });
+
+  it('diffs the selection against the output', () => {
+    const { dialog } = makeDialog();
+    expect(dialog.inserts).toBe(false);
+    expect(dialog.diff('Year: 2024')).toEqual([
+      { kind: 'removed', lines: ['Year: 2023'] },
+      { kind: 'added', lines: ['Year: 2024'] },
+    ]);
   });
 
   it('renders a template with the entry of the note', () => {

@@ -104,6 +104,60 @@ describe('locateTemplateFragment', () => {
     ).toBeNull();
   });
 
+  // A bullet is layout: a line the user wrote must not match a template list
+  // block because both start with "-".
+  it('does not match a bulleted line only by its list marker', () => {
+    expect(
+      locateTemplateFragment(TEMPLATE, '- my own remark', render),
+    ).toBeNull();
+  });
+
+  // One unrelated line must not stretch the result over the template lines
+  // between it and the real match.
+  it('ignores an unrelated selected line instead of widening the range', () => {
+    const match = locateTemplateFragment(
+      TEMPLATE,
+      `PDF (plain body): [PDF](${URI})\n- my own remark`,
+      render,
+    );
+    expect(match).toMatchObject({ firstLine: 9, lastLine: 9 });
+  });
+
+  // The primary use case: the old line had one link, the entry now has many.
+  it('matches an outdated line against output that gained several links', () => {
+    const files = Array.from(
+      { length: 6 },
+      (_, index) => `C:/Zotero/storage/KEY${index}/Paper ${index}.pdf`,
+    );
+    const many = (source: string): string | null => {
+      const result = service.render(source, {
+        ...CONTEXT,
+        files,
+      } as unknown as TemplateContext);
+      return result.ok ? result.value : null;
+    };
+    const match = locateTemplateFragment(
+      TEMPLATE,
+      'PDF (plain body): [PDF](zotero://open-pdf/library/items/KEY0)',
+      many,
+    );
+    expect(match).toMatchObject({ firstLine: 9, lastLine: 9 });
+  });
+
+  // A template author's multi-line comment never reaches the note, so its
+  // lines must not be offered as the template of a selection.
+  it('does not extract the inside of a multi-line comment', () => {
+    const template = [
+      '{{!--',
+      'internal note about PDF links',
+      '--}}',
+      'PDF: {{#each (zoteroPdfURIs files)}}[PDF]({{this}}) {{/each}}',
+    ].join('\n');
+    expect(
+      locateTemplateFragment(template, 'internal note about PDF links', render),
+    ).toBeNull();
+  });
+
   it('returns null for a blank selection', () => {
     expect(locateTemplateFragment(TEMPLATE, '  \n ', render)).toBeNull();
   });

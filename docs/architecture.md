@@ -751,7 +751,7 @@ classDiagram
 | Refresh Library       | `update-bib-data`                 | Yes     | No   | No     | Direct      |
 | Batch Update Notes    | `batch-update-notes`              | Yes     | No   | No     | Direct      |
 | Update Current Note   | `update-current-note`             | Yes     | No   | No     | Direct      |
-| Replace Selection     | `replace-selection-with-template` | Yes     | Yes  | Yes    | Direct      |
+| Insert or Replace     | `replace-selection-with-template` | Yes     | Yes  | Yes    | Direct      |
 
 ### ActionContext
 
@@ -778,20 +778,20 @@ Runtime context provided when action is triggered. Different surfaces provide di
 | Context menu    | extracted (absent off a citekey) | from editor    | —              | —              |
 | Search modal    | —                                | —              | selected entry | click/keyboard |
 
-The context menu is built when the cursor is on a citekey or text is selected. Each action decides from the invocation whether it appears: `OpenNoteAction` and `InsertNoteLinkAction` need a citekey, `ReplaceSelectionWithTemplateAction` needs a selection. Shared steps of the direct actions live on the base class, such as `resolveActiveNote()`, which matches the active file to a library entry for `UpdateCurrentNoteAction` and `ReplaceSelectionWithTemplateAction`.
+The context menu is built when the cursor is on a citekey or text is selected. Each action decides from the invocation whether it appears: `OpenNoteAction` and `InsertNoteLinkAction` need a citekey, `ReplaceSelectionWithTemplateAction` needs a selection. Only actions whose descriptor sets `usesCitekey` get the ` @citekey` suffix in their menu title, so an action that renders the note's own entry never names a different citekey that happens to sit under the cursor. Shared steps of the direct actions live on the base class, such as `resolveActiveNote()`, which matches the active file to a library entry for `UpdateCurrentNoteAction` and `ReplaceSelectionWithTemplateAction`.
 
-### Replace Selection with Template
+### Insert or Replace with Template Output
 
-`ReplaceSelectionWithTemplateAction` checks the preconditions (an editor with a selection, a loaded library, a note matched to an entry), builds a `TemplateSelectionDialog` (`src/application/template-selection-dialog.ts`) for that selection and hands it to the `ITemplateSelectionPresenter` port. The UI side, `ModalTemplateSelectionPresenter`, opens `ReplaceSelectionModal`, so the application layer has no Obsidian import.
+`ReplaceSelectionWithTemplateAction` checks the preconditions (an active editor, a loaded library, a note matched to an entry), builds a `TemplateSelectionDialog` (`src/application/template-selection-dialog.ts`) for the selection and hands it to the `ITemplateSelectionPresenter` port. With an empty selection the dialog inserts at the cursor and Extract is unavailable. When Extract matches, the dialog widens the editor selection to whole note lines through `IEditorProxy.setSelection`, because the match is whole template lines. The UI side, `ModalTemplateSelectionPresenter`, opens `ReplaceSelectionModal`, so the application layer has no Obsidian import.
 
-| Piece                                                              | Layer       | Role                                                                                                                                                                         |
-| ------------------------------------------------------------------ | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TemplateSelectionDialog`                                          | Application | Template sources, extraction, rendering with the note's entry, profile save, `apply()` through `IEditorProxy.replaceSelection`                                               |
-| `locateTemplateFragment`                                           | Template    | Splits a template into line units with `Handlebars.parse` (a top-level block stays whole), renders each unit, and maps the selected lines to the most similar rendered lines |
-| `ContentTemplateResolver.listTemplateSources()` / `readTemplate()` | Application | Template files from the settings offered under "Extract from"                                                                                                                |
-| `FragmentProfile` helpers                                          | Domain      | Pure add, update, remove and name checks for the `fragmentProfiles` setting                                                                                                  |
-| `ReplaceSelectionModal`, `ProfileSuggest`                          | UI          | The dialog, and the `AbstractInputSuggest` popover of the Profile field                                                                                                      |
-| `renderLineDiff`                                                   | UI          | Line diff rendering shared with `UpdateReviewModal`                                                                                                                          |
+| Piece                                                              | Layer       | Role                                                                                                                                                |
+| ------------------------------------------------------------------ | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TemplateSelectionDialog`                                          | Application | Template sources, extraction (widened to whole lines), rendering with the note's entry, the preview diff, profile save, `apply()`                   |
+| `locateTemplateFragment`                                           | Template    | Splits a template into line units (a multi-line statement stays whole), renders each, and maps each selected line to its most similar rendered line |
+| `ContentTemplateResolver.listTemplateSources()` / `readTemplate()` | Application | Template files from the settings offered under "Extract from"                                                                                       |
+| `FragmentProfile` helpers                                          | Domain      | Pure add, update, remove and name checks for the `fragmentProfiles` setting                                                                         |
+| `ReplaceSelectionModal`, `ProfileSuggest`                          | UI          | The dialog, and the `AbstractInputSuggest` popover of the Profile field                                                                             |
+| `renderLineDiff`                                                   | UI          | Line diff rendering shared with `UpdateReviewModal`                                                                                                 |
 
 Nothing is recorded after apply: the replaced text is ordinary note text, and the sync planner and baselines are not involved.
 

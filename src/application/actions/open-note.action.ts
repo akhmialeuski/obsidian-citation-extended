@@ -25,6 +25,7 @@ export class OpenNoteAction extends SearchModalAction {
     showInCommandPalette: true,
     showInContextMenu: true,
     requiresEditor: false,
+    usesCitekey: true,
   };
 
   /** Shown in the context menu only when the cursor is on a citekey. */

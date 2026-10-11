@@ -154,7 +154,7 @@ The plugin does **not** assign default hotkeys to its commands. You choose the b
 | Insert multiple citations                   | —                | Multi-select modal: add references one by one, insert combined `[@...]` on close |
 | Insert literature note content              | —                | Used less frequently, assign if needed                                           |
 | Refresh citation database                   | —                | Rarely needed (auto-reload handles most cases)                                   |
-| Replace selection with template output      | —                | Also available from the editor context menu on a selection                       |
+| Insert or replace with template output      | —                | Also available from the editor context menu on a selection                       |
 
 ---
 
@@ -301,7 +301,7 @@ See [Template Examples: Subfolder Organization](templates/examples.md#subfolder-
 
 ### Fragment profiles
 
-Named templates for the **Replace selection with template output** command. Each profile has a **Name** and a **Template** (Handlebars, rendered with the entry of the note the command runs in). **Add profile** creates one named `New profile` (then `New profile 2`, …), the trash icon removes one, and a name another profile already uses is refused with a message under the field.
+Named templates for the **Insert or replace with template output** command. Each profile has a **Name** and a **Template** (Handlebars, rendered with the entry of the note the command runs in). **Add profile** creates one named `New profile` (then `New profile 2`, …), the trash icon removes one, and a name another profile already uses is refused with a message under the field.
 
 Profiles are also created, renamed and saved from the **Profile** field of the dialog. A profile only fills the dialog: changing or deleting it does not change notes where it was applied.
 

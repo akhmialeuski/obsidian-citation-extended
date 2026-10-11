@@ -28,6 +28,7 @@ function makeAction(
     icon: string;
     isVisible: boolean;
     isEnabled: boolean;
+    usesCitekey: boolean;
   }> = {},
 ): ApplicationAction {
   return {
@@ -38,6 +39,7 @@ function makeAction(
       showInCommandPalette: true,
       showInContextMenu: true,
       requiresEditor: true,
+      usesCitekey: overrides.usesCitekey ?? true,
     },
     isVisible: jest.fn().mockReturnValue(overrides.isVisible ?? true),
     isEnabled: jest.fn().mockReturnValue(overrides.isEnabled ?? true),
@@ -292,7 +294,8 @@ describe('ContextMenuHandler', () => {
 
   it('adds items without a citekey suffix when only text is selected', () => {
     const action = makeAction({
-      name: 'Replace selection with template output',
+      name: 'Insert or replace with template output',
+      usesCitekey: false,
     });
     const { plugin, actionRegistry, actionCtx, _getMenuCallback } = makePlugin(
       makeEditor('PDF: [PDF](zotero://open-pdf/library/items/KEY)'),
@@ -305,7 +308,7 @@ describe('ContextMenuHandler', () => {
     _getMenuCallback()!(menu);
 
     expect(menu._items.map((item) => item.title)).toEqual([
-      'Replace selection with template output',
+      'Insert or replace with template output',
     ]);
     menu._items[0].onClick();
     expect(action.isVisible).toHaveBeenCalledWith({
@@ -335,5 +338,24 @@ describe('ContextMenuHandler', () => {
       citekey: 'smith2023',
       selectedText: 'selected',
     });
+  });
+  // An action that renders the note's own entry must not name the citekey
+  // under the cursor, which may belong to a different entry.
+  it('does not name the citekey for an action that does not use it', () => {
+    const action = makeAction({
+      name: 'Insert or replace with template output',
+      usesCitekey: false,
+    });
+    const { plugin, actionRegistry, actionCtx, _getMenuCallback } = makePlugin(
+      makeEditor('selected'),
+      [action],
+    );
+    mockExtractCitekey.mockReturnValue('smith2023');
+
+    new ContextMenuHandler(plugin, actionRegistry, actionCtx).register();
+    const menu = makeMockMenu();
+    _getMenuCallback()!(menu);
+
+    expect(menu._items[0].title).toBe('Insert or replace with template output');
   });
 });
