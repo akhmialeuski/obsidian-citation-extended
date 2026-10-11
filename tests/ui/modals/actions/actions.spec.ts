@@ -8,6 +8,8 @@ import { OpenNoteAction } from '../../../../src/application/actions/open-note.ac
 import { OpenNoteAtCursorAction } from '../../../../src/application/actions/open-note-at-cursor.action';
 import { BatchUpdateNotesAction } from '../../../../src/application/actions/batch-update.action';
 import { UpdateCurrentNoteAction } from '../../../../src/application/actions/update-current-note.action';
+import { ReplaceSelectionWithTemplateAction } from '../../../../src/application/actions/replace-selection-with-template.action';
+import { TemplateSelectionDialog } from '../../../../src/application/template-selection-dialog';
 import { ActionContext } from '../../../../src/application/actions/action.types';
 import { LiteratureNoteNotFoundError } from '../../../../src/core/errors';
 import type { IBatchNoteOrchestrator } from '../../../../src/notes/batch/batch-update.types';
@@ -37,6 +39,7 @@ function makeMockEditor() {
     replaceRange: jest.fn(),
     replaceSelection: jest.fn(),
     setCursor: jest.fn(),
+    getSelection: jest.fn(() => ''),
   };
 }
 
@@ -1524,5 +1527,144 @@ describe('InsertSubsequentCitationAction (additional)', () => {
     await action.execute({});
 
     expect(ctx.platform.notifications.show).not.toHaveBeenCalled();
+  });
+});
+
+describe('citekey-only context menu actions', () => {
+  it('OpenNoteAction and InsertNoteLinkAction are visible only on a citekey', () => {
+    const ctx = makeCtx();
+    for (const action of [
+      new OpenNoteAction(ctx),
+      new InsertNoteLinkAction(ctx),
+    ]) {
+      expect(action.isVisible({ citekey: 'test2024' })).toBe(true);
+      expect(action.isVisible({ selectedText: 'text' })).toBe(false);
+    }
+  });
+});
+
+describe('ReplaceSelectionWithTemplateAction', () => {
+  let ctx: ReturnType<typeof makeCtx>;
+  let presenter: { open: jest.Mock };
+  let action: ReplaceSelectionWithTemplateAction;
+
+  beforeEach(() => {
+    ctx = makeCtx();
+    ctx._editor.getSelection.mockReturnValue('PDF: [PDF](zotero://x)');
+    (ctx.platform.workspace.getActiveFile as jest.Mock).mockReturnValue({
+      path: 'Reading notes/@test2024.md',
+      name: '@test2024.md',
+    });
+    (
+      ctx.noteService as unknown as Record<string, jest.Mock>
+    ).findCitekeyForFile = jest.fn(() => 'test2024');
+    presenter = { open: jest.fn() };
+    action = new ReplaceSelectionWithTemplateAction(
+      ctx,
+      {
+        listTemplateSources: jest.fn(),
+        readTemplate: jest.fn(),
+      } as unknown as IContentTemplateResolver,
+      jest.fn(() => Promise.resolve()),
+      presenter,
+    );
+  });
+
+  it('is an editor command shown in the palette and the context menu', () => {
+    expect(action.descriptor).toMatchObject({
+      id: 'replace-selection-with-template',
+      name: 'Replace selection with template output',
+      showInCommandPalette: true,
+      showInContextMenu: true,
+      requiresEditor: true,
+    });
+  });
+
+  it('is visible only when text is selected', () => {
+    expect(action.isVisible({ selectedText: 'x' })).toBe(true);
+    expect(action.isVisible({ selectedText: '' })).toBe(false);
+    expect(action.isVisible({ citekey: 'test2024' })).toBe(false);
+  });
+
+  it('opens the dialog for the selection of the matched note', async () => {
+    await action.execute({});
+    expect(presenter.open).toHaveBeenCalledTimes(1);
+    const dialog = presenter.open.mock.calls[0][0] as TemplateSelectionDialog;
+    expect(dialog).toBeInstanceOf(TemplateSelectionDialog);
+    expect(dialog.selection).toEqual({
+      citekey: 'test2024',
+      filePath: 'Reading notes/@test2024.md',
+      text: 'PDF: [PDF](zotero://x)',
+    });
+    expect(ctx.templateService.getTemplateVariables).toHaveBeenCalledWith({
+      id: 'test2024',
+    });
+  });
+
+  it('asks for a selection when nothing is selected', async () => {
+    ctx._editor.getSelection.mockReturnValue('');
+    await action.execute({});
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'Citations: Select the text to replace first.',
+    );
+    expect(presenter.open).not.toHaveBeenCalled();
+  });
+
+  it('asks for a selection when there is no editor', async () => {
+    (ctx.platform.workspace.getActiveEditor as jest.Mock).mockReturnValue(null);
+    await action.execute({});
+    expect(presenter.open).not.toHaveBeenCalled();
+  });
+
+  it('stops when the note matches no entry', async () => {
+    (
+      ctx.noteService as unknown as Record<string, jest.Mock>
+    ).findCitekeyForFile.mockReturnValue(null);
+    await action.execute({});
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'Citations: "@test2024.md" does not match any library entry.',
+    );
+    expect(presenter.open).not.toHaveBeenCalled();
+  });
+
+  it('reports a note that cannot be matched because a template fails', async () => {
+    (
+      ctx.noteService as unknown as Record<string, jest.Mock>
+    ).findCitekeyForFile.mockImplementation(() => {
+      throw new Error('Template render failed');
+    });
+    await action.execute({});
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'Citations: Could not match "@test2024.md" — Template render failed',
+    );
+    expect(presenter.open).not.toHaveBeenCalled();
+  });
+
+  it('stops when the library is not loaded', async () => {
+    (ctx.libraryService as unknown as { library: unknown }).library = null;
+    await action.execute({});
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'Citations: Library is not loaded yet.',
+    );
+  });
+
+  it('stops when there is no active file', async () => {
+    (ctx.platform.workspace.getActiveFile as jest.Mock).mockReturnValue(null);
+    await action.execute({});
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'Citations: No active file.',
+    );
+  });
+
+  it('reports an entry that cannot be read', async () => {
+    (ctx.citationService.getEntry as jest.Mock).mockReturnValue({
+      ok: false,
+      error: new Error('Entry not found'),
+    });
+    await action.execute({});
+    expect(ctx.platform.notifications.show).toHaveBeenCalledWith(
+      'Citations: Entry not found',
+    );
+    expect(presenter.open).not.toHaveBeenCalled();
   });
 });

@@ -25,6 +25,11 @@ export class InsertNoteLinkAction extends SearchModalAction {
     requiresEditor: true,
   };
 
+  /** Shown in the context menu only when the cursor is on a citekey. */
+  isVisible(invocation: ActionInvocationContext): boolean {
+    return invocation.citekey !== undefined;
+  }
+
   onChoose = async (item: Entry) => {
     await this.insertLink(item.id);
   };

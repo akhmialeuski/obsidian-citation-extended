@@ -38,6 +38,7 @@ jest.mock(
     MarkdownView: class {},
     ItemView: class {},
     EditorSuggest: class {},
+    AbstractInputSuggest: class {},
     WorkspaceLeaf: class {},
     setIcon: jest.fn(),
     PluginSettingTab: class {},

@@ -235,6 +235,8 @@ jest.mock(
 
     class MockSetting {
       settingEl: HTMLElement;
+      descEl: HTMLElement;
+      name = '';
       private _container: HTMLElement;
       private _textCallbacks: Array<(c: MockTextComponent) => void> = [];
       private _textAreaCallbacks: Array<(c: MockTextAreaComponent) => void> =
@@ -251,17 +253,24 @@ jest.mock(
         this._container = container;
         this.settingEl = document.createElement('div');
         this.settingEl.classList.add('setting-item');
+        this.descEl = document.createElement('div');
+        this.settingEl.appendChild(this.descEl);
         this._container.appendChild(this.settingEl);
         // Store reference for test assertions
         settingInstances.push(this as unknown as Record<string, unknown>);
       }
-      setName() {
+      setName(name: string) {
+        this.name = name;
         return this;
       }
       setDesc() {
         return this;
       }
       setHeading() {
+        return this;
+      }
+      setClass(cls: string) {
+        this.settingEl.classList.add(cls);
         return this;
       }
       addText(cb: (comp: MockTextComponent) => void) {
@@ -306,6 +315,15 @@ jest.mock(
         const comps: MockTextComponent[] = [];
         for (const cb of this._textCallbacks) {
           const c = new MockTextComponent();
+          cb(c);
+          comps.push(c);
+        }
+        return comps;
+      }
+      getTextAreaComponents(): MockTextAreaComponent[] {
+        const comps: MockTextAreaComponent[] = [];
+        for (const cb of this._textAreaCallbacks) {
+          const c = new MockTextAreaComponent();
           cb(c);
           comps.push(c);
         }
@@ -391,11 +409,14 @@ interface MockSettingInstance {
     triggerChange(v: string): void;
     inputEl: HTMLElement;
   }>;
+  getTextAreaComponents(): Array<{ triggerChange(v: string): void }>;
   getToggleComponents(): Array<{ triggerChange(v: boolean): void }>;
   getDropdownComponents(): Array<{ triggerChange(v: string): void }>;
   getButtonComponents(): Array<{ triggerClick(): void }>;
   getExtraButtonComponents(): Array<{ triggerClick(): void }>;
   settingEl: HTMLElement;
+  descEl: HTMLElement;
+  name: string;
 }
 
 function createMockPlugin(
@@ -1719,6 +1740,95 @@ describe('CitationSettingTab', () => {
       plugin.settings.citationStylePreset = 'custom';
       tab.display();
       expect(getSettings().length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('fragment profiles section', () => {
+    const PROFILE = { id: 'p1', name: 'pdf-links', template: 'PDF' };
+    const profileRows = () =>
+      getSettings().filter((s) =>
+        s.settingEl.parentElement?.classList.contains(
+          'citation-fragment-profile',
+        ),
+      );
+    const addProfileButton = () => {
+      const all = getSettings();
+      const heading = all.findIndex((s) => s.name === 'Fragment profiles');
+      return all
+        .slice(heading)
+        .find((s) => s.getButtonComponents().length > 0)!
+        .getButtonComponents()[0];
+    };
+    const settle = async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    };
+
+    it('renders a name row and a template row per profile', () => {
+      plugin.settings.fragmentProfiles = [PROFILE];
+      tab.display();
+      const rows = profileRows();
+      expect(rows.map((r) => r.name)).toEqual(['Name', 'Template']);
+      expect(rows[1].settingEl.classList).toContain('citation-setting-stacked');
+    });
+
+    it('adds a profile under a free name', async () => {
+      plugin.settings.fragmentProfiles = [
+        { id: 'p0', name: 'New profile', template: '' },
+      ];
+      tab.display();
+      addProfileButton().triggerClick();
+      await settle();
+      expect(plugin.settings.fragmentProfiles.map((p) => p.name)).toEqual([
+        'New profile',
+        'New profile 2',
+      ]);
+      expect(plugin.saveSettings).toHaveBeenCalled();
+    });
+
+    it('renames a profile and keeps its template', async () => {
+      plugin.settings.fragmentProfiles = [PROFILE];
+      tab.display();
+      profileRows()[0].getTextComponents()[0].triggerChange('pdf-list');
+      await settle();
+      expect(plugin.settings.fragmentProfiles).toEqual([
+        { id: 'p1', name: 'pdf-list', template: 'PDF' },
+      ]);
+    });
+
+    it('refuses a name another profile uses and shows why', async () => {
+      plugin.settings.fragmentProfiles = [
+        PROFILE,
+        { id: 'p2', name: 'doi', template: 'D' },
+      ];
+      tab.display();
+      const nameRow = profileRows()[2];
+      nameRow.getTextComponents()[0].triggerChange('pdf-links');
+      await settle();
+      expect(nameRow.descEl.textContent).toBe(
+        'Another profile already uses this name.',
+      );
+      expect(plugin.settings.fragmentProfiles[1].name).toBe('doi');
+      expect(plugin.saveSettings).not.toHaveBeenCalled();
+    });
+
+    it('updates the template and keeps the name', async () => {
+      plugin.settings.fragmentProfiles = [PROFILE];
+      tab.display();
+      profileRows()[1].getTextAreaComponents()[0].triggerChange('NEW');
+      await settle();
+      expect(plugin.settings.fragmentProfiles).toEqual([
+        { id: 'p1', name: 'pdf-links', template: 'NEW' },
+      ]);
+    });
+
+    it('removes a profile', async () => {
+      plugin.settings.fragmentProfiles = [PROFILE];
+      tab.display();
+      profileRows()[0].getExtraButtonComponents()[0].triggerClick();
+      await settle();
+      expect(plugin.settings.fragmentProfiles).toEqual([]);
+      expect(plugin.saveSettings).toHaveBeenCalled();
     });
   });
 });

@@ -23,7 +23,9 @@ import {
   OpenNoteAtCursorAction,
   BatchUpdateNotesAction,
   UpdateCurrentNoteAction,
+  ReplaceSelectionWithTemplateAction,
 } from '../application/actions';
+import { ModalTemplateSelectionPresenter } from '../ui/modals/replace-selection-modal';
 
 /**
  * Initializes all user-facing UI surfaces: command palette, context menu,
@@ -85,6 +87,15 @@ export class UIService implements IUIService {
         actionCtx,
         this.plugin.batchOrchestrator,
         this.plugin.contentTemplateResolver,
+      ),
+    );
+
+    actionRegistry.register(
+      new ReplaceSelectionWithTemplateAction(
+        actionCtx,
+        this.plugin.contentTemplateResolver,
+        () => this.plugin.saveSettings(),
+        new ModalTemplateSelectionPresenter(this.plugin.app),
       ),
     );
 

@@ -1,5 +1,8 @@
 import type { ICitationService } from '../citation.service';
-import type { IPlatformAdapter } from '../../platform/platform-adapter';
+import type {
+  IPlatformAdapter,
+  IVaultFile,
+} from '../../platform/platform-adapter';
 import type {
   INoteService,
   ILibraryService,
@@ -69,6 +72,48 @@ export abstract class ApplicationAction {
 
   /** Execute the action directly (context menu, cursor command, etc.). */
   abstract execute(invocation: ActionInvocationContext): Promise<void>;
+
+  /**
+   * Match the active file to a library entry. Shows a notice and returns
+   * null when there is no active file, the library is not loaded, or the
+   * file matches no entry.
+   */
+  protected resolveActiveNote(): { file: IVaultFile; citekey: string } | null {
+    const { platform } = this.ctx;
+
+    const file = platform.workspace.getActiveFile();
+    if (!file) {
+      platform.notifications.show('Citations: No active file.');
+      return null;
+    }
+
+    const library = this.ctx.libraryService.library;
+    if (!library) {
+      platform.notifications.show('Citations: Library is not loaded yet.');
+      return null;
+    }
+
+    // findCitekeyForFile renders the title template for every entry to match
+    // the path; a broken template throws TemplateRenderError. Commands are
+    // invoked fire-and-forget, so surface the failure as a notice instead of
+    // letting the rejection vanish.
+    let citekey: string | null;
+    try {
+      citekey = this.ctx.noteService.findCitekeyForFile(file, library);
+    } catch (e) {
+      platform.notifications.show(
+        `Citations: Could not match "${file.name}" — ${(e as Error).message}`,
+      );
+      return null;
+    }
+    if (!citekey) {
+      platform.notifications.show(
+        `Citations: "${file.name}" does not match any library entry.`,
+      );
+      return null;
+    }
+    return { file, citekey };
+  }
 }
 
 /**

@@ -227,7 +227,7 @@
 }
 
 /* Update review dialog (note sync diff) */
-.citation-update-review .citation-review-diff {
+.citation-review-diff {
   max-height: 45vh;
   overflow: auto;
   border: 1px solid var(--background-modifier-border);
@@ -235,7 +235,7 @@
   margin: 8px 0 12px;
 }
 
-.citation-update-review .citation-review-pre {
+.citation-review-pre {
   margin: 0;
   padding: 8px;
   font-family: var(--font-monospace);
@@ -245,18 +245,18 @@
   word-break: break-word;
 }
 
-.citation-update-review .citation-diff-line.is-added {
+.citation-diff-line.is-added {
   background-color: rgba(var(--color-green-rgb), 0.14);
   color: var(--text-normal);
 }
 
-.citation-update-review .citation-diff-line.is-removed {
+.citation-diff-line.is-removed {
   background-color: rgba(var(--color-red-rgb), 0.12);
   color: var(--text-muted);
   text-decoration: line-through;
 }
 
-.citation-update-review .citation-diff-line.is-fold {
+.citation-diff-line.is-fold {
   color: var(--text-faint);
   font-style: italic;
 }
@@ -273,7 +273,95 @@
   color: var(--text-muted);
 }
 
-.citation-update-review .citation-diff-expand {
+.citation-diff-expand {
   cursor: pointer;
   text-decoration: underline;
+}
+
+/* Replace selection with template dialog */
+.citation-fragment-meta {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  margin: 0 0 6px;
+}
+
+.citation-fragment-quote {
+  border-left: 3px solid var(--interactive-accent);
+  background: var(--background-secondary);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 20vh;
+  overflow: auto;
+  margin-bottom: 8px;
+}
+
+.citation-fragment-label {
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-semibold);
+  margin: 12px 0 4px;
+}
+
+.citation-fragment-editor {
+  width: 100%;
+  min-height: 64px;
+  resize: vertical;
+  font-family: var(--font-monospace);
+  font-size: 12px;
+}
+
+.citation-fragment-status {
+  font-size: var(--font-ui-smaller);
+  margin: 2px 0 6px;
+}
+
+.citation-fragment-status.is-ok {
+  color: var(--text-success);
+}
+
+.citation-fragment-status.is-warning {
+  color: var(--text-warning);
+}
+
+.citation-fragment-error {
+  color: var(--text-error);
+}
+
+.citation-fragment-suggestion {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.citation-fragment-create {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-accent);
+}
+
+/* Narrow windows: controls move under their labels instead of overflowing */
+@media (max-width: 520px) {
+  .citation-fragment-modal .setting-item {
+    flex-wrap: wrap;
+  }
+
+  .citation-fragment-modal .setting-item-control {
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: 6px;
+  }
+}
+
+/* Fragment profiles in the settings */
+.citation-fragment-profile {
+  display: block;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 0 10px;
+  margin-bottom: 10px;
 }

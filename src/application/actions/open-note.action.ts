@@ -27,6 +27,11 @@ export class OpenNoteAction extends SearchModalAction {
     requiresEditor: false,
   };
 
+  /** Shown in the context menu only when the cursor is on a citekey. */
+  isVisible(invocation: ActionInvocationContext): boolean {
+    return invocation.citekey !== undefined;
+  }
+
   onChoose = async (item: Entry, evt: MouseEvent | KeyboardEvent) => {
     if (evt instanceof MouseEvent || evt.key == 'Enter') {
       const newPane = evt instanceof KeyboardEvent && evt.ctrlKey;
