@@ -149,6 +149,19 @@ Updates a single literature note — the one open in the active pane — with th
 
 **When to use:** After editing one reference in Zotero (fixing metadata, adding highlights) when you don't want to run the full batch update.
 
+## Replace Selection with Template Output
+
+Replaces the text selected in a literature note with the output of a template, rendered with the note's library entry.
+
+- **Command**: `Citations: Replace selection with template output`, also in the editor context menu whenever text is selected
+- **Extract** finds the part of a template set in the settings that produced the selection and puts it into the dialog, where you can edit it
+- **Profile** loads, creates, renames and saves named templates (see [Fragment profiles](configuration.md#fragment-profiles))
+- A preview shows the selection against the replacement before anything is written. Only the selected text changes
+
+![Replace selection with template dialog](images/replace-selection-dialog.png)
+
+**When to use:** Part of an existing note is outdated, for example a PDF was added to the item in Zotero after the note was created. See [Replacing a Selection with Template Output](use-cases/replace-selection-with-template.md) for the full guide.
+
 ## Refresh Citation Database
 
 Manually reloads all configured citation databases.

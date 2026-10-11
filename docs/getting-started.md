@@ -77,6 +77,7 @@ See [Readwise Integration](use-cases/readwise-integration.md) for a complete wal
 | Insert multiple citations | Multi-select mode: pick several, insert `[@a; @b; @c]` |
 | Open literature note for citation at cursor | Jumps to the note for `[@citekey]` under cursor — no modal |
 | Update all literature notes | Re-renders all literature notes with the current content template |
+| Replace selection with template output | Replaces the selected text of a note with fresh template output |
 | Refresh citation database | Reloads all configured bibliography files |
 
 See [Features](features.md) for detailed descriptions and [Configuration: Hotkeys](configuration.md#hotkeys) for recommended key bindings.

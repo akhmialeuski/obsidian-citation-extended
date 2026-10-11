@@ -136,7 +136,7 @@ The cache file is managed automatically -- you do not need to create or edit it.
 
 ## Hotkeys
 
-The plugin registers eight commands but does **not** assign default hotkeys — you choose bindings that fit your workflow. To configure:
+The plugin does **not** assign default hotkeys to its commands. You choose the bindings that fit your workflow. To configure:
 
 1. Open **Settings** > **Hotkeys**
 2. Search for `Citations`
@@ -144,16 +144,17 @@ The plugin registers eight commands but does **not** assign default hotkeys — 
 
 **Recommended bindings** (adjust to taste):
 
-| Command | Suggested hotkey | Rationale |
-|---------|-----------------|-----------|
-| Open literature note | `Ctrl+Shift+O` | Mnemonic: **O**pen note |
-| Insert Markdown citation | `Ctrl+Shift+E` | Quick citation insertion while writing |
-| Insert literature note link | `Ctrl+Shift+L` | Mnemonic: **L**ink |
-| Open literature note for citation at cursor | `Ctrl+Shift+G` | No modal — jumps directly to the note for the citation under cursor |
-| Insert subsequent citation | — | Appends `; @key2` to an existing `[@key1]` at cursor |
-| Insert multiple citations | — | Multi-select modal: add references one by one, insert combined `[@...]` on close |
-| Insert literature note content | — | Used less frequently, assign if needed |
-| Refresh citation database | — | Rarely needed (auto-reload handles most cases) |
+| Command                                     | Suggested hotkey | Rationale                                                                        |
+| ------------------------------------------- | ---------------- | -------------------------------------------------------------------------------- |
+| Open literature note                        | `Ctrl+Shift+O`   | Mnemonic: **O**pen note                                                          |
+| Insert Markdown citation                    | `Ctrl+Shift+E`   | Quick citation insertion while writing                                           |
+| Insert literature note link                 | `Ctrl+Shift+L`   | Mnemonic: **L**ink                                                               |
+| Open literature note for citation at cursor | `Ctrl+Shift+G`   | No modal — jumps directly to the note for the citation under cursor              |
+| Insert subsequent citation                  | —                | Appends `; @key2` to an existing `[@key1]` at cursor                             |
+| Insert multiple citations                   | —                | Multi-select modal: add references one by one, insert combined `[@...]` on close |
+| Insert literature note content              | —                | Used less frequently, assign if needed                                           |
+| Refresh citation database                   | —                | Rarely needed (auto-reload handles most cases)                                   |
+| Replace selection with template output      | —                | Also available from the editor context menu on a selection                       |
 
 ---
 
@@ -297,6 +298,18 @@ This creates notes like `Reading notes/article-journal/@smith2023.md`. Missing f
 The plugin searches recursively in subfolders when opening notes, so manually moved notes are still found. If a note is moved completely outside the literature note folder (e.g. into a project-specific folder), the plugin performs a vault-wide search as a last resort before creating a duplicate. That last resort applies only when exactly one note in the vault carries the expected name — when several do, the plugin creates the note rather than risk writing to an unrelated one.
 
 See [Template Examples: Subfolder Organization](templates/examples.md#subfolder-organization) for more patterns.
+
+### Fragment profiles
+
+Named templates for the **Replace selection with template output** command. Each profile has a **Name** and a **Template** (Handlebars, rendered with the entry of the note the command runs in). **Add profile** creates one named `New profile` (then `New profile 2`, …), the trash icon removes one, and a name another profile already uses is refused with a message under the field.
+
+Profiles are also created, renamed and saved from the **Profile** field of the dialog. A profile only fills the dialog: changing or deleting it does not change notes where it was applied.
+
+- **Default:** no profiles
+
+![Fragment profiles settings](images/settings-fragment-profiles.png)
+
+See [Replacing a Selection with Template Output](use-cases/replace-selection-with-template.md).
 
 ---
 

@@ -9,6 +9,7 @@ Practical, step-by-step guides for common workflows with Obsidian Citation Exten
 - [Citing a Source](citing-a-source.md) — Insert a citation while writing, using primary and secondary formats
 - [Creating Literature Notes](creating-literature-notes.md) — Create, organize, and manage literature notes from your references
 - [Updating Literature Notes](updating-literature-notes.md) — Re-sync notes with the library via three-way merge, without ever losing manual edits
+- [Replacing a Selection with Template Output](replace-selection-with-template.md): Refresh one outdated part of a note, such as PDF links added later in Zotero, from a template you extract, edit or save as a profile
 - [Multi-Citation Workflow](multi-citation-workflow.md) — Insert multiple citations at once or append to existing ones
 - [Navigating from Citation to Note](navigating-from-citation-to-note.md) — Jump from a citation in your text directly to its literature note
 - [Reviewing the References of a Note](reviewing-references-in-a-note.md) — List everything the active note cites, and jump from the sidebar back to each citation in the text
