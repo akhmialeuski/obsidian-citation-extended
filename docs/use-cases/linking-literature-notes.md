@@ -2,15 +2,15 @@
 
 ## Problem
 
-You are writing a synthesis note, a project overview, or a daily journal and want to reference a specific literature note inline. Instead of manually typing the file path or searching for it in the file explorer, you want to quickly insert a properly formatted link — either a wiki link (`[[path]]`) or a Markdown link (`[text](path)`) — with an appropriate display name.
+You are writing a synthesis note, a project overview, or a daily journal and want to reference a specific literature note inline. Instead of manually typing the file path or searching for it in the file explorer, you want to quickly insert a properly formatted link (either a wiki link `[[path]]` or a Markdown link `[text](path)`) with an appropriate display name.
 
 This is different from inserting a citation (`[@citekey]`). A literature note link creates a navigable connection within your vault, whereas a citation is a formatted text string for eventual export to PDF or DOCX.
 
 ## Prerequisites
 
 - At least one citation database configured and loaded
-- Literature notes folder configured in **Settings > Citation plugin > Literature Notes**
-- (Optional) A hotkey assigned to **Citations: Insert literature note link** — recommended: `Ctrl+Shift+L`
+- Literature notes folder configured in **Settings > Citation Extended > Literature notes**
+- (Optional) A hotkey assigned to **Citation Extended: Insert literature note link** (recommended: `Ctrl+Shift+L`)
 
 ## Step-by-Step Walkthrough
 
@@ -24,7 +24,7 @@ This is different from inserting a citation (`[@citekey]`). A literature note li
    For the theoretical foundation, see |
    ```
 
-3. Open the Command Palette (`Ctrl+P`) and run **Citations: Insert literature note link** (or press your configured hotkey, e.g. `Ctrl+Shift+L`).
+3. Open the Command Palette (`Ctrl+P`) and run **Citation Extended: Insert literature note link** (or press your configured hotkey, e.g. `Ctrl+Shift+L`).
 
 4. The search modal opens. Type `lecun deep` to find the reference:
 
@@ -58,7 +58,7 @@ This is different from inserting a citation (`[@citekey]`). A literature note li
 
 ### Using a Custom Display Template
 
-1. Go to **Settings > Citation plugin > Markdown Citations > Literature note link display template**.
+1. Go to **Settings > Citation Extended > Markdown citation templates > Literature note link display template**.
 
 2. Enter a Handlebars template. For example:
 
@@ -82,13 +82,13 @@ This is different from inserting a citation (`[@citekey]`). A literature note li
 
 ## Template Setup
 
-The display text template is configured in **Settings > Citation plugin > Markdown Citations > Literature note link display template**. This is a single-line Handlebars template with access to all entry variables.
+The display text template is configured in **Settings > Citation Extended > Markdown citation templates > Literature note link display template**. This is a single-line Handlebars template with access to all entry variables.
 
 ### Common Display Templates
 
 | Template | Wiki link result | Markdown link result |
 |----------|-----------------|---------------------|
-| (empty — default) | `[[Reading notes/@lecun2015]]` | `[lecun2015](Reading notes/@lecun2015.md)` |
+| (empty, default) | `[[Reading notes/@lecun2015]]` | `[lecun2015](Reading notes/@lecun2015.md)` |
 | `{{authorString}} ({{year}})` | `[[Reading notes/@lecun2015\|LeCun, Bengio, Hinton (2015)]]` | `[LeCun, Bengio, Hinton (2015)](Reading notes/@lecun2015.md)` |
 | `{{titleShort}}` | `[[Reading notes/@lecun2015\|Deep learning]]` | `[Deep learning](Reading notes/@lecun2015.md)` |
 | `@{{citekey}}` | `[[Reading notes/@lecun2015\|@lecun2015]]` | `[@lecun2015](Reading notes/@lecun2015.md)` |
@@ -144,7 +144,7 @@ Markdown link:
 
 If you want to insert links only to notes that already exist:
 
-1. Go to **Settings > Citation plugin > Literature Notes**
+1. Go to **Settings > Citation Extended > Literature notes**
 2. Enable **Disable automatic note creation**
 3. Now, inserting a link for a reference without an existing note shows an error message
 
@@ -184,4 +184,4 @@ This is more readable in prose than a bare citekey.
 - **The display template affects both link types.** You do not need separate templates for wiki and Markdown links.
 - **Links work with subfolder organization.** If your title template is `{{type}}/{{citekey}}`, the link path reflects the subfolder structure: `[[Reading notes/article-journal/@lecun2015]]`.
 - **Difference from "Insert Markdown citation":** The citation command inserts formatted text like `[@lecun2015]`. The link command inserts a navigable vault link like `[[Reading notes/@lecun2015]]`. Use citations for export-ready documents and links for internal knowledge graphs.
-- **Auto-creation happens silently.** When a literature note is created via the link command, it happens in the background — the note file is created but not opened. You stay in your current document.
+- **Auto-creation happens silently.** When a literature note is created via the link command, it happens in the background: the note file is created but not opened. You stay in your current document.

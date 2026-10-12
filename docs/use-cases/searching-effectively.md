@@ -2,7 +2,7 @@
 
 ## Problem
 
-Your bibliography library contains hundreds or thousands of entries. When you open the search modal, you need to find the right reference quickly — sometimes by title, sometimes by author, sometimes by a vague memory of a keyword or year. Understanding what the search supports and how to phrase your queries saves time on every citation you insert.
+Your bibliography library contains hundreds or thousands of entries. When you open the search modal, you need to find the right reference quickly: sometimes by title, sometimes by author, sometimes by a vague memory of a keyword or year. Understanding what the search supports and how to phrase your queries saves time on every citation you insert.
 
 The plugin uses MiniSearch for full-text indexing, providing fuzzy matching, prefix matching, and accent-insensitive search out of the box.
 
@@ -105,7 +105,7 @@ The search normalizes diacritical marks, so you do not need to type accented cha
    muller2019
    ```
 
-3. This also works in reverse — typing `Gomez` matches entries by "Gomez":
+3. This also works in reverse: typing `Gomez` matches entries by "Gomez":
 
    ```
    gomez
@@ -131,7 +131,7 @@ The search tolerates minor typos.
    vaswani2017
    ```
 
-   Fuzzy matching has limits — it works best for single-character errors (substitutions, insertions, deletions). Badly misspelled words may not match.
+   Fuzzy matching has limits: it works best for single-character errors (substitutions, insertions, deletions). Badly misspelled words may not match.
 
 ### Prefix Matching
 
@@ -175,7 +175,7 @@ Type the beginning of a word, and entries matching that prefix appear.
 
 The default result order is by search relevance. You can change the base sort order (before search ranking) in settings.
 
-1. Go to **Settings > Citation plugin > Display > Sort order**.
+1. Go to **Settings > Citation Extended > Display > Sort order**.
 
 2. Choose one of:
 

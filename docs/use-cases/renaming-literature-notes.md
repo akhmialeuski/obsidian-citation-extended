@@ -26,15 +26,15 @@ The `citekey` field is the most reliable identifier since every library entry ha
 
 ### 2. Configure the setting
 
-1. Open **Settings** > **Citation plugin** > **Literature notes**
+1. Open **Settings** > **Citation Extended** > **Literature notes**
 2. In the **Note identifier field** text box, type `citekey`
-3. The setting takes effect immediately — no reload needed
+3. The setting takes effect immediately, with no reload needed
 
 ### 3. Re-render existing notes (optional)
 
 If you have existing literature notes that were created before adding `citekey` to the template, they won't have the frontmatter field. To add it:
 
-1. Run **Citations: Update all literature notes** from the Command Palette
+1. Run **Citation Extended: Update all literature notes** from the Command Palette
 2. This re-renders all notes using your updated template, adding the `citekey` field
 
 ### 4. Rename notes freely
@@ -54,7 +54,7 @@ When you run **Open literature note** or any command that looks up a note, the p
 2. Case-insensitive filename match
 3. Filename match in subfolders
 4. Vault-wide filename match
-5. **Frontmatter field match** — scans all vault markdown files for a note where the configured frontmatter field equals the target citekey
+5. **Frontmatter field match**: scans all vault markdown files for a note where the configured frontmatter field equals the target citekey
 
 Step 5 only runs when the previous four steps found nothing, and only when the **Note identifier field** setting is not empty. The lookup uses Obsidian's in-memory metadata cache, so there is no performance penalty from reading files.
 
@@ -72,4 +72,4 @@ The field name is configurable. Instead of `citekey`, you can use any field from
 
 - Notes created before the frontmatter field was added to the template won't be found by this method until the field is added (manually or via batch update)
 - If multiple notes share the same frontmatter value, the first match is returned
-- The lookup is case-sensitive — `Smith2023` does not match `smith2023`
+- The lookup is case-sensitive: `Smith2023` does not match `smith2023`

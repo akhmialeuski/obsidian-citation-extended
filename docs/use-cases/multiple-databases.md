@@ -2,13 +2,13 @@
 
 ## Problem
 
-You maintain more than one bibliography — perhaps a personal research library and a shared team library, or separate databases for different projects, or a Zotero collection alongside a legacy Mendeley export. You want all of these sources available in a single search modal so you can cite and create notes from any of them without switching databases.
+You maintain more than one bibliography: perhaps a personal research library and a shared team library, or separate databases for different projects, or a Zotero collection alongside a legacy Mendeley export. You want all of these sources available in a single search modal so you can cite and create notes from any of them without switching databases.
 
-The plugin supports up to 20 databases loaded simultaneously. All entries are merged into one searchable library, with configurable behavior for duplicate citekeys.
+The plugin supports up to 20 databases loaded simultaneously. All entries are merged into one searchable library, and a citekey found in two databases is kept as two separate entries.
 
 ## Prerequisites
 
-- Two or more bibliography files exported from your reference manager(s)
+- Two or more bibliography sources: files exported from your reference manager(s), a running Zotero, or a Readwise account
 - Each file in a supported format: CSL-JSON (`.json`), BibLaTeX (`.bib`), or Hayagriva (`.yml`)
 - File paths accessible from your vault (absolute paths, or relative to the vault root)
 
@@ -16,13 +16,13 @@ The plugin supports up to 20 databases loaded simultaneously. All entries are me
 
 ### Adding Multiple Databases
 
-1. Open **Settings > Citation plugin > Citation databases**.
+1. Open **Settings > Citation Extended > Citation databases**.
 
-2. Your first database is already configured. Give it a descriptive name, for example `Personal Library`. Select the format (e.g., `Better BibTeX`) and enter the file path:
+2. Your first database is already configured. Give it a descriptive name, for example `Personal Library`. Select the **Database source** (e.g., `Better BibTeX (file)`) and enter the file path:
 
    ```
    Name:   Personal Library
-   Type:   Better BibTeX
+   Source: Better BibTeX (file)
    Path:   /home/user/Zotero/personal-library.bib
    ```
 
@@ -34,7 +34,7 @@ The plugin supports up to 20 databases loaded simultaneously. All entries are me
 
    ```
    Name:   Team Library
-   Type:   Better CSL JSON
+   Source: Better CSL JSON (file)
    Path:   /home/user/Dropbox/shared/team-references.json
    ```
 
@@ -42,9 +42,13 @@ The plugin supports up to 20 databases loaded simultaneously. All entries are me
 
    ```
    Name:   Conference Papers
-   Type:   Better BibTeX
+   Source: Better BibTeX (file)
    Path:   /home/user/Zotero/conference-2024.bib
    ```
+
+   The cards of two configured databases look like this:
+
+   ![Two database cards, a Better CSL JSON file and a Better BibTeX file](../images/settings-multiple-databases.png)
 
 6. Close settings. The plugin reloads all databases. The status bar shows the total count across all databases:
 
@@ -54,23 +58,15 @@ The plugin supports up to 20 databases loaded simultaneously. All entries are me
 
 ### Searching Across Databases
 
-1. Open the Command Palette (`Ctrl+P`) and run any command that opens the search modal (or press your configured hotkey, e.g. `Ctrl+Shift+E`).
+1. Open the Command Palette (`Ctrl+P`) and run any command that opens the search modal, or press the hotkey you assigned to one.
 
 2. Search as usual. The modal searches across all loaded databases simultaneously. Results from different databases are interleaved based on search relevance.
 
-3. When the same citekey exists in multiple databases, the search results show a prefix with the database name:
+3. Every result shows the name of its database before the citekey. When the same citekey exists in two databases, the reference is listed twice, once with each prefix:
 
-   ```
-   Personal Library:smith2023
-   Attention Is All You Need
-   Smith, Jones (2023)
+   ![Search modal listing two references that exist in both the Library and the Lab databases](../images/search-modal-duplicates.png)
 
-   Team Library:smith2023
-   A Survey of Self-Attention Methods
-   Smith, Lee, Chen (2023)
-   ```
-
-4. Select the entry you want. The prefix helps you identify which database each result comes from.
+4. Select the entry you want. The prefix tells you which database each result comes from.
 
 ### Understanding Composite Citekeys
 
@@ -83,27 +79,11 @@ smith2023@db-1711234890-c3d4
 
 This composite citekey is used for literature note filenames and wiki-links. Because it is based on the database's internal id (not the display name), **you can freely rename databases** in settings without breaking any existing notes or links.
 
-> **Note:** Single-database setups and multi-database setups without overlapping citekeys are not affected — citekeys remain unchanged (e.g. `smith2023`).
+> **Note:** Single-database setups and multi-database setups without overlapping citekeys are not affected. Citekeys remain unchanged (e.g. `smith2023`).
 
-### Understanding the Merge Strategy
+### Choosing Between Duplicates
 
-When the same citekey appears in multiple databases, the plugin needs to decide which entry to use for note creation. The current merge strategy is **Last wins**:
-
-- Databases are processed in the order they appear in settings (top to bottom)
-- For duplicate citekeys, the entry from the **last** database in the list takes precedence for note creation
-- Both entries remain searchable — only the "canonical" entry used for note content is affected
-
-**Example:** If `smith2023` exists in both `Personal Library` (first) and `Team Library` (second), the Team Library version is used when creating the literature note.
-
-### Reordering Databases to Control Priority
-
-To change which database takes precedence for duplicates:
-
-1. Open **Settings > Citation plugin > Citation databases**
-2. The databases are listed in order. The last one in the list has the highest priority
-3. Rearrange by removing and re-adding databases in your preferred order
-
-**Example:** To make your personal library take precedence over the team library, ensure `Personal Library` appears **after** `Team Library` in the list.
+No database takes precedence over another. Both copies of a duplicated citekey stay in the library under their own composite citekeys, and every command works on the copy you select in the search modal. Selecting `Personal Library:smith2023` creates or opens the note of the Personal Library entry, and selecting `Team Library:smith2023` creates or opens a separate note for the Team Library entry. The order of the databases in the settings does not matter.
 
 ## Expected Result
 
@@ -117,40 +97,39 @@ Citations: 1847 entries
 
 ### Search Modal with Duplicates
 
-Searching for a citekey that exists in two databases:
+Searching for a citekey that exists in two databases lists one result per database, each with its own prefix:
 
 ```
-Personal Library:lecun2015
 Deep learning
-LeCun, Bengio, Hinton (2015)
+Personal Library:lecun2015 | 2015 | Yann LeCun, Yoshua Bengio, Geoffrey Hinton
 
-Team Library:lecun2015
 Deep learning
-LeCun, Bengio, Hinton (2015)
+Team Library:lecun2015 | 2015 | Yann LeCun, Yoshua Bengio, Geoffrey Hinton
 ```
 
 ### Search Modal without Duplicates
 
-For unique citekeys, no prefix is shown:
+A citekey found in one database is listed once, still with the name of its database:
 
 ```
 Attention Is All You Need
-Vaswani, Shazeer, Parmar, Uszkoreit, Jones, Gomez, Kaiser, Polosukhin (2017)
-vaswani2017
+Personal Library:vaswani2017 | 2017 | Ashish Vaswani, Noam Shazeer, Niki Parmar et al.
 ```
 
-### Literature Note Created from Merged Entry
+### Literature Note Created from a Duplicate
 
-When you create a literature note for a duplicate citekey, the note uses the entry from the last database in the list (by default). The note itself does not contain any database prefix — it uses the clean citekey:
+A literature note created for a duplicated citekey uses the entry you selected, and its `{{citekey}}` is the composite citekey of that entry. With the default title template `@{{citekey}}`, the note of the Personal Library copy is named `@lecun2015@db-1711234567-a1b2.md`, and a template line `citekey: {{citekey}}` renders as:
 
 ```markdown
 ---
 title: "Deep learning"
 authors: "LeCun, Bengio, Hinton"
 year: 2015
-citekey: lecun2015
+citekey: lecun2015@db-1711234567-a1b2
 ---
 ```
+
+A citekey found in only one database keeps its plain form, such as `citekey: vaswani2017`.
 
 ## Variations
 
@@ -163,7 +142,7 @@ A common setup for research groups:
 | Personal Library | BibLaTeX | `/home/user/Zotero/my-library.bib` | Your personal references, exported from Zotero with Better BibTeX |
 | Team Library | CSL-JSON | `/home/user/Dropbox/team/references.json` | Shared team references, synced via Dropbox |
 
-Put `Personal Library` last to prioritize your own annotations and notes over the team version.
+A reference present in both libraries is listed twice in the search modal, so pick the `Personal Library` copy when you want your own annotations and notes.
 
 ### Mixing Formats
 
@@ -201,9 +180,9 @@ This is especially useful on mobile (iOS/Android) where absolute filesystem path
 
 ## Tips
 
-- **Naming matters.** Give each database a clear, descriptive name. These names appear as prefixes in the search modal when duplicates are found — `Team Library:smith2023` is much more helpful than `Database 2:smith2023`.
+- **Naming matters.** Give each database a clear, descriptive name. These names appear as prefixes of every result in the search modal, and `Team Library:smith2023` is much more helpful than `Database 2:smith2023`.
 - **Renaming is safe.** You can rename a database at any time in settings. The plugin uses a stable internal identifier for composite citekeys, so renaming does not break existing literature notes or wiki-links.
 - **Keep the total count reasonable.** The plugin handles large libraries well (5000+ entries), but loading 20 large BibLaTeX files simultaneously will increase load time. CSL-JSON is significantly faster to parse than BibLaTeX.
-- **The file watcher works per-database.** Each database file is watched independently. If you update `personal-library.bib`, only that database is reloaded — the others stay cached.
+- **The file watcher works per-database.** Each database file is watched independently. If you update `personal-library.bib`, only that database is reloaded, and the others stay cached.
 - **Use "Refresh citation database" if something looks wrong.** If an entry from one database is not appearing, try running the refresh command from the Command Palette. This reloads all databases from disk.
 - **Up to 20 databases are supported.** This is a practical limit to prevent excessive memory usage and load times.

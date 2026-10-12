@@ -2,7 +2,7 @@
 
 ## Problem
 
-Your reference manager (Zotero, Mendeley, or others) stores PDF files for each source. When reviewing a citation or literature note, you want quick access to the original PDF — either by opening it directly from the search modal, by clicking a link in your literature note, or by jumping to the entry in Zotero. Manually navigating to the PDF file on disk or switching to Zotero each time breaks your reading flow.
+Your reference manager (Zotero, Mendeley, or others) stores PDF files for each source. When reviewing a citation or literature note, you want quick access to the original PDF, either by opening it directly from the search modal, by clicking a link in your literature note, or by jumping to the entry in Zotero. Manually navigating to the PDF file on disk or switching to Zotero each time breaks your reading flow.
 
 The plugin provides multiple ways to bridge the gap between your Obsidian notes and the PDF files managed by your reference manager.
 
@@ -16,7 +16,7 @@ The plugin provides multiple ways to bridge the gap between your Obsidian notes 
 
 ### Opening a PDF from the Search Modal
 
-1. Open the Command Palette (`Ctrl+P`) and run **Citations: Insert Markdown citation** (or any command that opens the search modal, or press your configured hotkey, e.g. `Ctrl+Shift+E`).
+1. Open the Command Palette (`Ctrl+P`) and run **Citation Extended: Insert Markdown citation** (or any command that opens the search modal, or press your configured hotkey, e.g. `Ctrl+Shift+E`).
 
 2. Search for the reference. For example, type `lecun deep`:
 
@@ -220,13 +220,13 @@ Notice the "PDF" section is completely absent when no PDF is available.
 | ------------------------------------------------- | ----------------- | --------------------------------------------------------------- |
 | Open PDF from search modal                        | `Shift+Tab`       | System PDF viewer opens the attached file                       |
 | Open entry in Zotero                              | `Tab`             | Zotero opens and selects the entry                              |
-| PDF link in template (`pdfMarkdownLink`)          | —                 | `[filename](file:///path/to/file.pdf)` rendered in note         |
-| PDF link in template (`pdfLink`)                  | —                 | `file:///path/to/file.pdf` URI rendered in note                 |
-| PDF link in template (`urlEncode`)                | —                 | `file:///path/to/url-encoded-file.pdf` URI rendered in note     |
-| Open PDF in Zotero (`zoteroPdfURI`)               | —                 | `zotero://open-pdf/library/items/ABCD1234` URI rendered in note |
-| Open all PDFs in Zotero (`zoteroPdfURIs`)         | —                 | Array of `zotero://open-pdf` URIs, one per PDF attachment       |
-| Named Zotero PDF link (`zoteroPdfMarkdownLink`)   | —                 | `[filename](zotero://open-pdf/library/items/KEY)` for first PDF |
-| Named Zotero PDF links (`zoteroPdfMarkdownLinks`) | —                 | Array of `[filename](zotero://...)` Markdown links for all PDFs |
+| PDF link in template (`pdfMarkdownLink`)          | None              | `[filename](file:///path/to/file.pdf)` rendered in note         |
+| PDF link in template (`pdfLink`)                  | None              | `file:///path/to/file.pdf` URI rendered in note                 |
+| PDF link in template (`urlEncode`)                | None              | `file:///path/to/url-encoded-file.pdf` URI rendered in note     |
+| Open PDF in Zotero (`zoteroPdfURI`)               | None              | `zotero://open-pdf/library/items/ABCD1234` URI rendered in note |
+| Open all PDFs in Zotero (`zoteroPdfURIs`)         | None              | Array of `zotero://open-pdf` URIs, one per PDF attachment       |
+| Named Zotero PDF link (`zoteroPdfMarkdownLink`)   | None              | `[filename](zotero://open-pdf/library/items/KEY)` for first PDF |
+| Named Zotero PDF links (`zoteroPdfMarkdownLinks`) | None              | Array of `[filename](zotero://...)` Markdown links for all PDFs |
 
 ## Variations
 
@@ -273,7 +273,7 @@ Use `zoteroPdfURI` to generate a `zotero://open-pdf` link that opens the PDF in 
 
 > The `{{#if}}` block ensures nothing is rendered when the entry has no PDF attachments or when the file path does not contain a Zotero storage key.
 
-### Multiple PDFs — Open All in Zotero
+### Multiple PDFs: Open All in Zotero
 
 When an entry has multiple PDF attachments (e.g. main paper + supplementary material), use `zoteroPdfURIs` to list them all. The helper returns an array, so iterate directly with `{{#each}}`:
 
@@ -296,7 +296,7 @@ When an entry has multiple PDF attachments (e.g. main paper + supplementary mate
 
 Non-PDF attachments (HTML snapshots, images) are automatically excluded.
 
-### Multiple PDFs — Named Zotero Links
+### Multiple PDFs: Named Zotero Links
 
 When you want each PDF link to display the file's actual name (e.g. `Smith2023`, `Smith2023-supplement`) rather than a generic `[PDF]` label, use `zoteroPdfMarkdownLinks`. The helper returns an array of pre-built Markdown links, so iterate with `{{#each}}`:
 

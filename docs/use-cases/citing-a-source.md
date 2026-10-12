@@ -8,9 +8,9 @@ This is the most frequent action you will perform with the plugin. A fast citati
 
 ## Prerequisites
 
-- At least one citation database configured in **Settings > Citation plugin > Citation databases** with a valid file path and format (CSL-JSON, BibLaTeX, or Hayagriva)
+- At least one citation database configured in **Settings > Citation Extended > Citation databases** with a valid file path and format (CSL-JSON, BibLaTeX, or Hayagriva)
 - The status bar shows the number of loaded entries (e.g., `Citations: 342 entries`)
-- (Optional) A hotkey assigned to **Citations: Insert Markdown citation** — recommended: `Ctrl+Shift+E`
+- (Optional) A hotkey assigned to **Citation Extended: Insert Markdown citation** (recommended: `Ctrl+Shift+E`)
 
 ## Step-by-Step Walkthrough
 
@@ -24,7 +24,7 @@ This is the most frequent action you will perform with the plugin. A fast citati
 
    (The `|` represents your cursor position.)
 
-2. Open the Command Palette (`Ctrl+P`) and search for **Citations: Insert Markdown citation** (or press your configured hotkey, e.g. `Ctrl+Shift+E`).
+2. Open the Command Palette (`Ctrl+P`) and search for **Citation Extended: Insert Markdown citation** (or press your configured hotkey, e.g. `Ctrl+Shift+E`).
 
 3. The search modal appears. Type the author name, title, or year of the source you want to cite. For example, type `vaswani attention`:
 
@@ -60,7 +60,7 @@ The plugin supports two citation formats: primary (Enter) and secondary (Shift+E
    According to |, the self-attention mechanism...
    ```
 
-2. Run **Citations: Insert Markdown citation** to open the search modal (via Command Palette or your configured hotkey).
+2. Run **Citation Extended: Insert Markdown citation** to open the search modal (via Command Palette or your configured hotkey).
 
 3. Type `vaswani` to find the entry.
 
@@ -76,13 +76,13 @@ The plugin supports two citation formats: primary (Enter) and secondary (Shift+E
 
 If you want every cited reference to have a corresponding literature note:
 
-1. Go to **Settings > Citation plugin > Markdown Citations**
+1. Go to **Settings > Citation Extended > Markdown citation templates**
 2. Enable **Auto-create literature note on citation**
 3. Now, each time you insert a citation, the plugin also creates the literature note file (if it does not already exist) using your configured content template
 
 ## Template Setup
 
-The citation format is controlled by two templates in **Settings > Citation plugin > Markdown Citations**.
+The citation format is controlled by two templates in **Settings > Citation Extended > Markdown citation templates**.
 
 ### Default Custom Templates
 
@@ -132,13 +132,13 @@ Given a BibLaTeX entry:
 @vaswani2017
 ```
 
-**With `textcite` preset — Primary (Enter):**
+**With `textcite` preset, primary (Enter):**
 
 ```markdown
 Vaswani, Shazeer et al. (2017)
 ```
 
-**With `parencite` preset — Primary (Enter):**
+**With `parencite` preset, primary (Enter):**
 
 ```markdown
 (Vaswani, Shazeer et al., 2017)
@@ -154,7 +154,7 @@ If you do not use Pandoc and prefer Obsidian-native links as citations, set the 
 [[{{citekey}}]]
 ```
 
-**Result:**
+**Inserted citation:**
 
 ```markdown
 [[vaswani2017]]
@@ -168,7 +168,7 @@ To remind yourself to add page numbers, include a placeholder in the template:
 [@{{citekey}}, p. ]
 ```
 
-**Result:**
+**Inserted citation:**
 
 ```markdown
 [@vaswani2017, p. ]
@@ -182,7 +182,7 @@ The cursor lands at the end, so you can type the page number right away.
 {{formatNames entry.author max=2}} ({{year}})
 ```
 
-**Result:**
+**Inserted citation:**
 
 ```markdown
 Vaswani and Shazeer et al. (2017)
@@ -190,8 +190,8 @@ Vaswani and Shazeer et al. (2017)
 
 ## Tips
 
-- **Speed matters.** Assigning a hotkey (e.g. `Ctrl+Shift+E`) to the citation command makes it nearly instant — your fingers never leave the keyboard.
+- **Speed matters.** Assigning a hotkey (e.g. `Ctrl+Shift+E`) to the citation command makes it nearly instant: your fingers never leave the keyboard.
 - **Primary vs. secondary is contextual.** Use primary for parenthetical citations at the end of a sentence and secondary for narrative citations woven into your prose.
 - **The modal remembers nothing between invocations.** Each time you open it, the search field is empty. For inserting many citations in a row, see [Multi-Citation Workflow](multi-citation-workflow.md).
 - **Cursor positioning.** After insertion, the cursor is always placed at the end of the inserted text. This means you can type a period, a space, or continue your sentence immediately.
-- **If the citation looks wrong**, check your templates in settings. The most common issue is selecting a preset but expecting custom template behavior — presets lock the template fields.
+- **If the citation looks wrong**, check your templates in settings. The most common issue is selecting a preset but expecting custom template behavior, because presets lock the template fields.
