@@ -218,7 +218,7 @@ function makeDialog(profiles: FragmentProfile[] = [], text = SELECTION) {
       (): Promise<TemplateFragmentMatch | null> =>
         Promise.resolve({ template: 'PDF: {{x}}', firstLine: 9, lastLine: 9 }),
     ),
-    render: jest.fn((template: string) =>
+    output: jest.fn((template: string) =>
       template.includes('BROKEN')
         ? { ok: false, error: new Error('Template render failed') }
         : { ok: true, value: template.replace('{{x}}', 'two links') },

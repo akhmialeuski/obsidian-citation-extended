@@ -197,3 +197,42 @@ describe('TemplateSelectionDialog', () => {
     expect(editor.replaceSelection).toHaveBeenCalledWith('Year: 2024');
   });
 });
+
+describe('TemplateSelectionDialog output', () => {
+  /** A block unit: renders with the line break of its last line. */
+  const BLOCK = ['{{#if year}}', 'Year: {{year}}', '{{/if}}'].join('\n');
+
+  // Whole note lines are selected without the final line break, so a block's
+  // trailing one would leave an empty line behind on every apply.
+  it('drops the final line break of a block when the selection has none', () => {
+    const { dialog } = makeDialog();
+    const output = dialog.output(BLOCK);
+    expect(output).toEqual({ ok: true, value: 'Year: 2024' });
+    const added = dialog
+      .diff(output.ok ? output.value : '')
+      .filter((hunk) => hunk.kind === 'added')
+      .flatMap((hunk) => hunk.lines);
+    expect(added).toEqual(['Year: 2024']);
+  });
+
+  it('keeps the final line break when the selection ends with one', () => {
+    const { dialog } = makeDialog(
+      ['# Main paper', '', 'Year: 2023', ''],
+      { line: 2, ch: 0 },
+      { line: 3, ch: 0 },
+    );
+    expect(dialog.selection.text).toBe('Year: 2023\n');
+    expect(dialog.output(BLOCK)).toEqual({ ok: true, value: 'Year: 2024\n' });
+  });
+
+  it('keeps the final line break when inserting at the cursor', () => {
+    const { dialog } = makeDialog(NOTE, { line: 1, ch: 0 }, { line: 1, ch: 0 });
+    expect(dialog.inserts).toBe(true);
+    expect(dialog.output(BLOCK)).toEqual({ ok: true, value: 'Year: 2024\n' });
+  });
+
+  it('passes a render error through', () => {
+    const { dialog } = makeDialog();
+    expect(dialog.output('{{#each}}').ok).toBe(false);
+  });
+});

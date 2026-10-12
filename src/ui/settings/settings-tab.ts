@@ -1181,7 +1181,7 @@ export class CitationSettingTab extends PluginSettingTab {
   private renderFragmentProfilesSection(containerEl: HTMLElement): void {
     new Setting(containerEl).setName('Fragment profiles').setHeading();
     containerEl.createEl('p', {
-      text: 'Named templates you can load when replacing a selection with template output.',
+      text: 'Named templates for inserting or replacing text with template output.',
       cls: 'setting-item-description',
     });
 

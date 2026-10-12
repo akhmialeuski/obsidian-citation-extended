@@ -7,6 +7,7 @@ import {
   findProfile,
   type FragmentProfile,
 } from '../../domain/fragment-profile';
+import type { TemplateFragmentMatch } from '../../template/template-fragment-locator';
 import { renderLineDiff } from '../render-line-diff';
 import { ProfileSuggest } from '../suggest/profile-suggest';
 
@@ -172,7 +173,7 @@ export class ReplaceSelectionModal extends Modal {
 
   private async extract(sourcePath: string): Promise<void> {
     const before = this.dialog.selection.text;
-    let match;
+    let match: TemplateFragmentMatch | null;
     try {
       match = await this.dialog.extract(sourcePath);
     } catch (e) {
@@ -260,7 +261,7 @@ export class ReplaceSelectionModal extends Modal {
         text: 'Extract or type a template to see the result.',
       });
     } else {
-      const result = this.dialog.render(this.template);
+      const result = this.dialog.output(this.template);
       if (result.ok) {
         this.rendered = result.value;
         renderLineDiff(this.previewEl, this.dialog.diff(result.value));

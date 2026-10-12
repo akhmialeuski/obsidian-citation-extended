@@ -1,6 +1,6 @@
 /**
- * Fragment profiles: named Handlebars templates the "Replace selection with
- * template" dialog can load. A profile only fills the dialog; it is never
+ * Fragment profiles: named Handlebars templates the "Insert or replace with
+ * template output" dialog can load. A profile only fills the dialog; it is never
  * linked to the notes it was applied to. The helpers are pure and return new
  * lists, ported from the profile model of the Advanced Audio Recorder plugin.
  */

@@ -6,6 +6,7 @@ import type {
 } from '../platform/platform-adapter';
 import {
   lineDiff,
+  ok,
   type DiffHunk,
   type Result,
   type TemplateContext,
@@ -25,11 +26,9 @@ import {
 } from '../template/template-fragment-locator';
 
 /**
- * Model behind the "Insert or replace with template output" dialog, bound to
- * one selection (or one cursor position) in one literature note. It extracts
- * the template part that produced the selection, renders templates with the
- * note's entry, keeps the fragment profiles in the settings, and replaces the
- * selection, or inserts at the cursor, on apply. Nothing is tracked after apply.
+ * The application side of the "Insert or replace with template output"
+ * dialog: the selection it is bound to, the port that opens it, and the model
+ * the UI drives.
  */
 
 /** Where the dialog was opened: the note, its entry and the selected text. */
@@ -48,6 +47,13 @@ export interface ITemplateSelectionPresenter {
   open(dialog: TemplateSelectionDialog): void;
 }
 
+/**
+ * Model behind the "Insert or replace with template output" dialog, bound to
+ * one selection (or one cursor position) in one literature note. It extracts
+ * the template part that produced the selection, renders templates with the
+ * note's entry, keeps the fragment profiles in the settings, and replaces the
+ * selection, or inserts at the cursor, on apply. Nothing is tracked after apply.
+ */
 export class TemplateSelectionDialog {
   constructor(
     readonly selection: TemplateSelection,
@@ -115,6 +121,21 @@ export class TemplateSelectionDialog {
   /** Render a template with the entry of the note. */
   render(template: string): Result<string, TemplateRenderError> {
     return this.templateService.render(template, this.variables);
+  }
+
+  /**
+   * The text Apply writes and the preview shows: `template` rendered, without
+   * a final line break the selection does not end with. A block unit such as
+   * `{{#each}}…{{/each}}` renders with the line break of its last line, while
+   * a selection of whole note lines stops before it, so writing the output as
+   * is would add an empty line on every apply. Insert mode keeps it.
+   */
+  output(template: string): Result<string, TemplateRenderError> {
+    const rendered = this.render(template);
+    if (!rendered.ok || this.inserts || this.selection.text.endsWith('\n')) {
+      return rendered;
+    }
+    return ok(rendered.value.replace(/\n$/, ''));
   }
 
   /** What Apply changes: the selection against `output`, or `output` added. */

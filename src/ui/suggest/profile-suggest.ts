@@ -3,8 +3,8 @@ import type { App } from 'obsidian';
 import type { FragmentProfile } from '../../domain/fragment-profile';
 
 /**
- * Native Obsidian popover under the "Profile" field of the "Replace selection
- * with template" dialog. Lists the fragment profiles whose name contains the
+ * Native Obsidian popover under the "Profile" field of the "Insert or replace
+ * with template output" dialog. Lists the fragment profiles whose name contains the
  * typed text, each with a rename button, and ends with an item that creates a
  * profile under the typed name. Modelled on `TextInputSuggest` of the
  * Advanced Audio Recorder plugin: candidates are read per query, so a profile

@@ -225,7 +225,7 @@ export const SettingsSchema = z.object({
       }),
     )
     .default([]),
-  // Fragment profiles for the "Replace selection with template" dialog.
+  // Fragment profiles for the "Insert or replace with template output" dialog.
   // Invalid elements are quarantined like `databases`.
   fragmentProfiles: z.preprocess(
     quarantineInvalidElements('fragmentProfiles', FragmentProfileSchema),
