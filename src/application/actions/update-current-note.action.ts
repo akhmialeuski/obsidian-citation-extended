@@ -37,37 +37,9 @@ export class UpdateCurrentNoteAction extends ApplicationAction {
   async execute(_invocation: ActionInvocationContext): Promise<void> {
     const { platform } = this.ctx;
 
-    const file = platform.workspace.getActiveFile();
-    if (!file) {
-      platform.notifications.show('Citations: No active file.');
-      return;
-    }
-
-    const library = this.ctx.libraryService.library;
-    if (!library) {
-      platform.notifications.show('Citations: Library is not loaded yet.');
-      return;
-    }
-
-    // findCitekeyForFile renders the title template for every entry to match
-    // the path; a broken template throws TemplateRenderError. The command is
-    // invoked fire-and-forget, so surface the failure as a notice instead of
-    // letting the rejection vanish.
-    let citekey: string | null;
-    try {
-      citekey = this.ctx.noteService.findCitekeyForFile(file, library);
-    } catch (e) {
-      platform.notifications.show(
-        `Citations: Could not match "${file.name}" — ${(e as Error).message}`,
-      );
-      return;
-    }
-    if (!citekey) {
-      platform.notifications.show(
-        `Citations: "${file.name}" does not match any library entry.`,
-      );
-      return;
-    }
+    const note = this.resolveActiveNote();
+    if (!note) return;
+    const { file, citekey } = note;
 
     const templateStr = await this.contentTemplateResolver.resolve();
     const result = await this.orchestrator.execute({

@@ -113,30 +113,44 @@ const DatabaseConfigSchema = z.object({
 });
 
 /**
- * Drop invalid `databases[]` elements before the array parse instead of
- * letting ONE bad element (unknown `type` from a newer build, a hand-edit)
- * fail the whole settings parse — the caller would then fall back to raw,
- * unvalidated settings, losing every schema protection for every field.
+ * Build a preprocessor that drops invalid elements of a settings array before
+ * the array parse, instead of letting ONE bad element (an unknown `type` from a
+ * newer build, a hand-edit) fail the whole settings parse — the caller would
+ * then fall back to raw, unvalidated settings, losing every schema protection
+ * for every field.
  */
-function quarantineInvalidDatabases(value: unknown): unknown {
-  if (value === undefined) return value; // let `.default([])` apply
-  if (!Array.isArray(value)) {
-    console.warn(
-      'Citations: settings key "databases" is not an array — ignoring it.',
-    );
-    return [];
-  }
-  return value.filter((element, index) => {
-    const result = DatabaseConfigSchema.safeParse(element);
-    if (!result.success) {
+function quarantineInvalidElements(
+  key: string,
+  elementSchema: z.ZodTypeAny,
+): (value: unknown) => unknown {
+  return (value) => {
+    if (value === undefined) return value; // let `.default([])` apply
+    if (!Array.isArray(value)) {
       console.warn(
-        `Citations: dropping invalid database config at index ${index}:`,
-        result.error.issues[0]?.message ?? 'unknown issue',
+        `Citations: settings key "${key}" is not an array — ignoring it.`,
       );
+      return [];
     }
-    return result.success;
-  });
+    const elements: unknown[] = value;
+    return elements.filter((element, index) => {
+      const result = elementSchema.safeParse(element);
+      if (!result.success) {
+        console.warn(
+          `Citations: dropping invalid "${key}" element at index ${index}:`,
+          result.error.issues[0]?.message ?? 'unknown issue',
+        );
+      }
+      return result.success;
+    });
+  };
 }
+
+/** One saved fragment profile, see `src/domain/fragment-profile.ts`. */
+const FragmentProfileSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  template: z.string(),
+});
 
 export const SettingsSchema = z.object({
   citationExportPath: z.string(),
@@ -195,7 +209,7 @@ export const SettingsSchema = z.object({
   // Multi-source configuration. Invalid elements are quarantined (dropped
   // with a warning) rather than failing the whole settings parse.
   databases: z.preprocess(
-    quarantineInvalidDatabases,
+    quarantineInvalidElements('databases', DatabaseConfigSchema),
     z.array(DatabaseConfigSchema).default([]),
   ),
   disableAutomaticNoteCreation: z.boolean().default(false),
@@ -211,6 +225,12 @@ export const SettingsSchema = z.object({
       }),
     )
     .default([]),
+  // Fragment profiles for the "Insert or replace with template output" dialog.
+  // Invalid elements are quarantined like `databases`.
+  fragmentProfiles: z.preprocess(
+    quarantineInvalidElements('fragmentProfiles', FragmentProfileSchema),
+    z.array(FragmentProfileSchema).default([]),
+  ),
   // Note identifier (frontmatter-based lookup).
   // When set, the plugin scans vault notes for a matching frontmatter field
   // as a last-resort fallback when filename-based lookup fails.
@@ -272,6 +292,7 @@ export const DEFAULT_SETTINGS: CitationsPluginSettingsType = {
   databases: [],
   disableAutomaticNoteCreation: false,
   templateProfiles: [],
+  fragmentProfiles: [],
   // Note identifier
   noteIdentifierField: '',
   // Readwise defaults

@@ -6,8 +6,9 @@ import { extractCitekeyAtCursor } from '../application/citekey-extractor';
 /**
  * Registers context menu items from the ActionRegistry.
  *
- * Iterates over actions with `showInContextMenu: true` and adds a menu
- * item for each when the cursor is positioned on a citation citekey.
+ * Iterates over actions with `showInContextMenu: true` when the cursor is on
+ * a citekey or text is selected. Each action decides from the invocation
+ * (citekey and selected text) whether it applies, via `isVisible`.
  * Adding a new context menu action = creating an action class with
  * `showInContextMenu: true` — no changes to this file needed.
  */
@@ -24,16 +25,19 @@ export class ContextMenuHandler {
         const proxyEditor = this.actionCtx.platform.workspace.getActiveEditor();
         if (!proxyEditor) return;
 
-        const citekey = extractCitekeyAtCursor(proxyEditor);
-        if (!citekey) return;
+        const citekey = extractCitekeyAtCursor(proxyEditor) ?? undefined;
+        const selectedText = proxyEditor.getSelection();
+        if (!citekey && selectedText === '') return;
 
-        const invocation = { citekey };
+        const invocation = { citekey, selectedText };
 
         for (const action of this.actionRegistry.getContextMenuActions()) {
           if (action.isVisible(invocation) && action.isEnabled(invocation)) {
+            const suffix =
+              action.descriptor.usesCitekey && citekey ? ` @${citekey}` : '';
             menu.addItem((item) => {
               item
-                .setTitle(`${action.descriptor.name} @${citekey}`)
+                .setTitle(`${action.descriptor.name}${suffix}`)
                 .setIcon(action.descriptor.icon ?? 'book-open')
                 .onClick(() => void action.execute(invocation));
             });

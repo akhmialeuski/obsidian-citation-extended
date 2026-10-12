@@ -25,7 +25,13 @@ export class OpenNoteAction extends SearchModalAction {
     showInCommandPalette: true,
     showInContextMenu: true,
     requiresEditor: false,
+    usesCitekey: true,
   };
+
+  /** Shown in the context menu only when the cursor is on a citekey. */
+  isVisible(invocation: ActionInvocationContext): boolean {
+    return invocation.citekey !== undefined;
+  }
 
   onChoose = async (item: Entry, evt: MouseEvent | KeyboardEvent) => {
     if (evt instanceof MouseEvent || evt.key == 'Enter') {

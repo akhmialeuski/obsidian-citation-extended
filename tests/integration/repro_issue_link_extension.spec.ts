@@ -54,6 +54,7 @@ jest.mock(
     Modal: class {},
     ItemView: class {},
     EditorSuggest: class {},
+    AbstractInputSuggest: class {},
     WorkspaceLeaf: class {},
     setIcon: jest.fn(),
     Notice: jest.fn(),

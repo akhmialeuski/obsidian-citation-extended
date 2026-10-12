@@ -49,6 +49,16 @@ import {
 import { ReferenceListSortOrder } from '../../library/sort-entries';
 import { VariableListModal } from '../modals/variable-list-modal';
 import {
+  NEW_PROFILE_NAME,
+  addProfile,
+  createProfile,
+  findProfile,
+  freeProfileName,
+  profileNameRejection,
+  removeProfile,
+  updateProfile,
+} from '../../domain/fragment-profile';
+import {
   classifySyncOutcome,
   SyncOutcomeKind,
 } from '../../library/sync-outcome';
@@ -113,6 +123,7 @@ export class CitationSettingTab extends PluginSettingTab {
 
     this.renderDatabaseSection(containerEl);
     this.renderLiteratureNotesSection(containerEl);
+    this.renderFragmentProfilesSection(containerEl);
     this.renderCitationsSection(containerEl);
     this.renderDisplaySection(containerEl);
   }
@@ -1165,6 +1176,91 @@ export class CitationSettingTab extends PluginSettingTab {
           new VariableListModal(this.app, variables).open();
         });
       });
+  }
+
+  private renderFragmentProfilesSection(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName('Fragment profiles').setHeading();
+    containerEl.createEl('p', {
+      text: 'Named templates for inserting or replacing text with template output.',
+      cls: 'setting-item-description',
+    });
+
+    for (const profile of this.plugin.settings.fragmentProfiles) {
+      const card = containerEl.createDiv('citation-fragment-profile');
+      const nameRow = new Setting(card)
+        .setName('Name')
+        .addText((text) => {
+          text.setValue(profile.name).onChange(async (value) => {
+            const rejection = profileNameRejection(
+              this.plugin.settings.fragmentProfiles,
+              profile.id,
+              value,
+            );
+            nameRow.descEl.setText(rejection ?? '');
+            if (rejection !== undefined) return;
+            await this.saveFragmentProfile(profile.id, { name: value });
+          });
+        })
+        .addExtraButton((button) => {
+          button
+            .setIcon('trash')
+            .setTooltip('Remove profile')
+            .onClick(() => {
+              void (async () => {
+                this.plugin.settings.fragmentProfiles = removeProfile(
+                  this.plugin.settings.fragmentProfiles,
+                  profile.id,
+                );
+                await this.plugin.saveSettings();
+                this.display();
+              })();
+            });
+        });
+      nameRow.descEl.addClass('citation-fragment-error');
+
+      new Setting(card)
+        .setName('Template')
+        .setClass('citation-setting-stacked')
+        .addTextArea((area) => {
+          area.setValue(profile.template).onChange(async (value) => {
+            await this.saveFragmentProfile(profile.id, { template: value });
+          });
+        });
+    }
+
+    new Setting(containerEl).addButton((button) => {
+      button
+        .setButtonText('Add profile')
+        .setCta()
+        .onClick(() => {
+          void (async () => {
+            const profiles = this.plugin.settings.fragmentProfiles;
+            this.plugin.settings.fragmentProfiles = addProfile(
+              profiles,
+              createProfile(freeProfileName(profiles, NEW_PROFILE_NAME)),
+            );
+            await this.plugin.saveSettings();
+            this.display();
+          })();
+        });
+    });
+  }
+
+  /** Store a changed name or template of one fragment profile. */
+  private async saveFragmentProfile(
+    id: string,
+    change: { name?: string; template?: string },
+  ): Promise<void> {
+    const profiles = this.plugin.settings.fragmentProfiles;
+    const current = findProfile(profiles, id);
+    if (!current) return;
+    this.plugin.settings.fragmentProfiles = updateProfile(
+      profiles,
+      id,
+      change.name ?? current.name,
+      change.template ?? current.template,
+    );
+    await this.plugin.saveSettings();
   }
 
   private renderCitationsSection(containerEl: HTMLElement): void {

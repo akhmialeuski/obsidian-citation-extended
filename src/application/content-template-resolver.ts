@@ -23,6 +23,18 @@ export interface IContentTemplateResolver {
    */
   resolve(noteKind?: string, entryType?: string): Promise<string>;
 
+  /**
+   * Template file paths configured in the plugin settings: the literature
+   * note content template first, then every distinct profile template.
+   */
+  listTemplateSources(): string[];
+
+  /**
+   * Read a template file from the vault. A missing file is reported through
+   * a notice and falls back to the built-in default template.
+   */
+  readTemplate(templatePath: string): Promise<string>;
+
   /** Migrate a legacy inline content template to a vault file. */
   migrateInlineToFile(): Promise<void>;
 
@@ -48,17 +60,25 @@ export class ContentTemplateResolver implements IContentTemplateResolver {
       const profile = this.profileRegistry.resolve(noteKind, entryType);
       // Only use profile if it's not the built-in default (which falls through to global settings)
       if (profile !== DEFAULT_PROFILE && profile.contentTemplatePath) {
-        return this.readTemplateFile(profile.contentTemplatePath);
+        return this.readTemplate(profile.contentTemplatePath);
       }
     }
 
     // Fall back to global settings
-    return this.readTemplateFile(
-      this.settings.literatureNoteContentTemplatePath,
-    );
+    return this.readTemplate(this.settings.literatureNoteContentTemplatePath);
   }
 
-  private async readTemplateFile(templatePath: string): Promise<string> {
+  listTemplateSources(): string[] {
+    const paths = [
+      this.settings.literatureNoteContentTemplatePath,
+      ...(this.profileRegistry?.getProfiles() ?? []).map(
+        (profile) => profile.contentTemplatePath,
+      ),
+    ];
+    return [...new Set(paths.filter((path) => path !== ''))];
+  }
+
+  async readTemplate(templatePath: string): Promise<string> {
     if (templatePath) {
       const file = this.vault.getAbstractFileByPath(
         this.normalizePath(templatePath),

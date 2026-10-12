@@ -28,6 +28,7 @@ function makeAction(
     icon: string;
     isVisible: boolean;
     isEnabled: boolean;
+    usesCitekey: boolean;
   }> = {},
 ): ApplicationAction {
   return {
@@ -38,11 +39,21 @@ function makeAction(
       showInCommandPalette: true,
       showInContextMenu: true,
       requiresEditor: true,
+      usesCitekey: overrides.usesCitekey ?? true,
     },
     isVisible: jest.fn().mockReturnValue(overrides.isVisible ?? true),
     isEnabled: jest.fn().mockReturnValue(overrides.isEnabled ?? true),
     execute: jest.fn().mockResolvedValue(undefined),
   } as unknown as ApplicationAction;
+}
+
+/** Editor proxy double; `selection` is what `getSelection` returns. */
+function makeEditor(selection = '') {
+  return {
+    getCursor: jest.fn(),
+    getLine: jest.fn(),
+    getSelection: jest.fn(() => selection),
+  };
 }
 
 function makePlugin(
@@ -143,7 +154,7 @@ describe('ContextMenuHandler', () => {
   });
 
   it('adds menu item when cursor is on a citation', () => {
-    const editor = { getCursor: jest.fn(), getLine: jest.fn() };
+    const editor = makeEditor();
     const action = makeAction({ name: 'Open literature note' });
     const { plugin, actionRegistry, actionCtx, _getMenuCallback } = makePlugin(
       editor,
@@ -165,7 +176,7 @@ describe('ContextMenuHandler', () => {
   });
 
   it('clicking menu item calls action.execute', () => {
-    const editor = { getCursor: jest.fn(), getLine: jest.fn() };
+    const editor = makeEditor();
     const action = makeAction();
     const { plugin, actionRegistry, actionCtx, _getMenuCallback } = makePlugin(
       editor,
@@ -181,7 +192,10 @@ describe('ContextMenuHandler', () => {
     menuCallback!(menu);
 
     menu._items[0].onClick();
-    expect(action.execute).toHaveBeenCalledWith({ citekey: 'smith2023' });
+    expect(action.execute).toHaveBeenCalledWith({
+      citekey: 'smith2023',
+      selectedText: '',
+    });
   });
 
   it('does not add menu item when no editor is active', () => {
@@ -201,7 +215,7 @@ describe('ContextMenuHandler', () => {
   });
 
   it('does not add menu item when no citation at cursor', () => {
-    const editor = { getCursor: jest.fn(), getLine: jest.fn() };
+    const editor = makeEditor();
     const { plugin, actionRegistry, actionCtx, _getMenuCallback } = makePlugin(
       editor,
       [makeAction()],
@@ -219,7 +233,7 @@ describe('ContextMenuHandler', () => {
   });
 
   it('adds multiple menu items for multiple context menu actions', () => {
-    const editor = { getCursor: jest.fn(), getLine: jest.fn() };
+    const editor = makeEditor();
     const action1 = makeAction({ name: 'Open note' });
     const action2 = makeAction({ name: 'Insert citation' });
     const { plugin, actionRegistry, actionCtx, _getMenuCallback } = makePlugin(
@@ -241,7 +255,7 @@ describe('ContextMenuHandler', () => {
   });
 
   it('skips actions that are not visible', () => {
-    const editor = { getCursor: jest.fn(), getLine: jest.fn() };
+    const editor = makeEditor();
     const action = makeAction({ isVisible: false });
     const { plugin, actionRegistry, actionCtx, _getMenuCallback } = makePlugin(
       editor,
@@ -260,7 +274,7 @@ describe('ContextMenuHandler', () => {
   });
 
   it('skips actions that are not enabled', () => {
-    const editor = { getCursor: jest.fn(), getLine: jest.fn() };
+    const editor = makeEditor();
     const action = makeAction({ isEnabled: false });
     const { plugin, actionRegistry, actionCtx, _getMenuCallback } = makePlugin(
       editor,
@@ -276,5 +290,72 @@ describe('ContextMenuHandler', () => {
     menuCallback!(menu);
 
     expect(menu.addItem).not.toHaveBeenCalled();
+  });
+
+  it('adds items without a citekey suffix when only text is selected', () => {
+    const action = makeAction({
+      name: 'Insert or replace with template output',
+      usesCitekey: false,
+    });
+    const { plugin, actionRegistry, actionCtx, _getMenuCallback } = makePlugin(
+      makeEditor('PDF: [PDF](zotero://open-pdf/library/items/KEY)'),
+      [action],
+    );
+    mockExtractCitekey.mockReturnValue(null);
+
+    new ContextMenuHandler(plugin, actionRegistry, actionCtx).register();
+    const menu = makeMockMenu();
+    _getMenuCallback()!(menu);
+
+    expect(menu._items.map((item) => item.title)).toEqual([
+      'Insert or replace with template output',
+    ]);
+    menu._items[0].onClick();
+    expect(action.isVisible).toHaveBeenCalledWith({
+      citekey: undefined,
+      selectedText: 'PDF: [PDF](zotero://open-pdf/library/items/KEY)',
+    });
+    expect(action.execute).toHaveBeenCalledWith({
+      citekey: undefined,
+      selectedText: 'PDF: [PDF](zotero://open-pdf/library/items/KEY)',
+    });
+  });
+
+  it('passes both the citekey and the selection when both are present', () => {
+    const action = makeAction();
+    const { plugin, actionRegistry, actionCtx, _getMenuCallback } = makePlugin(
+      makeEditor('selected'),
+      [action],
+    );
+    mockExtractCitekey.mockReturnValue('smith2023');
+
+    new ContextMenuHandler(plugin, actionRegistry, actionCtx).register();
+    const menu = makeMockMenu();
+    _getMenuCallback()!(menu);
+
+    expect(menu._items[0].title).toBe('Open literature note @smith2023');
+    expect(action.isVisible).toHaveBeenCalledWith({
+      citekey: 'smith2023',
+      selectedText: 'selected',
+    });
+  });
+  // An action that renders the note's own entry must not name the citekey
+  // under the cursor, which may belong to a different entry.
+  it('does not name the citekey for an action that does not use it', () => {
+    const action = makeAction({
+      name: 'Insert or replace with template output',
+      usesCitekey: false,
+    });
+    const { plugin, actionRegistry, actionCtx, _getMenuCallback } = makePlugin(
+      makeEditor('selected'),
+      [action],
+    );
+    mockExtractCitekey.mockReturnValue('smith2023');
+
+    new ContextMenuHandler(plugin, actionRegistry, actionCtx).register();
+    const menu = makeMockMenu();
+    _getMenuCallback()!(menu);
+
+    expect(menu._items[0].title).toBe('Insert or replace with template output');
   });
 });

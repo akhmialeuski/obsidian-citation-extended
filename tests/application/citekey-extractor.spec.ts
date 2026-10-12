@@ -13,6 +13,7 @@ function makeEditor(line: string, ch: number): IEditorProxy {
     getLine: () => line,
     getSelection: () => '',
     setCursor: jest.fn(),
+    setSelection: jest.fn(),
     replaceSelection: jest.fn(),
     replaceRange: jest.fn(),
   };

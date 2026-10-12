@@ -234,4 +234,56 @@ describe('ContentTemplateResolver', () => {
       consoleSpy.mockRestore();
     });
   });
+
+  describe('listTemplateSources', () => {
+    it('lists the settings template, then distinct profile templates', () => {
+      const mocks = makeMocks({
+        settings: { literatureNoteContentTemplatePath: 'notes.md' },
+      });
+      const registry = {
+        getProfiles: () => [
+          { contentTemplatePath: 'book.md' },
+          { contentTemplatePath: 'notes.md' },
+          { contentTemplatePath: '' },
+        ],
+      };
+      const resolver = new ContentTemplateResolver(
+        mocks.vault as never,
+        mocks.notifications as never,
+        mocks.settings as never,
+        mocks.normalizePath,
+        mocks.saveSettings,
+        registry as never,
+      );
+      expect(resolver.listTemplateSources()).toEqual(['notes.md', 'book.md']);
+    });
+
+    it('is empty when no template path is configured', () => {
+      const { resolver } = createResolver();
+      expect(resolver.listTemplateSources()).toEqual([]);
+    });
+  });
+
+  describe('readTemplate', () => {
+    it('reads the file at the given path', async () => {
+      const file = { path: 'book.md', name: 'book.md' };
+      const { resolver, mocks } = createResolver({
+        vault: { getAbstractFileByPath: jest.fn(() => file) },
+      });
+      await expect(resolver.readTemplate('book.md')).resolves.toBe(
+        'vault template content',
+      );
+      expect(mocks.vault.getAbstractFileByPath).toHaveBeenCalledWith('book.md');
+    });
+
+    it('falls back to the default template and reports a missing file', async () => {
+      const { resolver, mocks } = createResolver();
+      await expect(resolver.readTemplate('missing.md')).resolves.toBe(
+        DEFAULT_CONTENT_TEMPLATE,
+      );
+      expect(mocks.notifications.show).toHaveBeenCalledWith(
+        expect.stringContaining('missing.md'),
+      );
+    });
+  });
 });

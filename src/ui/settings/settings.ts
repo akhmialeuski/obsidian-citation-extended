@@ -1,6 +1,7 @@
 import { DatabaseConfig } from '../../core';
 import type { NoteUpdateMode, UpdateConfirmationMode } from '../../core';
 import type { TemplateProfile } from '../../domain/template-profile';
+import type { FragmentProfile } from '../../domain/fragment-profile';
 import {
   DEFAULT_SETTINGS,
   CitationStylePreset,
@@ -52,6 +53,8 @@ export class CitationsPluginSettings {
     DEFAULT_SETTINGS.disableAutomaticNoteCreation;
   public templateProfiles: TemplateProfile[] =
     DEFAULT_SETTINGS.templateProfiles;
+  public fragmentProfiles: FragmentProfile[] =
+    DEFAULT_SETTINGS.fragmentProfiles;
 
   // Note identifier (frontmatter-based lookup)
   public noteIdentifierField: string = DEFAULT_SETTINGS.noteIdentifierField;

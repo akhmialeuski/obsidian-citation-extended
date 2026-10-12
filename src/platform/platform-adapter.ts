@@ -81,8 +81,11 @@ export interface IEditorPosition {
 
 export interface IEditorProxy {
   getSelection(): string;
-  getCursor(): IEditorPosition;
+  /** Cursor head, or the start (`from`) or end (`to`) of the selection. */
+  getCursor(which?: 'from' | 'to'): IEditorPosition;
   setCursor(pos: IEditorPosition): void;
+  /** Select the text between two positions. */
+  setSelection(anchor: IEditorPosition, head: IEditorPosition): void;
   replaceSelection(text: string): void;
   replaceRange(text: string, pos: IEditorPosition): void;
   /** Return the content of the line at the given zero-based line number. */

@@ -499,3 +499,45 @@ describe('note update settings', () => {
     }
   });
 });
+
+describe('fragmentProfiles', () => {
+  it('defaults to an empty list', () => {
+    const result = validateSettings({ ...DEFAULT_SETTINGS });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.fragmentProfiles).toEqual([]);
+  });
+
+  it('keeps valid profiles and drops invalid ones without failing the parse', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = validateSettings({
+      ...DEFAULT_SETTINGS,
+      fragmentProfiles: [
+        { id: 'a', name: 'pdf-links', template: 'PDF' },
+        { id: 'b', name: '', template: 'no name' },
+        { id: 'c', name: 'no template' },
+      ],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.fragmentProfiles).toEqual([
+        { id: 'a', name: 'pdf-links', template: 'PDF' },
+      ]);
+    }
+    expect(warn).toHaveBeenCalledWith(
+      'Citations: dropping invalid "fragmentProfiles" element at index 1:',
+      expect.any(String),
+    );
+    warn.mockRestore();
+  });
+
+  it('ignores a non-array value', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = validateSettings({
+      ...DEFAULT_SETTINGS,
+      fragmentProfiles: 'broken',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.fragmentProfiles).toEqual([]);
+    warn.mockRestore();
+  });
+});

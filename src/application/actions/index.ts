@@ -17,3 +17,4 @@ export { RefreshLibraryAction } from './refresh-library.action';
 export { OpenNoteAtCursorAction } from './open-note-at-cursor.action';
 export { BatchUpdateNotesAction } from './batch-update.action';
 export { UpdateCurrentNoteAction } from './update-current-note.action';
+export { ReplaceSelectionWithTemplateAction } from './replace-selection-with-template.action';

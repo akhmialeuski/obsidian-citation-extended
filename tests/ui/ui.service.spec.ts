@@ -12,6 +12,8 @@ jest.mock(
     MarkdownView: class {},
     ItemView: class {},
     EditorSuggest: class {},
+    AbstractInputSuggest: class {},
+    Modal: class {},
     WorkspaceLeaf: class {},
     setIcon: jest.fn(),
     SuggestModal: class {
@@ -431,7 +433,7 @@ describe('UIService', () => {
   });
 
   describe('registerCommands', () => {
-    it('registers 11 commands', () => {
+    it('registers 12 commands', () => {
       const { plugin, commands } = makePlugin({
         status: LoadingStatus.Idle,
         parseErrors: [],
@@ -440,9 +442,9 @@ describe('UIService', () => {
       const service = new UIService(plugin as never);
       service.init();
 
-      // 10 action commands from the registry + the references view command.
-      expect(commands).toHaveLength(11);
-      expect(plugin.addCommand).toHaveBeenCalledTimes(11);
+      // 11 action commands from the registry + the references view command.
+      expect(commands).toHaveLength(12);
+      expect(plugin.addCommand).toHaveBeenCalledTimes(12);
     });
 
     it('open-literature-note command opens search modal with OpenNoteAction', () => {
