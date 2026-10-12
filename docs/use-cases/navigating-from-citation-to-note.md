@@ -9,8 +9,8 @@ The plugin provides a direct command that reads the citation under your cursor a
 ## Prerequisites
 
 - At least one citation database configured and loaded
-- Literature notes folder configured in **Settings > Citation plugin > Literature Notes**
-- (Optional) A hotkey assigned to **Citations: Open literature note for citation at cursor** — recommended: `Ctrl+Shift+G`
+- Literature notes folder configured in **Settings > Citation Extended > Literature notes**
+- (Optional) A hotkey assigned to **Citation Extended: Open literature note for citation at cursor** — recommended: `Ctrl+Shift+G`
 
 ## Step-by-Step Walkthrough
 
@@ -30,7 +30,7 @@ The plugin provides a direct command that reads the citation under your cursor a
    Transformer architectures [@vaswa|ni2017] have become the foundation
    ```
 
-3. Open the Command Palette (`Ctrl+P`) and run **Citations: Open literature note for citation at cursor** (or press your configured hotkey, e.g. `Ctrl+Shift+G`).
+3. Open the Command Palette (`Ctrl+P`) and run **Citation Extended: Open literature note for citation at cursor** (or press your configured hotkey, e.g. `Ctrl+Shift+G`).
 
 4. The plugin parses the current line, finds the citation pattern `[@vaswani2017]`, extracts the citekey `vaswani2017`, and opens the literature note directly.
 
@@ -65,7 +65,7 @@ If the plugin cannot find a recognized citation pattern on the current line, not
    [@huang2017] and EfficientNet [@tan2019].
    ```
 
-2. To review your notes on the ResNet paper, place your cursor on the line containing `[@he2016]` and run **Citations: Open literature note for citation at cursor** (via the Command Palette or your configured hotkey, e.g. `Ctrl+Shift+G`).
+2. To review your notes on the ResNet paper, place your cursor on the line containing `[@he2016]` and run **Citation Extended: Open literature note for citation at cursor** (via the Command Palette or your configured hotkey, e.g. `Ctrl+Shift+G`).
 
 3. The note `Reading notes/@he2016.md` opens. Read your notes, add new thoughts, then navigate back using Obsidian's back button (`Ctrl+Alt+Left` on Windows/Linux or `Cmd+Alt+Left` on macOS).
 
@@ -79,7 +79,7 @@ If the plugin cannot find a recognized citation pattern on the current line, not
 The attention mechanism [@vaswani2017] was a breakthrough.
 ```
 
-**Action:** Run **Citations: Open literature note for citation at cursor** (via Command Palette or your configured hotkey, e.g. `Ctrl+Shift+G`)
+**Action:** Run **Citation Extended: Open literature note for citation at cursor** (via Command Palette or your configured hotkey, e.g. `Ctrl+Shift+G`)
 
 **Result:** The file `Reading notes/@vaswani2017.md` opens in the editor. If the file does not exist and auto-creation is enabled, it is created with your configured template content.
 

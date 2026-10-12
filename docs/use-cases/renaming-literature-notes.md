@@ -26,7 +26,7 @@ The `citekey` field is the most reliable identifier since every library entry ha
 
 ### 2. Configure the setting
 
-1. Open **Settings** > **Citation plugin** > **Literature notes**
+1. Open **Settings** > **Citation Extended** > **Literature notes**
 2. In the **Note identifier field** text box, type `citekey`
 3. The setting takes effect immediately — no reload needed
 
@@ -34,7 +34,7 @@ The `citekey` field is the most reliable identifier since every library entry ha
 
 If you have existing literature notes that were created before adding `citekey` to the template, they won't have the frontmatter field. To add it:
 
-1. Run **Citations: Update all literature notes** from the Command Palette
+1. Run **Citation Extended: Update all literature notes** from the Command Palette
 2. This re-renders all notes using your updated template, adding the `citekey` field
 
 ### 4. Rename notes freely

@@ -1,29 +1,43 @@
 # Configuration
 
-All settings are accessible in **Settings** > **Citation plugin**.
+All settings are accessible in **Settings** > **Citation Extended**.
 
-![Settings overview](images/settings-overview_1.png)
-![Settings overview](images/settings-overview_2.png)
+![Citation databases and literature notes settings](images/settings-overview_1.png)
+![Fragment profiles, Markdown citation and display settings](images/settings-overview_2.png)
 
 ---
 
 ## Citation Databases
 
-![Database settings](images/settings-databases.png)
+![One database card with a Better CSL JSON file source](images/settings-databases.png)
 
 This section controls where the plugin reads your bibliography data from.
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| Database name | Friendly label shown in search modal when the same citekey exists in multiple databases. You can rename a database at any time without breaking existing literature notes or wiki-links | `Database 1` |
-| Database type | Format of the bibliography file (see [Database Formats](#database-formats) below). Changing the format triggers an automatic library reload and shows a confirmation notice | `CSL-JSON` |
-| Database path | Absolute or vault-relative path to the exported bibliography file. After the path is validated, the library reloads automatically (with a short debounce delay) | (empty) |
+| Database name | Friendly label shown before the citekey of every search result, such as `Library:smith2023`. You can rename a database at any time without breaking existing literature notes or wiki-links | `Database 1` |
+| Database source | Where the references come from: one of the six sources listed in [Database Sources](#database-sources) below. Changing it re-renders the card with the fields of the new source. Switching to a file source or to Zotero (local API) also reloads the library and shows a confirmation notice | `Better CSL JSON (file)` |
+| Database path | Shown for the three file sources. Absolute or vault-relative path to the exported bibliography file. After the path is validated, the library reloads automatically (with a short debounce delay) | (empty) |
 
 - Up to 20 databases supported
 - Each database receives a stable internal identifier on creation. This identifier is invisible to the user but ensures that renaming a database does not break composite citekeys or literature note links
-- When the same citekey appears in multiple databases, both entries are kept with a `database:citekey` display prefix in the search modal
+- Every search result shows the name of its database before the citekey, so when the same citekey appears in several databases, each copy is listed separately and the prefix tells them apart
+- Switching a database to another source and back keeps the path, URL or token you entered for each source
 - Path validation runs automatically and shows "Path verified" or "File not found"
 - Removing a database immediately triggers a library reload so the search index reflects the change
+
+### Database Sources
+
+The **Database source** dropdown lists every way to load references:
+
+| Option | Reads | Fields on the card |
+|--------|-------|--------------------|
+| Better CSL JSON (file) | A `.json` CSL-JSON export | Database path |
+| Better BibTeX (file) | A `.bib` BibTeX or BibLaTeX export | Database path |
+| Hayagriva (YAML file) | A `.yml` Hayagriva bibliography used by Typst | Database path |
+| Readwise | Highlights and documents from the Readwise API | See [Readwise Integration](#readwise-integration) |
+| Zotero (Better BibTeX) | A running Zotero through the Better BibTeX pull export | See [Live Zotero (Better BibTeX) settings](#live-zotero-better-bibtex-settings) |
+| Zotero (local API) | A running Zotero 7 or later through its built-in local API | See [Zotero (local API) settings](#zotero-local-api-settings) |
 
 ### Database Formats
 
@@ -49,13 +63,13 @@ This section controls where the plugin reads your bibliography data from.
 
 To use more than one bibliography source (e.g. personal library + shared team library):
 
-1. Open **Settings** > **Citation plugin** > **Citation Databases**
-2. Your first database is already configured — enter its name, type, and path
+1. Open **Settings** > **Citation Extended** > **Citation databases**
+2. Your first database is already configured. Enter its name, source and path
 3. Click **Add database** to add a second entry
-4. Give each database a unique name (this label appears in the search modal for duplicates)
-5. If both databases contain the same citekey, the **merge strategy** controls which entry is used for note creation (see [Data Sources: Merge Strategies](data-sources.md#merge-strategies))
+4. Give each database a unique name, because this label appears before the citekey of every search result
+5. If both databases contain the same citekey, both entries stay in the library under separate composite citekeys and you pick one in the search modal (see [Data Sources: Duplicate Handling](data-sources.md#duplicate-handling))
 
-![Multiple databases](images/settings-multiple-databases.png)
+![Two database cards, a Better CSL JSON file and a Better BibTeX file](images/settings-multiple-databases.png)
 
 ### Library load timeout
 
@@ -63,17 +77,41 @@ To use more than one bibliography source (e.g. personal library + shared team li
 |---------|-------------|---------|
 | **Library load timeout (seconds)** | Maximum time to wait for all databases to load and parse before aborting. Raise this if you see "Timeout loading citation database" with a large or heavily LaTeX-escaped library. Range `5`–`600` | `30` |
 
-A load that exceeds this timeout is **not** retried automatically — the parse may still be running in the background, and a retry would queue another parse behind it. If you hit the timeout, raise the value and re-run **Refresh library** (or reopen the vault). Out-of-range values typed in the field are clamped to the valid range.
+A load that exceeds this timeout is **not** retried automatically — the parse may still be running in the background, and a retry would queue another parse behind it. If you hit the timeout, raise the value and re-run **Refresh citation database** (or reopen the vault). Out-of-range values typed in the field are clamped to the valid range.
 
 ### Live Zotero (Better BibTeX) settings
 
-Shown per database when using the live Zotero connection (a Better BibTeX pull-export URL as the database path). These require Zotero running with the Better BibTeX plugin.
+Shown on a database card whose **Database source** is **Zotero (Better BibTeX)**. These require Zotero running with the Better BibTeX plugin.
 
-| Setting                          | Description                                                                                                                                                                                                                                                            | Default |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| **Import notes**                 | Include Zotero child notes in the export (`exportNotes=true`). They become available via the `{{note}}` template variable                                                                                                                                             | `false` |
+![Database card with the Zotero (Better BibTeX) source](images/settings-zotero-better-bibtex.png)
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **Export format** | Format of the Better BibTeX pull export, **Better CSL JSON** or **Better BibTeX**. It must match the export URL (`.json` for CSL JSON, `.biblatex` for BibLaTeX) and selects the parser. Changing it reloads the library | `Better CSL JSON` |
+| **Better BibTeX export URL** | The URL Zotero gives for **Download Better BibTeX export…** on a library or collection | (empty) |
+| **Import notes** | Include Zotero child notes in the export (`exportNotes=true`). They become available via the `{{note}}` template variable | `false` |
 | **Import PDF annotations**       | Fetch native Zotero PDF annotations (highlights, comments, colors, page deep-links) for every entry via the Better BibTeX JSON-RPC API. Exposed in templates as `{{annotations}}`, `{{attachments}}`, and `{{annotationCount}}`. Requires Better BibTeX. Toggling recreates the source | `false` |
-| **Auto-sync interval (minutes)** | How often to re-fetch from Zotero. Set to `0` to disable (refresh manually). Maximum `10080` (1 week) — larger values are clamped                                                                                                                                     | `0`     |
+| **Auto-sync interval (minutes)** | How often to re-fetch from Zotero. Set to `0` to disable (refresh manually). Maximum `10080` (1 week), and larger values are clamped. The interval is shared with the Zotero (local API) source | `0` |
+| **Test connection** | Asks Zotero for its version and reports the Zotero and Better BibTeX versions under the fields, or the error | |
+| **Sync now** | Fetches the export from Zotero and reloads the library | |
+
+### Zotero (local API) settings
+
+Shown on a database card whose **Database source** is **Zotero (local API)**. These require Zotero 7 or later with **Settings** > **Advanced** > **Allow other applications on this computer to communicate with Zotero** enabled, as the hint at the top of the card says.
+
+![Database card with the Zotero (local API) source](images/settings-zotero-local-api.png)
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **Zotero API base URL** | Address of the Zotero local server. Leave empty for `http://127.0.0.1:23119` | (empty) |
+| **Group library ID** | Numeric Zotero group id to load a group library instead of your personal library | (empty) |
+| **Collection key** | The 8-character key of one collection to restrict the import to | (empty) |
+| **Import PDF annotations** | Fetch native Zotero PDF annotations for every entry. Exposed in templates as `{{annotations}}` and `{{attachments}}` | `false` |
+| **Auto-sync interval (minutes)** | How often to re-fetch from Zotero. Set to `0` to disable. Shared with the Zotero (Better BibTeX) source | `0` |
+| **Test connection** | Reports how many items Zotero makes visible with the current scope, or the error | |
+| **Sync now** | Fetches the library from Zotero and reloads it | |
+
+See [Data Sources: Zotero (local API)](data-sources.md#zotero-local-api--no-better-bibtex-required) for how citation keys are resolved.
 
 ---
 
@@ -83,17 +121,19 @@ Connect the plugin to your Readwise account to import highlights and documents a
 
 ### Adding a Readwise Database
 
-1. Open **Settings** > **Citation plugin** > **Citation databases**
+1. Open **Settings** > **Citation Extended** > **Citation databases**
 2. Click **Add database**
-3. In the new database card, change the **Database type** dropdown to **Readwise**
+3. In the new database card, change the **Database source** dropdown to **Readwise**
 4. The card now shows Readwise-specific fields instead of a file path
+
+![Database card with the Readwise source and a category filter](images/settings-readwise.png)
 
 ### Readwise Database Card Settings
 
 | Setting / Button | Description |
 |------------------|-------------|
 | **Database name** | Friendly label for this database (default: `Database N`). You can rename it to `Readwise` or any name you prefer |
-| **Database type** | Must be set to **Readwise** |
+| **Database source** | Must be set to **Readwise** |
 | **API token** | Your Readwise access token (password field). Get it from [readwise.io/access_token](https://readwise.io/access_token). Stored in plugin settings |
 | **Auto-sync interval (minutes)** | How often the plugin automatically fetches new data from Readwise, in minutes. Set to `0` to disable automatic sync. Default: `30`. Maximum: `10080` (1 week) — larger values are clamped to avoid timer overflow |
 | **Advanced filters** | Per-database import filters sub-section (see below). Optional |
@@ -139,7 +179,7 @@ The cache file is managed automatically -- you do not need to create or edit it.
 The plugin does **not** assign default hotkeys to its commands. You choose the bindings that fit your workflow. To configure:
 
 1. Open **Settings** > **Hotkeys**
-2. Search for `Citations`
+2. Search for `Citation Extended`
 3. Click the `+` button next to any command to assign a key combination
 
 **Recommended bindings** (adjust to taste):
@@ -152,15 +192,18 @@ The plugin does **not** assign default hotkeys to its commands. You choose the b
 | Open literature note for citation at cursor | `Ctrl+Shift+G`   | No modal — jumps directly to the note for the citation under cursor              |
 | Insert subsequent citation                  | —                | Appends `; @key2` to an existing `[@key1]` at cursor                             |
 | Insert multiple citations                   | —                | Multi-select modal: add references one by one, insert combined `[@...]` on close |
-| Insert literature note content              | —                | Used less frequently, assign if needed                                           |
+| Insert literature note content in the current pane | —         | Used less frequently, assign if needed                                           |
 | Refresh citation database                   | —                | Rarely needed (auto-reload handles most cases)                                   |
 | Insert or replace with template output      | —                | Also available from the editor context menu on a selection                       |
+| Update all literature notes                 | —                | Re-syncs every literature note with the library                                  |
+| Update literature note for current file     | —                | Re-syncs only the note open in the active pane                                   |
+| Show references for current note            | —                | Also available from the ribbon icon                                              |
 
 ---
 
 ## Literature Notes
 
-![Literature notes settings](images/settings-literature-notes.png)
+![Literature notes and literature note templates settings](images/settings-literature-notes.png)
 
 This section controls how literature notes are created, named, and where they are stored.
 
@@ -170,6 +213,8 @@ This section controls how literature notes are created, named, and where they ar
 | Disable automatic note creation       | When enabled, only opens existing notes — never creates new ones                            | `false`         |
 | Note identifier field                 | Frontmatter field name used to find renamed notes (see [details below](#note-identifier-field)) | (empty)         |
 | Filename sanitization replacement     | Character(s) used to replace illegal filename characters (`: * ? " < > \|`)                 | `_`             |
+| Note update mode                      | How the update commands treat existing notes (see [details below](#note-update-mode))       | `Smart sync (callout blocks + 3-way merge)` |
+| Review changes before writing         | When the diff review dialog appears (see [details below](#review-changes-before-writing))   | `Only when there are conflicts` |
 | Literature note title template        | Handlebars template for the note filename (without `.md` extension)                         | `@{{citekey}}`  |
 | Literature note content template file | Path to a vault file used as the note body template                                         | (empty)         |
 
@@ -236,7 +281,7 @@ Controls how **Update all literature notes** and **Update literature note for cu
 
 | Mode | Behaviour |
 |------|-----------|
-| **Smart sync** (default) | Only content the plugin owns is managed: frontmatter keys rendered by the template and `{{#syncBlock}}` callouts (marked by native `^zc-…` block IDs). Each is merged three-way against the last synced snapshot, so library changes and your edits combine automatically; real conflicts open the review dialog. Everything else in the note is never touched. |
+| **Smart sync (callout blocks + 3-way merge)** (default) | Only content the plugin owns is managed: frontmatter keys rendered by the template and `{{#syncBlock}}` callouts (marked by native `^zc-…` block IDs). Each is merged three-way against the last synced snapshot, so library changes and your edits combine automatically; real conflicts open the review dialog. Everything else in the note is never touched. |
 | **Update frontmatter only** | Frontmatter keys are merged the same way; the body is never touched. |
 | **Overwrite notes completely** | The whole note is replaced by the freshly rendered template. |
 
@@ -248,7 +293,7 @@ When the diff review dialog appears during note updates:
 |-------|-----------|
 | **Only when there are conflicts** (default) | Clean merges are written automatically; the dialog opens only when you and the library changed the same thing. |
 | **Before every change** | Every pending write shows the diff first. |
-| **Never** | Clean merges are written; conflicted notes are skipped and reported. |
+| **Never (conflicted notes are skipped)** | Clean merges are written. Conflicted notes are skipped and reported. |
 
 See [Updating Literature Notes](use-cases/updating-literature-notes.md) for the full model, including how deletions and pre-existing notes are handled.
 
@@ -283,7 +328,7 @@ Path to a Markdown file in your vault that serves as the template body. This is 
 
 Click the **Show variables** button to open a modal listing all template variables discovered from your loaded library, including dynamic fields from your bibliography. You can copy the full list as a Markdown table.
 
-![Variable list modal](images/settings-variable-list.png)
+![Available template variables dialog listing the variables of a loaded library](images/settings-variable-list.png)
 
 ### Subfolder Support
 
@@ -307,7 +352,7 @@ Profiles are also created, renamed and saved from the **Profile** field of the d
 
 - **Default:** no profiles
 
-![Fragment profiles settings](images/settings-fragment-profiles.png)
+![Fragment profiles section with two profiles](images/settings-fragment-profiles.png)
 
 See [Replacing a Selection with Template Output](use-cases/replace-selection-with-template.md).
 
@@ -315,21 +360,22 @@ See [Replacing a Selection with Template Output](use-cases/replace-selection-wit
 
 ## Markdown Citations
 
-![Markdown citation settings](images/settings-citations.png)
+![Markdown citation templates settings](images/settings-citations.png)
 
-This section controls what text is inserted when you use the **Insert Markdown citation** command.
+This section controls what text is inserted when you use the **Insert Markdown citation** command or the inline autocomplete.
 
 | Setting | Description | Default |
 |---------|-------------|---------|
 | Citation style preset | Built-in style or custom (see table below) | `custom` |
-| Primary citation template | Template for the main citation format | `[@{{citekey}}]` |
-| Secondary citation template | Template for the alternative format (activated by **Shift+Enter** in the search modal) | `@{{citekey}}` |
+| Markdown primary citation template | Template for the main citation format | `[@{{citekey}}]` |
+| Markdown secondary citation template | Template for the alternative format (activated by **Shift+Enter** in the search modal) | `@{{citekey}}` |
 | Auto-create literature note on citation | Create the literature note file when inserting a citation, if it doesn't exist yet | `false` |
 | Literature note link display template | Custom Handlebars template for the display text of inserted literature note links. Leave empty to use defaults (citekey for Markdown, title for Wiki) | (empty) |
+| Inline citation autocomplete | Suggest matching references while typing `@`/`[@` in the editor | `On` |
 
 ### Citation style preset
 
-Select a built-in style to auto-fill both template fields, or choose `custom` to define your own. When a preset is active, the template fields are disabled — switch to `custom` to edit them.
+Select a built-in style to auto-fill both template fields, or choose `custom` to define your own. When a preset is active, the template fields are disabled and say "Controlled by the active citation style preset." Switch to `custom` to edit them.
 
 | Preset | Primary | Alternative | Use case |
 |--------|---------|-------------|----------|
@@ -365,6 +411,10 @@ When a template is set, it is rendered with all template variables (just like ci
 | `{{titleShort}}` | `[Attention](path)` | `[[path\|Attention]]` |
 | `@{{citekey}}` | `[@smith2023](path)` | `[[path\|@smith2023]]` |
 
+### Inline citation autocomplete
+
+When enabled, typing `@` or `[@` in the editor opens a suggestion popover backed by the same fuzzy search index as the search modal. Press **Enter** to insert the primary citation format, **Shift+Enter** for the alternative format. The typed trigger (including a leading `[`) is replaced by the rendered citation. Disable this setting if you prefer to insert citations only through the search modal. See [Features: Inline Citation Autocomplete](features.md#inline-citation-autocomplete).
+
 ---
 
 ## Display
@@ -373,17 +423,12 @@ When a template is set, it is rendered with all template variables (just like ci
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| Sort order | How references are sorted in the search modal | `Default (file order)` |
-| Inline citation autocomplete | Suggest matching references while typing `@`/`[@` in the editor | `On` |
-| Bibliography entry template | Handlebars template used to render each reference in the References sidebar | `{{authorString}} ({{year}}). {{title}}.` |
-
-### Inline citation autocomplete
-
-When enabled, typing `@` or `[@` in the editor opens a suggestion popover backed by the same fuzzy search index as the search modal. Press **Enter** to insert the primary citation format, **Shift+Enter** for the alternative format. The typed trigger (including a leading `[`) is replaced by the rendered citation. Disable this setting if you prefer to insert citations only through the search modal.
+| Sort order | How references are sorted in the search modal and the inline autocomplete | `Default (file order)` |
+| Bibliography entry template | Handlebars template used to render each reference in the References sidebar | `{{authorString}}{{#if year}} ({{year}}){{/if}}. {{title}}.` |
 
 ### Bibliography entry template
 
-Controls how each reference is displayed in the **References** sidebar view (see [Features: References Sidebar](features.md#references-sidebar)). It is a standard Handlebars template with access to all [template variables](templates/variables.md). For example, `{{authorString}} ({{year}}). {{title}}.` renders as `Jane Smith (2023). A Study.` Leave empty to fall back to the default.
+Controls how each reference is displayed in the **References** sidebar view (see [Features: References Sidebar](features.md#references-sidebar)). It is a standard Handlebars template with access to all [template variables](templates/variables.md). For example, the default `{{authorString}}{{#if year}} ({{year}}){{/if}}. {{title}}.` renders as `Jane Smith (2023). A Study.`, and leaves out the parentheses for an entry without a year. Leave empty to fall back to the default.
 
 ### Sort order options
 

@@ -81,8 +81,8 @@ Nothing is ever written silently when there is doubt.
 
 | Command | Scope |
 |---------|-------|
-| `Citations: Update all literature notes` | Every existing literature note |
-| `Citations: Update literature note for current file` | Only the active note |
+| `Citation Extended: Update all literature notes` | Every existing literature note |
+| `Citation Extended: Update literature note for current file` | Only the active note |
 
 The single-note command finds the matching entry via the [note identifier field](../configuration.md#note-identifier-field) (when configured), the rendered title path, or an unambiguous filename match.
 

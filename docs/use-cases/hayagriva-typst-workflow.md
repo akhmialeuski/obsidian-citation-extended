@@ -65,13 +65,13 @@ lecun2015:
 
 ### Configuring the Plugin
 
-1. Open **Settings > Citation plugin > Citation databases**.
+1. Open **Settings > Citation Extended > Citation databases**.
 
 2. Configure the database:
 
    ```
    Name:   Typst Bibliography
-   Type:   Hayagriva (YAML)
+   Source: Hayagriva (YAML file)
    Path:   /home/user/typst/bibliography.yml
    ```
 
@@ -85,7 +85,7 @@ lecun2015:
 
 ### Creating Literature Notes from Hayagriva Entries
 
-1. Open the Command Palette (`Ctrl+P`) and run **Citations: Open literature note** (or press your configured hotkey, e.g. `Ctrl+Shift+O`).
+1. Open the Command Palette (`Ctrl+P`) and run **Citation Extended: Open literature note** (or press your configured hotkey, e.g. `Ctrl+Shift+O`).
 
 2. Search for an entry. Type `vaswani`:
 
@@ -139,7 +139,7 @@ lecun2015:
 
 If you draft your Typst documents in Obsidian before compiling, set up citation templates that match Typst's citation syntax.
 
-1. Go to **Settings > Citation plugin > Markdown Citations**.
+1. Go to **Settings > Citation Extended > Markdown citation templates**.
 2. Set **Citation style preset** to `custom`.
 3. Set the **Primary citation template** to:
 

@@ -10,6 +10,7 @@ The plugin supports loading bibliography data from multiple sources and formats.
 | **Better BibTeX**   | `.bib`           | Rich format with PDF paths, keywords, notes. Slower to parse but more data available                                                        |
 | **Hayagriva**       | `.yml` / `.yaml` | YAML-based bibliography format used by [Typst](https://typst.app). Supports basic fields: title, author, date, DOI, URL, parent (container) |
 | **Readwise**        | API              | Highlights and documents from Readwise (v2 Export + v3 Reader APIs, loaded together)                                                        |
+| **Zotero (Better BibTeX)** | API      | Pulls a Better BibTeX export from a running Zotero, with optional notes and PDF annotations. See [Zotero (Better BibTeX) live connection](#zotero-better-bibtex-live-connection) |
 | **Zotero (local API)** | API           | Reads a running Zotero (7+) directly via its built-in local HTTP API — no Better BibTeX, no export file. See [Zotero (local API)](#zotero-local-api--no-better-bibtex-required) |
 
 ### Choosing a Format
@@ -59,7 +60,7 @@ The plugin loads data from both Readwise APIs in parallel and merges the results
 | **v3 Reader** | Documents, articles, PDFs saved in Readwise Reader         | `rd-{id}`      |
 
 **Setup:**
-1. Go to **Settings** > **Citation plugin** > **Citation databases**
+1. Go to **Settings** > **Citation Extended** > **Citation databases**
 2. Click **Add database**
 3. Change the **Database source** dropdown to **Readwise**
 4. Enter your API token (get it from [readwise.io/access_token](https://readwise.io/access_token))
@@ -67,7 +68,7 @@ The plugin loads data from both Readwise APIs in parallel and merges the results
 6. Click **Sync now** to load data
 
 **How it works:**
-- Readwise is a regular database type -- you add it the same way you add a BibLaTeX or CSL-JSON database
+- Readwise is a regular database source -- you add it the same way you add a BibLaTeX or CSL-JSON database
 - Data is fetched on each sync (manual "Sync now", plugin reload, or automatic periodic sync)
 - By default, the plugin automatically syncs Readwise data every 30 minutes. You can change the interval in the **Auto-sync interval (minutes)** field on the database card, or set it to `0` to disable automatic sync. Interval changes take effect on the next sync cycle
 - The automatic sync timer starts when the plugin loads and stops when the plugin unloads
@@ -82,7 +83,7 @@ The plugin loads data from both Readwise APIs in parallel and merges the results
 
 **Incremental sync:** After the first full download, periodic and manual syncs fetch only the entries updated since the last successful sync (using the Readwise `updatedAfter` API cursor) and merge them into the locally cached set. This makes background syncs fast and cheap even for large libraries. Two consequences to be aware of:
 
-- **Deletions are not detected incrementally.** If you delete a book or document in Readwise, it stays in the library until the next full re-fetch. Run **Citations: Refresh citation database** from the command palette to force a full re-download.
+- **Deletions are not detected incrementally.** If you delete a book or document in Readwise, it stays in the library until the next full re-fetch. Run **Citation Extended: Refresh citation database** from the command palette to force a full re-download.
 - The sync cursor is stored inside the offline cache file. Deleting the cache file simply causes the next sync to be a full download.
 
 **Field mapping:**
@@ -128,8 +129,10 @@ Loads the bibliography **directly from a running Zotero** via the [Better BibTeX
 
 **Setup:**
 1. In Zotero, right-click a library or collection → **Download Better BibTeX export…** and copy the URL. Choose the **Better CSL JSON** (`.json`) or **BibLaTeX** (`.bib`) variant.
-2. In plugin settings, add a database and set its **type** to match (Better CSL JSON or Better BibTeX).
-3. Set **Database source** to **Zotero (Better BibTeX)**, pick the matching **Export format**, paste the URL into **Better BibTeX export URL**, and click **Test connection** to confirm Zotero answers (it reports the Zotero and BBT versions).
+2. In plugin settings, add a database and set its **Database source** to **Zotero (Better BibTeX)**.
+3. Pick the **Export format** that matches the URL (Better CSL JSON or Better BibTeX), paste the URL into **Better BibTeX export URL**, and click **Test connection** to confirm Zotero answers (it reports the Zotero and BBT versions).
+
+![Database card with the Zotero (Better BibTeX) source](images/settings-zotero-better-bibtex.png)
 
 **Notes:** Enable **Import notes** to append `&exportNotes=true` to the export, so Zotero child notes are included and surfaced via the `{{note}}` template variable.
 
@@ -151,10 +154,12 @@ Loads the bibliography from the **native local HTTP API built into Zotero 7 and 
 **Requirements:** Zotero 7 or later running on the same machine, with **Settings → Advanced → "Allow other applications on this computer to communicate with Zotero"** enabled (one checkbox, off by default). The connection is local-only (`127.0.0.1`); nothing leaves your machine.
 
 **Setup:**
-1. In plugin settings, add a database and set its **Database type** to **Zotero (local API)**.
+1. In plugin settings, add a database and set its **Database source** to **Zotero (local API)**.
 2. Leave the **Zotero API base URL** empty (default `http://127.0.0.1:23119`), or point it at a non-standard port.
 3. Optionally set a **Group library ID** (numeric Zotero group id) and/or a **Collection key** to restrict the import.
 4. Click **Test connection** — it reports how many items are visible.
+
+![Database card with the Zotero (local API) source](images/settings-zotero-local-api.png)
 
 **Citation keys** resolve in this order:
 1. Zotero's **native Citation Key field** (Zotero 7.0.31+; in Zotero 8+ Better BibTeX keys are migrated into it automatically) — your existing citekeys keep working.
@@ -185,23 +190,17 @@ You can configure up to 20 databases in settings. All entries are loaded and mer
 
 ### Duplicate Handling
 
-When the same citekey appears in multiple databases:
+Every search result shows the name of its database before the citekey, for example `Personal Library:smith2023`. When the same citekey appears in multiple databases:
 
-- Both entries are preserved in the library
-- In the search modal, duplicates show a display prefix: `DatabaseName:citekey` (e.g. `Personal Library:smith2023`)
+- Both entries are preserved in the library, and the search modal lists each of them with its own database prefix
 - Internally, each duplicate receives a **composite citekey** in the format `citekey@<database-id>`, where `<database-id>` is a stable auto-generated identifier (e.g. `smith2023@db-1711234567-a1b2`). This composite citekey is used for literature note filenames and wiki-links
 - Because the composite citekey uses the internal database id (not the display name), **renaming a database does not break existing literature notes or links**
-- The merge strategy determines which entry takes precedence for note creation
 
 > **Upgrading from an earlier version:** If you previously used multiple databases with overlapping citekeys, the composite citekey format has changed from `citekey@DatabaseName` to `citekey@<database-id>`. Literature note filenames and wiki-links that used the old format need to be updated manually. **Single-database setups are not affected.** Multi-database setups without overlapping citekeys are also not affected.
 
-### Merge Strategies
+No entry overrides another. The note you open or the citation you insert comes from the entry you pick in the search modal, so the database prefix is how you choose between the two copies.
 
-| Strategy                | Behavior                                                                                                      |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Last wins** (default) | The last database in the list provides the canonical entry. Reorder databases in settings to control priority |
-
-**Example:** You have a personal library (`My Library`) and a shared team library (`Team`). With "Last wins", entries from `Team` (listed second) override `My Library` when both have the same citekey. To reverse this, drag `My Library` below `Team` in the settings list.
+![Search modal listing two references that exist in both the Library and the Lab databases](images/search-modal-duplicates.png)
 
 ### Hayagriva (YAML)
 

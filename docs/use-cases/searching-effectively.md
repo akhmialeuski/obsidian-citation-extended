@@ -175,7 +175,7 @@ Type the beginning of a word, and entries matching that prefix appear.
 
 The default result order is by search relevance. You can change the base sort order (before search ranking) in settings.
 
-1. Go to **Settings > Citation plugin > Display > Sort order**.
+1. Go to **Settings > Citation Extended > Display > Sort order**.
 
 2. Choose one of:
 

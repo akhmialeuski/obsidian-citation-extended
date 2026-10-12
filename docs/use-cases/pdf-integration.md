@@ -16,7 +16,7 @@ The plugin provides multiple ways to bridge the gap between your Obsidian notes 
 
 ### Opening a PDF from the Search Modal
 
-1. Open the Command Palette (`Ctrl+P`) and run **Citations: Insert Markdown citation** (or any command that opens the search modal, or press your configured hotkey, e.g. `Ctrl+Shift+E`).
+1. Open the Command Palette (`Ctrl+P`) and run **Citation Extended: Insert Markdown citation** (or any command that opens the search modal, or press your configured hotkey, e.g. `Ctrl+Shift+E`).
 
 2. Search for the reference. For example, type `lecun deep`:
 

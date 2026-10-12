@@ -36,12 +36,12 @@ This guide covers the complete Zotero-to-Obsidian pipeline, from Better BibTeX c
 
 ### Step 3: Configure the Plugin
 
-1. Open Obsidian, go to **Settings > Citation plugin > Citation databases**.
+1. Open Obsidian, go to **Settings > Citation Extended > Citation databases**.
 2. Configure the database:
 
    ```
    Name:   Zotero Library
-   Type:   Better BibTeX      (or Better CSL JSON if you exported that format)
+   Source: Better BibTeX (file)   (or Better CSL JSON (file) if you exported that format)
    Path:   /home/user/Zotero/obsidian-export.bib
    ```
 
@@ -59,7 +59,7 @@ This guide covers the complete Zotero-to-Obsidian pipeline, from Better BibTeX c
 3. The plugin's file watcher detects the change and reloads automatically. The status bar count increases.
 4. Search for the new reference in the search modal — it should appear immediately.
 
-If auto-reload does not trigger, run **Citations: Refresh citation database** from the Command Palette.
+If auto-reload does not trigger, run **Citation Extended: Refresh citation database** from the Command Palette.
 
 ### Step 5: Set Up a Template with Zotero Features
 
@@ -125,7 +125,7 @@ tags:
 
 Set the template path in settings:
 
-**Settings > Citation plugin > Literature Notes > Literature note content template file:**
+**Settings > Citation Extended > Literature notes > Literature note content template file:**
 
 ```
 Templates/literature-note.md
@@ -253,6 +253,8 @@ Instead of exporting a file and watching it, the plugin can fetch the library **
 3. Paste the URL into **Better BibTeX export URL** and click **Test connection** — it reports the Zotero and Better BibTeX versions on success.
 4. Optionally enable **Import notes** to pull Zotero child notes into `{{note}}`, and set an **Auto-sync interval** to re-fetch periodically.
 
+![Database card with the Zotero (Better BibTeX) source](../images/settings-zotero-better-bibtex.png)
+
 Requirements and trade-offs:
 
 - Zotero must be running with Better BibTeX on the same machine (the connection is local-only, `127.0.0.1`).
@@ -303,6 +305,8 @@ If you don't use Better BibTeX — or want a connection that survives every Zote
 3. Optionally enter a **Group library ID** or a **Collection key** to narrow the import.
 4. Click **Test connection**.
 
+![Database card with the Zotero (local API) source](../images/settings-zotero-local-api.png)
+
 Citation keys use Zotero's native Citation Key field when present (Zotero 8+ migrates Better BibTeX keys into it automatically), fall back to a `Citation Key:` line in Extra, and are generated (`lastnameYear`) otherwise. See [Data Sources: Zotero (local API)](../data-sources.md#zotero-local-api--no-better-bibtex-required) for the full comparison with the Better BibTeX connection.
 
 ### CSL-JSON Export
@@ -310,7 +314,7 @@ Citation keys use Zotero's native Citation Key field when present (Zotero 8+ mig
 If you prefer CSL-JSON:
 
 1. In Zotero, export as **Better CSL JSON** (with "Keep updated").
-2. In plugin settings, set the database type to **Better CSL JSON**.
+2. In plugin settings, set the **Database source** to **Better CSL JSON (file)**.
 3. All citation and note features work the same, but PDF paths, keywords, and Zotero-specific fields will not be available in templates.
 
 ### Multiple Zotero Collections

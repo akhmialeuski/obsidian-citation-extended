@@ -8,23 +8,25 @@ You use Readwise to collect highlights from books, articles, podcasts, and other
 
 - An active [Readwise](https://readwise.io) account with highlights or Reader documents
 - A Readwise API access token (get it from [readwise.io/access_token](https://readwise.io/access_token))
-- The Citation plugin installed and configured
+- The Citation Extended plugin installed and configured
 
 ## Walkthrough
 
 ### Step 1: Open the Citation Databases Settings
 
-1. Open **Settings** > **Citation plugin**
+1. Open **Settings** > **Citation Extended**
 2. Find the **Citation databases** section at the top
 
 ### Step 2: Add a Readwise Database
 
 1. Click the **Add database** button
 2. A new database card appears with default settings
-3. In the **Database type** dropdown, select **Readwise**
+3. In the **Database source** dropdown, select **Readwise**
 4. Optionally, rename the database (e.g. change `Database 2` to `Readwise`) in the name field
 
-When you select the Readwise type, the card switches from a file path input to Readwise-specific fields: an API token input, a Validate button, and a Sync button.
+When you select the Readwise source, the card switches from a file path input to Readwise-specific fields: the API token, the auto-sync interval, the advanced import filters, a **Validate token** button and a **Sync now** button.
+
+![Database card with the Readwise source and a category filter](../images/settings-readwise.png)
 
 ### Step 3: Enter Your API Token
 

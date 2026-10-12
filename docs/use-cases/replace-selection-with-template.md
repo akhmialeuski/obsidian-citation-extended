@@ -12,7 +12,7 @@ This is a manual, one-time replacement. The plugin does not track the replaced t
 
 - At least one citation database configured and loaded
 - A literature note open in the editor that the plugin can match to a library entry (see [Renaming Literature Notes](renaming-literature-notes.md) for how notes are matched)
-- A content template file set in **Settings > Citation plugin > Literature note content template file**, if you want to extract the template part instead of typing it
+- A content template file set in **Settings > Citation Extended > Literature note content template file**, if you want to extract the template part instead of typing it
 
 ## Step-by-Step Walkthrough
 
@@ -28,7 +28,7 @@ The note was created when the item had one PDF:
 
 1. **Select the outdated text.** Select the line `PDF: [PDF](zotero://open-pdf/library/items/EBAUJBLY)`. The selection can be part of a line, a whole line or several lines.
 
-2. **Open the dialog.** Run **Citations: Insert or replace with template output** from the Command Palette (`Ctrl+P`), or right-click the selection and choose **Insert or replace with template output**. The menu item appears whenever text is selected.
+2. **Open the dialog.** Run **Citation Extended: Insert or replace with template output** from the Command Palette (`Ctrl+P`), or right-click the selection and choose **Insert or replace with template output**. The menu item appears whenever text is selected.
 
 3. **Extract the template part.** In **Extract from**, keep the literature note template (or pick a profile template, when [template profiles](../configuration.md) are configured) and press **Extract**. The dialog finds the template lines that produced the selection, puts them into the **Template** field and says where they came from, for example `Extracted from citation-content-template.md, line 7.` Extract always returns whole template lines, so when you selected only part of a line, the selection in the note is extended to the whole line and the status adds `The selection now covers whole lines.` Without that, the text of the line you left unselected, such as `PDF: `, would appear twice.
 
@@ -57,7 +57,7 @@ A profile is a name and a template, stored in the plugin settings. In the **Prof
 - The pencil next to a profile selects it for renaming: change the name in the field and press **Save**. Only the pencil renames.
 - **Save** stays disabled while the template is empty or another profile already uses the name.
 
-Profiles can also be added, renamed, edited and removed in **Settings > Citation plugin > Fragment profiles**:
+Profiles can also be added, renamed, edited and removed in **Settings > Citation Extended > Fragment profiles**:
 
 ![Fragment profiles in the settings](../images/settings-fragment-profiles.png)
 
@@ -65,7 +65,7 @@ A profile only fills the dialog. Changing or deleting a profile later does not c
 
 ## Inserting Without a Selection
 
-When the note has no text to replace, for example because the content template never had a PDF line, place the cursor where the links should go and run **Citations: Insert or replace with template output** from the Command Palette. The dialog opens as **Insert template output**: **Extract** is unavailable, because there is nothing to extract from, and you load a profile or type the template, such as `{{#each (zoteroPdfMarkdownLinks files)}}{{this}} {{/each}}`. The preview lists only the lines that will be added, and **Apply** inserts them at the cursor.
+When the note has no text to replace, for example because the content template never had a PDF line, place the cursor where the links should go and run **Citation Extended: Insert or replace with template output** from the Command Palette. The dialog opens as **Insert template output**: **Extract** is unavailable, because there is nothing to extract from, and you load a profile or type the template, such as `{{#each (zoteroPdfMarkdownLinks files)}}{{this}} {{/each}}`. The preview lists only the lines that will be added, and **Apply** inserts them at the cursor.
 
 The context menu item appears only on a selection, so use the Command Palette or a hotkey for inserting.
 

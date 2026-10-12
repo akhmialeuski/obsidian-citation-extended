@@ -9,7 +9,7 @@ The References sidebar answers both. It lists every reference the active note ci
 ## Prerequisites
 
 - At least one citation database configured and loaded
-- A bibliography entry template configured in **Settings > Citation plugin**, where the default `{{authorString}} ({{year}}). {{title}}.` is a good starting point (see [Configuration](../configuration.md))
+- A bibliography entry template configured in **Settings > Citation Extended**, where the default `{{authorString}}{{#if year}} ({{year}}){{/if}}. {{title}}.` is a good starting point (see [Configuration](../configuration.md))
 - A note open in the editor that contains at least one citation
 
 ## Step-by-Step Walkthrough
@@ -27,9 +27,11 @@ The References sidebar answers both. It lists every reference the active note ci
    later surveys [@huang2017; @tan2019] treat it as settled.
    ```
 
-2. Open the panel from the ribbon, or run **Citations: Show references for current note** from the Command Palette (`Ctrl+P`).
+2. Open the panel from the ribbon, or run **Citation Extended: Show references for current note** from the Command Palette (`Ctrl+P`).
 
 3. The sidebar lists one item per distinct citekey, in the order the citations first appear in the note. Although `he2016` appears twice in the text, it is listed once, because the panel lists references rather than occurrences.
+
+![References sidebar for a note citing four library entries and one citekey that is not in the library](../images/references-sidebar.png)
 
 ### Opening a Literature Note
 

@@ -10,9 +10,9 @@ The plugin offers three approaches for this, each suited to a different situatio
 
 - At least one citation database configured and loaded
 - (Optional) Hotkeys assigned:
-  - **Citations: Insert multiple citations** — for building a new multi-cite from scratch
-  - **Citations: Insert subsequent citation** — for appending to an existing citation
-  - **Citations: Insert Markdown citation** — for single citations (suggested hotkey: `Ctrl+Shift+E`)
+  - **Citation Extended: Insert multiple citations** — for building a new multi-cite from scratch
+  - **Citation Extended: Insert subsequent citation** — for appending to an existing citation
+  - **Citation Extended: Insert Markdown citation** — for single citations (suggested hotkey: `Ctrl+Shift+E`)
 
 ## Scenario 1: Insert Multiple Citations at Once
 
@@ -26,9 +26,12 @@ Use this when you want to build a combined citation `[@key1; @key2; @key3]` from
    Recent advances in deep learning have produced remarkable results|
    ```
 
-2. Open the Command Palette (`Ctrl+P`) and run **Citations: Insert multiple citations** (or press your assigned hotkey).
+2. Open the Command Palette (`Ctrl+P`) and run **Citation Extended: Insert multiple citations** (or press your assigned hotkey).
 
-3. The search modal opens with a counter showing how many citations you have collected so far. Type to search for your first reference. For example, type `lecun deep`:
+3. The search modal opens, and its footer lists the keys: `Enter` adds a citation to the list, `Shift+Enter` adds it and inserts immediately, `Esc` inserts the collected citations. Type to search for your first reference. For example, type `lecun deep`:
+
+   ![Insert multiple citations modal with its key hints](../images/multi-citation-modal.png)
+
 
    ```
    Deep learning
@@ -36,7 +39,7 @@ Use this when you want to build a combined citation `[@key1; @key2; @key3]` from
    lecun2015
    ```
 
-4. Press `Enter` to add this reference. The modal closes briefly and reopens, ready for the next selection. The counter now shows **1 citation collected**.
+4. Press `Enter` to add this reference. The modal closes briefly and reopens, ready for the next selection. The modal does not show how many references are collected, so keep count yourself.
 
 5. Search for your second reference. Type `vaswani attention`:
 
@@ -46,7 +49,7 @@ Use this when you want to build a combined citation `[@key1; @key2; @key3]` from
    vaswani2017
    ```
 
-6. Press `Enter` to add it. The modal reopens again. Counter shows **2 citations collected**.
+6. Press `Enter` to add it. The modal reopens again with two references collected.
 
 7. Search for your third reference. Type `devlin bert`:
 
@@ -92,7 +95,7 @@ Use this when you already have a citation like `[@lecun2015]` in your text and w
    Deep learning has transformed computer vision [@lecun2015|].
    ```
 
-3. Open the Command Palette (`Ctrl+P`) and run **Citations: Insert subsequent citation** (or press your assigned hotkey).
+3. Open the Command Palette (`Ctrl+P`) and run **Citation Extended: Insert subsequent citation** (or press your assigned hotkey).
 
 4. The search modal opens. Search for the reference you want to add. Type `krizhevsky imagenet`:
 
@@ -174,9 +177,9 @@ This approach works but is more error-prone than the dedicated commands. It is b
 
 | Method | Command | Result |
 |--------|---------|--------|
-| Insert multiple citations | `Citations: Insert multiple citations` | `[@lecun2015; @vaswani2017; @devlin2019]` |
-| Insert subsequent citation | `Citations: Insert subsequent citation` | `[@lecun2015]` becomes `[@lecun2015; @krizhevsky2012]` |
-| Manual (repeated single) | `Citations: Insert Markdown citation` x2 + manual edit | `[@lecun2015; @vaswani2017]` |
+| Insert multiple citations | `Citation Extended: Insert multiple citations` | `[@lecun2015; @vaswani2017; @devlin2019]` |
+| Insert subsequent citation | `Citation Extended: Insert subsequent citation` | `[@lecun2015]` becomes `[@lecun2015; @krizhevsky2012]` |
+| Manual (repeated single) | `Citation Extended: Insert Markdown citation` x2 + manual edit | `[@lecun2015; @vaswani2017]` |
 
 ## Variations
 

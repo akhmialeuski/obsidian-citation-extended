@@ -10,14 +10,14 @@ The plugin automates this entirely: select a reference, and a fully formatted li
 
 - At least one citation database configured and loaded
 - A literature note content template file created in your vault (e.g., `Templates/literature-note.md`)
-- The template file path entered in **Settings > Citation plugin > Literature Notes > Literature note content template file**
+- The template file path entered in **Settings > Citation Extended > Literature notes > Literature note content template file**
 - A literature note folder configured (default: `Reading notes`)
 
 ## Step-by-Step Walkthrough
 
 ### Creating a Literature Note for the First Time
 
-1. Open the Command Palette (`Ctrl+P`) and search for **Citations: Open literature note** (or press your configured hotkey, e.g. `Ctrl+Shift+O`).
+1. Open the Command Palette (`Ctrl+P`) and search for **Citation Extended: Open literature note** (or press your configured hotkey, e.g. `Ctrl+Shift+O`).
 
 2. The search modal appears. Type the title, author, or citekey of the reference. For example, type `goodfellow deep learning`:
 
@@ -77,7 +77,7 @@ The plugin automates this entirely: select a reference, and a fully formatted li
 
 ### Opening an Existing Literature Note
 
-1. Run **Citations: Open literature note** again and search for the same reference.
+1. Run **Citation Extended: Open literature note** again and search for the same reference.
 
 2. The plugin finds the existing note at `Reading notes/@goodfellow2016.md` and opens it directly — no duplicate is created.
 
@@ -137,7 +137,7 @@ tags:
 {{#if URL}}- [URL]({{URL}}){{/if}}
 ```
 
-Then set the path in **Settings > Citation plugin > Literature Notes > Literature note content template file** to:
+Then set the path in **Settings > Citation Extended > Literature notes > Literature note content template file** to:
 
 ```
 Templates/literature-note.md
@@ -307,7 +307,7 @@ created: {{currentDate}}
 
 If you create literature notes through another tool (e.g., Zotero Integration plugin) and only want this plugin for opening and navigating:
 
-1. Go to **Settings > Citation plugin > Literature Notes**
+1. Go to **Settings > Citation Extended > Literature notes**
 2. Enable **Disable automatic note creation**
 3. Now, running **Open literature note** for a reference without an existing note shows an error instead of creating one
 

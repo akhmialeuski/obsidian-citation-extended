@@ -15,7 +15,7 @@ You want control over what character (or no character) replaces these illegal ch
 
 ### Changing the Replacement Character
 
-1. Open **Settings > Citation plugin > Literature Notes**.
+1. Open **Settings > Citation Extended > Literature notes**.
 
 2. Find the **Filename sanitization replacement** field (below "Disable automatic note creation").
 
