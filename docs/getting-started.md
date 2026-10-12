@@ -39,7 +39,7 @@ If you use [Typst](https://typst.app) for typesetting, you can use your Hayagriv
 
 ### Readwise
 
-If you use [Readwise](https://readwise.io) to collect highlights, you can import them directly — no file export needed:
+If you use [Readwise](https://readwise.io) to collect highlights, you can import them directly (no file export needed):
 
 1. In plugin settings, click **Add database** and set the **Database source** to **Readwise**
 2. Paste your API token (get it from [readwise.io/access_token](https://readwise.io/access_token))
@@ -64,7 +64,7 @@ A running Zotero can be read directly, without exporting a file. Select **Zotero
 
 1. Open the Command Palette (`Ctrl+P`) and run **Citation Extended: Open literature note**, or press the hotkey you assigned to it
 2. Search for a reference by title, author, or year
-3. Select a reference — the plugin creates a note using your configured template
+3. Select a reference, and the plugin creates a note using your configured template
 4. The note is saved in your configured literature note folder
 
 ![Open literature note search modal](images/search-modal.png)
@@ -79,7 +79,7 @@ A running Zotero can be read directly, without exporting a file. Select **Zotero
 | Insert Markdown citation | Inserts `[@citekey]` or custom format at cursor |
 | Insert subsequent citation | Appends to an existing citation: `[@a]` → `[@a; @b]` |
 | Insert multiple citations | Multi-select mode: pick several, insert `[@a; @b; @c]` |
-| Open literature note for citation at cursor | Jumps to the note for `[@citekey]` under cursor — no modal |
+| Open literature note for citation at cursor | Jumps to the note for `[@citekey]` under cursor (no modal) |
 | Update all literature notes | Re-syncs every literature note with the library and the current content template |
 | Update literature note for current file | Re-syncs only the literature note open in the active pane |
 | Show references for current note | Opens the References sidebar listing every citation in the active note |

@@ -2,7 +2,7 @@
 
 ## Problem
 
-You maintain more than one bibliography — perhaps a personal research library and a shared team library, or separate databases for different projects, or a Zotero collection alongside a legacy Mendeley export. You want all of these sources available in a single search modal so you can cite and create notes from any of them without switching databases.
+You maintain more than one bibliography: perhaps a personal research library and a shared team library, or separate databases for different projects, or a Zotero collection alongside a legacy Mendeley export. You want all of these sources available in a single search modal so you can cite and create notes from any of them without switching databases.
 
 The plugin supports up to 20 databases loaded simultaneously. All entries are merged into one searchable library, and a citekey found in two databases is kept as two separate entries.
 
@@ -79,7 +79,7 @@ smith2023@db-1711234890-c3d4
 
 This composite citekey is used for literature note filenames and wiki-links. Because it is based on the database's internal id (not the display name), **you can freely rename databases** in settings without breaking any existing notes or links.
 
-> **Note:** Single-database setups and multi-database setups without overlapping citekeys are not affected — citekeys remain unchanged (e.g. `smith2023`).
+> **Note:** Single-database setups and multi-database setups without overlapping citekeys are not affected. Citekeys remain unchanged (e.g. `smith2023`).
 
 ### Choosing Between Duplicates
 
@@ -183,6 +183,6 @@ This is especially useful on mobile (iOS/Android) where absolute filesystem path
 - **Naming matters.** Give each database a clear, descriptive name. These names appear as prefixes of every result in the search modal, and `Team Library:smith2023` is much more helpful than `Database 2:smith2023`.
 - **Renaming is safe.** You can rename a database at any time in settings. The plugin uses a stable internal identifier for composite citekeys, so renaming does not break existing literature notes or wiki-links.
 - **Keep the total count reasonable.** The plugin handles large libraries well (5000+ entries), but loading 20 large BibLaTeX files simultaneously will increase load time. CSL-JSON is significantly faster to parse than BibLaTeX.
-- **The file watcher works per-database.** Each database file is watched independently. If you update `personal-library.bib`, only that database is reloaded — the others stay cached.
+- **The file watcher works per-database.** Each database file is watched independently. If you update `personal-library.bib`, only that database is reloaded, and the others stay cached.
 - **Use "Refresh citation database" if something looks wrong.** If an entry from one database is not appearing, try running the refresh command from the Command Palette. This reloads all databases from disk.
 - **Up to 20 databases are supported.** This is a practical limit to prevent excessive memory usage and load times.

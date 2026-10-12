@@ -11,7 +11,7 @@ The plugin supports loading bibliography data from multiple sources and formats.
 | **Hayagriva**       | `.yml` / `.yaml` | YAML-based bibliography format used by [Typst](https://typst.app). Supports basic fields: title, author, date, DOI, URL, parent (container) |
 | **Readwise**        | API              | Highlights and documents from Readwise (v2 Export + v3 Reader APIs, loaded together)                                                        |
 | **Zotero (Better BibTeX)** | API      | Pulls a Better BibTeX export from a running Zotero, with optional notes and PDF annotations. See [Zotero (Better BibTeX) live connection](#zotero-better-bibtex-live-connection) |
-| **Zotero (local API)** | API           | Reads a running Zotero (7+) directly via its built-in local HTTP API — no Better BibTeX, no export file. See [Zotero (local API)](#zotero-local-api--no-better-bibtex-required) |
+| **Zotero (local API)** | API           | Reads a running Zotero (7+) directly via its built-in local HTTP API (no Better BibTeX, no export file). See [Zotero (local API)](#zotero-local-api-without-better-bibtex) |
 
 ### Choosing a Format
 
@@ -31,7 +31,7 @@ The plugin supports loading bibliography data from multiple sources and formats.
 
 ### Local File (default)
 
-Reads from the filesystem using an absolute path or a path relative to the vault root. Uses `chokidar` for file watching on desktop — when the file changes on disk, the library reloads automatically.
+Reads from the filesystem using an absolute path or a path relative to the vault root. Uses `chokidar` for file watching on desktop: when the file changes on disk, the library reloads automatically.
 
 **When to use:** Desktop only. Best for auto-exported files from Zotero/Better BibTeX that live outside the vault.
 
@@ -98,13 +98,13 @@ The plugin loads data from both Readwise APIs in parallel and merges the results
 | `source_url`                  | `URL`                      | Original source URL                                        |
 | `readwise_url` / `unique_url` | `zoteroSelectURI`          | Opens in Readwise Reader app (see note below)              |
 | `summary`                     | `abstract`                 |                                                            |
-| `asin`                        | `asin`                     | Amazon ASIN (v2 Export books only); not mapped to ISBN     |
-| `site_name`                   | `containerTitle`           | Reader (v3) — e.g. "The New Yorker"                        |
+| `asin`                        | `asin`                     | Amazon ASIN (v2 Export books only), not mapped to ISBN     |
+| `site_name`                   | `containerTitle`           | Reader (v3), e.g. "The New Yorker"                         |
 | `book_tags` / `tags`          | `keywords[]`               |                                                            |
 | `document_note` / `notes`     | `documentNote`             | Document-level note (distinct from highlights)             |
 | `word_count`                  | `wordCount`                | Reader (v3) entries only                                   |
-| `reading_progress`            | `readingProgress`          | Reader (v3) — fraction 0..1                                |
-| `location`                    | `readerLocation`           | Reader (v3) — new/later/shortlist/archive/feed             |
+| `reading_progress`            | `readingProgress`          | Reader (v3), fraction 0..1                                 |
+| `location`                    | `readerLocation`           | Reader (v3), new/later/shortlist/archive/feed              |
 | `highlights[].text`           | `note`                     | Aggregated with `---` separator (backward-compatible)      |
 | `highlights[]`                | `highlights[]`             | Structured per-highlight metadata (see below)              |
 | `published_date`              | `issuedDate`               | Reader (v3) entries only                                   |
@@ -117,15 +117,15 @@ The plugin loads data from both Readwise APIs in parallel and merges the results
 
 **Searching highlights:** Full-text search indexes the highlight/note text (truncated per entry), so a query that appears only inside a highlight will still find the entry. Title and author matches always rank above highlight-only matches.
 
-**Offline cache:** After each successful sync, Readwise data is cached locally at `.obsidian/plugins/citation-extended/readwise-cache-<id>.json` — one file per Readwise database, keyed by its stable id, so multiple Readwise databases never collide. If the API is unavailable on the next plugin load, the cached data is used as a fallback and a warning is shown. The cache stores the full unfiltered data plus the incremental-sync cursor (`lastSyncAt`) and is overwritten only after a fully successful sync (every Readwise API responds); a partial outage leaves the previous cache intact. Import filters are re-applied when the cache is read, so changing filters always takes effect. Caches written by older plugin versions (a bare entry array) are still readable; the first sync after upgrading is a full download that rewrites the cache in the new format.
+**Offline cache:** After each successful sync, Readwise data is cached locally at `.obsidian/plugins/citation-extended/readwise-cache-<id>.json`, one file per Readwise database, keyed by its stable id, so multiple Readwise databases never collide. If the API is unavailable on the next plugin load, the cached data is used as a fallback and a warning is shown. The cache stores the full unfiltered data plus the incremental-sync cursor (`lastSyncAt`) and is overwritten only after a fully successful sync (every Readwise API responds). A partial outage leaves the previous cache intact. Import filters are re-applied when the cache is read, so changing filters always takes effect. Caches written by older plugin versions (a bare entry array) are still readable. The first sync after upgrading is a full download that rewrites the cache in the new format.
 
 ### Zotero (Better BibTeX) live connection
 
-Loads the bibliography **directly from a running Zotero** via the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) pull-export endpoint — no manual file export needed. The plugin fetches the library over the local loopback connection and parses it through the same pipeline as a file source.
+Loads the bibliography **directly from a running Zotero** via the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) pull-export endpoint. No manual file export is needed. The plugin fetches the library over the local loopback connection and parses it through the same pipeline as a file source.
 
 **When to use:** You run Zotero with Better BibTeX on the same machine as Obsidian and want the library to stay current without re-exporting a file.
 
-**Requirements:** Zotero must be running with the Better BibTeX extension installed. The connection is local-only (`127.0.0.1`); nothing leaves your machine.
+**Requirements:** Zotero must be running with the Better BibTeX extension installed. The connection is local-only (`127.0.0.1`). Nothing leaves your machine.
 
 **Setup:**
 1. In Zotero, right-click a library or collection → **Download Better BibTeX export…** and copy the URL. Choose the **Better CSL JSON** (`.json`) or **BibLaTeX** (`.bib`) variant.
@@ -136,33 +136,33 @@ Loads the bibliography **directly from a running Zotero** via the [Better BibTeX
 
 **Notes:** Enable **Import notes** to append `&exportNotes=true` to the export, so Zotero child notes are included and surfaced via the `{{note}}` template variable.
 
-**PDF annotations:** Enable **Import PDF annotations** to additionally fetch the **native Zotero PDF annotations** (highlights, underlines, comments, image annotations) for every entry via the Better BibTeX JSON-RPC API. Annotations arrive as structured data — text, comment, hex color + palette name, page number, tags, and a `zotero://open-pdf/...?page=N&annotation=KEY` deep link that opens the PDF in Zotero **at the exact annotation**. They are exposed to templates as `{{annotations}}`, `{{attachments}}`, and `{{annotationCount}}` — see [Template Variables](templates/variables.md#annotations-source-agnostic). The fetch is batched (one JSON-RPC request per 50 entries) and best-effort: if it fails, the library still loads and a warning is reported.
+**PDF annotations:** Enable **Import PDF annotations** to additionally fetch the **native Zotero PDF annotations** (highlights, underlines, comments, image annotations) for every entry via the Better BibTeX JSON-RPC API. Annotations arrive as structured data: text, comment, hex color + palette name, page number, tags, and a `zotero://open-pdf/...?page=N&annotation=KEY` deep link that opens the PDF in Zotero **at the exact annotation**. They are exposed to templates as `{{annotations}}`, `{{attachments}}`, and `{{annotationCount}}` (see [Template Variables](templates/variables.md#annotations-source-agnostic)). The fetch is batched (one JSON-RPC request per 50 entries) and best-effort: if it fails, the library still loads and a warning is reported.
 
 **Auto-sync:** There is no file to watch, so the source can poll Zotero on a configurable **Auto-sync interval (minutes)** (0 = manual only, the default). Use **Sync now** or the **Refresh citation database** command for an immediate fetch.
 
-**Offline cache:** The last successful export — including the annotation payload — is cached at `.obsidian/plugins/citation-extended/zotero-cache-<id>.json`. If Zotero is closed or unreachable on a later load, the cached export is used so the library stays usable (with a warning).
+**Offline cache:** The last successful export, including the annotation payload, is cached at `.obsidian/plugins/citation-extended/zotero-cache-<id>.json`. If Zotero is closed or unreachable on a later load, the cached export is used so the library stays usable (with a warning).
 
-### Zotero (local API) — no Better BibTeX required
+### Zotero (local API) without Better BibTeX
 
-Loads the bibliography from the **native local HTTP API built into Zotero 7 and later** (`http://127.0.0.1:23119/api/`). No Better BibTeX, no file export — just Zotero itself. Because the connection uses only APIs shipped with Zotero, it is the most update-resilient way to connect: nothing breaks when an extension lags behind a new Zotero release.
+Loads the bibliography from the **native local HTTP API built into Zotero 7 and later** (`http://127.0.0.1:23119/api/`). No Better BibTeX and no file export, just Zotero itself. Because the connection uses only APIs shipped with Zotero, it is the most update-resilient way to connect: nothing breaks when an extension lags behind a new Zotero release.
 
 **When to use:**
 - You don't use Better BibTeX (or don't want to depend on it).
 - You want a connection that keeps working across Zotero major updates.
 - You want group libraries or a single collection without configuring exports.
 
-**Requirements:** Zotero 7 or later running on the same machine, with **Settings → Advanced → "Allow other applications on this computer to communicate with Zotero"** enabled (one checkbox, off by default). The connection is local-only (`127.0.0.1`); nothing leaves your machine.
+**Requirements:** Zotero 7 or later running on the same machine, with **Settings → Advanced → "Allow other applications on this computer to communicate with Zotero"** enabled (one checkbox, off by default). The connection is local-only (`127.0.0.1`). Nothing leaves your machine.
 
 **Setup:**
 1. In plugin settings, add a database and set its **Database source** to **Zotero (local API)**.
 2. Leave the **Zotero API base URL** empty (default `http://127.0.0.1:23119`), or point it at a non-standard port.
 3. Optionally set a **Group library ID** (numeric Zotero group id) and/or a **Collection key** to restrict the import.
-4. Click **Test connection** — it reports how many items are visible.
+4. Click **Test connection**. It reports how many items are visible.
 
 ![Database card with the Zotero (local API) source](images/settings-zotero-local-api.png)
 
 **Citation keys** resolve in this order:
-1. Zotero's **native Citation Key field** (Zotero 7.0.31+; in Zotero 8+ Better BibTeX keys are migrated into it automatically) — your existing citekeys keep working.
+1. Zotero's **native Citation Key field** (Zotero 7.0.31+, with Better BibTeX keys migrated into it automatically in Zotero 8+). Your existing citekeys keep working.
 2. A legacy `Citation Key: xxx` line in the item's **Extra** field (the old Better BibTeX pinning convention).
 3. A generated `lastnameYear` fallback (e.g. `smith2023`, deduplicated as `smith2023a`, `smith2023b`, …) for items with no pinned key.
 
@@ -172,7 +172,7 @@ Loads the bibliography from the **native local HTTP API built into Zotero 7 and 
 
 **Offline cache:** the last successful fetch is cached at `.obsidian/plugins/citation-extended/zotero-api-cache-<id>.json` and used when Zotero is closed (with a warning).
 
-**Better BibTeX vs local API — which live connection?**
+**Better BibTeX vs local API: which live connection?**
 
 | | Better BibTeX live connection | Zotero local API |
 |---|---|---|
@@ -229,8 +229,8 @@ jones2022:
   date: 2022
 ```
 
-**When to use:** If you use Typst as your typesetting system and already maintain a Hayagriva bibliography. The plugin uses a built-in YAML parser for common Hayagriva fields — complex nested structures may need a dedicated YAML library in future versions.
+**When to use:** If you use Typst as your typesetting system and already maintain a Hayagriva bibliography. The plugin uses a built-in YAML parser for common Hayagriva fields. Complex nested structures may need a dedicated YAML library in future versions.
 
 ## Coming Soon
 
-- **Generic HTTP/Network sources** — fetch a bibliography from an arbitrary URL (the Zotero/Better BibTeX live connection above already covers the local-Zotero case)
+- **Generic HTTP/Network sources**: fetch a bibliography from an arbitrary URL (the Zotero/Better BibTeX live connection above already covers the local-Zotero case)

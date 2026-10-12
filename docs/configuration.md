@@ -41,23 +41,23 @@ The **Database source** dropdown lists every way to load references:
 
 ### Database Formats
 
-**Better CSL JSON** (`.json`) — The Citation Style Language JSON format. This is a standardized, lightweight format that most reference managers can export. It loads quickly and is the recommended choice for most users.
+**Better CSL JSON** (`.json`) is the Citation Style Language JSON format. This is a standardized, lightweight format that most reference managers can export. It loads quickly and is the recommended choice for most users.
 
 - **Best for:** Zotero (via "Export Library" → Better CSL JSON), Mendeley, Paperpile
 - **Advantages:** Fast parsing, standard format, smaller file size
 - **Limitations:** May not include all custom fields (e.g. PDF file paths, Zotero notes)
 
-**Better BibTeX** (`.bib`) — A LaTeX bibliography format that carries richer metadata than CSL-JSON, including PDF file paths, keywords, abstract, and annotation notes. Parsing is slower because the BibTeX grammar is more complex.
+**Better BibTeX** (`.bib`) is a LaTeX bibliography format that carries richer metadata than CSL-JSON, including PDF file paths, keywords, abstract, and annotation notes. Parsing is slower because the BibTeX grammar is more complex.
 
 - **Best for:** Zotero with [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin, LaTeX users
 - **Advantages:** Richer metadata (PDF paths, keywords, notes), seamless LaTeX integration, full Cyrillic support via `\cyrchar` commands
 - **Limitations:** Slower to parse on large libraries (5000+ entries), larger file size
 
-**Zotero (local API)** — Not a file format: reads a running Zotero (7 or later) directly through the local HTTP API built into Zotero itself. No Better BibTeX and no export file needed; enable one checkbox in Zotero's Advanced settings. Citation keys come from Zotero's native Citation Key field (with Extra-field and generated fallbacks).
+**Zotero (local API)** is not a file format: it reads a running Zotero (7 or later) directly through the local HTTP API built into Zotero itself. No Better BibTeX and no export file needed. Enable one checkbox in Zotero's Advanced settings. Citation keys come from Zotero's native Citation Key field (with Extra-field and generated fallbacks).
 
 - **Best for:** users without Better BibTeX, group libraries, maximum resilience to Zotero updates
 - **Advantages:** zero extensions, live data, collection/group scoping, native citekeys
-- **Limitations:** requires Zotero 7+, no Zotero notes import, custom BBT citekey formulas only via pinned/native keys — see [Data Sources: Zotero (local API)](data-sources.md#zotero-local-api--no-better-bibtex-required)
+- **Limitations:** requires Zotero 7+, no Zotero notes import, custom BBT citekey formulas only via pinned/native keys (see [Data Sources: Zotero (local API)](data-sources.md#zotero-local-api-without-better-bibtex))
 
 ### Setting Up Multiple Databases
 
@@ -75,9 +75,9 @@ To use more than one bibliography source (e.g. personal library + shared team li
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| **Library load timeout (seconds)** | Maximum time to wait for all databases to load and parse before aborting. Raise this if you see "Timeout loading citation database" with a large or heavily LaTeX-escaped library. Range `5`–`600` | `30` |
+| **Library load timeout (seconds)** | Maximum time to wait for all databases to load and parse before aborting. Raise this if you see "Timeout loading citation database" with a large or heavily LaTeX-escaped library. Range `5` to `600` | `30` |
 
-A load that exceeds this timeout is **not** retried automatically — the parse may still be running in the background, and a retry would queue another parse behind it. If you hit the timeout, raise the value and re-run **Refresh citation database** (or reopen the vault). Out-of-range values typed in the field are clamped to the valid range.
+A load that exceeds this timeout is **not** retried automatically: the parse may still be running in the background, and a retry would queue another parse behind it. If you hit the timeout, raise the value and re-run **Refresh citation database** (or reopen the vault). Out-of-range values typed in the field are clamped to the valid range.
 
 ### Live Zotero (Better BibTeX) settings
 
@@ -111,7 +111,7 @@ Shown on a database card whose **Database source** is **Zotero (local API)**. Th
 | **Test connection** | Reports how many items Zotero makes visible with the current scope, or the error | |
 | **Sync now** | Fetches the library from Zotero and reloads it | |
 
-See [Data Sources: Zotero (local API)](data-sources.md#zotero-local-api--no-better-bibtex-required) for how citation keys are resolved.
+See [Data Sources: Zotero (local API)](data-sources.md#zotero-local-api-without-better-bibtex) for how citation keys are resolved.
 
 ---
 
@@ -135,10 +135,10 @@ Connect the plugin to your Readwise account to import highlights and documents a
 | **Database name** | Friendly label for this database (default: `Database N`). You can rename it to `Readwise` or any name you prefer |
 | **Database source** | Must be set to **Readwise** |
 | **API token** | Your Readwise access token (password field). Get it from [readwise.io/access_token](https://readwise.io/access_token). Stored in plugin settings |
-| **Auto-sync interval (minutes)** | How often the plugin automatically fetches new data from Readwise, in minutes. Set to `0` to disable automatic sync. Default: `30`. Maximum: `10080` (1 week) — larger values are clamped to avoid timer overflow |
+| **Auto-sync interval (minutes)** | How often the plugin automatically fetches new data from Readwise, in minutes. Set to `0` to disable automatic sync. Default: `30`. Maximum: `10080` (1 week). Larger values are clamped to avoid timer overflow |
 | **Advanced filters** | Per-database import filters sub-section (see below). Optional |
 | **Validate token** | Tests the API token against Readwise. Shows "Token is valid" or "Token is invalid" |
-| **Sync now** | Fetches data from both Readwise APIs and reloads the library. On success, updates the "Last sync" timestamp; on failure it reports the error and does **not** update the timestamp |
+| **Sync now** | Fetches data from both Readwise APIs and reloads the library. On success, updates the "Last sync" timestamp. On failure it reports the error and does **not** update the timestamp |
 
 ### Import Filters (Advanced filters)
 
@@ -164,13 +164,13 @@ Readwise entries support all standard plugin features: citation insertion, liter
 
 ### Offline Cache
 
-After each successful sync, the plugin saves Readwise data to a local cache file at `.obsidian/plugins/citation-extended/readwise-cache-<id>.json` — one file per Readwise database (keyed by its stable id) so multiple Readwise databases never overwrite each other's cache. If the Readwise API is unavailable on the next load (e.g., no network connection), the plugin falls back to the cached data automatically. A warning notice appears when cached data is used instead of a fresh API response.
+After each successful sync, the plugin saves Readwise data to a local cache file at `.obsidian/plugins/citation-extended/readwise-cache-<id>.json`, one file per Readwise database (keyed by its stable id) so multiple Readwise databases never overwrite each other's cache. If the Readwise API is unavailable on the next load (e.g., no network connection), the plugin falls back to the cached data automatically. A warning notice appears when cached data is used instead of a fresh API response.
 
 ### Security Note
 
 Your Readwise API token is stored **unencrypted** in the plugin's `data.json` (`.obsidian/plugins/citation-extended/data.json`). Obsidian does not provide a secret store for plugins. Treat the vault accordingly: avoid committing it to a public git repository, and be mindful when syncing the vault through third-party cloud services. Revoke and regenerate the token at [readwise.io/access_token](https://readwise.io/access_token) if it is ever exposed.
 
-The cache file is managed automatically -- you do not need to create or edit it. It is overwritten only after a fully successful sync where every Readwise API responds; a partial outage (one API unavailable) leaves the previous cache intact rather than replacing it with an incomplete snapshot.
+The cache file is managed automatically -- you do not need to create or edit it. It is overwritten only after a fully successful sync where every Readwise API responds. A partial outage (one API unavailable) leaves the previous cache intact rather than replacing it with an incomplete snapshot.
 
 ---
 
@@ -189,15 +189,15 @@ The plugin does **not** assign default hotkeys to its commands. You choose the b
 | Open literature note                        | `Ctrl+Shift+O`   | Mnemonic: **O**pen note                                                          |
 | Insert Markdown citation                    | `Ctrl+Shift+E`   | Quick citation insertion while writing                                           |
 | Insert literature note link                 | `Ctrl+Shift+L`   | Mnemonic: **L**ink                                                               |
-| Open literature note for citation at cursor | `Ctrl+Shift+G`   | No modal — jumps directly to the note for the citation under cursor              |
-| Insert subsequent citation                  | —                | Appends `; @key2` to an existing `[@key1]` at cursor                             |
-| Insert multiple citations                   | —                | Multi-select modal: add references one by one, insert combined `[@...]` on close |
-| Insert literature note content in the current pane | —         | Used less frequently, assign if needed                                           |
-| Refresh citation database                   | —                | Rarely needed (auto-reload handles most cases)                                   |
-| Insert or replace with template output      | —                | Also available from the editor context menu on a selection                       |
-| Update all literature notes                 | —                | Re-syncs every literature note with the library                                  |
-| Update literature note for current file     | —                | Re-syncs only the note open in the active pane                                   |
-| Show references for current note            | —                | Also available from the ribbon icon                                              |
+| Open literature note for citation at cursor | `Ctrl+Shift+G`   | No modal: jumps directly to the note for the citation under cursor               |
+| Insert subsequent citation                  | None             | Appends `; @key2` to an existing `[@key1]` at cursor                             |
+| Insert multiple citations                   | None             | Multi-select modal: add references one by one, insert combined `[@...]` on close |
+| Insert literature note content in the current pane | None      | Used less frequently, assign if needed                                           |
+| Refresh citation database                   | None             | Rarely needed (auto-reload handles most cases)                                   |
+| Insert or replace with template output      | None             | Also available from the editor context menu on a selection                       |
+| Update all literature notes                 | None             | Re-syncs every literature note with the library                                  |
+| Update literature note for current file     | None             | Re-syncs only the note open in the active pane                                   |
+| Show references for current note            | None             | Also available from the ribbon icon                                              |
 
 ---
 
@@ -210,7 +210,7 @@ This section controls how literature notes are created, named, and where they ar
 | Setting                               | Description                                                                                 | Default        |
 | ------------------------------------- | ------------------------------------------------------------------------------------------- | -------------- |
 | Literature note folder                | Folder inside the vault where new notes are created                                         | `Reading notes` |
-| Disable automatic note creation       | When enabled, only opens existing notes — never creates new ones                            | `false`         |
+| Disable automatic note creation       | When enabled, only opens existing notes and never creates new ones                          | `false`         |
 | Note identifier field                 | Frontmatter field name used to find renamed notes (see [details below](#note-identifier-field)) | (empty)         |
 | Filename sanitization replacement     | Character(s) used to replace illegal filename characters (`: * ? " < > \|`)                 | `_`             |
 | Note update mode                      | How the update commands treat existing notes (see [details below](#note-update-mode))       | `Smart sync (callout blocks + 3-way merge)` |
@@ -222,9 +222,9 @@ This section controls how literature notes are created, named, and where they ar
 
 The folder path is relative to the vault root. If the folder doesn't exist, it will be created when the first note is saved. Examples:
 
-- `Reading notes` — notes saved to `<vault>/Reading notes/@smith2023.md`
-- `References/Literature` — nested folder structure
-- (empty) — notes saved directly in vault root
+- `Reading notes`: notes saved to `<vault>/Reading notes/@smith2023.md`
+- `References/Literature`: nested folder structure
+- (empty): notes saved directly in vault root
 
 ### Disable automatic note creation
 
@@ -246,13 +246,13 @@ When you rename a literature note, the plugin can no longer find it by filename 
    ---
    ```
 2. Set **Note identifier field** to the name of that field (e.g. `citekey`)
-3. Now you can freely rename notes — the plugin will still find them
+3. Now you can freely rename notes, and the plugin will still find them
 
 The field name is configurable, so you can use any identifier that your template provides:
 
 | Field name   | Template frontmatter        | Use case                              |
 | ------------ | --------------------------- | ------------------------------------- |
-| `citekey`    | `citekey: {{citekey}}`      | Default — works with all source types |
+| `citekey`    | `citekey: {{citekey}}`      | Default, works with all source types  |
 | `zoteroId`   | `zoteroId: {{zoteroId}}`    | Zotero item key                       |
 | `DOI`        | `DOI: {{DOI}}`              | Digital Object Identifier             |
 
@@ -281,8 +281,8 @@ Controls how **Update all literature notes** and **Update literature note for cu
 
 | Mode | Behaviour |
 |------|-----------|
-| **Smart sync (callout blocks + 3-way merge)** (default) | Only content the plugin owns is managed: frontmatter keys rendered by the template and `{{#syncBlock}}` callouts (marked by native `^zc-…` block IDs). Each is merged three-way against the last synced snapshot, so library changes and your edits combine automatically; real conflicts open the review dialog. Everything else in the note is never touched. |
-| **Update frontmatter only** | Frontmatter keys are merged the same way; the body is never touched. |
+| **Smart sync (callout blocks + 3-way merge)** (default) | Only content the plugin owns is managed: frontmatter keys rendered by the template and `{{#syncBlock}}` callouts (marked by native `^zc-…` block IDs). Each is merged three-way against the last synced snapshot, so library changes and your edits combine automatically. Real conflicts open the review dialog. Everything else in the note is never touched. |
+| **Update frontmatter only** | Frontmatter keys are merged the same way, and the body is never touched. |
 | **Overwrite notes completely** | The whole note is replaced by the freshly rendered template. |
 
 ### Review changes before writing
@@ -291,7 +291,7 @@ When the diff review dialog appears during note updates:
 
 | Value | Behaviour |
 |-------|-----------|
-| **Only when there are conflicts** (default) | Clean merges are written automatically; the dialog opens only when you and the library changed the same thing. |
+| **Only when there are conflicts** (default) | Clean merges are written automatically. The dialog opens only when you and the library changed the same thing. |
 | **Before every change** | Every pending write shows the diff first. |
 | **Never (conflicted notes are skipped)** | Clean merges are written. Conflicted notes are skipped and reported. |
 
@@ -314,7 +314,7 @@ A Handlebars template that produces the filename (without `.md`). The default `@
 
 ### Literature note content template file
 
-Path to a Markdown file in your vault that serves as the template body. This is the recommended approach — it lets you edit the template as a normal note with full syntax highlighting. If the path is empty, an empty note body is created.
+Path to a Markdown file in your vault that serves as the template body. This is the recommended approach: it lets you edit the template as a normal note with full syntax highlighting. If the path is empty, an empty note body is created.
 
 **How to set up:**
 
@@ -340,7 +340,7 @@ Use forward slashes in the title template to organize notes into subfolders:
 
 This creates notes like `Reading notes/article-journal/@smith2023.md`. Missing folders are created automatically.
 
-The plugin searches recursively in subfolders when opening notes, so manually moved notes are still found. If a note is moved completely outside the literature note folder (e.g. into a project-specific folder), the plugin performs a vault-wide search as a last resort before creating a duplicate. That last resort applies only when exactly one note in the vault carries the expected name — when several do, the plugin creates the note rather than risk writing to an unrelated one.
+The plugin searches recursively in subfolders when opening notes, so manually moved notes are still found. If a note is moved completely outside the literature note folder (e.g. into a project-specific folder), the plugin performs a vault-wide search as a last resort before creating a duplicate. That last resort applies only when exactly one note in the vault carries the expected name. When several do, the plugin creates the note rather than risk writing to an unrelated one.
 
 See [Template Examples: Subfolder Organization](templates/examples.md#subfolder-organization) for more patterns.
 
@@ -387,7 +387,7 @@ Select a built-in style to auto-fill both template fields, or choose `custom` to
 ### Primary vs secondary citation
 
 - **Primary**: inserted when you press **Enter** in the search modal
-- **Secondary**: inserted when you press **Shift+Enter** — use it for an alternative format (e.g. switch between `[@smith2023]` and `Smith (2023)`)
+- **Secondary**: inserted when you press **Shift+Enter**. Use it for an alternative format (e.g. switch between `[@smith2023]` and `Smith (2023)`)
 
 ### Auto-create literature note on citation
 
@@ -406,7 +406,7 @@ When a template is set, it is rendered with all template variables (just like ci
 
 | Template | Result (Markdown) | Result (Wiki) |
 |----------|-------------------|---------------|
-| (empty — default) | `[smith2023](path)` | `[[path]]` |
+| (empty, default) | `[smith2023](path)` | `[[path]]` |
 | `{{authorString}} ({{year}})` | `[Smith, Jones (2023)](path)` | `[[path\|Smith, Jones (2023)]]` |
 | `{{titleShort}}` | `[Attention](path)` | `[[path\|Attention]]` |
 | `@{{citekey}}` | `[@smith2023](path)` | `[[path\|@smith2023]]` |
@@ -435,8 +435,8 @@ Controls how each reference is displayed in the **References** sidebar view (see
 | Option | Behavior |
 |--------|----------|
 | Default (file order) | Entries appear in the order they are stored in the bibliography file |
-| By year (newest first) | Most recent publications first — useful for finding recent references quickly |
-| By year (oldest first) | Oldest publications first — useful for chronological review |
+| By year (newest first) | Most recent publications first, useful for finding recent references quickly |
+| By year (oldest first) | Oldest publications first, useful for chronological review |
 | By author (A to Z) | Alphabetical by first author's last name |
 
 Entries missing the sort field (e.g. no year) are placed at the end of the list.

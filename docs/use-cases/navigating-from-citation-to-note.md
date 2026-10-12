@@ -4,13 +4,13 @@
 
 While reading or editing a document, you encounter a citation like `[@vaswani2017]` and want to quickly open the corresponding literature note to review your reading notes, check the abstract, or add new annotations. Opening the search modal, typing the citekey, and selecting it each time is too many steps for a simple navigation action.
 
-The plugin provides a direct command that reads the citation under your cursor and jumps straight to the note — no search modal, no typing.
+The plugin provides a direct command that reads the citation under your cursor and jumps straight to the note, with no search modal and no typing.
 
 ## Prerequisites
 
 - At least one citation database configured and loaded
 - Literature notes folder configured in **Settings > Citation Extended > Literature notes**
-- (Optional) A hotkey assigned to **Citation Extended: Open literature note for citation at cursor** — recommended: `Ctrl+Shift+G`
+- (Optional) A hotkey assigned to **Citation Extended: Open literature note for citation at cursor** (recommended: `Ctrl+Shift+G`)
 
 ## Step-by-Step Walkthrough
 
@@ -24,7 +24,7 @@ The plugin provides a direct command that reads the citation under your cursor a
    being the most influential models.
    ```
 
-2. Place your cursor inside or next to the first citation — anywhere within `[@vaswani2017]`:
+2. Place your cursor inside or next to the first citation, anywhere within `[@vaswani2017]`:
 
    ```markdown
    Transformer architectures [@vaswa|ni2017] have become the foundation
@@ -50,7 +50,7 @@ All three patterns work regardless of where exactly your cursor is positioned on
 
 ### When No Citation Is Found
 
-If the plugin cannot find a recognized citation pattern on the current line, nothing happens. No modal opens, no error is shown — the command silently does nothing. Make sure your cursor is on a line that contains a citation.
+If the plugin cannot find a recognized citation pattern on the current line, nothing happens. No modal opens and no error is shown. The command silently does nothing. Make sure your cursor is on a line that contains a citation.
 
 ### Navigating in a Dense Document
 
@@ -81,7 +81,7 @@ The attention mechanism [@vaswani2017] was a breakthrough.
 
 **Action:** Run **Citation Extended: Open literature note for citation at cursor** (via Command Palette or your configured hotkey, e.g. `Ctrl+Shift+G`)
 
-**Result:** The file `Reading notes/@vaswani2017.md` opens in the editor. If the file does not exist and auto-creation is enabled, it is created with your configured template content.
+The file `Reading notes/@vaswani2017.md` opens in the editor. If the file does not exist and auto-creation is enabled, it is created with your configured template content.
 
 ## Variations
 
@@ -111,14 +111,14 @@ The two commands serve different purposes:
 
 | Command | When to use | Modal? |
 |---------|------------|--------|
-| **Open literature note** (suggested: `Ctrl+Shift+O`) | You want to browse and search your library | Yes — search modal opens |
-| **Open literature note for citation at cursor** (suggested: `Ctrl+Shift+G`) | You see a specific citation and want to jump to it | No — direct navigation |
+| **Open literature note** (suggested: `Ctrl+Shift+O`) | You want to browse and search your library | Yes, search modal opens |
+| **Open literature note for citation at cursor** (suggested: `Ctrl+Shift+G`) | You see a specific citation and want to jump to it | No, direct navigation |
 
 Use **Open literature note for citation at cursor** for fast in-context navigation and **Open literature note** for exploratory browsing.
 
 ## Tips
 
-- **This command is read-only navigation.** It never modifies your document — it only opens or creates the literature note file.
+- **This command is read-only navigation.** It never modifies your document. It only opens or creates the literature note file.
 - **Multi-cite handling.** If your cursor is on a line with `[@lecun2015; @vaswani2017; @devlin2019]`, the plugin picks the first citekey it matches on the line. To navigate to a specific one in a multi-cite, make sure it appears first on the line or use the search-based **Open literature note** command instead.
 - **Works across panes.** The note opens in the active pane. If you want it to open in a split pane, use Obsidian's native "Open in new pane" behavior by holding `Ctrl` (or `Cmd` on macOS) when the note opens.
 - **Pair with back navigation.** After jumping to a literature note, press `Ctrl+Alt+Left` (Windows/Linux) or `Cmd+Alt+Left` (macOS) to return to your original document. This creates a fluid reading-and-annotating workflow.

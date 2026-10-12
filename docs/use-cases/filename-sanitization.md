@@ -2,7 +2,7 @@
 
 ## Problem
 
-When creating literature notes, certain characters in titles are not allowed in filenames. By default, the plugin replaces characters like `: * ? " < > |` with an underscore (`_`). This can produce awkward filenames — for example, a reference titled "Social Networks: A Survey" becomes `Social Networks_ A Survey.md`.
+When creating literature notes, certain characters in titles are not allowed in filenames. By default, the plugin replaces characters like `: * ? " < > |` with an underscore (`_`). This can produce awkward filenames. For example, a reference titled "Social Networks: A Survey" becomes `Social Networks_ A Survey.md`.
 
 You want control over what character (or no character) replaces these illegal characters, so your filenames look cleaner.
 
@@ -38,9 +38,9 @@ If you want colons and other special characters to simply disappear rather than 
 
 The replacement applies in three places:
 
-- **Note filenames** — when the "Open literature note" command generates a path from your title template
-- **Subfolder path segments** — when your title template uses `/` for subdirectories (e.g. `{{type}}/{{citekey}}`), each segment is sanitized independently
-- **Data values with slashes** — variable values containing `/` (e.g. `"Author A / Author B"`) are replaced before rendering to prevent accidental subdirectory creation
+- **Note filenames**: when the "Open literature note" command generates a path from your title template
+- **Subfolder path segments**: when your title template uses `/` for subdirectories (e.g. `{{type}}/{{citekey}}`), each segment is sanitized independently
+- **Data values with slashes**: variable values containing `/` (e.g. `"Author A / Author B"`) are replaced before rendering to prevent accidental subdirectory creation
 
 ## Expected Output
 

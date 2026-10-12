@@ -10,7 +10,7 @@ This is the most frequent action you will perform with the plugin. A fast citati
 
 - At least one citation database configured in **Settings > Citation Extended > Citation databases** with a valid file path and format (CSL-JSON, BibLaTeX, or Hayagriva)
 - The status bar shows the number of loaded entries (e.g., `Citations: 342 entries`)
-- (Optional) A hotkey assigned to **Citation Extended: Insert Markdown citation** — recommended: `Ctrl+Shift+E`
+- (Optional) A hotkey assigned to **Citation Extended: Insert Markdown citation** (recommended: `Ctrl+Shift+E`)
 
 ## Step-by-Step Walkthrough
 
@@ -132,13 +132,13 @@ Given a BibLaTeX entry:
 @vaswani2017
 ```
 
-**With `textcite` preset — Primary (Enter):**
+**With `textcite` preset, primary (Enter):**
 
 ```markdown
 Vaswani, Shazeer et al. (2017)
 ```
 
-**With `parencite` preset — Primary (Enter):**
+**With `parencite` preset, primary (Enter):**
 
 ```markdown
 (Vaswani, Shazeer et al., 2017)
@@ -154,7 +154,7 @@ If you do not use Pandoc and prefer Obsidian-native links as citations, set the 
 [[{{citekey}}]]
 ```
 
-**Result:**
+**Inserted citation:**
 
 ```markdown
 [[vaswani2017]]
@@ -168,7 +168,7 @@ To remind yourself to add page numbers, include a placeholder in the template:
 [@{{citekey}}, p. ]
 ```
 
-**Result:**
+**Inserted citation:**
 
 ```markdown
 [@vaswani2017, p. ]
@@ -182,7 +182,7 @@ The cursor lands at the end, so you can type the page number right away.
 {{formatNames entry.author max=2}} ({{year}})
 ```
 
-**Result:**
+**Inserted citation:**
 
 ```markdown
 Vaswani and Shazeer et al. (2017)
@@ -190,8 +190,8 @@ Vaswani and Shazeer et al. (2017)
 
 ## Tips
 
-- **Speed matters.** Assigning a hotkey (e.g. `Ctrl+Shift+E`) to the citation command makes it nearly instant — your fingers never leave the keyboard.
+- **Speed matters.** Assigning a hotkey (e.g. `Ctrl+Shift+E`) to the citation command makes it nearly instant: your fingers never leave the keyboard.
 - **Primary vs. secondary is contextual.** Use primary for parenthetical citations at the end of a sentence and secondary for narrative citations woven into your prose.
 - **The modal remembers nothing between invocations.** Each time you open it, the search field is empty. For inserting many citations in a row, see [Multi-Citation Workflow](multi-citation-workflow.md).
 - **Cursor positioning.** After insertion, the cursor is always placed at the end of the inserted text. This means you can type a period, a space, or continue your sentence immediately.
-- **If the citation looks wrong**, check your templates in settings. The most common issue is selecting a preset but expecting custom template behavior — presets lock the template fields.
+- **If the citation looks wrong**, check your templates in settings. The most common issue is selecting a preset but expecting custom template behavior, because presets lock the template fields.

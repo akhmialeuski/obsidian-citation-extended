@@ -252,7 +252,7 @@ Hayagriva uses its own type vocabulary. Common Hayagriva types and how the plugi
 | `thesis` | `thesis` |
 | `report` | `report` |
 
-These differ from CSL types (which use `article-journal`, `paper-conference`, etc.). If your template uses `{{#if (eq type "article-journal")}}`, it will not match Hayagriva entries — use `{{#if (eq type "article")}}` instead, or handle both:
+These differ from CSL types (which use `article-journal`, `paper-conference`, etc.). If your template uses `{{#if (eq type "article-journal")}}`, it will not match Hayagriva entries. Use `{{#if (eq type "article")}}` instead, or handle both:
 
 ```handlebars
 {{#if (or (eq type "article") (eq type "article-journal"))}}

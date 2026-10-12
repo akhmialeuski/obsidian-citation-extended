@@ -95,14 +95,14 @@ keywords: {{#each keywords}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}
 
 **Template variable notes for Readwise entries:**
 - `{{note}}` -- contains all highlights aggregated with `---` separators
-- `{{zoteroSelectURI}}` -- links to the Readwise Reader app (not Zotero). For v2 books this is typically `https://read.readwise.io/read/{id}`; for v3 Reader documents it is the Reader document URL
+- `{{zoteroSelectURI}}` -- links to the Readwise Reader app (not Zotero). For v2 books this is typically `https://read.readwise.io/read/{id}`. For v3 Reader documents it is the Reader document URL
 - `{{URL}}` -- the original source URL (e.g., Amazon book page, article URL)
 - `{{abstract}}` -- the book summary (from Readwise summary or document_note)
 - `{{keywords}}` -- tags from Readwise
 - `{{titleShort}}` -- the cleaned/readable title (v2 books)
 - `{{source}}` -- origin such as `kindle`, `instapaper`, or the Reader source
 - `{{containerTitle}}` -- the source site name (Reader documents, e.g. "The New Yorker")
-- `{{entry.asin}}` -- the Amazon ASIN for Kindle books (v2 Export books only; deliberately not exposed as `{{ISBN}}` because an ASIN is not a valid ISBN)
+- `{{entry.asin}}` -- the Amazon ASIN for Kindle books (v2 Export books only, and deliberately not exposed as `{{ISBN}}` because an ASIN is not a valid ISBN)
 - `{{entry.documentNote}}` -- a document-level note (distinct from individual highlights)
 - `{{entry.wordCount}}`, `{{entry.readingProgress}}`, `{{entry.readerLocation}}` -- Reader document metadata
 
@@ -110,7 +110,7 @@ The Readwise-specific fields (`asin`, `documentNote`, `wordCount`, `readingProgr
 
 ### Rendering structured highlights
 
-In addition to the aggregated `{{note}}` string, Readwise highlights are exposed through the **source-agnostic `annotations` interface** — the same one Zotero PDF annotations use, so a single template section renders both. Iterate with `{{#each annotations}}`:
+In addition to the aggregated `{{note}}` string, Readwise highlights are exposed through the **source-agnostic `annotations` interface**, the same one Zotero PDF annotations use, so a single template section renders both. Iterate with `{{#each annotations}}`:
 
 ```handlebars
 ## Highlights
@@ -121,7 +121,7 @@ In addition to the aggregated `{{note}}` string, Readwise highlights are exposed
 {{/each}}
 ```
 
-Each item has: `text`, `comment` (your note), `page`/`pageLabel`, `colorName`, `tags`, `openURI`, `source` (`readwise`) — see [Template Variables → Annotations](../templates/variables.md#annotations-source-agnostic).
+Each item has: `text`, `comment` (your note), `page`/`pageLabel`, `colorName`, `tags`, `openURI`, `source` (`readwise`). See [Template Variables → Annotations](../templates/variables.md#annotations-source-agnostic).
 
 > [!warning] Migrating from `entry.highlights`
 > Earlier versions exposed a Readwise-only `{{#each entry.highlights}}` list. That surface is **deprecated** but still works, so existing templates keep rendering. Migrate to `{{#each annotations}}` and remap the fields: `note` → `comment`, `location` → `page`/`pageLabel`, `color` → `colorName`. The `highlights` surface will be removed in a future release.
@@ -176,7 +176,7 @@ You do not rise to the level of your goals. You fall to the level of your system
 - To pull the latest data immediately, click **Sync now** in the database card
 - Rate limiting is handled automatically -- the plugin respects Readwise's API rate limits (waiting out the server's `Retry-After` interval), and transient server or network errors are retried with exponential backoff before the sync is reported as failed
 - You can use Readwise alongside file-based databases (Zotero, BibTeX, etc.) -- all entries are merged into a single searchable library
-- The plugin loads data from both Readwise APIs automatically; there is no mode selector
+- The plugin loads data from both Readwise APIs automatically. There is no mode selector
 - **Import filters:** Expand **Advanced filters** on the database card to limit what gets imported -- by category, tag, Reader location, or a minimum highlight count. This is useful if you have thousands of items but only want a subset in Obsidian
 - **Reader highlights:** Highlights and notes made inside Readwise Reader are merged into their parent document (rather than dropped), so they show up in `annotations` and in search
 - **Truthful sync:** If a manual **Sync now** fails (e.g., invalid token or network error), the plugin reports the error and leaves the "Last sync" timestamp unchanged -- it no longer reports a false success

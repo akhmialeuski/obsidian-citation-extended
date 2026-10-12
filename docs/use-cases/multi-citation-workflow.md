@@ -2,7 +2,7 @@
 
 ## Problem
 
-Academic writing often requires citing multiple sources together in a single parenthetical reference — for example, `[@lecun2015; @vaswani2017; @devlin2019]` — to support a claim with several pieces of evidence. Inserting each citation individually, then manually editing the brackets and semicolons, is slow and error-prone. You need a way to build multi-cite references efficiently.
+Academic writing often requires citing multiple sources together in a single parenthetical reference (for example, `[@lecun2015; @vaswani2017; @devlin2019]`) to support a claim with several pieces of evidence. Inserting each citation individually, then manually editing the brackets and semicolons, is slow and error-prone. You need a way to build multi-cite references efficiently.
 
 The plugin offers three approaches for this, each suited to a different situation.
 
@@ -10,9 +10,9 @@ The plugin offers three approaches for this, each suited to a different situatio
 
 - At least one citation database configured and loaded
 - (Optional) Hotkeys assigned:
-  - **Citation Extended: Insert multiple citations** — for building a new multi-cite from scratch
-  - **Citation Extended: Insert subsequent citation** — for appending to an existing citation
-  - **Citation Extended: Insert Markdown citation** — for single citations (suggested hotkey: `Ctrl+Shift+E`)
+  - **Citation Extended: Insert multiple citations**, for building a new multi-cite from scratch
+  - **Citation Extended: Insert subsequent citation**, for appending to an existing citation
+  - **Citation Extended: Insert Markdown citation**, for single citations (suggested hotkey: `Ctrl+Shift+E`)
 
 ## Scenario 1: Insert Multiple Citations at Once
 
@@ -137,7 +137,7 @@ Use this when you already have a citation like `[@lecun2015]` in your text and w
 
 ### Fallback Behavior
 
-If your cursor is **not** inside an existing `[@...]` citation when you run **Insert subsequent citation**, the command falls back to a normal single citation insertion. This means you can safely use it as your default citation command — it appends when possible and inserts fresh otherwise.
+If your cursor is **not** inside an existing `[@...]` citation when you run **Insert subsequent citation**, the command falls back to a normal single citation insertion. This means you can safely use it as your default citation command. It appends when possible and inserts fresh otherwise.
 
 ## Scenario 3: Manual Multi-Cite with Repeated Single Citations
 
@@ -151,7 +151,7 @@ Use this as a quick alternative when you only need two citations and don't want 
    The results confirm previous findings [@lecun2015]
    ```
 
-2. Manually edit the text to open the citation for appending — delete the closing `]` and type `; `:
+2. Manually edit the text to open the citation for appending. Delete the closing `]` and type `; `:
 
    ```markdown
    The results confirm previous findings [@lecun2015; |
@@ -185,7 +185,7 @@ This approach works but is more error-prone than the dedicated commands. It is b
 
 ### Custom Multi-Cite Separator
 
-The multi-citation format uses `; @` as the separator between citekeys. This follows the Pandoc citation syntax standard. The separator is built into the plugin and is not configurable — it produces valid Pandoc multi-cite syntax that works with citeproc for PDF/DOCX export.
+The multi-citation format uses `; @` as the separator between citekeys. This follows the Pandoc citation syntax standard. The separator is built into the plugin and is not configurable. It produces valid Pandoc multi-cite syntax that works with citeproc for PDF/DOCX export.
 
 ### Using Presets with Multi-Cite
 
@@ -196,5 +196,5 @@ Multi-cite commands always use the primary citation template format. If your pre
 - **Use "Insert multiple citations" for three or more references.** It is faster than appending one at a time since the modal stays open.
 - **Use "Insert subsequent citation" for adding one more reference to an existing citation.** Just place your cursor inside the brackets and go.
 - **Order matters.** In the "Insert multiple citations" flow, citations appear in the order you select them. If you need alphabetical ordering for your citation style, select them in that order.
-- **Esc finalizes the multi-citation.** In the multi-citation modal, pressing Esc does not cancel — it inserts all citations collected so far. If you have not selected any citations yet, Esc closes the modal without inserting anything.
+- **Esc finalizes the multi-citation.** In the multi-citation modal, pressing Esc does not cancel. It inserts all citations collected so far. If you have not selected any citations yet, Esc closes the modal without inserting anything.
 - **Shift+Enter for the last one.** When you know you are selecting the final reference in the multi-citation flow, use `Shift+Enter` to add and insert in one step instead of pressing Enter then Esc.

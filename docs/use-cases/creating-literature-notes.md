@@ -2,7 +2,7 @@
 
 ## Problem
 
-You want to create a dedicated note for each source in your bibliography — a place to store metadata (title, authors, year), your reading notes, key ideas, and links back to the original PDF or Zotero entry. Manually creating these notes, copying metadata, and maintaining consistent formatting across hundreds of sources is tedious and error-prone.
+You want to create a dedicated note for each source in your bibliography: a place to store metadata (title, authors, year), your reading notes, key ideas, and links back to the original PDF or Zotero entry. Manually creating these notes, copying metadata, and maintaining consistent formatting across hundreds of sources is tedious and error-prone.
 
 The plugin automates this entirely: select a reference, and a fully formatted literature note is created from your template. If the note already exists, it opens the existing one instead of creating a duplicate.
 
@@ -79,7 +79,7 @@ The plugin automates this entirely: select a reference, and a fully formatted li
 
 1. Run **Citation Extended: Open literature note** again and search for the same reference.
 
-2. The plugin finds the existing note at `Reading notes/@goodfellow2016.md` and opens it directly — no duplicate is created.
+2. The plugin finds the existing note at `Reading notes/@goodfellow2016.md` and opens it directly. No duplicate is created.
 
 3. This works even if you renamed the note or moved it to a subfolder (see "Note Lookup" below).
 
@@ -87,10 +87,10 @@ The plugin automates this entirely: select a reference, and a fully formatted li
 
 The plugin uses a four-step lookup to find existing notes:
 
-1. **Exact path match** — checks `Reading notes/@goodfellow2016.md` directly
-2. **Case-insensitive match** — finds the note if you changed the casing
-3. **Subfolder search** — recursively scans the literature note folder for the note
-4. **Vault-wide search** — scans the entire vault as a last resort
+1. **Exact path match**: checks `Reading notes/@goodfellow2016.md` directly
+2. **Case-insensitive match**: finds the note if you changed the casing
+3. **Subfolder search**: recursively scans the literature note folder for the note
+4. **Vault-wide search**: scans the entire vault as a last resort
 
 This means you can freely reorganize your literature notes into project folders, tag-based folders, or any structure you prefer. The plugin will still find them.
 
