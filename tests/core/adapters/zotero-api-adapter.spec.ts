@@ -230,6 +230,102 @@ describe('buildZoteroApiEntries', () => {
       ['ITEMBBB2', 'lecun2015'],
     ]);
   });
+
+  it('maps presentation presenters to CSL authors without a CSL projection', () => {
+    const item = makeItem({
+      data: {
+        itemType: 'presentation',
+        title: 'The Future of Rock Music',
+        creators: [
+          {
+            creatorType: 'presenter',
+            firstName: 'Freddie',
+            lastName: 'Mercury',
+          },
+          {
+            creatorType: 'presenter',
+            firstName: 'David',
+            lastName: 'Bowie',
+          },
+          {
+            creatorType: 'editor',
+            firstName: 'Brian',
+            lastName: 'May',
+          },
+        ],
+      },
+    });
+
+    const [dto] = buildZoteroApiEntries(makeLibrary([item]));
+
+    expect(dto.csl.type).toBe('speech');
+    expect(dto.csl.author).toEqual([
+      { given: 'Freddie', family: 'Mercury' },
+      { given: 'David', family: 'Bowie' },
+    ]);
+
+    const entry = new ZoteroApiAdapter(dto);
+    expect(entry.authorString).toBe('Freddie Mercury, David Bowie');
+  });
+
+  it('recovers presenters when the CSL projection has no authors', () => {
+    const item = makeItem({
+      data: {
+        itemType: 'presentation',
+        title: 'Rock Legends Conference',
+        creators: [
+          {
+            creatorType: 'presenter',
+            firstName: 'Mick',
+            lastName: 'Jagger',
+          },
+          {
+            creatorType: 'presenter',
+            firstName: 'Debbie',
+            lastName: 'Harry',
+          },
+        ],
+      },
+      csljson: {
+        id: '12345/ITEM0001',
+        type: 'speech',
+        title: 'Rock Legends Conference',
+      },
+    });
+
+    const [dto] = buildZoteroApiEntries(makeLibrary([item]));
+
+    expect(dto.csl.author).toEqual([
+      { given: 'Mick', family: 'Jagger' },
+      { given: 'Debbie', family: 'Harry' },
+    ]);
+  });
+
+  it('preserves existing CSL authors instead of replacing them with presenters', () => {
+    const item = makeItem({
+      data: {
+        itemType: 'presentation',
+        title: 'Rock Music History',
+        creators: [
+          {
+            creatorType: 'presenter',
+            firstName: 'Freddie',
+            lastName: 'Mercury',
+          },
+        ],
+      },
+      csljson: {
+        id: '12345/ITEM0001',
+        type: 'speech',
+        title: 'Rock Music History',
+        author: [{ given: 'David', family: 'Bowie' }],
+      },
+    });
+
+    const [dto] = buildZoteroApiEntries(makeLibrary([item]));
+
+    expect(dto.csl.author).toEqual([{ given: 'David', family: 'Bowie' }]);
+  });
 });
 
 describe('buildZoteroApiEntries — annotations', () => {

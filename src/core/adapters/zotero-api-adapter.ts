@@ -249,7 +249,7 @@ const ITEM_TYPE_TO_CSL: Record<string, string> = {
 
 function creatorsToAuthors(
   creators: unknown,
-  creatorType: 'author' | 'editor',
+  creatorType: 'author' | 'editor' | 'presenter',
 ): Author[] {
   if (!Array.isArray(creators)) return [];
   return (creators as Array<Record<string, unknown>>)
@@ -347,6 +347,15 @@ function buildCsl(
   csl['zotero-key'] = item.key;
   if (!csl.keyword && tags.length > 0) {
     csl.keyword = tags.join(', ');
+  }
+
+  // Zotero presentations use the native 'presenter' creator type.
+  // Recover presenters when the CSL projection does not provide authors.
+  if (item.data.itemType === 'presentation' && !csl.author?.length) {
+    const presenters = creatorsToAuthors(item.data.creators, 'presenter');
+    if (presenters.length) {
+      csl.author = presenters;
+    }
   }
   return csl;
 }
