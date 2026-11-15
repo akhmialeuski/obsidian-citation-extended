@@ -1,8 +1,6 @@
-import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import obsidianmd from 'eslint-plugin-obsidianmd';
 import prettier from 'eslint-plugin-prettier';
-import eslintComments from '@eslint-community/eslint-plugin-eslint-comments';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import globals from 'globals';
 
@@ -44,13 +42,12 @@ const UI_ACRONYMS = [
 ];
 
 export default tseslint.config(
-    eslint.configs.recommended,
-    ...tseslint.configs.recommended,
+    // The base Obsidian's community plugin scanner builds on, so a rule the scanner runs is run here first.
+    ...obsidianmd.configs.recommended,
     {
+        files: ['**/*.{ts,cts,mts,tsx,js,cjs,mjs,jsx}'],
         plugins: {
             prettier,
-            obsidianmd,
-            '@eslint-community/eslint-comments': eslintComments,
         },
         linterOptions: {
             // A stale eslint-disable that no longer suppresses anything is itself
@@ -92,35 +89,6 @@ export default tseslint.config(
             '@typescript-eslint/no-unsafe-return': 'error',
             '@typescript-eslint/no-unsafe-argument': 'error',
 
-            // Console usage
-            'no-console': ['error', { allow: ['warn', 'error', 'debug'] }],
-
-            // Obsidian plugin guideline rules (eslint-plugin-obsidianmd).
-            // Listed individually instead of spreading `configs.recommended`,
-            // whose 0.3.0 bundle also pulls in eslint-plugin-security / -sdl /
-            // -import / -no-unsanitized, which flood this codebase with
-            // unrelated findings.
-            'obsidianmd/no-unsupported-api': 'error', // API calls newer than manifest.minAppVersion
-            'obsidianmd/no-global-this': 'error', // prefer window/activeWindow (see core override)
-            'obsidianmd/prefer-window-timers': 'error', // window.setTimeout over bare global timers
-            'obsidianmd/no-tfile-tfolder-cast': 'error',
-            'obsidianmd/no-view-references-in-plugin': 'error',
-            'obsidianmd/object-assign': 'error',
-            'obsidianmd/platform': 'error',
-            'obsidianmd/prefer-abstract-input-suggest': 'error',
-            'obsidianmd/regex-lookbehind': 'error',
-            'obsidianmd/vault/iterate': 'error',
-            'obsidianmd/detach-leaves': 'error',
-            'obsidianmd/commands/no-command-in-command-id': 'error',
-            'obsidianmd/commands/no-command-in-command-name': 'error',
-            'obsidianmd/commands/no-default-hotkeys': 'error',
-            'obsidianmd/commands/no-plugin-id-in-command-id': 'error',
-            'obsidianmd/commands/no-plugin-name-in-command-name': 'error',
-            'obsidianmd/settings-tab/no-manual-html-headings': 'warn',
-            'obsidianmd/settings-tab/no-problematic-settings-headings': 'warn',
-            // The plugin scanner reports both; listed so `npm run lint` catches them first.
-            'obsidianmd/no-static-styles-assignment': 'error',
-            'obsidianmd/settings-tab/prefer-setting-definitions': 'error',
             // UI text must be sentence case; product names and acronyms are
             // allow-listed and literal URLs are ignored, so legitimate strings
             // pass without an eslint-disable.
@@ -130,32 +98,6 @@ export default tseslint.config(
                     brands: UI_BRAND_NAMES,
                     acronyms: UI_ACRONYMS,
                     ignoreRegex: ['https?://\\S+'],
-                },
-            ],
-
-            // Guideline rules must not be silenced with an inline eslint-disable,
-            // and any directive that remains has to explain itself. This mirrors
-            // the Obsidian review bot so such issues are caught locally by
-            // `npm run lint` instead of only in review.
-            '@eslint-community/eslint-comments/no-restricted-disable': [
-                'error',
-                'obsidianmd',
-            ],
-            '@eslint-community/eslint-comments/require-description': [
-                'error',
-                { ignore: [] },
-            ],
-
-            // Prefer Obsidian's createDiv()/createSpan() shorthand over
-            // createEl('div'|'span'). 0.3.0 ships the rule logic but does not
-            // export it, so the check is reproduced here.
-            'no-restricted-syntax': [
-                'warn',
-                {
-                    selector:
-                        "CallExpression[callee.property.name='createEl'][arguments.0.value=/^(div|span)$/]",
-                    message:
-                        "Prefer createDiv()/createSpan() over createEl('div'|'span') for Obsidian element creation.",
                 },
             ],
         },
@@ -221,7 +163,6 @@ export default tseslint.config(
             '@typescript-eslint/no-unsafe-call': 'off',
             '@typescript-eslint/no-unsafe-return': 'off',
             '@typescript-eslint/no-unsafe-argument': 'off',
-            'no-restricted-syntax': 'off',
             // Obsidian runtime guidelines don't apply to Node-based test code,
             // which legitimately stubs `global`/`globalThis` for mocking.
             'obsidianmd/prefer-window-timers': 'off',
@@ -229,9 +170,12 @@ export default tseslint.config(
             // Mock fixtures use arbitrary titles, not user-facing UI text.
             'obsidianmd/ui/sentence-case': 'off',
             // Test files silence no-explicit-any for mocks with bare directives;
-            // they are not shipped and not covered by the review guidelines.
-            '@eslint-community/eslint-comments/require-description': 'off',
-            '@eslint-community/eslint-comments/no-restricted-disable': 'off',
+            // they are not shipped and the plugin scanner does not lint them.
+            'eslint-comments/require-description': 'off',
+            'eslint-comments/no-restricted-disable': 'off',
+            'eslint-comments/disable-enable-pair': 'off',
+            // Tests still cover deprecated aliases, such as the Readwise `highlights` variable, until they are removed.
+            '@typescript-eslint/no-deprecated': 'off',
         },
     },
 );
