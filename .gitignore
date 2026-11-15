@@ -9,8 +9,8 @@
 .DS_Store
 Thumbs.db
 
-# npm
-node_modules/
+# npm, without a trailing slash so a node_modules symlink is ignored too
+node_modules
 npm-debug.log
 
 # build
