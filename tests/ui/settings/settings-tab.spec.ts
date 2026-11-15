@@ -447,6 +447,27 @@ function getSettings(): MockSettingInstance[] {
   return settingInstances as unknown as MockSettingInstance[];
 }
 
+interface PageDefinition {
+  type: string;
+  name: string;
+  page: () => { title: string; containerEl: HTMLElement; display(): void };
+}
+
+function pageDefinitions(tab: CitationSettingTab): PageDefinition[] {
+  return tab.getSettingDefinitions() as unknown as PageDefinition[];
+}
+
+/** Open every page of the tab, as Obsidian does one at a time, and gather them in the tab's container. */
+function showSettings(tab: CitationSettingTab): void {
+  const { containerEl } = tab as unknown as { containerEl: HTMLElement };
+  containerEl.replaceChildren();
+  for (const definition of pageDefinitions(tab)) {
+    const page = definition.page();
+    page.display();
+    containerEl.append(page.containerEl);
+  }
+}
+
 describe('CitationSettingTab', () => {
   let tab: CitationSettingTab;
   let plugin: CitationPlugin;
@@ -466,48 +487,40 @@ describe('CitationSettingTab', () => {
     tab = new CitationSettingTab({} as never, plugin);
   });
 
-  describe('display()', () => {
-    it('renders without throwing', () => {
-      expect(() => tab.display()).not.toThrow();
-    });
-
-    it('calls all four render sections (produces Setting instances)', () => {
-      tab.display();
-      // Heading settings (databases, literature notes, lit note templates, citations, display) + field settings
-      expect(getSettings().length).toBeGreaterThanOrEqual(10);
-    });
-
-    it('sets the container id attribute to zoteroSettingTab', () => {
-      tab.display();
-      expect(
-        (
-          tab as unknown as { containerEl: HTMLElement }
-        ).containerEl.getAttribute('id'),
-      ).toBe('zoteroSettingTab');
-    });
-
-    it('empties containerEl before rendering', () => {
-      tab.display();
-      const container = (tab as unknown as { containerEl: HTMLElement })
-        .containerEl;
-      const firstChildCount = container.children.length;
-      tab.display();
-      // Second display should not double the children (it empties first)
-      expect(container.children.length).toBe(firstChildCount);
-    });
-  });
-
+  // minAppVersion is 1.13.0, so Obsidian always draws the tab from these pages and never calls the tab's display().
   describe('getSettingDefinitions()', () => {
-    interface PageDefinition {
-      type: string;
-      name: string;
-      page: () => { title: string; containerEl: HTMLElement; display(): void };
-    }
-    const pages = (): PageDefinition[] =>
-      tab.getSettingDefinitions() as unknown as PageDefinition[];
+    const pages = (): PageDefinition[] => pageDefinitions(tab);
 
-    // Obsidian 1.13+ draws the tab from these pages and never calls display(), so they must cover every section.
-    it('lists one page per section of display()', () => {
+    it('leaves the deprecated one-page display() to the base class', () => {
+      expect(
+        Object.prototype.hasOwnProperty.call(
+          CitationSettingTab.prototype,
+          'display',
+        ),
+      ).toBe(false);
+    });
+
+    // The stylesheet scopes its rules to this id, so every page carries it.
+    it('scopes every page to the stylesheet id', () => {
+      const ids = pages().map((definition) => {
+        const page = definition.page();
+        page.display();
+        return page.containerEl.getAttribute('id');
+      });
+
+      expect(ids).toEqual(Array(5).fill('zoteroSettingTab'));
+    });
+
+    it('empties a page before drawing it again', () => {
+      const page = pages()[1].page();
+      page.display();
+      const firstChildCount = page.containerEl.children.length;
+      page.display();
+
+      expect(page.containerEl.children.length).toBe(firstChildCount);
+    });
+
+    it('lists one page per section', () => {
       expect(pages().map((p) => [p.type, p.name])).toEqual([
         ['page', 'Citation databases'],
         ['page', 'Literature notes'],
@@ -556,7 +569,7 @@ describe('CitationSettingTab', () => {
         { name: 'DB1', path: '/a.json', type: 'csl-json' },
         { name: 'DB2', path: '/b.json', type: 'biblatex' },
       ];
-      tab.display();
+      showSettings(tab);
 
       const container = (tab as unknown as { containerEl: HTMLElement })
         .containerEl;
@@ -568,7 +581,7 @@ describe('CitationSettingTab', () => {
       plugin.settings.databases = [
         { name: 'DB1', path: '/a.json', type: 'csl-json' },
       ];
-      tab.display();
+      showSettings(tab);
 
       // Find the setting that has a button component (the "Add database" button)
       // For 1 database: heading(0), card header(1), type(2), path(3), add-button(4)
@@ -594,7 +607,7 @@ describe('CitationSettingTab', () => {
         path: `/db${i}.json`,
         type: 'csl-json' as const,
       }));
-      tab.display();
+      showSettings(tab);
 
       // Find the first setting with a button (the add-database button)
       const allSettings = getSettings();
@@ -616,7 +629,7 @@ describe('CitationSettingTab', () => {
 
   describe('renderDatabaseCard', () => {
     it('renders header with name text input and delete extra button', () => {
-      tab.display();
+      showSettings(tab);
       const container = (tab as unknown as { containerEl: HTMLElement })
         .containerEl;
       const card = container.querySelector('.citation-database-setting');
@@ -624,8 +637,8 @@ describe('CitationSettingTab', () => {
 
       // The header setting has an extraButton (delete)
       const allSettings = getSettings();
-      // First setting is the section heading, second is the card header
-      const headerSetting = allSettings[1];
+      // A page has no section heading, so the first setting is the card header
+      const headerSetting = allSettings[0];
       const extraButtons = headerSetting.getExtraButtonComponents();
       expect(extraButtons.length).toBeGreaterThan(0);
     });
@@ -635,9 +648,9 @@ describe('CitationSettingTab', () => {
         { name: 'DB1', path: '/a.json', type: 'csl-json' },
         { name: 'DB2', path: '/b.json', type: 'biblatex' },
       ];
-      tab.display();
+      showSettings(tab);
 
-      const headerSetting = getSettings()[1]; // first card header
+      const headerSetting = getSettings()[0]; // first card header
       const extraButtons = headerSetting.getExtraButtonComponents();
       extraButtons[0].triggerClick();
       await Promise.resolve();
@@ -649,8 +662,8 @@ describe('CitationSettingTab', () => {
     });
 
     it('name text input saves on change', async () => {
-      tab.display();
-      const headerSetting = getSettings()[1]; // first card header
+      showSettings(tab);
+      const headerSetting = getSettings()[0]; // first card header
       const textComps = headerSetting.getTextComponents();
       expect(textComps.length).toBeGreaterThan(0);
 
@@ -661,10 +674,10 @@ describe('CitationSettingTab', () => {
     });
 
     it('type dropdown saves on change', async () => {
-      tab.display();
+      showSettings(tab);
       // The type dropdown is on the second setting inside the card
       const allSettings = getSettings();
-      const typeSetting = allSettings[2]; // Database type setting
+      const typeSetting = allSettings[1]; // Database type setting
       const dropdowns = typeSetting.getDropdownComponents();
       expect(dropdowns.length).toBeGreaterThan(0);
 
@@ -675,9 +688,9 @@ describe('CitationSettingTab', () => {
     });
 
     it('type dropdown triggers library reload after saving', async () => {
-      tab.display();
+      showSettings(tab);
       const allSettings = getSettings();
-      const typeSetting = allSettings[2]; // Database type setting
+      const typeSetting = allSettings[1]; // Database type setting
       const dropdowns = typeSetting.getDropdownComponents();
 
       dropdowns[0].triggerChange('biblatex');
@@ -691,10 +704,10 @@ describe('CitationSettingTab', () => {
 
     it('path text input saves on change and triggers path check', async () => {
       mockReadLocalFile.mockResolvedValue(new ArrayBuffer(0));
-      tab.display();
+      showSettings(tab);
 
       const allSettings = getSettings();
-      const pathSetting = allSettings[3]; // Database path setting
+      const pathSetting = allSettings[2]; // Database path setting
       const textComps = pathSetting.getTextComponents();
       expect(textComps.length).toBeGreaterThan(0);
 
@@ -786,7 +799,7 @@ describe('CitationSettingTab', () => {
     it('renders the Zotero fields for a live-Zotero database without throwing', () => {
       plugin = zoteroPlugin();
       tab = new CitationSettingTab({} as never, plugin);
-      expect(() => tab.display()).not.toThrow();
+      expect(() => showSettings(tab)).not.toThrow();
       // The export-URL placeholder text appears in one of the text inputs.
       const hasUrlField =
         allComponents((s) => s.getTextComponents()).length > 0;
@@ -796,7 +809,7 @@ describe('CitationSettingTab', () => {
     it('switching the source dropdown to a file format clears the sourceType', () => {
       plugin = zoteroPlugin();
       tab = new CitationSettingTab({} as never, plugin);
-      tab.display();
+      showSettings(tab);
 
       const dropdowns = allComponents((s) =>
         s.getDropdownComponents(),
@@ -810,7 +823,7 @@ describe('CitationSettingTab', () => {
     it('clamps the Zotero sync interval, reflects it back, and shows a Notice', async () => {
       plugin = zoteroPlugin();
       tab = new CitationSettingTab({} as never, plugin);
-      tab.display();
+      showSettings(tab);
 
       const texts = allComponents((s) => s.getTextComponents()) as Array<{
         triggerChange(v: string): void;
@@ -837,7 +850,7 @@ describe('CitationSettingTab', () => {
         ],
       });
       tab = new CitationSettingTab({} as never, plugin);
-      tab.display();
+      showSettings(tab);
 
       const dropdowns = allComponents((s) =>
         s.getDropdownComponents(),
@@ -852,7 +865,7 @@ describe('CitationSettingTab', () => {
     it('saves the export-notes flag and the URL, and exercises the buttons', () => {
       plugin = zoteroPlugin();
       tab = new CitationSettingTab({} as never, plugin);
-      tab.display();
+      showSettings(tab);
 
       const toggles = allComponents((s) => s.getToggleComponents()) as Array<{
         triggerChange(v: boolean): void;
@@ -915,13 +928,13 @@ describe('CitationSettingTab', () => {
     it('renders the local API fields without throwing', () => {
       plugin = apiPlugin();
       tab = new CitationSettingTab({} as never, plugin);
-      expect(() => tab.display()).not.toThrow();
+      expect(() => showSettings(tab)).not.toThrow();
     });
 
     it('saves base URL, group id, and collection key', () => {
       plugin = apiPlugin();
       tab = new CitationSettingTab({} as never, plugin);
-      tab.display();
+      showSettings(tab);
 
       const texts = allComponents((s) => s.getTextComponents()) as Array<{
         triggerChange(v: string): void;
@@ -941,7 +954,7 @@ describe('CitationSettingTab', () => {
     it('exercises the test-connection and sync buttons without throwing', () => {
       plugin = apiPlugin();
       tab = new CitationSettingTab({} as never, plugin);
-      tab.display();
+      showSettings(tab);
 
       const buttons = allComponents((s) => s.getButtonComponents()) as Array<{
         triggerClick(): void;
@@ -956,7 +969,7 @@ describe('CitationSettingTab', () => {
   describe('checkDatabasePath', () => {
     it('shows "Path verified." on success', async () => {
       mockReadLocalFile.mockResolvedValue(new ArrayBuffer(0));
-      tab.display();
+      showSettings(tab);
 
       // Wait for path check to resolve
       await Promise.resolve();
@@ -972,7 +985,7 @@ describe('CitationSettingTab', () => {
 
     it('shows "File not found." on failure', async () => {
       mockReadLocalFile.mockRejectedValue(new Error('Not found'));
-      tab.display();
+      showSettings(tab);
 
       await Promise.resolve();
       await Promise.resolve();
@@ -989,7 +1002,7 @@ describe('CitationSettingTab', () => {
       plugin.settings.databases = [
         { name: 'Empty', path: '', type: 'csl-json' },
       ];
-      tab.display();
+      showSettings(tab);
 
       await Promise.resolve();
       await Promise.resolve();
@@ -1001,7 +1014,7 @@ describe('CitationSettingTab', () => {
 
   describe('renderLiteratureNotesSection', () => {
     it('renders documentation links', () => {
-      tab.display();
+      showSettings(tab);
       const container = (tab as unknown as { containerEl: HTMLElement })
         .containerEl;
       const links = container.querySelectorAll('a');
@@ -1009,7 +1022,7 @@ describe('CitationSettingTab', () => {
     });
 
     it('show variables button calls getTemplateVariables and opens modal', () => {
-      tab.display();
+      showSettings(tab);
 
       // Find all button components across all settings
       for (const setting of getSettings()) {
@@ -1023,7 +1036,7 @@ describe('CitationSettingTab', () => {
     });
 
     it('disable automatic note creation toggle saves setting', async () => {
-      tab.display();
+      showSettings(tab);
 
       // Find the first toggle and trigger it
       for (const setting of getSettings()) {
@@ -1041,13 +1054,13 @@ describe('CitationSettingTab', () => {
 
   describe('renderCitationsSection', () => {
     it('renders citation style preset dropdown', () => {
-      tab.display();
+      showSettings(tab);
       expect(getSettings().length).toBeGreaterThan(0);
     });
 
     it('changing preset to non-custom updates template values', async () => {
       plugin.settings.citationStylePreset = 'custom';
-      tab.display();
+      showSettings(tab);
 
       // Collect all dropdowns
       const allDropdowns: Array<{ triggerChange(v: string): void }> = [];
@@ -1066,7 +1079,7 @@ describe('CitationSettingTab', () => {
     });
 
     it('auto-create toggle saves setting on change', async () => {
-      tab.display();
+      showSettings(tab);
 
       // Find all toggles
       const allToggles: Array<{ triggerChange(v: boolean): void }> = [];
@@ -1085,7 +1098,7 @@ describe('CitationSettingTab', () => {
 
   describe('renderDisplaySection', () => {
     it('sort order dropdown saves setting on change', async () => {
-      tab.display();
+      showSettings(tab);
 
       // Collect all dropdowns, last one is sort order
       const allDropdowns: Array<{ triggerChange(v: string): void }> = [];
@@ -1119,7 +1132,7 @@ describe('CitationSettingTab', () => {
     });
 
     it('renders Readwise-specific fields (token, buttons) instead of path', () => {
-      tab.display();
+      showSettings(tab);
       const container = (tab as unknown as { containerEl: HTMLElement })
         .containerEl;
 
@@ -1132,7 +1145,7 @@ describe('CitationSettingTab', () => {
       plugin.settings.databases = [
         { id: 'db-1', name: 'CSL DB', path: '/a.json', type: 'csl-json' },
       ];
-      tab.display();
+      showSettings(tab);
       const container = (tab as unknown as { containerEl: HTMLElement })
         .containerEl;
 
@@ -1142,14 +1155,14 @@ describe('CitationSettingTab', () => {
 
     it('readwise card renders more settings than a file-based card', () => {
       // Readwise card: header + type + token + buttons = 4 card settings
-      tab.display();
+      showSettings(tab);
       const countReadwise = getSettings().length;
 
       settingInstances.length = 0;
       plugin.settings.databases = [
         { id: 'db-1', name: 'CSL DB', path: '/a.json', type: 'csl-json' },
       ];
-      tab.display();
+      showSettings(tab);
       const countFile = getSettings().length;
 
       // Readwise has token + buttons (2 extra) vs path (1)
@@ -1160,7 +1173,7 @@ describe('CitationSettingTab', () => {
       plugin.settings.databases = [
         { id: 'db-1', name: 'CSL DB', path: '/a.json', type: 'csl-json' },
       ];
-      tab.display();
+      showSettings(tab);
 
       const allDropdowns: Array<{ triggerChange(v: string): void }> = [];
       for (const setting of getSettings()) {
@@ -1180,7 +1193,7 @@ describe('CitationSettingTab', () => {
     });
 
     it('type dropdown changing from readwise deletes sourceType', async () => {
-      tab.display();
+      showSettings(tab);
 
       const allDropdowns: Array<{ triggerChange(v: string): void }> = [];
       for (const setting of getSettings()) {
@@ -1197,7 +1210,7 @@ describe('CitationSettingTab', () => {
     });
 
     it('API token text input saves setting on change', async () => {
-      tab.display();
+      showSettings(tab);
 
       // Collect all text components
       const allTexts: Array<{ triggerChange(v: string): void }> = [];
@@ -1217,7 +1230,7 @@ describe('CitationSettingTab', () => {
 
     it('displays last sync date when available', () => {
       plugin.settings.readwiseLastSyncDate = '2024-06-15T12:00:00Z';
-      tab.display();
+      showSettings(tab);
 
       const container = (tab as unknown as { containerEl: HTMLElement })
         .containerEl;
@@ -1228,7 +1241,7 @@ describe('CitationSettingTab', () => {
 
     it('does not display last sync date when empty', () => {
       plugin.settings.readwiseLastSyncDate = '';
-      tab.display();
+      showSettings(tab);
 
       const container = (tab as unknown as { containerEl: HTMLElement })
         .containerEl;
@@ -1243,7 +1256,7 @@ describe('CitationSettingTab', () => {
 
       it('shows Notice when no token is set', async () => {
         plugin.settings.databases[0].path = '';
-        tab.display();
+        showSettings(tab);
 
         const allButtons: Array<{ triggerClick(): void }> = [];
         for (const setting of getSettings()) {
@@ -1260,7 +1273,7 @@ describe('CitationSettingTab', () => {
 
       it('shows success when token is valid', async () => {
         mockValidateToken.mockResolvedValue(true);
-        tab.display();
+        showSettings(tab);
 
         const allButtons: Array<{ triggerClick(): void }> = [];
         for (const setting of getSettings()) {
@@ -1280,7 +1293,7 @@ describe('CitationSettingTab', () => {
 
       it('shows error when token is invalid', async () => {
         mockValidateToken.mockResolvedValue(false);
-        tab.display();
+        showSettings(tab);
 
         const allButtons: Array<{ triggerClick(): void }> = [];
         for (const setting of getSettings()) {
@@ -1299,7 +1312,7 @@ describe('CitationSettingTab', () => {
 
       it('shows network error when validation throws', async () => {
         mockValidateToken.mockRejectedValue(new Error('Network failure'));
-        tab.display();
+        showSettings(tab);
 
         const allButtons: Array<{ triggerClick(): void }> = [];
         for (const setting of getSettings()) {
@@ -1323,7 +1336,7 @@ describe('CitationSettingTab', () => {
 
       it('shows Notice when no token is set', async () => {
         plugin.settings.databases[0].path = '';
-        tab.display();
+        showSettings(tab);
 
         const allButtons: Array<{ triggerClick(): void }> = [];
         for (const setting of getSettings()) {
@@ -1341,7 +1354,7 @@ describe('CitationSettingTab', () => {
       it('reloads library and updates last sync date on success', async () => {
         // Successful load returns a non-null library; state stays clean.
         (plugin.libraryService.load as jest.Mock).mockResolvedValue({});
-        tab.display();
+        showSettings(tab);
 
         const allButtons: Array<{ triggerClick(): void }> = [];
         for (const setting of getSettings()) {
@@ -1368,7 +1381,7 @@ describe('CitationSettingTab', () => {
           status: LoadingStatus.Error,
           parseErrors: [],
         };
-        tab.display();
+        showSettings(tab);
 
         const allButtons: Array<{ triggerClick(): void }> = [];
         for (const setting of getSettings()) {
@@ -1396,7 +1409,7 @@ describe('CitationSettingTab', () => {
           status: LoadingStatus.Loading,
           parseErrors: [],
         };
-        tab.display();
+        showSettings(tab);
 
         const allButtons: Array<{ triggerClick(): void }> = [];
         for (const setting of getSettings()) {
@@ -1422,7 +1435,7 @@ describe('CitationSettingTab', () => {
 
     describe('auto-sync interval clamp', () => {
       it('clamps an over-max interval, writes it back, and notifies', async () => {
-        tab.display();
+        showSettings(tab);
 
         // The interval field is the only number input with max = the schema max.
         let interval: { triggerChange(v: string): void } | undefined;
@@ -1473,7 +1486,7 @@ describe('CitationSettingTab', () => {
       }
 
       it('clamps an over-max timeout, writes it back, and notifies', async () => {
-        tab.display();
+        showSettings(tab);
 
         const field = findTimeoutField();
         expect(field).toBeDefined();
@@ -1492,7 +1505,7 @@ describe('CitationSettingTab', () => {
       });
 
       it('clamps a below-min timeout up to the minimum', async () => {
-        tab.display();
+        showSettings(tab);
 
         const field = findTimeoutField();
         expect(field).toBeDefined();
@@ -1561,7 +1574,7 @@ describe('CitationSettingTab', () => {
 
   describe('renderLiteratureNotesSection — link display template', () => {
     it('literatureNoteLinkDisplayTemplate text saves setting on change', async () => {
-      tab.display();
+      showSettings(tab);
 
       // Collect all text components
       const allTexts: Array<{ triggerChange(v: string): void }> = [];
@@ -1624,7 +1637,7 @@ describe('CitationSettingTab', () => {
 
   describe('createSaveHandler', () => {
     it('saves setting for valid value', async () => {
-      tab.display();
+      showSettings(tab);
 
       // buildTextField creates text components — find one and trigger
       for (const setting of getSettings()) {
@@ -1641,7 +1654,7 @@ describe('CitationSettingTab', () => {
     });
 
     it('shows error element for invalid value', () => {
-      tab.display();
+      showSettings(tab);
 
       // Find the literatureNoteTitleTemplate field (min(1) constraint)
       // It's after the literatureNoteFolder field
@@ -1726,7 +1739,7 @@ describe('CitationSettingTab', () => {
       plugin.settings.citationStylePreset = 'custom';
       plugin.settings.markdownCitationTemplate = 'old-template';
       plugin.settings.alternativeMarkdownCitationTemplate = 'old-alt';
-      tab.display();
+      showSettings(tab);
 
       // Collect all dropdowns, find the citation style one
       // The database card dropdowns come first; the citation preset is later
@@ -1761,7 +1774,7 @@ describe('CitationSettingTab', () => {
     it('does not overwrite templates when custom preset is selected', async () => {
       plugin.settings.citationStylePreset = 'textcite';
       plugin.settings.markdownCitationTemplate = 'my-custom';
-      tab.display();
+      showSettings(tab);
 
       const allDropdowns: Array<{ triggerChange(v: string): void }> = [];
       for (const setting of getSettings()) {
@@ -1786,7 +1799,7 @@ describe('CitationSettingTab', () => {
   describe('buildCitationTemplateField', () => {
     it('disables input when preset is not custom', () => {
       plugin.settings.citationStylePreset = 'textcite';
-      tab.display();
+      showSettings(tab);
       // When preset is not custom, template fields are disabled
       // No throw means it rendered correctly
       expect(getSettings().length).toBeGreaterThan(0);
@@ -1794,7 +1807,7 @@ describe('CitationSettingTab', () => {
 
     it('enables input when preset is custom', () => {
       plugin.settings.citationStylePreset = 'custom';
-      tab.display();
+      showSettings(tab);
       expect(getSettings().length).toBeGreaterThan(0);
     });
   });
@@ -1808,11 +1821,16 @@ describe('CitationSettingTab', () => {
         ),
       );
     const addProfileButton = () => {
-      const all = getSettings();
-      const heading = all.findIndex((s) => s.name === 'Fragment profiles');
-      return all
-        .slice(heading)
-        .find((s) => s.getButtonComponents().length > 0)!
+      const index = pageDefinitions(tab).findIndex(
+        (p) => p.name === 'Fragment profiles',
+      );
+      const page = (tab as unknown as { containerEl: HTMLElement }).containerEl
+        .children[index];
+      return getSettings()
+        .find(
+          (s) =>
+            page.contains(s.settingEl) && s.getButtonComponents().length > 0,
+        )!
         .getButtonComponents()[0];
     };
     const settle = async () => {
@@ -1822,7 +1840,7 @@ describe('CitationSettingTab', () => {
 
     it('renders a name row and a template row per profile', () => {
       plugin.settings.fragmentProfiles = [PROFILE];
-      tab.display();
+      showSettings(tab);
       const rows = profileRows();
       expect(rows.map((r) => r.name)).toEqual(['Name', 'Template']);
       expect(rows[1].settingEl.classList).toContain('citation-setting-stacked');
@@ -1832,7 +1850,7 @@ describe('CitationSettingTab', () => {
       plugin.settings.fragmentProfiles = [
         { id: 'p0', name: 'New profile', template: '' },
       ];
-      tab.display();
+      showSettings(tab);
       addProfileButton().triggerClick();
       await settle();
       expect(plugin.settings.fragmentProfiles.map((p) => p.name)).toEqual([
@@ -1844,7 +1862,7 @@ describe('CitationSettingTab', () => {
 
     it('renames a profile and keeps its template', async () => {
       plugin.settings.fragmentProfiles = [PROFILE];
-      tab.display();
+      showSettings(tab);
       profileRows()[0].getTextComponents()[0].triggerChange('pdf-list');
       await settle();
       expect(plugin.settings.fragmentProfiles).toEqual([
@@ -1857,7 +1875,7 @@ describe('CitationSettingTab', () => {
         PROFILE,
         { id: 'p2', name: 'doi', template: 'D' },
       ];
-      tab.display();
+      showSettings(tab);
       const nameRow = profileRows()[2];
       nameRow.getTextComponents()[0].triggerChange('pdf-links');
       await settle();
@@ -1870,7 +1888,7 @@ describe('CitationSettingTab', () => {
 
     it('updates the template and keeps the name', async () => {
       plugin.settings.fragmentProfiles = [PROFILE];
-      tab.display();
+      showSettings(tab);
       profileRows()[1].getTextAreaComponents()[0].triggerChange('NEW');
       await settle();
       expect(plugin.settings.fragmentProfiles).toEqual([
@@ -1880,7 +1898,7 @@ describe('CitationSettingTab', () => {
 
     it('removes a profile', async () => {
       plugin.settings.fragmentProfiles = [PROFILE];
-      tab.display();
+      showSettings(tab);
       profileRows()[0].getExtraButtonComponents()[0].triggerClick();
       await settle();
       expect(plugin.settings.fragmentProfiles).toEqual([]);
