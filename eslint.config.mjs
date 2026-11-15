@@ -178,6 +178,18 @@ export default tseslint.config(
     },
 
     {
+        // Node scripts lie outside tsconfig.json, so they are linted without type information.
+        files: ['tools/**/*.mjs'],
+        ...tseslint.configs.disableTypeChecked,
+        rules: {
+            ...tseslint.configs.disableTypeChecked.rules,
+            // Obsidian plugin rules that need type information, which a Node script neither has nor needs.
+            'obsidianmd/no-unsupported-api': 'off',
+            'obsidianmd/no-view-references-in-plugin': 'off',
+        },
+    },
+
+    {
         ignores: [
             'dist/**',
             'coverage/**',

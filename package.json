@@ -8,6 +8,7 @@
     "build": "rollup --config rollup.config.mjs",
     "lint": "eslint .",
     "test": "jest",
+    "crap-gate": "jest --coverage --silent && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/crap-gate.mjs",
     "bench": "jest --config jest.bench.config.cjs",
     "doc": "typedoc src/types.ts",
     "release": "standard-version",
