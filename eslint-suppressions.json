@@ -1,0 +1,271 @@
+{
+  "src/application/actions/batch-update.action.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/application/actions/insert-note-link.action.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/application/citekey-extractor.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/application/content-template-resolver.ts": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "src/application/template-selection-dialog.ts": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "src/core/adapters/csl-adapter.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/core/adapters/readwise-adapter.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/core/adapters/zotero-api-adapter.ts": {
+    "complexity": {
+      "count": 4
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/core/parsing/hayagriva-parser.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/core/readwise/readwise-api-client.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/core/readwise/readwise-delta.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/core/sync/frontmatter-sync.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/core/sync/note-sync.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/core/sync/sync-blocks.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/core/zotero/zotero-annotations.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/core/zotero/zotero-client.ts": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/core/zotero/zotero-local-api-client.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/infrastructure/source-manager.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/library/library.service.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/main.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/notes/baseline-store.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/notes/batch/batch-note-orchestrator.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 2
+    },
+    "max-params": {
+      "count": 1
+    }
+  },
+  "src/notes/note-lookup-index.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/notes/note.service.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/search/search.service.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/services/context-menu-handler.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/services/ui.service.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/sources/readwise-source.ts": {
+    "complexity": {
+      "count": 5
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    }
+  },
+  "src/sources/zotero-api-source.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    }
+  },
+  "src/sources/zotero-source.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    }
+  },
+  "src/template/helpers/path-helpers.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/template/introspection.service.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/template/template-fragment-locator.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/ui/modals/replace-selection-modal.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/ui/modals/update-review-modal.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/ui/modals/variable-list-modal.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/ui/render-line-diff.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/ui/settings/settings-tab.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 10
+    }
+  },
+  "src/ui/views/references-view.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/util.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  }
+}
