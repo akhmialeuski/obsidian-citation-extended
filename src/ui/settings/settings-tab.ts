@@ -109,14 +109,28 @@ const CITATION_STYLE_PRESET_LABELS: Record<CitationStylePreset, string> = {
   citekey: 'Citekey — [@citekey]',
 };
 
-/** Id the plugin stylesheet scopes the settings to, on the tab and on each section page. */
+/** Id the plugin stylesheet scopes the settings to, on each section page. */
 const SETTINGS_ROOT_ID = 'zoteroSettingTab';
 
-/** One section of the settings tab, drawn into whichever element hosts it. */
+/** One section of the settings tab, drawn into the page that hosts it. */
 interface SettingsSection {
   name: string;
   desc: string;
   render(containerEl: HTMLElement, refresh: () => void): void;
+}
+
+/** A page of the settings tab, drawn by its section and redrawn by it after a structural change. */
+class SectionPage extends SettingPage {
+  constructor(private readonly section: SettingsSection) {
+    super();
+    this.title = section.name;
+  }
+
+  display(): void {
+    this.containerEl.empty();
+    this.containerEl.setAttr('id', SETTINGS_ROOT_ID);
+    this.section.render(this.containerEl, () => this.display());
+  }
 }
 
 const DOCS_BASE =
@@ -133,10 +147,7 @@ export class CitationSettingTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
-  /**
-   * The sections of the tab, each drawn into the element that hosts it. `refresh` redraws that host after a
-   * structural change: the whole tab under display(), or the open page under getSettingDefinitions().
-   */
+  /** The sections of the tab, one page each. `refresh` redraws the open page after a structural change. */
   private sections(): SettingsSection[] {
     return [
       {
@@ -168,38 +179,8 @@ export class CitationSettingTab extends PluginSettingTab {
     ];
   }
 
-  /** The whole tab on one page, for Obsidian before 1.13, which has no getSettingDefinitions(). */
-  display(): void {
-    const { containerEl } = this;
-    containerEl.empty();
-    containerEl.setAttr('id', SETTINGS_ROOT_ID);
-
-    for (const section of this.sections()) {
-      new Setting(containerEl).setName(section.name).setHeading();
-      section.render(containerEl, () => this.display());
-    }
-  }
-
-  /**
-   * One page per section for Obsidian 1.13 and later, which draws the tab from these definitions and no longer
-   * calls display(). Each page is drawn by the same section code, so the two layouts cannot drift apart. The page
-   * class is declared here because SettingPage only exists from 1.13, and a module-level subclass would fail to
-   * load on older versions.
-   */
+  /** One page per section, which Obsidian lists in the tab and opens on demand. */
   getSettingDefinitions(): SettingDefinitionItem[] {
-    class SectionPage extends SettingPage {
-      constructor(private readonly section: SettingsSection) {
-        super();
-        this.title = section.name;
-      }
-
-      display(): void {
-        this.containerEl.empty();
-        this.containerEl.setAttr('id', SETTINGS_ROOT_ID);
-        this.section.render(this.containerEl, () => this.display());
-      }
-    }
-
     return this.sections().map((section) => ({
       type: 'page',
       name: section.name,

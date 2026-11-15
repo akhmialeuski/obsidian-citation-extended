@@ -66,6 +66,7 @@ jest.mock(
     },
     debounce: (fn: (...args: unknown[]) => unknown) => fn,
     PluginSettingTab: class {},
+    SettingPage: class {},
     Setting: class {},
   }),
   { virtual: true },

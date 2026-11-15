@@ -46,6 +46,7 @@ jest.mock(
     WorkspaceLeaf: class {},
     setIcon: jest.fn(),
     PluginSettingTab: class {},
+    SettingPage: class {},
     Setting: class {},
     SuggestModal: class {},
     Modal: class {},
