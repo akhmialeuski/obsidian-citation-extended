@@ -4,6 +4,8 @@ import {
   FileSystemAdapter,
   PluginSettingTab,
   Setting,
+  SettingDefinitionItem,
+  SettingPage,
   Notice,
 } from 'obsidian';
 
@@ -107,6 +109,16 @@ const CITATION_STYLE_PRESET_LABELS: Record<CitationStylePreset, string> = {
   citekey: 'Citekey — [@citekey]',
 };
 
+/** Id the plugin stylesheet scopes the settings to, on the tab and on each section page. */
+const SETTINGS_ROOT_ID = 'zoteroSettingTab';
+
+/** One section of the settings tab, drawn into whichever element hosts it. */
+interface SettingsSection {
+  name: string;
+  desc: string;
+  render(containerEl: HTMLElement, refresh: () => void): void;
+}
+
 const DOCS_BASE =
   'https://github.com/akhmialeuski/obsidian-citation-extended/blob/master/docs';
 
@@ -121,20 +133,85 @@ export class CitationSettingTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
+  /**
+   * The sections of the tab, each drawn into the element that hosts it. `refresh` redraws that host after a
+   * structural change: the whole tab under display(), or the open page under getSettingDefinitions().
+   */
+  private sections(): SettingsSection[] {
+    return [
+      {
+        name: 'Citation databases',
+        desc: 'Sources the library loads references from.',
+        render: (el, refresh) => this.renderDatabaseSection(el, refresh),
+      },
+      {
+        name: 'Literature notes',
+        desc: 'Folder, titles, content templates and how notes are updated.',
+        render: (el) => this.renderLiteratureNotesSection(el),
+      },
+      {
+        name: 'Fragment profiles',
+        desc: 'Named templates for inserting or replacing text with template output.',
+        render: (el, refresh) =>
+          this.renderFragmentProfilesSection(el, refresh),
+      },
+      {
+        name: 'Markdown citation templates',
+        desc: 'How the insert citation command writes a citation.',
+        render: (el, refresh) => this.renderCitationsSection(el, refresh),
+      },
+      {
+        name: 'Display',
+        desc: 'Sort order of the search results and the bibliography entry template.',
+        render: (el) => this.renderDisplaySection(el),
+      },
+    ];
+  }
+
+  /** The whole tab on one page, for Obsidian before 1.13, which has no getSettingDefinitions(). */
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.setAttr('id', 'zoteroSettingTab');
+    containerEl.setAttr('id', SETTINGS_ROOT_ID);
 
-    this.renderDatabaseSection(containerEl);
-    this.renderLiteratureNotesSection(containerEl);
-    this.renderFragmentProfilesSection(containerEl);
-    this.renderCitationsSection(containerEl);
-    this.renderDisplaySection(containerEl);
+    for (const section of this.sections()) {
+      new Setting(containerEl).setName(section.name).setHeading();
+      section.render(containerEl, () => this.display());
+    }
   }
 
-  private renderDatabaseSection(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName('Citation databases').setHeading();
+  /**
+   * One page per section for Obsidian 1.13 and later, which draws the tab from these definitions and no longer
+   * calls display(). Each page is drawn by the same section code, so the two layouts cannot drift apart. The page
+   * class is declared here because SettingPage only exists from 1.13, and a module-level subclass would fail to
+   * load on older versions.
+   */
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    class SectionPage extends SettingPage {
+      constructor(private readonly section: SettingsSection) {
+        super();
+        this.title = section.name;
+      }
+
+      display(): void {
+        this.containerEl.empty();
+        this.containerEl.setAttr('id', SETTINGS_ROOT_ID);
+        this.section.render(this.containerEl, () => this.display());
+      }
+    }
+
+    return this.sections().map((section) => ({
+      type: 'page',
+      name: section.name,
+      desc: section.desc,
+      page: () => new SectionPage(section),
+    }));
+  }
+
+  private renderDatabaseSection(
+    containerEl: HTMLElement,
+    refresh: () => void,
+  ): void {
     containerEl.createEl('p', {
       text: 'Configure one or more citation databases. The plugin will load references from all configured sources.',
       cls: 'setting-item-description',
@@ -145,7 +222,7 @@ export class CitationSettingTab extends PluginSettingTab {
     );
 
     this.plugin.settings.databases.forEach((db, index) => {
-      this.renderDatabaseCard(databasesContainer, db, index);
+      this.renderDatabaseCard(databasesContainer, db, index, refresh);
     });
 
     new Setting(containerEl).addButton((button) => {
@@ -165,7 +242,7 @@ export class CitationSettingTab extends PluginSettingTab {
               path: '',
             });
             await this.plugin.saveSettings();
-            this.display();
+            refresh();
           })();
         });
     });
@@ -214,6 +291,7 @@ export class CitationSettingTab extends PluginSettingTab {
     container: HTMLElement,
     db: DatabaseConfig,
     index: number,
+    refresh: () => void,
   ): void {
     const card = container.createDiv('citation-database-setting');
 
@@ -243,7 +321,7 @@ export class CitationSettingTab extends PluginSettingTab {
                 this.plugin.settings.readwiseLastSyncDate = '';
               }
               await this.plugin.saveSettings();
-              this.display();
+              refresh();
               void this.plugin.libraryService.load();
             })();
           });
@@ -256,7 +334,7 @@ export class CitationSettingTab extends PluginSettingTab {
         const db = this.plugin.settings.databases[index];
         CitationSettingTab.switchDatabaseSource(db, value);
         await this.plugin.saveSettings();
-        this.display();
+        refresh();
         // Live Better BibTeX and Readwise need a URL/token before a load can
         // succeed, so re-render their fields and wait for input rather than
         // firing a load that would just error.
@@ -1042,8 +1120,6 @@ export class CitationSettingTab extends PluginSettingTab {
   }
 
   private renderLiteratureNotesSection(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName('Literature notes').setHeading();
-
     this.buildTextField(
       containerEl,
       'Literature note folder',
@@ -1171,8 +1247,10 @@ export class CitationSettingTab extends PluginSettingTab {
       });
   }
 
-  private renderFragmentProfilesSection(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName('Fragment profiles').setHeading();
+  private renderFragmentProfilesSection(
+    containerEl: HTMLElement,
+    refresh: () => void,
+  ): void {
     containerEl.createEl('p', {
       text: 'Named templates for inserting or replacing text with template output.',
       cls: 'setting-item-description',
@@ -1205,7 +1283,7 @@ export class CitationSettingTab extends PluginSettingTab {
                   profile.id,
                 );
                 await this.plugin.saveSettings();
-                this.display();
+                refresh();
               })();
             });
         });
@@ -1233,7 +1311,7 @@ export class CitationSettingTab extends PluginSettingTab {
               createProfile(freeProfileName(profiles, NEW_PROFILE_NAME)),
             );
             await this.plugin.saveSettings();
-            this.display();
+            refresh();
           })();
         });
     });
@@ -1256,10 +1334,10 @@ export class CitationSettingTab extends PluginSettingTab {
     await this.plugin.saveSettings();
   }
 
-  private renderCitationsSection(containerEl: HTMLElement): void {
-    new Setting(containerEl)
-      .setName('Markdown citation templates')
-      .setHeading();
+  private renderCitationsSection(
+    containerEl: HTMLElement,
+    refresh: () => void,
+  ): void {
     containerEl.createEl('p', {
       text: 'You can insert pandoc-style citations rather than literature notes by using the insert citation command.',
       cls: 'setting-item-description',
@@ -1286,7 +1364,7 @@ export class CitationSettingTab extends PluginSettingTab {
             }
 
             await this.plugin.saveSettings();
-            this.display();
+            refresh();
           })();
         });
       });
@@ -1357,8 +1435,6 @@ export class CitationSettingTab extends PluginSettingTab {
   }
 
   private renderDisplaySection(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName('Display').setHeading();
-
     new Setting(containerEl)
       .setName('Sort order')
       .setDesc(
