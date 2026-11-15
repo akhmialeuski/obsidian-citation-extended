@@ -12,7 +12,6 @@ import { ReplaceSelectionWithTemplateAction } from '../../../../src/application/
 import { TemplateSelectionDialog } from '../../../../src/application/template-selection-dialog';
 import { ActionContext } from '../../../../src/application/actions/action.types';
 import { LiteratureNoteNotFoundError } from '../../../../src/core/errors';
-import type { IBatchNoteOrchestrator } from '../../../../src/notes/batch/batch-update.types';
 import type { IContentTemplateResolver } from '../../../../src/application/content-template-resolver';
 
 jest.mock(
@@ -843,7 +842,7 @@ describe('BatchUpdateNotesAction', () => {
     resolver = { resolve: jest.fn().mockResolvedValue('{{title}}') };
     action = new BatchUpdateNotesAction(
       ctx,
-      orchestrator as unknown as IBatchNoteOrchestrator,
+      orchestrator,
       resolver as unknown as IContentTemplateResolver,
     );
   });
@@ -1017,7 +1016,7 @@ describe('UpdateCurrentNoteAction', () => {
     resolver = { resolve: jest.fn().mockResolvedValue('{{title}}') };
     action = new UpdateCurrentNoteAction(
       ctx,
-      orchestrator as unknown as IBatchNoteOrchestrator,
+      orchestrator,
       resolver as unknown as IContentTemplateResolver,
     );
   });

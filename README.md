@@ -62,6 +62,15 @@ This plugin accesses the network only when **you** configure it to, and it never
 
 All bibliography parsing happens locally. Nothing leaves your vault unless you explicitly enable the Readwise integration above.
 
+## File and Clipboard Access
+
+The plugin reads files outside your vault and lists the notes inside it only for the features below, and it writes nothing outside the vault.
+
+- **Library files outside the vault**: a database whose source is a file (Better CSL JSON, Better BibTeX or Hayagriva (YAML)) reads the path you enter, which may be absolute and outside the vault, through Node's file system on desktop. The plugin watches that one file and reloads the library when it changes.
+- **Markdown notes in the vault**: to find the literature note of a citekey, the plugin lists the vault's Markdown files and matches them by path, by file name in any folder, and, when **Note identifier field** is set, by that frontmatter field. It reads no note content for this beyond Obsidian's metadata cache.
+- **Opening attachments**: in the search of **Open literature note**, **Shift+Tab** hands the entry's PDF to your operating system as a `file://` path, and **Tab** opens the entry in Zotero through a `zotero://` link. Nothing is opened unless you press one of them.
+- **Clipboard**: the plugin only writes to the clipboard, when you press **Copy bibliography** in the References view or **Copy all** in the template variable list. It never reads the clipboard.
+
 ## Development
 
 ```bash
@@ -77,7 +86,11 @@ Before opening a pull request, run the CRAP gate. It runs the suite with coverag
 npm run crap-gate
 ```
 
-On a green run, `npm run crap-gate -- --update-baseline` records every function that got better, so the baseline only falls. The complexity, parameter and length limits it shares with ESLint are checked by `npm run lint`, with existing debt recorded in `eslint-suppressions.json`.
+On a green run, `npm run crap-gate -- --update-baseline` records every function that got better, so the baseline only falls. The complexity, parameter and length limits it shares with ESLint are checked by `npm run lint`, with existing debt recorded in `.eslint/suppressions.json`. Once a recorded violation is fixed, prune it:
+
+```bash
+npx eslint --suppressions-location .eslint/suppressions.json --prune-suppressions src
+```
 
 See [Architecture](docs/architecture.md) for the design of the plugin.
 

@@ -118,6 +118,9 @@ export default tseslint.config(
             'obsidianmd/commands/no-plugin-name-in-command-name': 'error',
             'obsidianmd/settings-tab/no-manual-html-headings': 'warn',
             'obsidianmd/settings-tab/no-problematic-settings-headings': 'warn',
+            // The plugin scanner reports both; listed so `npm run lint` catches them first.
+            'obsidianmd/no-static-styles-assignment': 'error',
+            'obsidianmd/settings-tab/prefer-setting-definitions': 'error',
             // UI text must be sentence case; product names and acronyms are
             // allow-listed and literal URLs are ignored, so legitimate strings
             // pass without an eslint-disable.
@@ -161,7 +164,9 @@ export default tseslint.config(
 
     {
         // crap-gate limits, kept equal to crap-gate.toml so the edit hook and the commit agree.
-        // Existing debt is recorded per file in eslint-suppressions.json and may only shrink.
+        // Existing debt is recorded per file in .eslint/suppressions.json and may only shrink. The file is
+        // kept off ESLint's default location so a run under another config, such as Obsidian's plugin
+        // scanner, does not read it, find its entries unused and exit with a fatal error.
         files: ['src/**/*.ts'],
         rules: {
             complexity: ['error', 8],

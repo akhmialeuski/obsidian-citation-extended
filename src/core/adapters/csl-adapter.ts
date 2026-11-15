@@ -144,13 +144,11 @@ export class EntryCSLAdapter extends Entry {
   }
 
   private computeIssuedDate(): Date | null {
-    if (
-      !(
-        this.data.issued &&
-        this.data.issued['date-parts'] &&
-        this.data.issued['date-parts'][0].length > 0
-      )
-    )
+    if (!(
+      this.data.issued &&
+      this.data.issued['date-parts'] &&
+      this.data.issued['date-parts'][0].length > 0
+    ))
       return null;
 
     const [year, month, day] = this.data.issued['date-parts'][0];

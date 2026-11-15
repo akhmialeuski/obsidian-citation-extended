@@ -62,13 +62,11 @@ export function createMockPlatformAdapter(
     // handling is exercised against host semantics rather than identity.
     normalizePath: jest.fn(normalizePathLikeObsidian),
     resolvePath: jest.fn((p: string) => `/vault/${p}`),
-    addStatusBarItem: jest.fn(
-      (): IStatusBarItem => ({
-        setText: jest.fn(),
-        addClass: jest.fn(),
-        removeClass: jest.fn(),
-      }),
-    ),
+    addStatusBarItem: jest.fn((): IStatusBarItem => ({
+      setText: jest.fn(),
+      addClass: jest.fn(),
+      removeClass: jest.fn(),
+    })),
     ...overrides,
   };
 }

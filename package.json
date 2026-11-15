@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "rollup --config rollup.config.mjs -w",
     "build": "rollup --config rollup.config.mjs",
-    "lint": "eslint .",
+    "lint": "eslint --suppressions-location .eslint/suppressions.json .",
     "test": "jest",
     "crap-gate": "jest --coverage --silent && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/crap-gate.mjs",
     "bench": "jest --config jest.bench.config.cjs",
@@ -36,14 +36,14 @@
     "@types/node": "^18.0.0",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^9.1.2",
-    "eslint-plugin-obsidianmd": "^0.3.0",
+    "eslint-plugin-obsidianmd": "^0.6.0",
     "eslint-plugin-prettier": "^5.5.4",
     "fast-check": "^3.0.0",
     "globals": "^16.5.0",
     "husky": "^9.0.0",
     "jest": "^29.5.0",
     "jest-environment-jsdom": "^30.2.0",
-    "obsidian": "^1.10.3",
+    "obsidian": "^1.14.4",
     "prettier": "^3.0.0",
     "rollup": "^4.0.0",
     "rollup-plugin-web-worker-loader": "^1.6.1",
@@ -56,15 +56,15 @@
   "dependencies": {
     "@retorquere/bibtex-parser": "^6.4.19",
     "chokidar": "^3.5.3",
-    "handlebars": "^4.7.9",
+    "handlebars": "^4.7.10",
     "minisearch": "^7.2.0",
     "node-diff3": "^3.2.1",
     "open": "^8.4.2",
     "unicode2latex": "^3.0.3",
-    "zod": "^3.22.0"
+    "zod": "^4.6.7"
   },
   "lint-staged": {
-    "*.ts": "eslint --fix",
+    "*.ts": "eslint --fix --suppressions-location .eslint/suppressions.json",
     "*.json": "prettier --write"
   },
   "jest": {

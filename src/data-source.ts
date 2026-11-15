@@ -40,8 +40,7 @@ export function isZoteroBbtConfig(
  * String-based to allow extensibility via the registry pattern.
  */
 export type DataSourceType =
-  | (typeof DATA_SOURCE_TYPES)[keyof typeof DATA_SOURCE_TYPES]
-  | (string & {});
+  (typeof DATA_SOURCE_TYPES)[keyof typeof DATA_SOURCE_TYPES] | (string & {});
 
 /**
  * Options accepted by {@link DataSource.load}.

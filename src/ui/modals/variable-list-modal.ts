@@ -28,11 +28,6 @@ export class VariableListModal extends Modal {
     );
 
     const btnRow = contentEl.createDiv('citation-variable-btn-row');
-    btnRow.setCssProps({
-      display: 'flex',
-      justifyContent: 'flex-end',
-      marginBottom: '8px',
-    });
 
     const copyBtn = btnRow.createEl('button', { text: 'Copy all' });
     copyBtn.addClass('mod-cta');
@@ -50,8 +45,9 @@ export class VariableListModal extends Modal {
         });
     });
 
-    const table = contentEl.createEl('table');
-    table.setCssProps({ width: '100%', fontSize: '0.85em' });
+    const table = contentEl.createEl('table', {
+      cls: 'citation-variable-table',
+    });
 
     const thead = table.createEl('thead');
     const headerRow = thead.createEl('tr');

@@ -135,7 +135,7 @@ describe('LibraryService', () => {
       settings,
       platform,
       workerManager as unknown as WorkerManager,
-      new SourceManager(factory as never),
+      new SourceManager(factory),
       new NormalizationPipeline()
         .addStep(new SourceTaggingStep())
         .addStep(new DeduplicationStep()),
@@ -388,7 +388,7 @@ describe('LibraryService', () => {
         settings,
         platform,
         workerManager as unknown as WorkerManager,
-        new SourceManager(factory as never),
+        new SourceManager(factory),
         new NormalizationPipeline()
           .addStep(new SourceTaggingStep())
           .addStep(new DeduplicationStep()),
@@ -742,7 +742,7 @@ describe('LibraryService', () => {
         settings,
         platform,
         workerManager as unknown as WorkerManager,
-        new SourceManager(factory as never),
+        new SourceManager(factory),
         new NormalizationPipeline()
           .addStep(new SourceTaggingStep())
           .addStep(new DeduplicationStep()),
@@ -778,10 +778,8 @@ describe('LibraryService', () => {
     it('watcher callback triggers debounced reload', async () => {
       jest.useFakeTimers({ legacyFakeTimers: false });
       // Update window.setTimeout to use the faked version
-      global.window.setTimeout =
-        setTimeout as unknown as typeof window.setTimeout;
-      global.window.clearTimeout =
-        clearTimeout as unknown as typeof window.clearTimeout;
+      global.window.setTimeout = setTimeout;
+      global.window.clearTimeout = clearTimeout;
 
       let watchCallback: (() => void) | undefined;
       (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
@@ -822,10 +820,8 @@ describe('LibraryService', () => {
       service.dispose();
       jest.useRealTimers();
       // Restore window timers
-      global.window.setTimeout =
-        setTimeout as unknown as typeof window.setTimeout;
-      global.window.clearTimeout =
-        clearTimeout as unknown as typeof window.clearTimeout;
+      global.window.setTimeout = setTimeout;
+      global.window.clearTimeout = clearTimeout;
     });
   });
 
@@ -834,10 +830,8 @@ describe('LibraryService', () => {
   describe('dispose() full cleanup', () => {
     it('clears debounce timer', async () => {
       jest.useFakeTimers({ legacyFakeTimers: false });
-      global.window.setTimeout =
-        setTimeout as unknown as typeof window.setTimeout;
-      global.window.clearTimeout =
-        clearTimeout as unknown as typeof window.clearTimeout;
+      global.window.setTimeout = setTimeout;
+      global.window.clearTimeout = clearTimeout;
 
       let watchCallback: (() => void) | undefined;
       (LocalFileSource as jest.Mock).mockImplementation((id: string) => ({
@@ -867,7 +861,7 @@ describe('LibraryService', () => {
         settings,
         platform,
         workerManager as unknown as WorkerManager,
-        new SourceManager(factory as never),
+        new SourceManager(factory),
         new NormalizationPipeline()
           .addStep(new SourceTaggingStep())
           .addStep(new DeduplicationStep()),
@@ -886,10 +880,8 @@ describe('LibraryService', () => {
       expect(loadSpy).not.toHaveBeenCalled();
 
       jest.useRealTimers();
-      global.window.setTimeout =
-        setTimeout as unknown as typeof window.setTimeout;
-      global.window.clearTimeout =
-        clearTimeout as unknown as typeof window.clearTimeout;
+      global.window.setTimeout = setTimeout;
+      global.window.clearTimeout = clearTimeout;
     });
 
     it('clears retry timer', async () => {

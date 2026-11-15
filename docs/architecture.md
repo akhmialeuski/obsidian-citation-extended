@@ -1588,7 +1588,7 @@ Direct `import ... from 'obsidian'` only in:
 | `src/sources/vault-file-source.ts`     | `Vault`, `TFile`                                                                                             |
 | `src/services/command-registry.ts`     | `App`, `Plugin`                                                                                              |
 | `src/services/context-menu-handler.ts` | `App`, `Plugin`, `Menu`, `Editor`                                                                            |
-| `src/ui/`                              | `Modal`, `SuggestModal`, `PluginSettingTab`, `Setting`, `Notice`, `debounce`                                 |
+| `src/ui/`                              | `Modal`, `SuggestModal`, `PluginSettingTab`, `SettingPage`, `Setting`, `Notice`, `debounce`                  |
 | `src/main.ts`                          | `Plugin`                                                                                                     |
 
 **Never import `obsidian`:** `src/application/`, `src/library/`, `src/notes/`, `src/template/`, `src/core/`, `src/domain/`, `src/search/`, `src/infrastructure/`.

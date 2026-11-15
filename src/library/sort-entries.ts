@@ -4,10 +4,7 @@ import { Entry } from '../core';
  * Supported sort orders for the citation reference list modal.
  */
 export type ReferenceListSortOrder =
-  | 'default'
-  | 'year-desc'
-  | 'year-asc'
-  | 'author-asc';
+  'default' | 'year-desc' | 'year-asc' | 'author-asc';
 
 /**
  * Sort an array of entries according to the given sort order.

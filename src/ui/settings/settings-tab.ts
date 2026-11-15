@@ -4,6 +4,8 @@ import {
   FileSystemAdapter,
   PluginSettingTab,
   Setting,
+  SettingDefinitionItem,
+  SettingPage,
   Notice,
 } from 'obsidian';
 
@@ -63,6 +65,11 @@ import {
   SyncOutcomeKind,
 } from '../../library/sync-outcome';
 import { LoadingStatus } from '../../library/library-state';
+import {
+  SETTING_STATUS_CLASS,
+  SETTING_STATUS_KINDS,
+  setSettingStatus,
+} from './setting-status';
 
 /** Maximum number of sync warnings appended to the "synced with warnings" notice. */
 const MAX_SURFACED_SYNC_WARNINGS = 3;
@@ -102,6 +109,16 @@ const CITATION_STYLE_PRESET_LABELS: Record<CitationStylePreset, string> = {
   citekey: 'Citekey — [@citekey]',
 };
 
+/** Id the plugin stylesheet scopes the settings to, on the tab and on each section page. */
+const SETTINGS_ROOT_ID = 'zoteroSettingTab';
+
+/** One section of the settings tab, drawn into whichever element hosts it. */
+interface SettingsSection {
+  name: string;
+  desc: string;
+  render(containerEl: HTMLElement, refresh: () => void): void;
+}
+
 const DOCS_BASE =
   'https://github.com/akhmialeuski/obsidian-citation-extended/blob/master/docs';
 
@@ -116,20 +133,85 @@ export class CitationSettingTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
+  /**
+   * The sections of the tab, each drawn into the element that hosts it. `refresh` redraws that host after a
+   * structural change: the whole tab under display(), or the open page under getSettingDefinitions().
+   */
+  private sections(): SettingsSection[] {
+    return [
+      {
+        name: 'Citation databases',
+        desc: 'Sources the library loads references from.',
+        render: (el, refresh) => this.renderDatabaseSection(el, refresh),
+      },
+      {
+        name: 'Literature notes',
+        desc: 'Folder, titles, content templates and how notes are updated.',
+        render: (el) => this.renderLiteratureNotesSection(el),
+      },
+      {
+        name: 'Fragment profiles',
+        desc: 'Named templates for inserting or replacing text with template output.',
+        render: (el, refresh) =>
+          this.renderFragmentProfilesSection(el, refresh),
+      },
+      {
+        name: 'Markdown citation templates',
+        desc: 'How the insert citation command writes a citation.',
+        render: (el, refresh) => this.renderCitationsSection(el, refresh),
+      },
+      {
+        name: 'Display',
+        desc: 'Sort order of the search results and the bibliography entry template.',
+        render: (el) => this.renderDisplaySection(el),
+      },
+    ];
+  }
+
+  /** The whole tab on one page, for Obsidian before 1.13, which has no getSettingDefinitions(). */
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.setAttr('id', 'zoteroSettingTab');
+    containerEl.setAttr('id', SETTINGS_ROOT_ID);
 
-    this.renderDatabaseSection(containerEl);
-    this.renderLiteratureNotesSection(containerEl);
-    this.renderFragmentProfilesSection(containerEl);
-    this.renderCitationsSection(containerEl);
-    this.renderDisplaySection(containerEl);
+    for (const section of this.sections()) {
+      new Setting(containerEl).setName(section.name).setHeading();
+      section.render(containerEl, () => this.display());
+    }
   }
 
-  private renderDatabaseSection(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName('Citation databases').setHeading();
+  /**
+   * One page per section for Obsidian 1.13 and later, which draws the tab from these definitions and no longer
+   * calls display(). Each page is drawn by the same section code, so the two layouts cannot drift apart. The page
+   * class is declared here because SettingPage only exists from 1.13, and a module-level subclass would fail to
+   * load on older versions.
+   */
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    class SectionPage extends SettingPage {
+      constructor(private readonly section: SettingsSection) {
+        super();
+        this.title = section.name;
+      }
+
+      display(): void {
+        this.containerEl.empty();
+        this.containerEl.setAttr('id', SETTINGS_ROOT_ID);
+        this.section.render(this.containerEl, () => this.display());
+      }
+    }
+
+    return this.sections().map((section) => ({
+      type: 'page',
+      name: section.name,
+      desc: section.desc,
+      page: () => new SectionPage(section),
+    }));
+  }
+
+  private renderDatabaseSection(
+    containerEl: HTMLElement,
+    refresh: () => void,
+  ): void {
     containerEl.createEl('p', {
       text: 'Configure one or more citation databases. The plugin will load references from all configured sources.',
       cls: 'setting-item-description',
@@ -140,7 +222,7 @@ export class CitationSettingTab extends PluginSettingTab {
     );
 
     this.plugin.settings.databases.forEach((db, index) => {
-      this.renderDatabaseCard(databasesContainer, db, index);
+      this.renderDatabaseCard(databasesContainer, db, index, refresh);
     });
 
     new Setting(containerEl).addButton((button) => {
@@ -160,7 +242,7 @@ export class CitationSettingTab extends PluginSettingTab {
               path: '',
             });
             await this.plugin.saveSettings();
-            this.display();
+            refresh();
           })();
         });
     });
@@ -201,7 +283,7 @@ export class CitationSettingTab extends PluginSettingTab {
         text.inputEl.type = 'number';
         text.inputEl.min = String(LIBRARY_LOAD_TIMEOUT_MIN_SECONDS);
         text.inputEl.max = String(LIBRARY_LOAD_TIMEOUT_MAX_SECONDS);
-        text.inputEl.setCssProps({ width: '80px' });
+        text.inputEl.addClass('citation-number-input');
       });
   }
 
@@ -209,21 +291,11 @@ export class CitationSettingTab extends PluginSettingTab {
     container: HTMLElement,
     db: DatabaseConfig,
     index: number,
+    refresh: () => void,
   ): void {
     const card = container.createDiv('citation-database-setting');
-    card.setCssProps({
-      border: '1px solid var(--background-modifier-border)',
-      padding: '10px',
-      marginBottom: '10px',
-      borderRadius: '4px',
-    });
 
     const header = card.createDiv('citation-database-header');
-    header.setCssProps({
-      display: 'flex',
-      justifyContent: 'space-between',
-      marginBottom: '10px',
-    });
 
     new Setting(header)
       .setName(`Database ${index + 1}`)
@@ -249,7 +321,7 @@ export class CitationSettingTab extends PluginSettingTab {
                 this.plugin.settings.readwiseLastSyncDate = '';
               }
               await this.plugin.saveSettings();
-              this.display();
+              refresh();
               void this.plugin.libraryService.load();
             })();
           });
@@ -262,7 +334,7 @@ export class CitationSettingTab extends PluginSettingTab {
         const db = this.plugin.settings.databases[index];
         CitationSettingTab.switchDatabaseSource(db, value);
         await this.plugin.saveSettings();
-        this.display();
+        refresh();
         // Live Better BibTeX and Readwise need a URL/token before a load can
         // succeed, so re-render their fields and wait for input rather than
         // firing a load that would just error.
@@ -472,11 +544,11 @@ export class CitationSettingTab extends PluginSettingTab {
         text.inputEl.type = 'number';
         text.inputEl.min = String(READWISE_SYNC_INTERVAL_MIN_MINUTES);
         text.inputEl.max = String(READWISE_SYNC_INTERVAL_MAX_MINUTES);
-        text.inputEl.setCssProps({ width: '80px' });
+        text.inputEl.addClass('citation-number-input');
       });
 
     const statusEl = card.createDiv('zotero-status');
-    statusEl.setCssProps({ fontSize: '0.8em', marginTop: '5px' });
+    statusEl.addClass(SETTING_STATUS_CLASS);
 
     new Setting(card)
       .addButton((button) => {
@@ -488,7 +560,7 @@ export class CitationSettingTab extends PluginSettingTab {
               return;
             }
             statusEl.setText('Connecting…');
-            statusEl.setCssProps({ color: 'var(--text-muted)' });
+            setSettingStatus(statusEl, SETTING_STATUS_KINDS.Muted);
             try {
               const client = new ZoteroConnectorClient(
                 url,
@@ -499,12 +571,12 @@ export class CitationSettingTab extends PluginSettingTab {
               statusEl.setText(
                 `Connected — Zotero ${versions.zotero}, Better BibTeX ${versions.betterbibtex}.`,
               );
-              statusEl.setCssProps({ color: 'var(--text-success)' });
+              setSettingStatus(statusEl, SETTING_STATUS_KINDS.Success);
             } catch (e) {
               statusEl.setText(
                 e instanceof Error ? e.message : 'Connection failed.',
               );
-              statusEl.setCssProps({ color: 'var(--text-error)' });
+              setSettingStatus(statusEl, SETTING_STATUS_KINDS.Error);
             }
           })();
         });
@@ -643,18 +715,18 @@ export class CitationSettingTab extends PluginSettingTab {
         text.inputEl.type = 'number';
         text.inputEl.min = String(READWISE_SYNC_INTERVAL_MIN_MINUTES);
         text.inputEl.max = String(READWISE_SYNC_INTERVAL_MAX_MINUTES);
-        text.inputEl.setCssProps({ width: '80px' });
+        text.inputEl.addClass('citation-number-input');
       });
 
     const statusEl = card.createDiv('zotero-api-status');
-    statusEl.setCssProps({ fontSize: '0.8em', marginTop: '5px' });
+    statusEl.addClass(SETTING_STATUS_CLASS);
 
     new Setting(card)
       .addButton((button) => {
         button.setButtonText('Test connection').onClick(() => {
           void (async () => {
             statusEl.setText('Connecting…');
-            statusEl.setCssProps({ color: 'var(--text-muted)' });
+            setSettingStatus(statusEl, SETTING_STATUS_KINDS.Muted);
             try {
               const dbNow = this.plugin.settings.databases[index];
               const client = new ZoteroLocalApiClient(
@@ -670,12 +742,12 @@ export class CitationSettingTab extends PluginSettingTab {
                   result.totalItems === 1 ? '' : 's'
                 } visible${result.apiVersion ? ` (API v${result.apiVersion})` : ''}.`,
               );
-              statusEl.setCssProps({ color: 'var(--text-success)' });
+              setSettingStatus(statusEl, SETTING_STATUS_KINDS.Success);
             } catch (e) {
               statusEl.setText(
                 e instanceof Error ? e.message : 'Connection failed.',
               );
-              statusEl.setCssProps({ color: 'var(--text-error)' });
+              setSettingStatus(statusEl, SETTING_STATUS_KINDS.Error);
             }
           })();
         });
@@ -699,18 +771,18 @@ export class CitationSettingTab extends PluginSettingTab {
   ): Promise<boolean> {
     statusEl.empty();
     statusEl.setText('Checking path...');
-    statusEl.setCssProps({ color: 'var(--text-muted)' });
+    setSettingStatus(statusEl, SETTING_STATUS_KINDS.Muted);
 
     try {
       await FileSystemAdapter.readLocalFile(
         this.plugin.libraryService.resolveLibraryPath(filePath),
       );
       statusEl.setText('Path verified.');
-      statusEl.setCssProps({ color: 'var(--text-success)' });
+      setSettingStatus(statusEl, SETTING_STATUS_KINDS.Success);
       return true;
     } catch {
       statusEl.setText('File not found.');
-      statusEl.setCssProps({ color: 'var(--text-error)' });
+      setSettingStatus(statusEl, SETTING_STATUS_KINDS.Error);
       return false;
     }
   }
@@ -738,7 +810,7 @@ export class CitationSettingTab extends PluginSettingTab {
       });
 
     const pathStatusEl = card.createDiv('citation-path-status');
-    pathStatusEl.setCssProps({ fontSize: '0.8em', marginTop: '5px' });
+    pathStatusEl.addClass(SETTING_STATUS_CLASS);
 
     if (db.path) {
       void this.checkDatabasePath(db.path, pathStatusEl);
@@ -805,7 +877,7 @@ export class CitationSettingTab extends PluginSettingTab {
         text.inputEl.type = 'number';
         text.inputEl.min = String(READWISE_SYNC_INTERVAL_MIN_MINUTES);
         text.inputEl.max = String(READWISE_SYNC_INTERVAL_MAX_MINUTES);
-        text.inputEl.setCssProps({ width: '80px' });
+        text.inputEl.addClass('citation-number-input');
       });
 
     // Advanced filters (per-database import filters)
@@ -813,13 +885,13 @@ export class CitationSettingTab extends PluginSettingTab {
 
     // Status display
     const statusEl = card.createDiv('readwise-status');
-    statusEl.setCssProps({ fontSize: '0.8em', marginTop: '5px' });
+    statusEl.addClass(SETTING_STATUS_CLASS);
 
     if (this.plugin.settings.readwiseLastSyncDate) {
       statusEl.setText(
         `Last sync: ${this.plugin.settings.readwiseLastSyncDate}`,
       );
-      statusEl.setCssProps({ color: 'var(--text-muted)' });
+      setSettingStatus(statusEl, SETTING_STATUS_KINDS.Muted);
     }
 
     // Validate + Sync buttons
@@ -833,7 +905,7 @@ export class CitationSettingTab extends PluginSettingTab {
               return;
             }
             statusEl.setText('Validating...');
-            statusEl.setCssProps({ color: 'var(--text-muted)' });
+            setSettingStatus(statusEl, SETTING_STATUS_KINDS.Muted);
             try {
               const client = new ReadwiseApiClient(
                 token,
@@ -843,19 +915,19 @@ export class CitationSettingTab extends PluginSettingTab {
               const valid = await client.validateToken();
               if (valid) {
                 statusEl.setText('Token is valid. Loading library…');
-                statusEl.setCssProps({ color: 'var(--text-success)' });
+                setSettingStatus(statusEl, SETTING_STATUS_KINDS.Success);
                 new Notice('Readwise token validated. Loading library…');
                 void this.plugin.libraryService.load();
               } else {
                 statusEl.setText('Token is invalid.');
-                statusEl.setCssProps({ color: 'var(--text-error)' });
+                setSettingStatus(statusEl, SETTING_STATUS_KINDS.Error);
                 new Notice(
                   'Readwise token is invalid. Please check and retry.',
                 );
               }
             } catch {
               statusEl.setText('Validation failed — network error.');
-              statusEl.setCssProps({ color: 'var(--text-error)' });
+              setSettingStatus(statusEl, SETTING_STATUS_KINDS.Error);
               new Notice(
                 'Could not reach Readwise API. Check your connection.',
               );
@@ -888,7 +960,7 @@ export class CitationSettingTab extends PluginSettingTab {
                 this.plugin.libraryService.state.status !== LoadingStatus.Error
               ) {
                 statusEl.setText('Sync superseded by a newer reload…');
-                statusEl.setCssProps({ color: 'var(--text-muted)' });
+                setSettingStatus(statusEl, SETTING_STATUS_KINDS.Muted);
                 return;
               }
 
@@ -901,7 +973,7 @@ export class CitationSettingTab extends PluginSettingTab {
               // last-sync date or claim success.
               if (outcome.kind === SyncOutcomeKind.Failure) {
                 statusEl.setText(outcome.message);
-                statusEl.setCssProps({ color: 'var(--text-error)' });
+                setSettingStatus(statusEl, SETTING_STATUS_KINDS.Error);
                 new Notice(outcome.message);
                 return;
               }
@@ -917,9 +989,8 @@ export class CitationSettingTab extends PluginSettingTab {
                   ? `Last sync: ${this.plugin.settings.readwiseLastSyncDate} — ${outcome.warnings.length} warning(s)`
                   : `Last sync: ${this.plugin.settings.readwiseLastSyncDate}`,
               );
-              statusEl.setCssProps({
-                color: isWarning ? 'var(--text-warning)' : 'var(--text-muted)',
-              });
+              const { Warning, Muted } = SETTING_STATUS_KINDS;
+              setSettingStatus(statusEl, isWarning ? Warning : Muted);
               new Notice(
                 isWarning
                   ? `${outcome.message} ${outcome.warnings
@@ -1044,13 +1115,11 @@ export class CitationSettingTab extends PluginSettingTab {
           );
         text.inputEl.type = 'number';
         text.inputEl.min = String(READWISE_FILTER_MIN_HIGHLIGHTS);
-        text.inputEl.setCssProps({ width: '80px' });
+        text.inputEl.addClass('citation-number-input');
       });
   }
 
   private renderLiteratureNotesSection(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName('Literature notes').setHeading();
-
     this.buildTextField(
       containerEl,
       'Literature note folder',
@@ -1146,7 +1215,7 @@ export class CitationSettingTab extends PluginSettingTab {
     });
     linksEl.append(
       createSpan({
-        text: 'For template variables, helpers, and examples see the ',
+        text: 'For template variables, helpers, and examples, see the documentation: ',
       }),
       createEl('a', {
         text: 'Template variables',
@@ -1162,7 +1231,7 @@ export class CitationSettingTab extends PluginSettingTab {
         text: 'Template examples',
         href: `${DOCS_BASE}/templates/examples.md`,
       }),
-      createSpan({ text: ' documentation.' }),
+      createSpan({ text: '.' }),
     );
 
     new Setting(containerEl)
@@ -1178,8 +1247,10 @@ export class CitationSettingTab extends PluginSettingTab {
       });
   }
 
-  private renderFragmentProfilesSection(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName('Fragment profiles').setHeading();
+  private renderFragmentProfilesSection(
+    containerEl: HTMLElement,
+    refresh: () => void,
+  ): void {
     containerEl.createEl('p', {
       text: 'Named templates for inserting or replacing text with template output.',
       cls: 'setting-item-description',
@@ -1212,7 +1283,7 @@ export class CitationSettingTab extends PluginSettingTab {
                   profile.id,
                 );
                 await this.plugin.saveSettings();
-                this.display();
+                refresh();
               })();
             });
         });
@@ -1240,7 +1311,7 @@ export class CitationSettingTab extends PluginSettingTab {
               createProfile(freeProfileName(profiles, NEW_PROFILE_NAME)),
             );
             await this.plugin.saveSettings();
-            this.display();
+            refresh();
           })();
         });
     });
@@ -1263,10 +1334,10 @@ export class CitationSettingTab extends PluginSettingTab {
     await this.plugin.saveSettings();
   }
 
-  private renderCitationsSection(containerEl: HTMLElement): void {
-    new Setting(containerEl)
-      .setName('Markdown citation templates')
-      .setHeading();
+  private renderCitationsSection(
+    containerEl: HTMLElement,
+    refresh: () => void,
+  ): void {
     containerEl.createEl('p', {
       text: 'You can insert pandoc-style citations rather than literature notes by using the insert citation command.',
       cls: 'setting-item-description',
@@ -1293,7 +1364,7 @@ export class CitationSettingTab extends PluginSettingTab {
             }
 
             await this.plugin.saveSettings();
-            this.display();
+            refresh();
           })();
         });
       });
@@ -1364,8 +1435,6 @@ export class CitationSettingTab extends PluginSettingTab {
   }
 
   private renderDisplaySection(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName('Display').setHeading();
-
     new Setting(containerEl)
       .setName('Sort order')
       .setDesc(
@@ -1439,7 +1508,7 @@ export class CitationSettingTab extends PluginSettingTab {
       component.onChange(save);
 
       if (!enabled) {
-        component.inputEl.setCssProps({ opacity: '0.5' });
+        component.inputEl.addClass('citation-input-disabled');
       }
     });
   }
@@ -1449,12 +1518,7 @@ export class CitationSettingTab extends PluginSettingTab {
       cls: 'citation-setting-error',
       text: '',
     });
-    errorEl.setCssProps({
-      color: 'var(--text-error)',
-      fontSize: '0.8em',
-      marginTop: '4px',
-      display: 'none',
-    });
+    errorEl.hidden = true;
     return errorEl;
   }
 
@@ -1468,13 +1532,13 @@ export class CitationSettingTab extends PluginSettingTab {
         const result = fieldSchema.safeParse(value);
 
         if (result.success) {
-          errorEl.setCssProps({ display: 'none' });
+          errorEl.hidden = true;
           (this.plugin.settings as unknown as Record<string, unknown>)[key] =
             value;
           void this.plugin.saveSettings();
         } else {
           errorEl.setText(result.error.issues[0].message);
-          errorEl.setCssProps({ display: 'block' });
+          errorEl.hidden = false;
         }
       },
       500,

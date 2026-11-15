@@ -15,7 +15,7 @@ const update = parseArgs({
 }).values['update-baseline'];
 
 // complexity at 0 makes ESLint report every function with its score. The ESLint API does not apply
-// eslint-suppressions.json, so no function is hidden by the recorded lint debt.
+// .eslint/suppressions.json, so no function is hidden by the recorded lint debt.
 const eslint = new ESLint({
   overrideConfig: { rules: { complexity: ['error', 0] } },
   ruleFilter: ({ ruleId }) => ruleId === 'complexity',

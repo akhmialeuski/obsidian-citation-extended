@@ -2,8 +2,7 @@
  * Discriminated union representing either a successful value or an error.
  */
 export type Result<T, E = Error> =
-  | { ok: true; value: T }
-  | { ok: false; error: E };
+  { ok: true; value: T } | { ok: false; error: E };
 
 /**
  * Wrap a successful value in a Result.

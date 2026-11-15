@@ -851,7 +851,7 @@ describe('TemplateService', () => {
                 'C:/Users/me/Zotero/storage/N6LQL4XL/supplement.pdf',
               ],
             },
-          } as unknown as TemplateContext,
+          },
         ),
         '- [PDF](zotero://open-pdf/library/items/EBAUJBLY)\n- [PDF](zotero://open-pdf/library/items/N6LQL4XL)\n',
       );
@@ -1088,7 +1088,7 @@ describe('TemplateService', () => {
                 'C:/Users/me/Zotero/storage/N6LQL4XL/supplement.pdf',
               ],
             },
-          } as unknown as TemplateContext,
+          },
         ),
         '- [paper](zotero://open-pdf/library/items/EBAUJBLY)\n- [supplement](zotero://open-pdf/library/items/N6LQL4XL)\n',
       );

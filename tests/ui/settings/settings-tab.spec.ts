@@ -377,6 +377,10 @@ jest.mock(
           this.containerEl = document.createElement('div');
         }
       },
+      SettingPage: class {
+        containerEl: HTMLElement = document.createElement('div');
+        title = '';
+      },
       Setting: MockSetting,
       FileSystemAdapter: class {
         static readLocalFile = mockReadLocalFile;
@@ -490,6 +494,59 @@ describe('CitationSettingTab', () => {
       tab.display();
       // Second display should not double the children (it empties first)
       expect(container.children.length).toBe(firstChildCount);
+    });
+  });
+
+  describe('getSettingDefinitions()', () => {
+    interface PageDefinition {
+      type: string;
+      name: string;
+      page: () => { title: string; containerEl: HTMLElement; display(): void };
+    }
+    const pages = (): PageDefinition[] =>
+      tab.getSettingDefinitions() as unknown as PageDefinition[];
+
+    // Obsidian 1.13+ draws the tab from these pages and never calls display(), so they must cover every section.
+    it('lists one page per section of display()', () => {
+      expect(pages().map((p) => [p.type, p.name])).toEqual([
+        ['page', 'Citation databases'],
+        ['page', 'Literature notes'],
+        ['page', 'Fragment profiles'],
+        ['page', 'Markdown citation templates'],
+        ['page', 'Display'],
+      ]);
+    });
+
+    it('renders a section page without repeating its title as a heading', () => {
+      const page = pages()[0].page();
+      page.display();
+
+      expect(page.title).toBe('Citation databases');
+      expect(
+        page.containerEl.querySelectorAll('.citation-database-setting'),
+      ).toHaveLength(1);
+      expect(getSettings().map((s) => s.name)).not.toContain(
+        'Citation databases',
+      );
+    });
+
+    // A structural change re-renders the open page; re-rendering the tab instead would draw into a hidden element.
+    it('re-renders the open page, not the tab, after adding a database', async () => {
+      const page = pages()[0].page();
+      page.display();
+      const addButton = getSettings().find(
+        (s) => s.getButtonComponents().length > 0,
+      )!;
+      addButton.getButtonComponents()[0].triggerClick();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(
+        page.containerEl.querySelectorAll('.citation-database-setting'),
+      ).toHaveLength(2);
+      expect(
+        (tab as unknown as { containerEl: HTMLElement }).containerEl.children,
+      ).toHaveLength(0);
     });
   });
 
@@ -1401,8 +1458,7 @@ describe('CitationSettingTab', () => {
       // The timeout field is the only number input with max = the timeout
       // schema max (the auto-sync interval uses a different, larger max).
       function findTimeoutField():
-        | { triggerChange(v: string): void }
-        | undefined {
+        { triggerChange(v: string): void } | undefined {
         for (const setting of getSettings()) {
           for (const c of setting.getTextComponents()) {
             if (
@@ -1634,7 +1690,7 @@ describe('CitationSettingTab', () => {
 
       expect(plugin.settings.literatureNoteFolder).toBe('valid-folder');
       expect(plugin.saveSettings).toHaveBeenCalled();
-      expect(errorEl.style.display).toBe('none');
+      expect(errorEl.hidden).toBe(true);
     });
 
     it('shows error and does not save for invalid value', () => {
@@ -1644,7 +1700,7 @@ describe('CitationSettingTab', () => {
 
       handler('');
 
-      expect(errorEl.style.display).toBe('block');
+      expect(errorEl.hidden).toBe(false);
       expect(errorEl.textContent).toBeTruthy();
       // saveSettings should NOT have been called for invalid value
       expect(plugin.saveSettings).not.toHaveBeenCalled();
@@ -1655,10 +1711,10 @@ describe('CitationSettingTab', () => {
       const handler = createSaveHandler('literatureNoteTitleTemplate', errorEl);
 
       handler(''); // invalid
-      expect(errorEl.style.display).toBe('block');
+      expect(errorEl.hidden).toBe(false);
 
       handler('valid-title'); // now valid
-      expect(errorEl.style.display).toBe('none');
+      expect(errorEl.hidden).toBe(true);
       expect(plugin.saveSettings).toHaveBeenCalled();
     });
   });

@@ -8,7 +8,7 @@ function adapt(data: Partial<EntryDataCSL>): EntryCSLAdapter {
     id: 'smith2023',
     type: 'article-journal',
     ...data,
-  } as EntryDataCSL);
+  });
 }
 
 describe('EntryCSLAdapter note support', () => {

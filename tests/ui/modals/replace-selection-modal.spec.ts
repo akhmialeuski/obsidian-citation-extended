@@ -170,7 +170,7 @@ jest.mock(
         public app: unknown,
         public inputEl: HTMLInputElement,
       ) {
-        AbstractInputSuggest.last = this as AbstractInputSuggest<unknown>;
+        AbstractInputSuggest.last = this;
       }
       close(): void {}
       selectSuggestion(_value: T): void {}
@@ -214,9 +214,8 @@ function makeDialog(profiles: FragmentProfile[] = [], text = SELECTION) {
         : lineDiff(selection.text, output),
     ),
     templateSources: jest.fn(() => ['citation-content-template.md']),
-    extract: jest.fn(
-      (): Promise<TemplateFragmentMatch | null> =>
-        Promise.resolve({ template: 'PDF: {{x}}', firstLine: 9, lastLine: 9 }),
+    extract: jest.fn((): Promise<TemplateFragmentMatch | null> =>
+      Promise.resolve({ template: 'PDF: {{x}}', firstLine: 9, lastLine: 9 }),
     ),
     output: jest.fn((template: string) =>
       template.includes('BROKEN')

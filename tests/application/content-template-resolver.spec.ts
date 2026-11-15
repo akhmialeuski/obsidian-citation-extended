@@ -44,7 +44,7 @@ function createResolver(overrides: Record<string, unknown> = {}): {
   const mocks = makeMocks(overrides);
   const resolver = new ContentTemplateResolver(
     mocks.vault as never,
-    mocks.notifications as never,
+    mocks.notifications,
     mocks.settings as never,
     mocks.normalizePath,
     mocks.saveSettings,
@@ -249,7 +249,7 @@ describe('ContentTemplateResolver', () => {
       };
       const resolver = new ContentTemplateResolver(
         mocks.vault as never,
-        mocks.notifications as never,
+        mocks.notifications,
         mocks.settings as never,
         mocks.normalizePath,
         mocks.saveSettings,

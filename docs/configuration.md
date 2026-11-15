@@ -2,6 +2,12 @@
 
 All settings are accessible in **Settings** > **Citation Extended**.
 
+On Obsidian 1.13 and later, the tab lists the five sections below as pages, and each opens with the same settings. The settings search finds a section by its name, such as `Literature notes`, but not a single setting inside it.
+
+![The settings tab on Obsidian 1.13 and later, with one page per section](images/settings-pages.png)
+
+On older versions of Obsidian, every section is shown on one page.
+
 ![Citation databases and literature notes settings](images/settings-overview_1.png)
 ![Fragment profiles, Markdown citation and display settings](images/settings-overview_2.png)
 

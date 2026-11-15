@@ -5,3 +5,7 @@ complexity = 8
 max_args = 5
 function_lines = 50
 file_lines = 500
+
+# The recorded ESLint debt, kept off ESLint's default location, so the hook passes it as the lint script does.
+[baseline]
+eslint = ".eslint/suppressions.json"

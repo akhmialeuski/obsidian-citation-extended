@@ -92,7 +92,7 @@ const DatabaseConfigSchema = z.object({
   path: z.string(),
   sourceType: z.string().optional(),
   // Per-source-kind remembered connection strings (see DatabaseConfig).
-  sourcePaths: z.record(z.string()).optional(),
+  sourcePaths: z.record(z.string(), z.string()).optional(),
   // Readwise-only client-side import filters (optional, backward-compat).
   readwiseFilters: z
     .object({
@@ -121,7 +121,7 @@ const DatabaseConfigSchema = z.object({
  */
 function quarantineInvalidElements(
   key: string,
-  elementSchema: z.ZodTypeAny,
+  elementSchema: z.ZodType,
 ): (value: unknown) => unknown {
   return (value) => {
     if (value === undefined) return value; // let `.default([])` apply

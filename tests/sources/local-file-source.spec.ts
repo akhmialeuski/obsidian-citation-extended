@@ -147,7 +147,7 @@ describe('LocalFileSource', () => {
       parseErrors: [],
     });
 
-    vaultAdapter = new FileSystemAdapter() as any;
+    vaultAdapter = new FileSystemAdapter();
 
     // Default stat: file exists with non-zero size
     fsMocks.stat.mockResolvedValue(fakeStats());

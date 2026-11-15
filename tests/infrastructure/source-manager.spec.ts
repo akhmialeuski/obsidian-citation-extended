@@ -256,7 +256,7 @@ describe('SourceManager', () => {
         })),
       };
 
-      const manager = new SourceManager(factory as never);
+      const manager = new SourceManager(factory);
       manager.syncSources([makeDb('Fail')]);
 
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
