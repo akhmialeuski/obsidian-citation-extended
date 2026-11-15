@@ -71,6 +71,14 @@ npm run lint     # ESLint
 npm test         # Jest test suite
 ```
 
+Before opening a pull request, run the CRAP gate. It runs the suite with coverage and fails when a function in `src/` scores over 8 on CRAP (complexity squared times the cube of its uncovered share, plus complexity) unless `crap-baseline.json` already records it at that score or higher. It needs [uv](https://docs.astral.sh/uv/) for the Python script that joins the reports.
+
+```bash
+bash tools/crap-gate.sh
+```
+
+On a green run, `bash tools/crap-gate.sh --update-baseline` records every function that got better, so the baseline only falls. The complexity, parameter and length limits it shares with ESLint are checked by `npm run lint`, with existing debt recorded in `eslint-suppressions.json`.
+
 See [Architecture](docs/architecture.md) for the design of the plugin.
 
 ## License
