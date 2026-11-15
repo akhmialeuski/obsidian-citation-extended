@@ -6,14 +6,13 @@ jest.mock('web-worker:../../src/worker', () => ({ default: class {} }), {
 import {
   ReadwiseAdapter,
   ReadwiseEntryData,
-  ReadwiseMode,
 } from '../../../src/core/adapters/readwise-adapter';
 
 function makeEntryData(
   overrides: Partial<ReadwiseEntryData> = {},
 ): ReadwiseEntryData {
   return {
-    mode: 'readwise-highlights' as ReadwiseMode,
+    mode: 'readwise-highlights',
     rawId: '12345',
     title: 'Test Book Title',
     author: 'John Doe and Jane Smith',

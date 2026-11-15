@@ -94,7 +94,7 @@ describe('LibraryService - Multiple Databases', () => {
       settings,
       createMockPlatformAdapter(),
       workerManager,
-      new SourceManager(factory as never),
+      new SourceManager(factory),
       new NormalizationPipeline()
         .addStep(new SourceTaggingStep())
         .addStep(new DeduplicationStep()),
@@ -141,7 +141,7 @@ describe('LibraryService - Multiple Databases', () => {
       settings,
       createMockPlatformAdapter(),
       workerManager,
-      new SourceManager(factory as never),
+      new SourceManager(factory),
       new NormalizationPipeline()
         .addStep(new SourceTaggingStep())
         .addStep(new DeduplicationStep()),

@@ -142,7 +142,7 @@ describe('Issue 161: Insert Literature Note Link', () => {
       getInitialContentForCitekey: jest
         .fn()
         .mockResolvedValue({ ok: true, value: '' }),
-    } as unknown as typeof plugin.citationService;
+    };
 
     // Setup platform mock
     plugin.platform = {

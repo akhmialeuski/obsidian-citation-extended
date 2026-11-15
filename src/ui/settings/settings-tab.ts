@@ -1146,7 +1146,7 @@ export class CitationSettingTab extends PluginSettingTab {
     });
     linksEl.append(
       createSpan({
-        text: 'For template variables, helpers, and examples see the ',
+        text: 'For template variables, helpers, and examples, see the documentation: ',
       }),
       createEl('a', {
         text: 'Template variables',
@@ -1162,7 +1162,7 @@ export class CitationSettingTab extends PluginSettingTab {
         text: 'Template examples',
         href: `${DOCS_BASE}/templates/examples.md`,
       }),
-      createSpan({ text: ' documentation.' }),
+      createSpan({ text: '.' }),
     );
 
     new Setting(containerEl)

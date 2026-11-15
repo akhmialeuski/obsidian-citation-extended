@@ -1401,8 +1401,7 @@ describe('CitationSettingTab', () => {
       // The timeout field is the only number input with max = the timeout
       // schema max (the auto-sync interval uses a different, larger max).
       function findTimeoutField():
-        | { triggerChange(v: string): void }
-        | undefined {
+        { triggerChange(v: string): void } | undefined {
         for (const setting of getSettings()) {
           for (const c of setting.getTextComponents()) {
             if (

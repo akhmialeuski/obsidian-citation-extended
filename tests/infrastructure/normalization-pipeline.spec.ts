@@ -174,12 +174,12 @@ describe('DeduplicationStep', () => {
 
     step.prepare(results);
 
-    const r1 = step.process(results[0].entries as never[], {
+    const r1 = step.process(results[0].entries, {
       sourceId: 's1',
       databaseId: 'db-zotero-1',
       databaseName: 'Zotero',
     });
-    const r2 = step.process(results[1].entries as never[], {
+    const r2 = step.process(results[1].entries, {
       sourceId: 's2',
       databaseId: 'db-mendeley-2',
       databaseName: 'Mendeley',
@@ -200,14 +200,14 @@ describe('DeduplicationStep', () => {
 
     step.prepare(results);
 
-    const r1 = step.process(results[0].entries as never[], {
+    const r1 = step.process(results[0].entries, {
       sourceId: 's1',
       databaseId: stableId,
       databaseName: 'Old Name',
     });
 
     // Now simulate renamed database — same databaseId, different databaseName
-    const r1Renamed = step.process(results[0].entries as never[], {
+    const r1Renamed = step.process(results[0].entries, {
       sourceId: 's1',
       databaseId: stableId,
       databaseName: 'New Name',
@@ -227,7 +227,7 @@ describe('DeduplicationStep', () => {
 
     step.prepare(results);
 
-    const r1 = step.process(results[0].entries as never[], {
+    const r1 = step.process(results[0].entries, {
       sourceId: 's1',
       databaseId: 'db-1',
       databaseName: 'Zotero',

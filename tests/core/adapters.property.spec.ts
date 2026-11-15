@@ -2,7 +2,6 @@ import * as fc from 'fast-check';
 import {
   EntryCSLAdapter,
   EntryBibLaTeXAdapter,
-  EntryDataCSL,
   EntryDataBibLaTeX,
 } from '../../src/core';
 
@@ -35,7 +34,7 @@ describe('Adapters Property Testing', () => {
             // Add more fields as needed
           }),
           (data) => {
-            const adapter = new EntryCSLAdapter(data as EntryDataCSL);
+            const adapter = new EntryCSLAdapter(data);
             expect(adapter.id).toBe(data.id);
             expect(adapter.type).toBe(data.type);
             // Accessing other properties shouldn't throw

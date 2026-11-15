@@ -68,7 +68,7 @@ describe('LibraryService Loading Behavior', () => {
       settings,
       platform,
       workerManager,
-      new SourceManager(factory as never),
+      new SourceManager(factory),
       new NormalizationPipeline()
         .addStep(new SourceTaggingStep())
         .addStep(new DeduplicationStep()),

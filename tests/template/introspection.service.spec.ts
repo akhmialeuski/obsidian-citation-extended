@@ -36,7 +36,7 @@ describe('IntrospectionService', () => {
     it('discovers dynamic variables from library entries', () => {
       const entry = createMockEntry({ customField: 'custom value' });
       const library = new Library({
-        test2024: entry as never,
+        test2024: entry,
       });
 
       const vars = service.getTemplateVariables(library);

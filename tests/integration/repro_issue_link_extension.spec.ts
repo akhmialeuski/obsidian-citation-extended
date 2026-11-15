@@ -175,7 +175,7 @@ describe('Bug Reproduction: Incorrect Markdown Link Extension', () => {
       getInitialContentForCitekey: jest
         .fn()
         .mockResolvedValue({ ok: true, value: '' }),
-    } as unknown as typeof plugin.citationService;
+    };
 
     const actionCtx = {
       citationService: plugin.citationService,
