@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "rollup --config rollup.config.mjs -w",
     "build": "rollup --config rollup.config.mjs",
-    "lint": "eslint .",
+    "lint": "eslint --suppressions-location .eslint/suppressions.json .",
     "test": "jest",
     "crap-gate": "jest --coverage --silent && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/crap-gate.mjs",
     "bench": "jest --config jest.bench.config.cjs",
@@ -64,7 +64,7 @@
     "zod": "^4.6.7"
   },
   "lint-staged": {
-    "*.ts": "eslint --fix",
+    "*.ts": "eslint --fix --suppressions-location .eslint/suppressions.json",
     "*.json": "prettier --write"
   },
   "jest": {

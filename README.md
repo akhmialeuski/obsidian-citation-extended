@@ -77,7 +77,11 @@ Before opening a pull request, run the CRAP gate. It runs the suite with coverag
 npm run crap-gate
 ```
 
-On a green run, `npm run crap-gate -- --update-baseline` records every function that got better, so the baseline only falls. The complexity, parameter and length limits it shares with ESLint are checked by `npm run lint`, with existing debt recorded in `eslint-suppressions.json`.
+On a green run, `npm run crap-gate -- --update-baseline` records every function that got better, so the baseline only falls. The complexity, parameter and length limits it shares with ESLint are checked by `npm run lint`, with existing debt recorded in `.eslint/suppressions.json`. Once a recorded violation is fixed, prune it:
+
+```bash
+npx eslint --suppressions-location .eslint/suppressions.json --prune-suppressions src
+```
 
 See [Architecture](docs/architecture.md) for the design of the plugin.
 
