@@ -71,6 +71,14 @@ npm run lint     # ESLint
 npm test         # Jest test suite
 ```
 
+Before opening a pull request, run the CRAP gate. It runs the suite with coverage and fails when a function in `src/` scores over 8 on CRAP (complexity squared times the cube of its uncovered share, plus complexity) unless `crap-baseline.json` already records it at that score or higher. It needs Node 22.18 or later, which runs the TypeScript of `tools/crap-gate.ts` directly.
+
+```bash
+npm run crap-gate
+```
+
+On a green run, `npm run crap-gate -- --update-baseline` records every function that got better, so the baseline only falls. The complexity, parameter and length limits it shares with ESLint are checked by `npm run lint`, with existing debt recorded in `eslint-suppressions.json`.
+
 See [Architecture](docs/architecture.md) for the design of the plugin.
 
 ## License

@@ -160,6 +160,36 @@ export default tseslint.config(
     eslintConfigPrettier,
 
     {
+        // crap-gate limits, kept equal to crap-gate.toml so the edit hook and the commit agree.
+        // Existing debt is recorded per file in eslint-suppressions.json and may only shrink.
+        files: ['src/**/*.ts'],
+        rules: {
+            complexity: ['error', 8],
+            'max-params': ['error', 5],
+            'max-lines': [
+                'error',
+                { max: 500, skipComments: true, skipBlankLines: true },
+            ],
+            'max-lines-per-function': [
+                'error',
+                { max: 50, skipComments: true, skipBlankLines: true },
+            ],
+        },
+    },
+
+    {
+        // Node scripts lie outside tsconfig.json, so they are linted without type information.
+        files: ['tools/**/*.mjs'],
+        ...tseslint.configs.disableTypeChecked,
+        rules: {
+            ...tseslint.configs.disableTypeChecked.rules,
+            // Obsidian plugin rules that need type information, which a Node script neither has nor needs.
+            'obsidianmd/no-unsupported-api': 'off',
+            'obsidianmd/no-view-references-in-plugin': 'off',
+        },
+    },
+
+    {
         ignores: [
             'dist/**',
             'coverage/**',
