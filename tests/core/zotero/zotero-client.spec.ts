@@ -359,3 +359,42 @@ describe('ZoteroConnectorClient.fetchAttachmentsForCitekeys', () => {
     expect(post).not.toHaveBeenCalled();
   });
 });
+
+// Issue #97: Zotero closes a request from a `Mozilla/` user agent, which
+// Obsidian sends, without a response unless it carries Zotero-Allowed-Request.
+describe('ZoteroConnectorClient request headers', () => {
+  const ALLOWED = { 'Zotero-Allowed-Request': 'true' };
+
+  it('sends Zotero-Allowed-Request with the pull export GET', async () => {
+    const get = jest.fn(() =>
+      Promise.resolve(textResponse(200, '[]')),
+    ) as unknown as jest.MockedFunction<ZoteroHttpGetFn>;
+    const client = new ZoteroConnectorClient(PULL_URL, get, jest.fn());
+
+    await client.fetchBibliography();
+
+    expect(get.mock.calls[0][1]).toMatchObject(ALLOWED);
+  });
+
+  it('sends Zotero-Allowed-Request with the api.ready POST', async () => {
+    const post = jest.fn(() =>
+      Promise.resolve(jsonResponse(200, { result: {} })),
+    ) as unknown as jest.MockedFunction<ZoteroHttpPostFn>;
+    const client = new ZoteroConnectorClient(PULL_URL, jest.fn(), post);
+
+    await client.ping();
+
+    expect(post.mock.calls[0][2]).toMatchObject(ALLOWED);
+  });
+
+  it('sends Zotero-Allowed-Request with the item.attachments POST', async () => {
+    const post = jest.fn(() =>
+      Promise.resolve(jsonResponse(200, [])),
+    ) as unknown as jest.MockedFunction<ZoteroHttpPostFn>;
+    const client = new ZoteroConnectorClient(PULL_URL, jest.fn(), post);
+
+    await client.fetchAttachmentsForCitekeys(['a2020']);
+
+    expect(post.mock.calls[0][2]).toMatchObject(ALLOWED);
+  });
+});

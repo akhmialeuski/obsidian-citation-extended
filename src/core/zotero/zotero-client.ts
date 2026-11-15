@@ -17,6 +17,15 @@
  * @see https://retorque.re/zotero-better-bibtex/exporting/json-rpc/
  */
 
+/**
+ * Header every request to Zotero's HTTP server carries. Zotero closes a
+ * request whose user agent starts with `Mozilla/`, as Obsidian's does, without
+ * any response unless this header is present (zotero/zotero
+ * `chrome/content/zotero/xpcom/server/server.js`, since 2026-04-28).
+ */
+export const ZOTERO_ALLOWED_REQUEST_HEADERS: Readonly<Record<string, string>> =
+  { 'Zotero-Allowed-Request': 'true' };
+
 /** Minimal HTTP response surface used by the Zotero client. */
 export interface ZoteroHttpResponse {
   status: number;
@@ -101,6 +110,7 @@ export class ZoteroConnectorClient {
     let response: ZoteroHttpResponse;
     try {
       response = await this.get(url, {
+        ...ZOTERO_ALLOWED_REQUEST_HEADERS,
         Accept: 'application/json, text/plain',
       });
     } catch (e) {
@@ -149,6 +159,7 @@ export class ZoteroConnectorClient {
     let response: ZoteroHttpResponse;
     try {
       response = await this.post(url, requestBody, {
+        ...ZOTERO_ALLOWED_REQUEST_HEADERS,
         'Content-Type': 'application/json',
         Accept: 'application/json',
       });
@@ -225,6 +236,7 @@ export class ZoteroConnectorClient {
       let response: ZoteroHttpResponse;
       try {
         response = await this.post(url, requestBody, {
+          ...ZOTERO_ALLOWED_REQUEST_HEADERS,
           'Content-Type': 'application/json',
           Accept: 'application/json',
         });
