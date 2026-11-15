@@ -118,6 +118,8 @@ export default tseslint.config(
             'obsidianmd/commands/no-plugin-name-in-command-name': 'error',
             'obsidianmd/settings-tab/no-manual-html-headings': 'warn',
             'obsidianmd/settings-tab/no-problematic-settings-headings': 'warn',
+            // The plugin scanner reports it; listed so `npm run lint` catches it first.
+            'obsidianmd/no-static-styles-assignment': 'error',
             // UI text must be sentence case; product names and acronyms are
             // allow-listed and literal URLs are ignored, so legitimate strings
             // pass without an eslint-disable.

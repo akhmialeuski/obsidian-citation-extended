@@ -1633,7 +1633,7 @@ describe('CitationSettingTab', () => {
 
       expect(plugin.settings.literatureNoteFolder).toBe('valid-folder');
       expect(plugin.saveSettings).toHaveBeenCalled();
-      expect(errorEl.style.display).toBe('none');
+      expect(errorEl.hidden).toBe(true);
     });
 
     it('shows error and does not save for invalid value', () => {
@@ -1643,7 +1643,7 @@ describe('CitationSettingTab', () => {
 
       handler('');
 
-      expect(errorEl.style.display).toBe('block');
+      expect(errorEl.hidden).toBe(false);
       expect(errorEl.textContent).toBeTruthy();
       // saveSettings should NOT have been called for invalid value
       expect(plugin.saveSettings).not.toHaveBeenCalled();
@@ -1654,10 +1654,10 @@ describe('CitationSettingTab', () => {
       const handler = createSaveHandler('literatureNoteTitleTemplate', errorEl);
 
       handler(''); // invalid
-      expect(errorEl.style.display).toBe('block');
+      expect(errorEl.hidden).toBe(false);
 
       handler('valid-title'); // now valid
-      expect(errorEl.style.display).toBe('none');
+      expect(errorEl.hidden).toBe(true);
       expect(plugin.saveSettings).toHaveBeenCalled();
     });
   });

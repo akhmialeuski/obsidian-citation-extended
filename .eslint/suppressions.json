@@ -237,11 +237,6 @@
       "count": 1
     }
   },
-  "src/ui/modals/variable-list-modal.ts": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/ui/render-line-diff.ts": {
     "complexity": {
       "count": 1
