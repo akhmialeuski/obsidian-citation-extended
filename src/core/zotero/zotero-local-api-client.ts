@@ -20,7 +20,11 @@
  * - Responses include `Last-Modified-Version` (the library version).
  */
 
-import { ZoteroApiError, ZoteroAbortError } from './zotero-client';
+import {
+  ZoteroApiError,
+  ZoteroAbortError,
+  ZOTERO_ALLOWED_REQUEST_HEADERS,
+} from './zotero-client';
 import type { ZoteroHttpGetFn, ZoteroHttpResponse } from './zotero-client';
 
 /** Default origin of the Zotero local HTTP server. */
@@ -290,10 +294,8 @@ export class ZoteroLocalApiClient {
     let response: ZoteroHttpResponse;
     try {
       response = await this.get(url, {
+        ...ZOTERO_ALLOWED_REQUEST_HEADERS,
         Accept: 'application/json',
-        // Without this header Zotero drops requests that look browser-made
-        // (Origin header / Mozilla UA) with no response at all.
-        'Zotero-Allowed-Request': 'true',
       });
     } catch (e) {
       throw new ZoteroApiError(
