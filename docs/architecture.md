@@ -364,9 +364,17 @@ flowchart TD
     IDX --> OK["setState(Success)"]
 ```
 
-The cost of reacting to a change is proportional to the size of the changed
-database, not the whole library. A full `load()` still runs on startup,
-manual refresh, retry recovery, and settings changes.
+Watcher reloads call only the changed sources before rebuilding the combined
+library and index. Startup, manual refresh, retry recovery, and settings changes
+can call `load()` across all sources. Each source then chooses how to fetch its records.
+
+Zotero (local API) also synchronizes records within a single source. 
+On Zotero 10+, a whole personal or group library can use a V3 snapshot with a matching server ID and library version to skip record retrieval. 
+When the version advances, complete version maps detect additions, changes, and deletions among items, attachments, and enabled annotations. 
+Ordered keys preserve the adapter's iteration order while changed records are merged into the cached raw objects. 
+The source checks the server ID and version before saving the candidate snapshot. 
+Entry construction and search indexing still operate on the resulting library. 
+Zotero 7–9 and collection-scoped sources use full fetches. See [Zotero (local API)](data-sources.md#zotero-local-api-without-better-bibtex).
 
 ### Protection Mechanisms
 
@@ -1295,11 +1303,11 @@ Both stay behind the source boundary, so consumers never learn where the data ca
 | Path                 | Used by                     | Mechanism                                                                                          |
 | -------------------- | --------------------------- | -------------------------------------------------------------------------------------------------- |
 | **Getter override**  | Readwise (`ReadwiseAdapter`) | Annotations live in the parsed entry; the adapter overrides `get annotations()` and memoizes it     |
-| **Source injection** | Zotero (`ZoteroSource`)      | Annotations come from a separate call; the source calls `entry.setAnnotations(annotations, attachments)` |
+| **Annotation setter** | Zotero (Better BibTeX), Zotero (local API) | The Better BibTeX source calls `setAnnotations()` after JSON-RPC enrichment. `ZoteroApiAdapter` calls it with annotations and attachment references from the Local API DTO. |
 
 Injected `_annotations` / `_attachments` are own enumerable fields, so the `NormalizationPipeline`'s `Object.assign(clone, entry, …)` copies them and the prototype getter reads them off the clone — annotations survive tagging and deduplication.
 
-### Zotero PDF Annotation Flow
+### Better BibTeX PDF Annotation Flow
 
 When **Import PDF annotations** is enabled for a live Zotero (Better BibTeX) database, `ZoteroSource.load()` enriches the parsed entries with native annotations:
 
@@ -1463,7 +1471,7 @@ Four format adapters normalize raw data → `Entry`: `CSLAdapter`, `BibLaTeXAdap
 
 Domain convenience methods encapsulate presentation and transformation logic in the base class, keeping callers (TemplateService, SearchService, CitationSearchModal) decoupled from raw field-level details. When domain logic changes (e.g. how authors are formatted), only the Entry method needs updating — calling code stays unchanged.
 
-**Annotations are source-agnostic** (see [Annotation Model](#annotation-model)). `entry.annotations` / `entry.attachments` expose one interface regardless of origin, populated through two paths behind the source boundary: adapters whose annotation data lives in the parsed entry (Readwise) **override the getter**; sources whose annotations come from a separate call (Zotero via Better BibTeX JSON-RPC) **inject** them with `setAnnotations()`. `toJSON()` walks the entire prototype chain (not just the immediate prototype), so a multi-level adapter never loses inherited getters; the raw `_annotations` / `_attachments` backing fields are stripped from the serialized output.
+**Annotations are source-agnostic** (see [Annotation Model](#annotation-model)). `entry.annotations` and `entry.attachments` expose one interface. Readwise overrides the getter. Both Zotero sources use `setAnnotations()`. `toJSON()` walks the entire prototype chain to preserve inherited getters and omits the raw `_annotations` and `_attachments` backing fields.
 
 ### Result&lt;T, E&gt;
 

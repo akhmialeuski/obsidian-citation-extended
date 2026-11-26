@@ -179,6 +179,7 @@ Manually reloads all configured citation databases.
 - **Command**: `Citation Extended: Refresh citation database`
 - Useful when your bibliography file was updated outside Obsidian or when auto-reload didn't trigger
 - The plugin also watches for file changes and reloads automatically in most cases. Automatic reloads are **incremental**: only the database whose file actually changed is re-read and re-parsed, and the other databases are served from the previous load
+- For Zotero (local API), this command forces a **full fetch**. The **Sync now** button reloads all configured sources normally, so eligible whole personal and group libraries on Zotero 10+ can pick up additions, edits, and deletions incrementally. See [Zotero (local API)](data-sources.md#zotero-local-api-without-better-bibtex).
 - For Readwise databases, this command forces a **full re-download** (bypassing incremental sync), which is the way to pick up items deleted in Readwise
 
 **When to use:** You generally don't need this: the plugin auto-reloads when the bibliography file changes on disk. Use manual refresh if: (1) you edited the `.bib`/`.json` file in another application and changes aren't appearing, (2) you switched to a different exported file, or (3) you deleted items in Readwise and want them removed from the library. For routine Readwise updates, data is synced automatically and incrementally at a configurable interval (default: every 30 minutes). Use the **Sync now** button in the database card for an immediate fetch.

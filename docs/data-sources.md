@@ -166,11 +166,13 @@ Loads the bibliography from the **native local HTTP API built into Zotero 7 and 
 2. A legacy `Citation Key: xxx` line in the item's **Extra** field (the old Better BibTeX pinning convention).
 3. A generated `lastnameYear` fallback (e.g. `smith2023`, deduplicated as `smith2023a`, `smith2023b`, …) for items with no pinned key.
 
-**What you get:** bibliographic metadata, tags (`{{keywords}}`/`{{tags}}`), collection names (`{{collections}}`), attachment paths compatible with the `pdfLink`/`zoteroPdfURI` template helpers, and `{{entry.zotero.key}}` / `{{entry.zotero.dateAdded}}` / `{{entry.zotero.dateModified}}` extras. Enable **Import PDF annotations** to make Zotero annotations available to templates.
+**What you get:** bibliographic metadata, tags (`{{keywords}}`/`{{tags}}`), collection names (`{{collections}}`), attachment paths compatible with the `pdfLink`/`zoteroPdfURI` template helpers, and `{{entry.zotero.key}}` / `{{entry.zotero.dateAdded}}` / `{{entry.zotero.dateModified}}` extras. Enable **Import PDF annotations** to expose structured annotations through `{{annotations}}`, `{{attachments}}`, and `{{annotationCount}}` on Zotero 7+.
 
-**Auto-sync** shares the Zotero **Auto-sync interval (minutes)** setting (0 = manual). Zotero 10 and later can detect local edits before they are synced to zotero.org. For whole personal and group libraries, a normal sync reuses unchanged records and fetches full metadata for new or edited items, attachments, and enabled annotations. Collection-scoped sources and Zotero 7–9 use full fetches. Use **Sync now** for an immediate sync or **Refresh citation database** to force a full fetch.
+**Incremental sync** is available on Zotero 10+ for whole personal and group libraries. A normal sync compares Zotero's current inventories with the cache, reuses unchanged records, fetches new or edited items, attachments, and enabled annotations, and removes records deleted from Zotero. Local changes are picked up before they sync to zotero.org. Zotero 7–9 and collection-scoped sources use full fetches.
 
-**Offline cache** uses the last successful compatible snapshot at `.obsidian/plugins/citation-extended/zotero-api-cache-<id>.json` when Zotero is closed, with a warning. An older V2 cache remains usable offline with matching settings at the default API URL. V2 lacks the information needed to verify which endpoint or Zotero instance supplied it, even at the default URL. The first successful online full fetch upgrades the cache. A custom API URL requires that online fetch before offline use.
+**Sync controls.** Use **Sync now** for an immediate normal reload of all configured sources. Eligible Zotero libraries use incremental sync. **Refresh citation database** forces a full fetch. Automatic polling uses **Auto-sync interval (minutes)**, with `0` disabling polling.
+
+**Offline cache** uses the last successful compatible snapshot at `.obsidian/plugins/citation-extended/zotero-api-cache-<id>.json` when Zotero is unavailable and reports a warning. An older V2 cache remains usable offline with matching settings at the default API URL. Its endpoint and Zotero instance cannot be verified. The first successful online full fetch upgrades it to V3. A custom API URL requires that online fetch before offline use.
 
 **Better BibTeX vs local API: which live connection?**
 
@@ -181,6 +183,7 @@ Loads the bibliography from the **native local HTTP API built into Zotero 7 and 
 | Citekeys | BBT-managed | native field → Extra → generated |
 | Custom BBT citekey formulas | yes | only via native/pinned keys |
 | Zotero notes (`{{note}}`) | yes (exportNotes) | no |
+| PDF annotation import | optional, via Better BibTeX | optional, via the Local API on Zotero 7+ |
 | Collections / group libraries | via export URL | built-in fields |
 | Survives Zotero major updates | depends on BBT | yes (built-in API) |
 
