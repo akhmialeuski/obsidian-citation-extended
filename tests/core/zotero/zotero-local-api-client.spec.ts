@@ -12,6 +12,12 @@ import type {
   ZoteroHttpGetFn,
   ZoteroHttpResponse,
 } from '../../../src/core/zotero/zotero-client';
+import {
+  emptyZoteroLibrary,
+  MockZoteroLocalApi,
+  zoteroItem,
+  zoteroResponse,
+} from '../../helpers/zotero-local-api';
 
 function response(
   status: number,
@@ -491,6 +497,233 @@ describe('ZoteroLocalApiClient', () => {
       const client = new ZoteroLocalApiClient(undefined, get);
 
       await expect(client.getLibraryVersion()).resolves.toBeNull();
+    });
+  });
+
+  describe('tracked reads', () => {
+    const expected = { serverId: 'test-server', libraryVersion: 20 };
+
+    it('probes mixed-case library headers without requesting a full record', async () => {
+      const get = jest.fn<
+        ReturnType<ZoteroHttpGetFn>,
+        Parameters<ZoteroHttpGetFn>
+      >(() =>
+        Promise.resolve(
+          response(
+            200,
+            {},
+            {
+              'zOtErO-sErVeR-iD': 'test-server',
+              'last-MODIFIED-version': '20',
+            },
+          ),
+        ),
+      );
+      const client = new ZoteroLocalApiClient('http://localhost:23120/', get);
+      await expect(client.getLibraryState({ groupId: '42' })).resolves.toEqual(
+        expected,
+      );
+      expect(get.mock.calls[0][0]).toBe(
+        'http://localhost:23120/api/groups/42/items/top?limit=1&format=versions',
+      );
+    });
+
+    it.each([undefined, '7oops', '-1', '1.5', '9007199254740992', ''])(
+      'treats %p as an unavailable version',
+      async (version) => {
+        const headers = {
+          'Zotero-Server-ID': 'test-server',
+          'Zotero-API-Version': '3',
+        };
+        const get: ZoteroHttpGetFn = () =>
+          Promise.resolve(
+            response(
+              200,
+              {},
+              {
+                ...headers,
+                ...(version === undefined
+                  ? {}
+                  : { 'Last-Modified-Version': version }),
+              },
+            ),
+          );
+        await expect(
+          new ZoteroLocalApiClient(undefined, get).getLibraryState(),
+        ).resolves.toEqual({
+          serverId: 'test-server',
+          libraryVersion: null,
+        });
+      },
+    );
+
+    it('reports a legacy version without a server ID', async () => {
+      const get: ZoteroHttpGetFn = () =>
+        Promise.resolve(
+          response(
+            200,
+            {},
+            {
+              'Zotero-API-Version': '3',
+              'Last-Modified-Version': '20',
+            },
+          ),
+        );
+      await expect(
+        new ZoteroLocalApiClient(undefined, get).getLibraryState(),
+      ).resolves.toEqual({
+        serverId: null,
+        libraryVersion: 20,
+      });
+    });
+
+    it.each([
+      null,
+      [],
+      { ITEM0001: '20' },
+      { ITEM0001: -2 },
+      { incorrect: 20 },
+    ])('rejects a malformed version map %p', async (body) => {
+      const get: ZoteroHttpGetFn = () => Promise.resolve(response(200, body));
+      const client = new ZoteroLocalApiClient(undefined, get);
+      await expect(
+        client.fetchItemVersions({}, 'items', expected),
+      ).rejects.toThrow(/version map/);
+    });
+
+    it('reads complete and empty inventories with the server identity header', async () => {
+      const api = new MockZoteroLocalApi({
+        ...emptyZoteroLibrary(20),
+        items: [zoteroItem('ITEM0001', 15), zoteroItem('ITEM0002', 20)],
+      });
+      const client = new ZoteroLocalApiClient(undefined, api.get);
+      expect(await client.fetchItemVersions({}, 'items', expected)).toEqual(
+        new Map([
+          ['ITEM0002', 20],
+          ['ITEM0001', 15],
+        ]),
+      );
+      expect(await client.fetchOrderedItemKeys({}, 'items', expected)).toEqual([
+        'ITEM0001',
+        'ITEM0002',
+      ]);
+      expect(
+        await client.fetchItemVersions({}, 'attachments', expected),
+      ).toEqual(new Map());
+      expect(
+        await client.fetchOrderedItemKeys({}, 'attachments', expected),
+      ).toEqual([]);
+      expect(
+        api.requests.every(
+          (request) =>
+            request.headers['Zotero-Server-ID'] === expected.serverId,
+        ),
+      ).toBe(true);
+    });
+
+    it('rejects truncated and duplicated inventories', async () => {
+      const get: ZoteroHttpGetFn = (url) =>
+        Promise.resolve(
+          url.includes('format=keys')
+            ? zoteroResponse(200, 'ITEM0001\nITEM0001', {
+                'Total-Results': '2',
+              })
+            : response(200, { ITEM0001: 15 }, { 'Total-Results': '2' }),
+        );
+      const client = new ZoteroLocalApiClient(undefined, get);
+      await expect(
+        client.fetchItemVersions({}, 'items', expected),
+      ).rejects.toThrow(/incomplete/);
+      await expect(
+        client.fetchOrderedItemKeys({}, 'items', expected),
+      ).rejects.toThrow(/invalid/i);
+    });
+
+    it('rejects unnamed collections in a tracked snapshot and keeps the legacy fallback', async () => {
+      const get: ZoteroHttpGetFn = () =>
+        Promise.resolve(response(200, [item('COLL0001')]));
+      const client = new ZoteroLocalApiClient(undefined, get);
+      await expect(client.fetchCollectionNames({})).resolves.toEqual({});
+      await expect(
+        client.fetchCollectionNames({}, undefined, expected),
+      ).rejects.toThrow(/collection without a name/);
+    });
+
+    it('batches group item keys and advances by the actual page size', async () => {
+      const items = Array.from({ length: 52 }, (_, i) =>
+        zoteroItem('IT' + String(i).padStart(6, '0'), 15),
+      );
+      const api = new MockZoteroLocalApi({ ...emptyZoteroLibrary(20), items });
+      const get: ZoteroHttpGetFn = (address, headers) => {
+        const url = new URL(address);
+        url.searchParams.set('limit', '20');
+        return api.get(url.href, headers);
+      };
+      const client = new ZoteroLocalApiClient(undefined, get);
+      const versions = new Map(items.map(({ key, version }) => [key, version]));
+      expect(
+        await client.fetchItemsByKey(
+          { groupId: '42' },
+          'items',
+          versions,
+          expected,
+        ),
+      ).toEqual(items);
+      expect(
+        api.requests.map(({ url }) => url.searchParams.get('start')),
+      ).toEqual(['0', '20', '40', '0']);
+      expect(
+        api.requests.map(
+          ({ url }) => url.searchParams.get('itemKey')?.split(',').length,
+        ),
+      ).toEqual([50, 50, 50, 2]);
+      expect(
+        api.requests.every(
+          ({ url }) =>
+            url.pathname === '/api/groups/42/items/top' &&
+            url.searchParams.get('include') === 'csljson,data' &&
+            url.search.includes('%2C'),
+        ),
+      ).toBe(true);
+    });
+
+    it.each([[], [zoteroItem('ITEM0001', 16)], [zoteroItem('ITEM0002', 15)]])(
+      'rejects a partial or mismatched batch %j',
+      async (...items) => {
+        const api = new MockZoteroLocalApi({
+          ...emptyZoteroLibrary(20),
+          items,
+        });
+        const client = new ZoteroLocalApiClient(undefined, api.get);
+        await expect(
+          client.fetchItemsByKey(
+            {},
+            'items',
+            new Map([['ITEM0001', 15]]),
+            expected,
+          ),
+        ).rejects.toThrow(/requested keys and versions/);
+      },
+    );
+
+    it('preserves HTTP error status and cancels an in-flight read', async () => {
+      const controller = new AbortController();
+      const get: ZoteroHttpGetFn = () => Promise.resolve(response(503, {}));
+      await expect(
+        new ZoteroLocalApiClient(undefined, get).getLibraryState(),
+      ).rejects.toMatchObject({ statusCode: 503 });
+      const abortingGet: ZoteroHttpGetFn = () => {
+        controller.abort();
+        return get('', {});
+      };
+      await expect(
+        new ZoteroLocalApiClient(undefined, abortingGet).fetchItemVersions(
+          {},
+          'items',
+          expected,
+          controller.signal,
+        ),
+      ).rejects.toThrow(ZoteroAbortError);
     });
   });
 });

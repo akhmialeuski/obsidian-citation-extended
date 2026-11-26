@@ -166,11 +166,11 @@ Loads the bibliography from the **native local HTTP API built into Zotero 7 and 
 2. A legacy `Citation Key: xxx` line in the item's **Extra** field (the old Better BibTeX pinning convention).
 3. A generated `lastnameYear` fallback (e.g. `smith2023`, deduplicated as `smith2023a`, `smith2023b`, …) for items with no pinned key.
 
-**What you get:** full bibliographic metadata via Zotero's own CSL mapping, tags (`{{keywords}}`/`{{tags}}`), collection names (`{{collections}}`), attachment paths compatible with the `pdfLink`/`zoteroPdfURI` template helpers, and `{{entry.zotero.key}}` / `{{entry.zotero.dateAdded}}` / `{{entry.zotero.dateModified}}` extras. Zotero child notes and PDF annotations are not fetched by this source.
+**What you get:** bibliographic metadata, tags (`{{keywords}}`/`{{tags}}`), collection names (`{{collections}}`), attachment paths compatible with the `pdfLink`/`zoteroPdfURI` template helpers, and `{{entry.zotero.key}}` / `{{entry.zotero.dateAdded}}` / `{{entry.zotero.dateModified}}` extras. Enable **Import PDF annotations** to make Zotero annotations available to templates.
 
-**Auto-sync:** shares the Zotero **Auto-sync interval (minutes)** setting (0 = manual). Use **Sync now** or **Refresh citation database** for an immediate fetch.
+**Auto-sync** shares the Zotero **Auto-sync interval (minutes)** setting (0 = manual). Zotero 10 and later can detect local edits before they are synced to zotero.org. For whole personal and group libraries, a normal sync reuses unchanged records and fetches full metadata for new or edited items, attachments, and enabled annotations. Collection-scoped sources and Zotero 7–9 use full fetches. Use **Sync now** for an immediate sync or **Refresh citation database** to force a full fetch.
 
-**Offline cache:** the last successful fetch is cached at `.obsidian/plugins/citation-extended/zotero-api-cache-<id>.json` and used when Zotero is closed (with a warning).
+**Offline cache** uses the last successful compatible snapshot at `.obsidian/plugins/citation-extended/zotero-api-cache-<id>.json` when Zotero is closed, with a warning. An older V2 cache remains usable offline with matching settings at the default API URL. V2 lacks the information needed to verify which endpoint or Zotero instance supplied it, even at the default URL. The first successful online full fetch upgrades the cache. A custom API URL requires that online fetch before offline use.
 
 **Better BibTeX vs local API: which live connection?**
 

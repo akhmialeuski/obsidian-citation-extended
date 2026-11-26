@@ -103,11 +103,6 @@
       "count": 1
     }
   },
-  "src/core/zotero/zotero-local-api-client.ts": {
-    "complexity": {
-      "count": 2
-    }
-  },
   "src/infrastructure/source-manager.ts": {
     "complexity": {
       "count": 2
@@ -185,12 +180,6 @@
     }
   },
   "src/sources/zotero-api-source.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    },
     "max-params": {
       "count": 1
     }

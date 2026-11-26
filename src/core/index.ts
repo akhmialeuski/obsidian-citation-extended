@@ -80,6 +80,7 @@ export { ZoteroLocalApiClient, ZOTERO_LOCAL_API_DEFAULT_BASE } from './zotero';
 export type {
   ZoteroApiItem,
   ZoteroApiLibraryData,
+  ZoteroApiLibraryState,
   ZoteroApiScope,
   ZoteroApiPingResult,
 } from './zotero';

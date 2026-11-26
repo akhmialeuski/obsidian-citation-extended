@@ -6,10 +6,14 @@
 jest.mock('obsidian', () => ({}), { virtual: true });
 
 import { ZoteroApiSource } from '../../src/sources/zotero-api-source';
-import { ZoteroApiError } from '../../src/core/zotero';
+import {
+  ZOTERO_LOCAL_API_DEFAULT_BASE,
+  ZoteroApiError,
+} from '../../src/core/zotero';
 import type {
   ZoteroApiItem,
   ZoteroApiLibraryData,
+  ZoteroApiLibraryState,
 } from '../../src/core/zotero';
 import type { IFileSystem } from '../../src/platform/platform-adapter';
 
@@ -42,10 +46,15 @@ function makeLibrary(): ZoteroApiLibraryData {
 function makeClient(
   impl: () => Promise<ZoteroApiLibraryData>,
   versionImpl: () => Promise<number | null> = () => Promise.resolve(null),
+  serverId: string | null = null,
 ) {
   return {
+    baseUrl: ZOTERO_LOCAL_API_DEFAULT_BASE,
     fetchLibrary: jest.fn(impl),
-    getLibraryVersion: jest.fn(versionImpl),
+    getLibraryState: jest.fn(async (): Promise<ZoteroApiLibraryState> => ({
+      serverId,
+      libraryVersion: await versionImpl(),
+    })),
     ping: jest.fn(),
   } as never;
 }
@@ -93,7 +102,7 @@ describe('ZoteroApiSource.load', () => {
     expect(fetchLibraryMock(client)).toHaveBeenCalledWith(
       scope,
       expect.anything(),
-      { includeAnnotations: false },
+      expect.objectContaining({ includeAnnotations: false }),
     );
   });
 
@@ -114,7 +123,7 @@ describe('ZoteroApiSource.load', () => {
     expect(fetchLibraryMock(client)).toHaveBeenCalledWith(
       {},
       expect.anything(),
-      { includeAnnotations: true },
+      expect.objectContaining({ includeAnnotations: true }),
     );
   });
 
@@ -139,7 +148,7 @@ describe('ZoteroApiSource.load', () => {
       collectionKey: string;
       importAnnotations: boolean;
     };
-    expect(cache.version).toBe(2);
+    expect(cache.version).toBe(3);
     expect(cache.entries).toHaveLength(2);
     expect(cache.libraryVersion).toBe(7);
     // Fetch parameters are recorded so a later scope/flag change invalidates.
@@ -185,7 +194,11 @@ describe('ZoteroApiSource.load', () => {
     const { fs } = createMockFileSystem();
     const seeder = new ZoteroApiSource(
       'za1',
-      makeClient(() => Promise.resolve(makeLibrary())),
+      makeClient(
+        () => Promise.resolve(makeLibrary()),
+        () => Promise.resolve(7),
+        'serverA',
+      ),
       {},
       fs,
       '/cache/zotero-api.json',
@@ -195,6 +208,7 @@ describe('ZoteroApiSource.load', () => {
     const client = makeClient(
       () => Promise.reject(new Error('full fetch must not run')),
       () => Promise.resolve(7),
+      'serverA',
     );
     const source = new ZoteroApiSource(
       'za1',
@@ -344,7 +358,7 @@ describe('ZoteroApiSource.load', () => {
     expect(fetchLibraryMock(client)).toHaveBeenCalledWith(
       {},
       expect.anything(),
-      { includeAnnotations: true },
+      expect.objectContaining({ includeAnnotations: true }),
     );
   });
 
@@ -389,19 +403,24 @@ describe('ZoteroApiSource.load', () => {
     );
   });
 
-  it('ignores a corrupt cache and reports the fetch error', async () => {
-    const client = makeClient(() => Promise.reject(new ZoteroApiError('down')));
-    const { fs } = createMockFileSystem('not-json{');
-    const source = new ZoteroApiSource(
-      'za1',
-      client,
-      {},
-      fs,
-      '/cache/zotero-api.json',
-    );
+  it.each(['not-json{', 'null', '{}'])(
+    'ignores a corrupt cache %p and reports the fetch error',
+    async (invalid) => {
+      const client = makeClient(() =>
+        Promise.reject(new ZoteroApiError('down')),
+      );
+      const { fs } = createMockFileSystem(invalid);
+      const source = new ZoteroApiSource(
+        'za1',
+        client,
+        {},
+        fs,
+        '/cache/zotero-api.json',
+      );
 
-    await expect(source.load()).rejects.toThrow(/down/);
-  });
+      await expect(source.load()).rejects.toThrow(/down/);
+    },
+  );
 });
 
 describe('ZoteroApiSource.watch', () => {
