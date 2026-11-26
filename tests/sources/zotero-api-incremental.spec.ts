@@ -134,6 +134,72 @@ describe('Zotero object reconciliation', () => {
 });
 
 describe('Zotero Local API sync', () => {
+  it('logs sync decisions and change counts without logging record content', async () => {
+    const api = new MockZoteroLocalApi({
+      ...emptyZoteroLibrary(),
+      items: [zoteroItem('ITEM0001'), zoteroItem('ITEM0002')],
+    });
+    const { source } = setup(api, { annotations: true });
+    const debug = jest.spyOn(console, 'debug').mockImplementation(() => {});
+    const summary = 'ZoteroApiSource: synchronization complete';
+    try {
+      await source.load();
+      expect(debug).toHaveBeenLastCalledWith(summary, {
+        mode: 'full',
+        cachedVersion: null,
+        libraryVersion: 1,
+        durationMs: expect.any(Number),
+        reason: 'no compatible incremental baseline',
+      });
+      await source.load();
+      expect(debug).toHaveBeenLastCalledWith(summary, {
+        mode: 'unchanged',
+        cachedVersion: 1,
+        libraryVersion: 1,
+        durationMs: expect.any(Number),
+      });
+
+      const child = attachment('ATT00001', 'ITEM0001', 2);
+      api.library = {
+        ...emptyZoteroLibrary(2),
+        items: [
+          zoteroItem('ITEM0001', 2, { title: 'Private title' }),
+          zoteroItem('ITEM0003', 2),
+        ],
+        attachments: [child],
+        annotations: [
+          annotation('ANN00001', child.key, 2, 'Private annotation'),
+        ],
+      };
+      await source.load();
+      expect(debug).toHaveBeenLastCalledWith(summary, {
+        mode: 'incremental',
+        cachedVersion: 1,
+        libraryVersion: 2,
+        durationMs: expect.any(Number),
+        changes: {
+          items: { added: 1, modified: 1, removed: 1 },
+          attachments: { added: 1, modified: 0, removed: 0 },
+          annotations: { added: 1, modified: 0, removed: 0 },
+        },
+      });
+
+      await source.load(undefined, { fullRefresh: true });
+      expect(debug).toHaveBeenLastCalledWith(summary, {
+        mode: 'full',
+        cachedVersion: 2,
+        libraryVersion: 2,
+        durationMs: expect.any(Number),
+        reason: 'manual refresh',
+      });
+      expect(JSON.stringify(debug.mock.calls)).not.toMatch(
+        /Private|ITEM0001|ANN00001/,
+      );
+    } finally {
+      debug.mockRestore();
+    }
+  });
+
   it('writes a full baseline, probes unchanged data, and only retrieves newly added or edited references', async () => {
     const original = zoteroItem('ITEM0001');
     const api = new MockZoteroLocalApi({

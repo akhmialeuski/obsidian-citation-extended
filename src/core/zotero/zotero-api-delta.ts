@@ -10,18 +10,32 @@ import type {
 
 export type ZoteroApiRawLibrary = Omit<ZoteroApiLibraryData, 'libraryVersion'>;
 
+export interface ZoteroObjectChangeCounts {
+  added: number;
+  modified: number;
+  removed: number;
+}
+
+export type ZoteroChangeCounts = Partial<
+  Record<ZoteroApiItemList, ZoteroObjectChangeCounts>
+>;
+
 /** Compare the complete inventory so absent keys also reveal deletions. */
 export function diffZoteroObjects(
   cached: readonly ZoteroApiItem[],
   versions: ReadonlyMap<string, number>,
-): { changed: Map<string, number>; removed: string[] } {
+): { changed: Map<string, number>; removed: string[]; added: number } {
   const previous = new Map(cached.map((item) => [item.key, item.version]));
   const changed = new Map<string, number>();
+  let added = 0;
   for (const [key, version] of versions) {
-    if (previous.get(key) !== version) changed.set(key, version);
+    const previousVersion = previous.get(key);
+    if (previousVersion === undefined) added++;
+    if (previousVersion !== version) changed.set(key, version);
   }
   return {
     changed,
+    added,
     removed: [...previous.keys()].filter((key) => !versions.has(key)),
   };
 }
@@ -57,11 +71,11 @@ export async function fetchZoteroDelta(
   scope: ZoteroApiScope,
   cached: ZoteroApiRawLibrary,
   expected: ZoteroApiLibraryState,
-  {
-    includeAnnotations,
-    signal,
-  }: { includeAnnotations: boolean; signal: AbortSignal },
-): Promise<ZoteroApiLibraryData> {
+  options: { includeAnnotations: boolean; signal: AbortSignal },
+): Promise<{ library: ZoteroApiLibraryData; changes: ZoteroChangeCounts }> {
+  const { includeAnnotations, signal } = options;
+  const changes: ZoteroChangeCounts = {};
+
   async function fetchList(list: ZoteroApiItemList): Promise<ZoteroApiItem[]> {
     const versions = await client.fetchItemVersions(
       scope,
@@ -75,7 +89,15 @@ export async function fetchZoteroDelta(
       expected,
       signal,
     );
-    const { changed, removed } = diffZoteroObjects(cached[list], versions);
+    const { added, changed, removed } = diffZoteroObjects(
+      cached[list],
+      versions,
+    );
+    changes[list] = {
+      added,
+      modified: changed.size - added,
+      removed: removed.length,
+    };
     const records = await client.fetchItemsByKey(
       scope,
       list,
@@ -88,7 +110,7 @@ export async function fetchZoteroDelta(
 
   // Child objects have separate versions. A change to an annotation can
   // leave both its parent attachment and the bibliographic item unchanged.
-  return {
+  const library = {
     items: await fetchList('items'),
     attachments: await fetchList('attachments'),
     annotations: includeAnnotations ? await fetchList('annotations') : [],
@@ -96,4 +118,5 @@ export async function fetchZoteroDelta(
     collectionNames: await client.fetchCollectionNames(scope, signal, expected),
     libraryVersion: expected.libraryVersion,
   };
+  return { library, changes };
 }

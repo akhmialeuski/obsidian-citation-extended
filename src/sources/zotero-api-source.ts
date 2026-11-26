@@ -10,7 +10,10 @@ import {
   ZoteroAbortError,
 } from '../core';
 import { fetchZoteroDelta } from '../core/zotero/zotero-api-delta';
-import type { ZoteroApiRawLibrary } from '../core/zotero/zotero-api-delta';
+import type {
+  ZoteroApiRawLibrary,
+  ZoteroChangeCounts,
+} from '../core/zotero/zotero-api-delta';
 import {
   supportsLocalVersions,
   ZOTERO_LOCAL_API_DEFAULT_BASE,
@@ -42,6 +45,34 @@ interface CacheAccess {
   load?: AbortController;
   write?: Promise<void>;
   observations: Map<string, ServerObservation>;
+}
+
+interface SyncDiagnostic {
+  startedAt: number;
+  mode: 'full' | 'incremental' | 'unchanged' | 'offline';
+  libraryVersion: number | null;
+  fullReason?: string;
+  changes?: ZoteroChangeCounts;
+}
+
+function logSync(
+  diagnostic: SyncDiagnostic,
+  cache: ZoteroApiCache | null,
+): void {
+  const { mode, startedAt, libraryVersion, fullReason, changes } = diagnostic;
+  const summary = {
+    mode,
+    cachedVersion: cache?.libraryVersion ?? null,
+    libraryVersion,
+    durationMs: Math.round(performance.now() - startedAt),
+    ...(mode === 'full' ? { reason: fullReason } : {}),
+    ...(mode === 'incremental' ? { changes } : {}),
+  };
+  if (mode === 'offline') {
+    console.warn('ZoteroApiSource: using cached library', summary);
+  } else {
+    console.debug('ZoteroApiSource: synchronization complete', summary);
+  }
 }
 
 // Reconfiguring a source creates a new instance using the same cache file.
@@ -153,6 +184,11 @@ export class ZoteroApiSource implements DataSource {
     externalSignal?: AbortSignal,
     options?: DataSourceLoadOptions,
   ): Promise<DataSourceLoadResult> {
+    const diagnostic: SyncDiagnostic = {
+      startedAt: performance.now(),
+      mode: 'offline',
+      libraryVersion: null,
+    };
     this.access.load?.abort();
     const controller = createLinkedAbortController(externalSignal);
     this.access.load = this.abortController = controller;
@@ -175,6 +211,7 @@ export class ZoteroApiSource implements DataSource {
         compatible,
         signal,
         options?.fullRefresh ?? false,
+        diagnostic,
       );
     } finally {
       if (this.access.load === controller) this.access.load = undefined;
@@ -186,13 +223,21 @@ export class ZoteroApiSource implements DataSource {
     cache: ZoteroApiCache | null,
     signal: AbortSignal,
     forceFull: boolean,
+    diagnostic: SyncDiagnostic,
   ): Promise<DataSourceLoadResult> {
     try {
-      const snapshot = await this.synchronize(cache, signal, forceFull);
+      const snapshot = await this.synchronize(
+        cache,
+        signal,
+        forceFull,
+        diagnostic,
+      );
       checkAborted(signal);
       const result = this.result(snapshot);
       if (snapshot !== cache) await this.commit(snapshot, signal);
       checkAborted(signal);
+      diagnostic.libraryVersion = snapshot.libraryVersion;
+      logSync(diagnostic, cache);
       return result;
     } catch (error) {
       // Let the caller handle cancellation before considering offline fallback.
@@ -202,7 +247,8 @@ export class ZoteroApiSource implements DataSource {
       if (!cache || !this.cacheMatchesServer(cache)) {
         throw new Error(`Failed to load from Zotero local API: ${message}`);
       }
-      console.warn(`ZoteroApiSource: using cached library (${message})`);
+      diagnostic.mode = 'offline';
+      logSync(diagnostic, cache);
       return this.result(
         cache,
         `Zotero synchronization failed (using cache): ${message}`,
@@ -214,13 +260,22 @@ export class ZoteroApiSource implements DataSource {
     cache: ZoteroApiCache | null,
     signal: AbortSignal,
     forceFull: boolean,
+    diagnostic: SyncDiagnostic,
   ): Promise<ZoteroApiCacheV3> {
+    let fullReason = forceFull ? 'manual refresh' : null;
     for (let attempt = 0; ; attempt++) {
       checkAborted(signal);
       let state = UNKNOWN_LIBRARY_STATE;
       try {
         state = await this.probe(signal);
-        return await this.syncSnapshot(state, cache, signal, forceFull);
+        diagnostic.libraryVersion = state.libraryVersion;
+        return await this.syncSnapshot(
+          state,
+          cache,
+          signal,
+          fullReason,
+          diagnostic,
+        );
       } catch (error) {
         checkAborted(signal);
         if (error instanceof ZoteroLocalApiError) {
@@ -231,7 +286,7 @@ export class ZoteroApiSource implements DataSource {
           // Keep the rejection across loads in case the replacement full
           // fetch fails and the instance is unreachable on the next load.
           this.observed.rejectedServerId = state.serverId;
-          forceFull = true;
+          fullReason = 'server identity changed during synchronization';
         }
         if (attempt === 1) throw error;
       }
@@ -242,27 +297,19 @@ export class ZoteroApiSource implements DataSource {
     state: ZoteroApiLibraryState,
     cache: ZoteroApiCache | null,
     signal: AbortSignal,
-    forceFull: boolean,
+    fullReason: string | null,
+    diagnostic: SyncDiagnostic,
   ): Promise<ZoteroApiCacheV3> {
     // The manual "Refresh citation database" command bypasses both the
     // unchanged fast path and delta retrieval so it can rebuild the snapshot.
     const baseline = this.incrementalBaseline(state, cache);
-    const incremental = !forceFull && baseline;
-    if (incremental && sameState(incremental, state)) return incremental;
+    const plan = fullReason ?? baseline;
+    if (typeof plan !== 'string' && sameState(plan, state)) {
+      diagnostic.mode = 'unchanged';
+      return plan;
+    }
 
-    const { importAnnotations } = this.config;
-    const library = incremental
-      ? await fetchZoteroDelta(
-          this.client,
-          this.scope,
-          incremental.rawLibrary,
-          state,
-          { includeAnnotations: importAnnotations, signal },
-        )
-      : await this.client.fetchLibrary(this.scope, signal, {
-          includeAnnotations: importAnnotations,
-          expected: state.serverId ? state : UNKNOWN_LIBRARY_STATE,
-        });
+    const library = await this.fetchSnapshot(plan, state, signal, diagnostic);
     const entries = buildZoteroApiEntries(library, this.scope);
 
     // A tracked full fetch also needs this check before it can establish an
@@ -272,6 +319,33 @@ export class ZoteroApiSource implements DataSource {
       ? state
       : { ...state, libraryVersion: library.libraryVersion };
     return snapshotToCache(library, entries, cacheState, this.config);
+  }
+
+  private async fetchSnapshot(
+    plan: string | { rawLibrary: ZoteroApiRawLibrary },
+    state: ZoteroApiLibraryState,
+    signal: AbortSignal,
+    diagnostic: SyncDiagnostic,
+  ) {
+    const { importAnnotations } = this.config;
+    if (typeof plan === 'string') {
+      diagnostic.mode = 'full';
+      diagnostic.fullReason = plan;
+      return this.client.fetchLibrary(this.scope, signal, {
+        includeAnnotations: importAnnotations,
+        expected: state.serverId ? state : UNKNOWN_LIBRARY_STATE,
+      });
+    }
+    const { library, changes } = await fetchZoteroDelta(
+      this.client,
+      this.scope,
+      plan.rawLibrary,
+      state,
+      { includeAnnotations: importAnnotations, signal },
+    );
+    diagnostic.mode = 'incremental';
+    diagnostic.changes = changes;
+    return library;
   }
 
   private async verifySnapshot(
@@ -305,14 +379,11 @@ export class ZoteroApiSource implements DataSource {
     state: ZoteroApiLibraryState,
     cache: ZoteroApiCache | null,
   ) {
-    if (
-      this.config.collectionKey ||
-      !supportsLocalVersions(state) ||
-      !hasRawBaseline(cache) ||
-      !this.cacheMatchesServer(cache)
-    ) {
-      return null;
-    }
+    if (this.config.collectionKey) return 'collection scope';
+    if (!supportsLocalVersions(state))
+      return 'local version tracking unavailable';
+    if (!hasRawBaseline(cache)) return 'no compatible incremental baseline';
+    if (!this.cacheMatchesServer(cache)) return 'server identity changed';
     if (state.libraryVersion < cache.libraryVersion) {
       // Require a new baseline even if the version reaches this value again
       // before the source manages to save a replacement.
@@ -322,7 +393,7 @@ export class ZoteroApiSource implements DataSource {
       };
     }
     if (this.observed.rolledBack && sameState(cache, this.observed.rolledBack))
-      return null;
+      return 'library version rolled back';
     return cache;
   }
 
