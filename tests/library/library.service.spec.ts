@@ -547,7 +547,7 @@ describe('LibraryService', () => {
       expect(service.sourceMetadata[0].parseErrorCount).toBe(2);
     });
 
-    it('truncates parse errors to at most 10 messages', async () => {
+    it('keeps every parse error message so its length is the total count', async () => {
       const manyErrors = Array.from({ length: 15 }, (_, i) => ({
         message: `Error ${i}`,
         citekey: `bad${i}`,
@@ -566,7 +566,8 @@ describe('LibraryService', () => {
       }));
 
       await service.load();
-      expect(service.state.parseErrors).toHaveLength(10);
+      expect(service.state.parseErrors).toHaveLength(15);
+      expect(service.state.parseErrors[14]).toBe('Error 14');
     });
 
     it('logs warning when parse errors exist', async () => {

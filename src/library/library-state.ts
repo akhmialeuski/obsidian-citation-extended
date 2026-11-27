@@ -12,5 +12,6 @@ export interface LibraryState {
   progress?: { current: number; total: number };
   error?: Error;
   lastLoaded?: Date;
+  /** Every parse error of the load, so `length` is the count shown to the user. */
   parseErrors: string[];
 }
