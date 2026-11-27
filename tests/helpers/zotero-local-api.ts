@@ -51,11 +51,8 @@ export class MockZoteroLocalApi {
     }
 
     let records = this.recordsFor(list);
-    const requested = query.get('itemKey');
-    if (requested) {
-      const keys = new Set(requested.split(','));
-      records = records.filter((item) => keys.has(item.key));
-    }
+    const since = Number(query.get('since') ?? 0);
+    if (since > 0) records = records.filter((item) => item.version > since);
     const collectionKey = url.pathname.match(
       /\/collections\/([^/]+)\/items\/top$/,
     )?.[1];
@@ -126,12 +123,9 @@ export class MockZoteroLocalApi {
 
   private serialize(page: ZoteroApiItem[], format: string): string {
     if (format === 'keys') return page.map((item) => item.key).join('\n');
-    // Version map properties deliberately differ from the server's result order.
     if (format === 'versions') {
       return JSON.stringify(
-        Object.fromEntries(
-          page.reverse().map((item) => [item.key, item.version]),
-        ),
+        Object.fromEntries(page.map((item) => [item.key, item.version])),
         null,
         4,
       );

@@ -1,10 +1,7 @@
 jest.mock('obsidian', () => ({}), { virtual: true });
 
 import { ZoteroAbortError, ZoteroLocalApiClient } from '../../src/core/zotero';
-import {
-  diffZoteroObjects,
-  mergeZoteroObjects,
-} from '../../src/core/zotero/zotero-api-delta';
+import { mergeZoteroObjects } from '../../src/core/zotero/zotero-api-delta';
 import { ZoteroApiSource } from '../../src/sources/zotero-api-source';
 import type { ZoteroApiCacheV3 } from '../../src/sources/zotero-api-cache';
 import type { ZoteroApiScope, ZoteroHttpGetFn } from '../../src/core/zotero';
@@ -94,46 +91,170 @@ describe('Zotero object reconciliation', () => {
   it('finds edits and deletions and merges in ordered-key order without mutating the baseline', () => {
     const unchanged = zoteroItem('ITEM0002');
     const cached = [zoteroItem('ITEM0001'), unchanged, zoteroItem('ITEM0003')];
-    const versions = new Map([
-      ['ITEM0002', 1],
-      ['ITEM0001', 2],
-      ['ITEM0004', 2],
+    const updated = [
+      zoteroItem('ITEM0001', 2),
+      zoteroItem('ITEM0004', 2),
+      { ...unchanged },
+    ];
+    const { items, counts } = mergeZoteroObjects(cached, updated, [
+      'ITEM0004',
+      'ITEM0002',
+      'ITEM0001',
     ]);
-    const { changed, removed } = diffZoteroObjects(cached, versions);
-    expect(changed).toEqual(
-      new Map([
-        ['ITEM0001', 2],
-        ['ITEM0004', 2],
-      ]),
-    );
-    expect(removed).toEqual(['ITEM0003']);
-    const updated = [zoteroItem('ITEM0001', 2), zoteroItem('ITEM0004', 2)];
-    const result = mergeZoteroObjects(
-      cached,
-      updated,
-      removed,
-      ['ITEM0004', 'ITEM0002', 'ITEM0001'],
-      versions,
-    );
-    expect(result).toEqual([updated[1], unchanged, updated[0]]);
-    expect(result[1]).toBe(unchanged);
+    expect(counts).toEqual({ added: 1, modified: 1, removed: 1 });
+    expect(items).toEqual([updated[1], unchanged, updated[0]]);
+    expect(items[1]).toBe(updated[2]);
     expect(cached.map((item) => item.version)).toEqual([1, 1, 1]);
+    expect(() => mergeZoteroObjects(cached, updated, ['ITEM0001'])).toThrow(
+      /outside the ordered inventory/,
+    );
     expect(() =>
-      mergeZoteroObjects(cached, updated, removed, ['ITEM0001'], versions),
-    ).toThrow(/inventories disagree/);
-    expect(() =>
-      mergeZoteroObjects(
-        cached,
-        updated,
-        removed,
-        ['ITEM0001', 'ITEM0002', 'ITEM0003'],
-        versions,
-      ),
-    ).toThrow(/inventories disagree/);
+      mergeZoteroObjects(cached, updated, [
+        'ITEM0004',
+        'ITEM0002',
+        'ITEM0001',
+        'UNKNOWN1',
+      ]),
+    ).toThrow(/missing from the cache and delta/);
   });
 });
 
 describe('Zotero Local API sync', () => {
+  it.each([false, true])(
+    'handles restored children older than the cursor (full fetch fails: %s)',
+    async (failFull) => {
+      const parent = zoteroItem('ITEM0001');
+      const child = attachment('ATT00001', parent.key);
+      const note = annotation('ANN00001', child.key);
+      const api = new MockZoteroLocalApi({
+        ...emptyZoteroLibrary(),
+        items: [parent],
+        attachments: [child],
+        annotations: [note],
+      });
+      const get: ZoteroHttpGetFn = (address, headers) => {
+        const url = new URL(address);
+        if (
+          failFull &&
+          api.library.libraryVersion === 3 &&
+          url.searchParams.get('format') === 'json' &&
+          !url.searchParams.has('since')
+        ) {
+          return Promise.resolve(zoteroResponse(503, 'Unavailable'));
+        }
+        return api.get(address, headers);
+      };
+      const { source, snapshot, file, fs } = setup(api, {
+        annotations: true,
+        get,
+      });
+      const writes = jest.spyOn(fs, 'writeFile');
+      await source.load();
+
+      // The normal endpoints hide the trashed parent and its descendants.
+      api.library = emptyZoteroLibrary(2);
+      expect((await source.load()).entries).toEqual([]);
+      expect(snapshot().rawLibrary).toMatchObject({
+        items: [],
+        attachments: [],
+        annotations: [],
+      });
+      const prior = file.content;
+
+      // Restoring visibility can leave the attachment and annotation versions unchanged.
+      api.library = {
+        ...emptyZoteroLibrary(3),
+        items: [{ ...parent, version: 3 }],
+        attachments: [child],
+        annotations: [note],
+      };
+      api.resetMetrics();
+      const result = await source.load();
+      expect(
+        api.requests.some(
+          ({ list, url, records }) =>
+            list === 'attachments' &&
+            url.searchParams.get('since') === '2' &&
+            records === 0,
+        ),
+      ).toBe(true);
+      if (failFull) {
+        expect(result.entries).toEqual([]);
+        expect(result.parseErrors?.[0].message).toMatch(/HTTP 503/);
+        expect(file.content).toBe(prior);
+        expect(writes).toHaveBeenCalledTimes(2);
+      } else {
+        expect(snapshot().libraryVersion).toBe(3);
+        expect(snapshot().entries[0]).toMatchObject({
+          key: parent.key,
+          attachmentRefs: [{ id: child.key }],
+          annotations: [{ id: note.key }],
+        });
+        expect(result.parseErrors).toEqual([]);
+        expect(
+          api.requests.some(
+            ({ list, format, url }) =>
+              list === 'attachments' &&
+              format === 'json' &&
+              !url.searchParams.has('since'),
+          ),
+        ).toBe(true);
+        expect(writes).toHaveBeenCalledTimes(3);
+      }
+    },
+  );
+
+  it.each([
+    ['outside the ordered inventory', 'OTHER001', 2, false],
+    ['outside the ordered inventory', 'OTHER001', 2, true],
+    ['newer than the pinned library version', 'ITEM0001', 3, false],
+    ['newer than the pinned library version', 'ITEM0001', 3, true],
+  ])(
+    'retries records %s (persistent: fixture %s/%i/%s)',
+    async (reason, key, version, persistent) => {
+      const api = new MockZoteroLocalApi({
+        ...emptyZoteroLibrary(),
+        items: [zoteroItem('ITEM0001')],
+      });
+      let deltaRequests = 0;
+      const get: ZoteroHttpGetFn = (address, headers) => {
+        const url = new URL(address);
+        if (
+          url.pathname.endsWith('/items/top') &&
+          url.searchParams.has('since')
+        ) {
+          deltaRequests++;
+          if (deltaRequests === 1 || persistent) {
+            return Promise.resolve(
+              zoteroResponse(200, JSON.stringify([zoteroItem(key, version)]), {
+                'Zotero-Server-ID': 'test-server',
+                'Last-Modified-Version': '2',
+                'Total-Results': '1',
+              }),
+            );
+          }
+        }
+        return api.get(address, headers);
+      };
+      const { source, snapshot, file } = setup(api, { get });
+      await source.load();
+      const prior = file.content;
+      api.library = {
+        ...emptyZoteroLibrary(2),
+        items: [zoteroItem('ITEM0001', 2)],
+      };
+      const result = await source.load();
+      expect(deltaRequests).toBe(2);
+      if (persistent) {
+        expect(file.content).toBe(prior);
+        expect(result.parseErrors?.[0].message).toContain(reason);
+      } else {
+        expect(snapshot().libraryVersion).toBe(2);
+        expect(result.parseErrors).toEqual([]);
+      }
+    },
+  );
+
   it('logs sync decisions and change counts without logging record content', async () => {
     const api = new MockZoteroLocalApi({
       ...emptyZoteroLibrary(),
@@ -236,8 +357,8 @@ describe('Zotero Local API sync', () => {
     expect(
       api.requests
         .find((request) => request.records > 0)
-        ?.url.searchParams.get('itemKey'),
-    ).toBe(added.key);
+        ?.url.searchParams.get('since'),
+    ).toBe('1');
     expect(api.requests.some((request) => request.list === 'annotations')).toBe(
       false,
     );
@@ -566,8 +687,7 @@ describe('Zotero Local API sync', () => {
       items: [zoteroItem('ITEM0001')],
     });
     const get: ZoteroHttpGetFn = (url, headers) => {
-      if (url.includes('format=versions') && !url.includes('limit='))
-        api.serverId = 'new-server';
+      if (url.includes('format=keys')) api.serverId = 'new-server';
       return api.get(url, headers);
     };
     const { source, snapshot } = setup(api, { get });
@@ -584,7 +704,7 @@ describe('Zotero Local API sync', () => {
     });
     const records = api.requests.filter((request) => request.records > 0);
     expect(records).toHaveLength(1);
-    expect(records[0].url.searchParams.has('itemKey')).toBe(false);
+    expect(records[0].url.searchParams.has('since')).toBe(false);
   });
 
   it('rejects a known foreign cache even on a later offline load', async () => {
@@ -684,7 +804,7 @@ describe('Zotero Local API sync', () => {
     api.resetMetrics();
     let changed = false;
     const get: ZoteroHttpGetFn = (url, headers) => {
-      if (!changed && url.includes('itemType=attachment&format=versions')) {
+      if (!changed && url.includes('itemType=attachment&format=keys')) {
         changed = true;
         api.library = {
           ...emptyZoteroLibrary(3),
@@ -703,7 +823,7 @@ describe('Zotero Local API sync', () => {
     expect(
       api.requests
         .filter((request) => request.list === 'items' && request.records > 0)
-        .every(({ url }) => url.searchParams.get('itemKey') === 'ITEM0002'),
+        .every(({ url }) => url.searchParams.get('since') === '1'),
     ).toBe(true);
   });
 

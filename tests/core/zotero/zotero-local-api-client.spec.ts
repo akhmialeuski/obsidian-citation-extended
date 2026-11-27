@@ -577,39 +577,16 @@ describe('ZoteroLocalApiClient', () => {
       });
     });
 
-    it.each([
-      null,
-      [],
-      { ITEM0001: '20' },
-      { ITEM0001: -2 },
-      { incorrect: 20 },
-    ])('rejects a malformed version map %p', async (body) => {
-      const get: ZoteroHttpGetFn = () => Promise.resolve(response(200, body));
-      const client = new ZoteroLocalApiClient(undefined, get);
-      await expect(
-        client.fetchItemVersions({}, 'items', expected),
-      ).rejects.toThrow(/version map/);
-    });
-
     it('reads complete and empty inventories with the server identity header', async () => {
       const api = new MockZoteroLocalApi({
         ...emptyZoteroLibrary(20),
         items: [zoteroItem('ITEM0001', 15), zoteroItem('ITEM0002', 20)],
       });
       const client = new ZoteroLocalApiClient(undefined, api.get);
-      expect(await client.fetchItemVersions({}, 'items', expected)).toEqual(
-        new Map([
-          ['ITEM0002', 20],
-          ['ITEM0001', 15],
-        ]),
-      );
       expect(await client.fetchOrderedItemKeys({}, 'items', expected)).toEqual([
         'ITEM0001',
         'ITEM0002',
       ]);
-      expect(
-        await client.fetchItemVersions({}, 'attachments', expected),
-      ).toEqual(new Map());
       expect(
         await client.fetchOrderedItemKeys({}, 'attachments', expected),
       ).toEqual([]);
@@ -621,18 +598,18 @@ describe('ZoteroLocalApiClient', () => {
       ).toBe(true);
     });
 
-    it('rejects truncated and duplicated inventories', async () => {
+    it('rejects truncated delta pages and duplicated ordered inventories', async () => {
       const get: ZoteroHttpGetFn = (url) =>
         Promise.resolve(
           url.includes('format=keys')
             ? zoteroResponse(200, 'ITEM0001\nITEM0001', {
                 'Total-Results': '2',
               })
-            : response(200, { ITEM0001: 15 }, { 'Total-Results': '2' }),
+            : response(200, [], { 'Total-Results': '2' }),
         );
       const client = new ZoteroLocalApiClient(undefined, get);
       await expect(
-        client.fetchItemVersions({}, 'items', expected),
+        client.fetchItemsSince({}, 'items', 14, expected),
       ).rejects.toThrow(/incomplete/);
       await expect(
         client.fetchOrderedItemKeys({}, 'items', expected),
@@ -649,62 +626,47 @@ describe('ZoteroLocalApiClient', () => {
       ).rejects.toThrow(/collection without a name/);
     });
 
-    it('batches group item keys and advances by the actual page size', async () => {
+    it('filters group items since the saved version and advances by the actual page size', async () => {
       const items = Array.from({ length: 52 }, (_, i) =>
         zoteroItem('IT' + String(i).padStart(6, '0'), 15),
       );
-      const api = new MockZoteroLocalApi({ ...emptyZoteroLibrary(20), items });
+      const api = new MockZoteroLocalApi({
+        ...emptyZoteroLibrary(20),
+        items: [zoteroItem('OLDER001', 14), ...items],
+      });
       const get: ZoteroHttpGetFn = (address, headers) => {
         const url = new URL(address);
         url.searchParams.set('limit', '20');
         return api.get(url.href, headers);
       };
       const client = new ZoteroLocalApiClient(undefined, get);
-      const versions = new Map(items.map(({ key, version }) => [key, version]));
       expect(
-        await client.fetchItemsByKey(
-          { groupId: '42' },
-          'items',
-          versions,
-          expected,
-        ),
+        await client.fetchItemsSince({ groupId: '42' }, 'items', 14, expected),
       ).toEqual(items);
       expect(
         api.requests.map(({ url }) => url.searchParams.get('start')),
-      ).toEqual(['0', '20', '40', '0']);
-      expect(
-        api.requests.map(
-          ({ url }) => url.searchParams.get('itemKey')?.split(',').length,
-        ),
-      ).toEqual([50, 50, 50, 2]);
+      ).toEqual(['0', '20', '40']);
       expect(
         api.requests.every(
           ({ url }) =>
             url.pathname === '/api/groups/42/items/top' &&
             url.searchParams.get('include') === 'csljson,data' &&
-            url.search.includes('%2C'),
+            url.searchParams.get('since') === '14',
         ),
       ).toBe(true);
     });
 
-    it.each([[], [zoteroItem('ITEM0001', 16)], [zoteroItem('ITEM0002', 15)]])(
-      'rejects a partial or mismatched batch %j',
-      async (...items) => {
-        const api = new MockZoteroLocalApi({
-          ...emptyZoteroLibrary(20),
-          items,
-        });
-        const client = new ZoteroLocalApiClient(undefined, api.get);
-        await expect(
-          client.fetchItemsByKey(
-            {},
-            'items',
-            new Map([['ITEM0001', 15]]),
-            expected,
-          ),
-        ).rejects.toThrow(/requested keys and versions/);
-      },
-    );
+    it('accepts Zotero version zero with the unfiltered since=0 cursor', async () => {
+      const old = zoteroItem('ITEM0001', 0);
+      const api = new MockZoteroLocalApi({
+        ...emptyZoteroLibrary(20),
+        items: [old],
+      });
+      const client = new ZoteroLocalApiClient(undefined, api.get);
+      expect(await client.fetchItemsSince({}, 'items', 0, expected)).toEqual([
+        old,
+      ]);
+    });
 
     it('preserves HTTP error status and cancels an in-flight read', async () => {
       const controller = new AbortController();
@@ -717,9 +679,10 @@ describe('ZoteroLocalApiClient', () => {
         return get('', {});
       };
       await expect(
-        new ZoteroLocalApiClient(undefined, abortingGet).fetchItemVersions(
+        new ZoteroLocalApiClient(undefined, abortingGet).fetchItemsSince(
           {},
           'items',
+          14,
           expected,
           controller.signal,
         ),

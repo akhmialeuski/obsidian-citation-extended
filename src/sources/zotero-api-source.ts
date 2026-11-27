@@ -9,7 +9,10 @@ import {
   buildZoteroApiEntries,
   ZoteroAbortError,
 } from '../core';
-import { fetchZoteroDelta } from '../core/zotero/zotero-api-delta';
+import {
+  fetchZoteroDelta,
+  MissingZoteroDeltaRecordError,
+} from '../core/zotero/zotero-api-delta';
 import type {
   ZoteroApiRawLibrary,
   ZoteroChangeCounts,
@@ -263,7 +266,8 @@ export class ZoteroApiSource implements DataSource {
     diagnostic: SyncDiagnostic,
   ): Promise<ZoteroApiCacheV3> {
     let fullReason = forceFull ? 'manual refresh' : null;
-    for (let attempt = 0; ; attempt++) {
+    let consistencyRetryAvailable = true;
+    for (;;) {
       checkAborted(signal);
       let state = UNKNOWN_LIBRARY_STATE;
       try {
@@ -278,19 +282,31 @@ export class ZoteroApiSource implements DataSource {
         );
       } catch (error) {
         checkAborted(signal);
-        if (error instanceof ZoteroLocalApiError) {
-          this.observeServer(error.serverId);
+        if (error instanceof MissingZoteroDeltaRecordError) {
+          // Only a delta can have missing records. The next attempt uses a
+          // full fetch, leaving the consistency retry budget available.
+          fullReason = error.message;
+          continue;
         }
-        if (!(error instanceof ZoteroSnapshotError)) throw error;
-        if (error.statusCode === 412) {
-          // Keep the rejection across loads in case the replacement full
-          // fetch fails and the instance is unreachable on the next load.
-          this.observed.rejectedServerId = state.serverId;
-          fullReason = 'server identity changed during synchronization';
-        }
-        if (attempt === 1) throw error;
+        fullReason = this.snapshotRetryReason(error, state) ?? fullReason;
+        if (!consistencyRetryAvailable) throw error;
+        consistencyRetryAvailable = false;
       }
     }
+  }
+
+  private snapshotRetryReason(
+    error: unknown,
+    state: ZoteroApiLibraryState,
+  ): string | null {
+    if (error instanceof ZoteroLocalApiError)
+      this.observeServer(error.serverId);
+    if (!(error instanceof ZoteroSnapshotError)) throw error;
+    if (error.statusCode !== 412) return null;
+    // Keep the rejection if the replacement fetch fails and the instance
+    // is unreachable on the next load.
+    this.observed.rejectedServerId = state.serverId;
+    return 'server identity changed during synchronization';
   }
 
   private async syncSnapshot(
@@ -322,7 +338,7 @@ export class ZoteroApiSource implements DataSource {
   }
 
   private async fetchSnapshot(
-    plan: string | { rawLibrary: ZoteroApiRawLibrary },
+    plan: string | { rawLibrary: ZoteroApiRawLibrary; libraryVersion: number },
     state: ZoteroApiLibraryState,
     signal: AbortSignal,
     diagnostic: SyncDiagnostic,
@@ -339,7 +355,7 @@ export class ZoteroApiSource implements DataSource {
     const { library, changes } = await fetchZoteroDelta(
       this.client,
       this.scope,
-      plan.rawLibrary,
+      plan,
       state,
       { includeAnnotations: importAnnotations, signal },
     );

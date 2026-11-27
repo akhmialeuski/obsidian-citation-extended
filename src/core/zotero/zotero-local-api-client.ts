@@ -216,7 +216,6 @@ function childrenOf(
 
 /** Page size for item fetches, which bounds individual response sizes. */
 const PAGE_LIMIT = 100;
-const KEY_BATCH_LIMIT = 50;
 // Match Zotero's default ordering. The same search and sort must be used
 // for the JSON and ordered key lists, including when dates tie.
 const ITEM_SORT = 'sort=dateModified&direction=desc';
@@ -338,35 +337,6 @@ export class ZoteroLocalApiClient {
     };
   }
 
-  async fetchItemVersions(
-    scope: ZoteroApiScope,
-    list: ZoteroApiItemList,
-    expected: ZoteroApiLibraryState,
-    signal?: AbortSignal,
-  ): Promise<Map<string, number>> {
-    const response = await this.request(
-      this.itemListUrl(scope, list, 'versions'),
-      signal,
-      expected,
-    );
-    const data = await response.json();
-    checkAborted(signal);
-    if (!isZoteroRecord(data))
-      throw new ZoteroApiError('Invalid Zotero item version map.');
-    const versions = new Map<string, number>();
-    for (const [key, version] of Object.entries(data)) {
-      if (!isObjectKey(key) || !isZoteroVersion(version)) {
-        throw new ZoteroApiError('Invalid Zotero item version map.');
-      }
-      versions.set(key, version);
-    }
-    checkInventoryCount(
-      numericHeader(response, 'total-results'),
-      versions.size,
-    );
-    return versions;
-  }
-
   async fetchOrderedItemKeys(
     scope: ZoteroApiScope,
     list: ZoteroApiItemList,
@@ -388,37 +358,29 @@ export class ZoteroLocalApiClient {
     return keys;
   }
 
-  async fetchItemsByKey(
+  /** Read versions newer than the last successful library snapshot. */
+  async fetchItemsSince(
     scope: ZoteroApiScope,
     list: ZoteroApiItemList,
-    versions: ReadonlyMap<string, number>,
+    since: number,
     expected: ZoteroApiLibraryState,
     signal?: AbortSignal,
   ): Promise<ZoteroApiItem[]> {
-    checkAborted(signal);
-    const entries = [...versions];
-    const records: ZoteroApiItem[] = [];
-    for (let start = 0; start < entries.length; start += KEY_BATCH_LIMIT) {
-      const batch = new Map(entries.slice(start, start + KEY_BATCH_LIMIT));
-      const query = new URLSearchParams({
-        itemKey: [...batch.keys()].join(','),
-      });
-      const { items } = await this.fetchAllPages(
-        `${this.itemListUrl(scope, list, 'json')}&${query.toString()}`,
-        signal,
-        expected,
+    const { items } = await this.fetchAllPages(
+      `${this.itemListUrl(scope, list, 'json')}&since=${since}`,
+      signal,
+      expected,
+    );
+    const pinnedVersion = expected.libraryVersion;
+    if (
+      pinnedVersion === null ||
+      items.some((item) => item.version > pinnedVersion)
+    ) {
+      throw new ZoteroSnapshotError(
+        'Zotero returned an item newer than the pinned library version.',
       );
-      if (
-        items.length !== batch.size ||
-        items.some((item) => batch.get(item.key) !== item.version)
-      ) {
-        throw new ZoteroSnapshotError(
-          'Zotero item response does not match the requested keys and versions.',
-        );
-      }
-      records.push(...items);
     }
-    return records;
+    return items;
   }
 
   /** Resolve current collection names independently of item versions. */
@@ -448,7 +410,7 @@ export class ZoteroLocalApiClient {
   private itemListUrl(
     scope: ZoteroApiScope,
     list: ZoteroApiItemList,
-    format: 'json' | 'keys' | 'versions',
+    format: 'json' | 'keys',
   ): string {
     const route =
       list === 'items'

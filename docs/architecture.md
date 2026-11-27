@@ -370,8 +370,8 @@ can call `load()` across all sources. Each source then chooses how to fetch its 
 
 Zotero (local API) also synchronizes records within a single source. 
 On Zotero 10+, a whole personal or group library can use a V3 snapshot with a matching server ID and library version to skip record retrieval. 
-When the version advances, complete version maps detect additions, changes, and deletions among items, attachments, and enabled annotations. 
-Ordered keys preserve the adapter's iteration order while changed records are merged into the cached raw objects. 
+When the version advances, paged `since` requests fetch newer items, attachments, and enabled annotations using the cached library version as the cursor.
+Complete ordered key lists detect deletions and preserve adapter order. If a visible key has no record in the cache or delta, the source retries with a full fetch.
 The source checks the server ID and version before saving the candidate snapshot. 
 Entry construction and search indexing still operate on the resulting library. 
 Zotero 7–9 and collection-scoped sources use full fetches. See [Zotero (local API)](data-sources.md#zotero-local-api-without-better-bibtex).

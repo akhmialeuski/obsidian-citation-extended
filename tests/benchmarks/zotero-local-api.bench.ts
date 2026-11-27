@@ -179,6 +179,35 @@ describe('Zotero Local API synchronization (synthetic transport)', () => {
         const expectedChildren: [number, number] =
           count === 1 ? [0, 0] : [Math.ceil(count / 4), Math.ceil(count / 8)];
         await load('changed ' + count, count, expectedChildren);
+        const deltaRequests = api.requests.filter(({ url }) =>
+          url.searchParams.has('since'),
+        );
+        expect(deltaRequests.map(({ list }) => list)).toEqual([
+          'items',
+          'attachments',
+          'annotations',
+        ]);
+        expect(
+          deltaRequests.every(
+            ({ format, url }) =>
+              format === 'json' &&
+              url.searchParams.get('since') ===
+                String(library.libraryVersion) &&
+              url.searchParams.has('limit') &&
+              url.searchParams.has('start'),
+          ),
+        ).toBe(true);
+        expect(
+          api.requests
+            .filter(
+              ({ format, url }) =>
+                format === 'keys' && !url.searchParams.has('since'),
+            )
+            .map(({ list }) => list),
+        ).toEqual(['items', 'attachments', 'annotations']);
+        expect(
+          api.requests.filter(({ format }) => format === 'versions'),
+        ).toHaveLength(2);
       }
     },
     120_000,

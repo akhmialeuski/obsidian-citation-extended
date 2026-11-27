@@ -20,56 +20,54 @@ export type ZoteroChangeCounts = Partial<
   Record<ZoteroApiItemList, ZoteroObjectChangeCounts>
 >;
 
-/** Compare the complete inventory so absent keys also reveal deletions. */
-export function diffZoteroObjects(
-  cached: readonly ZoteroApiItem[],
-  versions: ReadonlyMap<string, number>,
-): { changed: Map<string, number>; removed: string[]; added: number } {
-  const previous = new Map(cached.map((item) => [item.key, item.version]));
-  const changed = new Map<string, number>();
-  let added = 0;
-  for (const [key, version] of versions) {
-    const previousVersion = previous.get(key);
-    if (previousVersion === undefined) added++;
-    if (previousVersion !== version) changed.set(key, version);
+/** A visible record can reappear without its version advancing, for example after restoring its parent. */
+export class MissingZoteroDeltaRecordError extends ZoteroSnapshotError {
+  constructor() {
+    super(
+      'ordered inventory contains records missing from the cache and delta',
+    );
   }
-  return {
-    changed,
-    added,
-    removed: [...previous.keys()].filter((key) => !versions.has(key)),
-  };
 }
 
 export function mergeZoteroObjects(
   cached: readonly ZoteroApiItem[],
   changed: readonly ZoteroApiItem[],
-  removed: readonly string[],
   keys: readonly string[],
-  versions: ReadonlyMap<string, number>,
-): ZoteroApiItem[] {
+): { items: ZoteroApiItem[]; counts: ZoteroObjectChangeCounts } {
+  const present = new Set(keys);
   const records = new Map(cached.map((item) => [item.key, item]));
-  for (const key of removed) records.delete(key);
-  for (const item of changed) records.set(item.key, item);
+  const counts = {
+    added: 0,
+    modified: 0,
+    removed: cached.filter((item) => !present.has(item.key)).length,
+  };
 
-  if (keys.length !== versions.size) {
-    throw new ZoteroSnapshotError('Zotero item inventories disagree.');
+  if (changed.some((item) => !present.has(item.key))) {
+    throw new ZoteroSnapshotError(
+      'Zotero returned an item outside the ordered inventory.',
+    );
   }
-  // The ordered key response controls the adapter's iteration order. This
-  // preserves citekey tie-breaking and attachment order after additions or edits.
-  return keys.map((key) => {
+  for (const item of changed) {
+    const previous = records.get(item.key);
+    if (!previous) counts.added++;
+    else if (previous.version !== item.version) counts.modified++;
+    records.set(item.key, item);
+  }
+
+  // Preserve the adapter's citekey tie-breaking and attachment order.
+  const items = keys.map((key) => {
     const item = records.get(key);
-    if (!item || item.version !== versions.get(key)) {
-      throw new ZoteroSnapshotError('Zotero item inventories disagree.');
-    }
+    if (!item) throw new MissingZoteroDeltaRecordError();
     return item;
   });
+  return { items, counts };
 }
 
 /** Reconcile each endpoint's inventory, including children without visible parents. */
 export async function fetchZoteroDelta(
   client: ZoteroLocalApiClient,
   scope: ZoteroApiScope,
-  cached: ZoteroApiRawLibrary,
+  cached: { rawLibrary: ZoteroApiRawLibrary; libraryVersion: number },
   expected: ZoteroApiLibraryState,
   options: { includeAnnotations: boolean; signal: AbortSignal },
 ): Promise<{ library: ZoteroApiLibraryData; changes: ZoteroChangeCounts }> {
@@ -77,35 +75,26 @@ export async function fetchZoteroDelta(
   const changes: ZoteroChangeCounts = {};
 
   async function fetchList(list: ZoteroApiItemList): Promise<ZoteroApiItem[]> {
-    const versions = await client.fetchItemVersions(
-      scope,
-      list,
-      expected,
-      signal,
-    );
     const keys = await client.fetchOrderedItemKeys(
       scope,
       list,
       expected,
       signal,
     );
-    const { added, changed, removed } = diffZoteroObjects(
-      cached[list],
-      versions,
-    );
-    changes[list] = {
-      added,
-      modified: changed.size - added,
-      removed: removed.length,
-    };
-    const records = await client.fetchItemsByKey(
+    const records = await client.fetchItemsSince(
       scope,
       list,
-      changed,
+      cached.libraryVersion,
       expected,
       signal,
     );
-    return mergeZoteroObjects(cached[list], records, removed, keys, versions);
+    const { items, counts } = mergeZoteroObjects(
+      cached.rawLibrary[list],
+      records,
+      keys,
+    );
+    changes[list] = counts;
+    return items;
   }
 
   // Child objects have separate versions. A change to an annotation can
