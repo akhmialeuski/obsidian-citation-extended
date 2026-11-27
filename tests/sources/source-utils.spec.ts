@@ -156,12 +156,29 @@ describe('readVersionedJsonCache', () => {
 });
 
 describe('writeVersionedJsonCache', () => {
+  const path = '/cache.json';
+  const state = (entry: string) => ({ version: 1, entries: [entry] });
+
+  function deferWrite(fs: IFileSystem, store: Map<string, string>) {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    jest.mocked(fs.writeFile).mockImplementationOnce(async (path, data) => {
+      await gate;
+      store.set(path, data);
+    });
+    return release;
+  }
+
   it('serializes and writes the state', async () => {
     const { fs, store } = makeFs();
-    await writeVersionedJsonCache(fs, '/cache.json', {
-      version: 1,
-      entries: ['a'],
-    });
+    expect(
+      await writeVersionedJsonCache(fs, '/cache.json', {
+        version: 1,
+        entries: ['a'],
+      }),
+    ).toBe(true);
     expect(JSON.parse(store.get('/cache.json')!)).toEqual({
       version: 1,
       entries: ['a'],
@@ -170,17 +187,98 @@ describe('writeVersionedJsonCache', () => {
 
   it('is a no-op without a file system or path', async () => {
     const { fs } = makeFs();
-    await writeVersionedJsonCache(undefined, '/x', {});
-    await writeVersionedJsonCache(fs, undefined, {});
-    await writeVersionedJsonCache(fs, '', {});
+    expect(await writeVersionedJsonCache(undefined, '/x', {})).toBe(false);
+    expect(await writeVersionedJsonCache(fs, undefined, {})).toBe(false);
+    expect(await writeVersionedJsonCache(fs, '', {})).toBe(false);
     expect(fs.writeFile).not.toHaveBeenCalled();
   });
 
-  it('swallows write failures (best-effort cache)', async () => {
-    const { fs } = makeFs();
-    (fs.writeFile as jest.Mock).mockRejectedValue(new Error('disk full'));
+  it('reports write failure and allows subsequent reads and writes', async () => {
+    const { fs } = makeFs(JSON.stringify(state('prior')));
+    jest.mocked(fs.writeFile).mockRejectedValueOnce(new Error('disk full'));
+    const failed = writeVersionedJsonCache(fs, path, state('failed'));
+    const read = readVersionedJsonCache(fs, path, isCacheV1);
+    await expect(failed).resolves.toBe(false);
+    await expect(read).resolves.toEqual(state('prior'));
     await expect(
-      writeVersionedJsonCache(fs, '/cache.json', { version: 1 }),
-    ).resolves.toBeUndefined();
+      writeVersionedJsonCache(fs, path, state('next')),
+    ).resolves.toBe(true);
+    await expect(readVersionedJsonCache(fs, path, isCacheV1)).resolves.toEqual(
+      state('next'),
+    );
+  });
+
+  it('serializes writes and makes existing and new reads wait for the latest writer', async () => {
+    const { fs, store } = makeFs();
+    const releaseFirst = deferWrite(fs, store);
+    const releaseSecond = deferWrite(fs, store);
+    const first = writeVersionedJsonCache(fs, path, state('first'));
+    const earlyRead = readVersionedJsonCache(fs, path, isCacheV1);
+    const second = writeVersionedJsonCache(fs, path, state('second'));
+    await Promise.resolve();
+    expect(fs.writeFile).toHaveBeenCalledTimes(1);
+    expect(fs.exists).not.toHaveBeenCalled();
+    releaseFirst();
+    await expect(first).resolves.toBe(true);
+    const lateRead = readVersionedJsonCache(fs, path, isCacheV1);
+    expect(fs.exists).not.toHaveBeenCalled();
+    releaseSecond();
+    await expect(second).resolves.toBe(true);
+    await expect(earlyRead).resolves.toEqual(state('second'));
+    await expect(lateRead).resolves.toEqual(state('second'));
+  });
+
+  it('lets other paths and filesystem instances read and write independently', async () => {
+    const { fs, store } = makeFs();
+    const other = makeFs().fs;
+    const release = deferWrite(fs, store);
+    const pending = writeVersionedJsonCache(fs, path, state('pending'));
+    await expect(
+      writeVersionedJsonCache(fs, '/other.json', state('other path')),
+    ).resolves.toBe(true);
+    await expect(
+      writeVersionedJsonCache(other, path, state('other fs')),
+    ).resolves.toBe(true);
+    await expect(
+      readVersionedJsonCache(fs, '/other.json', isCacheV1),
+    ).resolves.toEqual(state('other path'));
+    await expect(
+      readVersionedJsonCache(other, path, isCacheV1),
+    ).resolves.toEqual(state('other fs'));
+    release();
+    await expect(pending).resolves.toBe(true);
+  });
+
+  it('skips an aborted queued write and starts the next write', async () => {
+    const { fs, store } = makeFs();
+    const release = deferWrite(fs, store);
+    const controller = new AbortController();
+    const first = writeVersionedJsonCache(fs, path, state('first'));
+    const cancelled = writeVersionedJsonCache(
+      fs,
+      path,
+      state('cancelled'),
+      controller.signal,
+    );
+    const last = writeVersionedJsonCache(fs, path, state('last'));
+    controller.abort();
+    release();
+    await expect(first).resolves.toBe(true);
+    await expect(cancelled).resolves.toBe(false);
+    await expect(last).resolves.toBe(true);
+    expect(fs.writeFile).toHaveBeenCalledTimes(2);
+    await expect(readVersionedJsonCache(fs, path, isCacheV1)).resolves.toEqual(
+      state('last'),
+    );
+  });
+
+  it('reports serialization errors before giving the adapter any content', async () => {
+    const { fs } = makeFs();
+    const circular = { self: {} };
+    circular.self = circular;
+    await expect(writeVersionedJsonCache(fs, path, circular)).resolves.toBe(
+      false,
+    );
+    expect(fs.writeFile).not.toHaveBeenCalled();
   });
 });

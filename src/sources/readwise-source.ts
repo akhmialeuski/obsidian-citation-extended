@@ -469,11 +469,14 @@ export class ReadwiseSource implements DataSource {
       // matches — a failed write keeps the old cursor+base pair on disk,
       // and the next sync simply re-merges the same delta (idempotent).
       if (fetchErrors.length === 0) {
-        await this.writeCache({
-          version: 1,
-          lastSyncAt: fetchStartedAt,
-          entries: fullEntries,
-        });
+        await this.writeCache(
+          {
+            version: 1,
+            lastSyncAt: fetchStartedAt,
+            entries: fullEntries,
+          },
+          signal,
+        );
       }
 
       return await this.runPipeline(fullEntries, fetchErrors, signal);
@@ -604,8 +607,16 @@ export class ReadwiseSource implements DataSource {
   }
 
   /** Write the cache state to disk (best-effort, errors are silent). */
-  private writeCache(state: ReadwiseCacheStateV1): Promise<void> {
-    return writeVersionedJsonCache(this.fileSystem, this.cachePath, state);
+  private writeCache(
+    state: ReadwiseCacheStateV1,
+    signal: AbortSignal,
+  ): Promise<boolean> {
+    return writeVersionedJsonCache(
+      this.fileSystem,
+      this.cachePath,
+      state,
+      signal,
+    );
   }
 
   /**

@@ -721,14 +721,15 @@ describe('Zotero Local API sync', () => {
         ? Promise.resolve(zoteroResponse(503, 'Unavailable'))
         : api.get(url, headers);
 
-    await expect(
-      setup(api, { get: failingGet }, cache).source.load(),
-    ).rejects.toThrow(/HTTP 503/);
+    const observingSource = setup(api, { get: failingGet }, cache).source;
+    await expect(observingSource.load()).rejects.toThrow(/HTTP 503/);
     api.offline = true;
-    await expect(setup(api, {}, cache).source.load()).rejects.toThrow(
-      /Zotero is closed/,
-    );
+    await expect(observingSource.load()).rejects.toThrow(/Zotero is closed/);
     expect(cache.file.content).toBe(before);
+    // A replacement source can only rule out the cache once it observes a
+    // different server itself.
+    observingSource.dispose();
+    expect((await setup(api, {}, cache).source.load()).entries).toHaveLength(1);
   });
 
   it('does not overwrite the prior cache after a partial synchronization failure', async () => {
@@ -845,6 +846,7 @@ describe('Zotero Local API sync', () => {
       ZoteroAbortError,
     );
     await started.promise;
+    older.source.dispose();
     api.library = {
       ...emptyZoteroLibrary(2),
       items: [zoteroItem('ITEM0002', 2)],
@@ -871,13 +873,10 @@ describe('Zotero Local API sync', () => {
         await release.promise;
         await write(path, data);
       });
-    const controller = new AbortController();
-    const first = expect(cache.source.load(controller.signal)).rejects.toThrow(
-      ZoteroAbortError,
-    );
+    const first = expect(cache.source.load()).rejects.toThrow(ZoteroAbortError);
     await started.promise;
 
-    controller.abort();
+    cache.source.dispose();
     api.library = {
       ...emptyZoteroLibrary(2),
       items: [zoteroItem('ITEM0002', 2)],

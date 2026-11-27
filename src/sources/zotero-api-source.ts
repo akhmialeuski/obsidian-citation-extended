@@ -33,6 +33,7 @@ import {
   createLinkedAbortController,
   PeriodicSync,
   readVersionedJsonCache,
+  writeVersionedJsonCache,
 } from './source-utils';
 import { isZoteroApiCache, snapshotToCache } from './zotero-api-cache';
 import type { ZoteroApiCache, ZoteroApiCacheV3 } from './zotero-api-cache';
@@ -42,12 +43,6 @@ interface ServerObservation {
   serverId?: string;
   rejectedServerId?: string | null;
   rolledBack?: ZoteroApiLibraryState;
-}
-
-interface CacheAccess {
-  load?: AbortController;
-  write?: Promise<void>;
-  observations: Map<string, ServerObservation>;
 }
 
 interface SyncDiagnostic {
@@ -78,32 +73,10 @@ function logSync(
   }
 }
 
-// Reconfiguring a source creates a new instance using the same cache file.
-// An adapter write already in progress must settle before the new load reads it.
-const cacheAccessByFileSystem = new WeakMap<
-  IFileSystem,
-  Map<string, CacheAccess>
->();
-
 const UNKNOWN_LIBRARY_STATE: ZoteroApiLibraryState = {
   serverId: null,
   libraryVersion: null,
 };
-
-function getCacheAccess(fileSystem?: IFileSystem, path?: string): CacheAccess {
-  if (!fileSystem || !path) return { observations: new Map() };
-  let files = cacheAccessByFileSystem.get(fileSystem);
-  if (!files) {
-    files = new Map();
-    cacheAccessByFileSystem.set(fileSystem, files);
-  }
-  let access = files.get(path);
-  if (!access) {
-    access = { observations: new Map() };
-    files.set(path, access);
-  }
-  return access;
-}
 
 function checkAborted(signal: AbortSignal): void {
   if (signal.aborted) throw new ZoteroAbortError();
@@ -151,12 +124,11 @@ function hasRawBaseline(
 export class ZoteroApiSource implements DataSource {
   private abortController: AbortController | null = null;
   private readonly poller: PeriodicSync | null;
-  private readonly access: CacheAccess;
   private readonly config: Pick<
     ZoteroApiCacheV3,
     'baseUrl' | 'groupId' | 'collectionKey' | 'importAnnotations'
   >;
-  private readonly observed: ServerObservation;
+  private readonly observed: ServerObservation = {};
 
   constructor(
     public readonly id: string,
@@ -178,9 +150,6 @@ export class ZoteroApiSource implements DataSource {
       collectionKey: scope.collectionKey ?? '',
       importAnnotations,
     };
-    this.access = getCacheAccess(fileSystem, cachePath);
-    this.observed = this.access.observations.get(client.baseUrl) ?? {};
-    this.access.observations.set(client.baseUrl, this.observed);
   }
 
   async load(
@@ -192,13 +161,12 @@ export class ZoteroApiSource implements DataSource {
       mode: 'offline',
       libraryVersion: null,
     };
-    this.access.load?.abort();
+    this.abortController?.abort();
     const controller = createLinkedAbortController(externalSignal);
-    this.access.load = this.abortController = controller;
+    this.abortController = controller;
     const { signal } = controller;
 
     try {
-      await this.access.write;
       checkAborted(signal);
       // Read and validate the saved snapshot once. Missing or corrupt files
       // are cache misses.
@@ -217,7 +185,6 @@ export class ZoteroApiSource implements DataSource {
         diagnostic,
       );
     } finally {
-      if (this.access.load === controller) this.access.load = undefined;
       if (this.abortController === controller) this.abortController = null;
     }
   }
@@ -455,27 +422,16 @@ export class ZoteroApiSource implements DataSource {
     snapshot: ZoteroApiCacheV3,
     signal: AbortSignal,
   ): Promise<void> {
-    if (!this.fileSystem || !this.cachePath) return;
-    // The storage API cannot cancel or atomically replace an in-progress write.
-    try {
-      const serialized = JSON.stringify(snapshot);
-      checkAborted(signal);
-      this.access.write = this.fileSystem
-        .writeFile(this.cachePath, serialized)
-        .then(
-          () => {
-            this.observed.rejectedServerId = undefined;
-            this.observed.rolledBack = undefined;
-          },
-          () => {
-            // A later load can proceed even if the preceding cache write failed.
-          },
-        );
-      await this.access.write;
-    } catch {
-      // Caching remains best-effort; the validated online result is usable.
-    } finally {
-      this.access.write = undefined;
+    if (
+      await writeVersionedJsonCache(
+        this.fileSystem,
+        this.cachePath,
+        snapshot,
+        signal,
+      )
+    ) {
+      this.observed.rejectedServerId = undefined;
+      this.observed.rolledBack = undefined;
     }
   }
 

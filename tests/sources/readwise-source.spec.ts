@@ -1047,6 +1047,63 @@ describe('ReadwiseSource with filters', () => {
 });
 
 describe('ReadwiseSource offline cache', () => {
+  it('reads the completed snapshot when a replacement source starts offline during a write', async () => {
+    const worker = createMockWorkerManager();
+    const path = '/cache.json';
+    let cached: string | undefined;
+    let markStarted!: () => void;
+    let release!: () => void;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fs = createMockFileSystem({
+      exists: jest.fn(() => Promise.resolve(cached !== undefined)),
+      readFile: jest.fn(() => Promise.resolve(cached ?? '')),
+      writeFile: jest.fn(async (_path: string, data: string) => {
+        markStarted();
+        await gate;
+        cached = data;
+      }),
+    });
+    const online = new ReadwiseSource(
+      's1',
+      createMockClient({
+        fetchExportBooks: jest.fn().mockResolvedValue([makeExportBook()]),
+      }),
+      worker as never,
+      fs,
+      path,
+    );
+    const pending = online.load();
+    await started;
+    online.dispose();
+    const readsBeforeReplacement = jest.mocked(fs.exists).mock.calls.length;
+
+    const offline = new ReadwiseSource(
+      's2',
+      createMockClient({
+        fetchExportBooks: jest.fn().mockRejectedValue(new Error('offline')),
+        fetchReaderDocuments: jest.fn().mockRejectedValue(new Error('offline')),
+      }),
+      worker as never,
+      fs,
+      path,
+    );
+    const loading = offline.load();
+    await Promise.resolve();
+    expect(fs.exists).toHaveBeenCalledTimes(readsBeforeReplacement);
+    release();
+    const [, result] = await Promise.allSettled([pending, loading]);
+    expect(result.status).toBe('fulfilled');
+    if (result.status === 'fulfilled') {
+      expect(result.value.entries).toHaveLength(1);
+      expect(result.value.parseErrors?.[0].message).toContain('using cache');
+    }
+  });
+
   it('writes fetched data to the cache file after a successful load', async () => {
     const fs = createMockFileSystem();
     const client = createMockClient({
