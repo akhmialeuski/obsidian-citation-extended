@@ -42,6 +42,7 @@ function setup(
   );
   return {
     ...cache,
+    client,
     source,
     snapshot: () => JSON.parse(cache.file.content ?? '{}') as ZoteroApiCacheV3,
   };
@@ -862,7 +863,21 @@ describe('Zotero Local API sync', () => {
       }
       return api.get(url, headers);
     };
-    await setup(api, { get }, cache).source.load();
+    const retrying = setup(api, { get }, cache);
+    const pinnedTo = jest.spyOn(retrying.client, 'pinnedTo');
+    await retrying.source.load();
+    expect(pinnedTo).toHaveBeenCalledTimes(2);
+    expect(pinnedTo).toHaveBeenNthCalledWith(1, {
+      serverId: api.serverId,
+      libraryVersion: 2,
+    });
+    expect(pinnedTo).toHaveBeenNthCalledWith(2, {
+      serverId: api.serverId,
+      libraryVersion: 3,
+    });
+    expect(pinnedTo.mock.results[0].value).not.toBe(
+      pinnedTo.mock.results[1].value,
+    );
     expect(cache.snapshot().libraryVersion).toBe(3);
     expect(cache.snapshot().entries[0].csl.title).toBe('Final revision');
     expect(api.fullRecords('items')).toBe(2);

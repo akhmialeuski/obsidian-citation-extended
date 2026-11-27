@@ -3,9 +3,8 @@ import type {
   ZoteroApiItem,
   ZoteroApiItemList,
   ZoteroApiLibraryData,
-  ZoteroApiLibraryState,
   ZoteroApiScope,
-  ZoteroLocalApiClient,
+  PinnedZoteroReader,
 } from './zotero-local-api-client';
 
 export type ZoteroApiRawLibrary = Omit<ZoteroApiLibraryData, 'libraryVersion'>;
@@ -65,27 +64,20 @@ export function mergeZoteroObjects(
 
 /** Reconcile each endpoint's inventory, including children without visible parents. */
 export async function fetchZoteroDelta(
-  client: ZoteroLocalApiClient,
+  reader: PinnedZoteroReader,
   scope: ZoteroApiScope,
   cached: { rawLibrary: ZoteroApiRawLibrary; libraryVersion: number },
-  expected: ZoteroApiLibraryState,
   options: { includeAnnotations: boolean; signal: AbortSignal },
 ): Promise<{ library: ZoteroApiLibraryData; changes: ZoteroChangeCounts }> {
   const { includeAnnotations, signal } = options;
   const changes: ZoteroChangeCounts = {};
 
   async function fetchList(list: ZoteroApiItemList): Promise<ZoteroApiItem[]> {
-    const keys = await client.fetchOrderedItemKeys(
-      scope,
-      list,
-      expected,
-      signal,
-    );
-    const records = await client.fetchItemsSince(
+    const keys = await reader.fetchOrderedItemKeys(scope, list, signal);
+    const records = await reader.fetchItemsSince(
       scope,
       list,
       cached.libraryVersion,
-      expected,
       signal,
     );
     const { items, counts } = mergeZoteroObjects(
@@ -104,8 +96,8 @@ export async function fetchZoteroDelta(
     attachments: await fetchList('attachments'),
     annotations: includeAnnotations ? await fetchList('annotations') : [],
     // Collection renames can leave item versions unchanged.
-    collectionNames: await client.fetchCollectionNames(scope, signal, expected),
-    libraryVersion: expected.libraryVersion,
+    collectionNames: await reader.fetchCollectionNames(scope, signal),
+    libraryVersion: reader.state.libraryVersion,
   };
   return { library, changes };
 }

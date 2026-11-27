@@ -48,9 +48,11 @@ function makeClient(
   versionImpl: () => Promise<number | null> = () => Promise.resolve(null),
   serverId: string | null = null,
 ) {
+  const fetchLibrary = jest.fn(impl);
   return {
     baseUrl: ZOTERO_LOCAL_API_DEFAULT_BASE,
-    fetchLibrary: jest.fn(impl),
+    fetchLibrary,
+    pinnedTo: jest.fn(() => ({ fetchLibrary })),
     getLibraryState: jest.fn(async (): Promise<ZoteroApiLibraryState> => ({
       serverId,
       libraryVersion: await versionImpl(),

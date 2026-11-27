@@ -169,22 +169,15 @@ function checkInventoryCount(total: number | null, count: number): void {
   }
 }
 
-function updateTotal(
+function checkStableTotal(
   previous: number | null,
   reported: number | null,
-  strict: boolean,
-): number | null {
-  if (
-    strict &&
-    previous !== null &&
-    reported !== null &&
-    previous !== reported
-  ) {
+): void {
+  if (previous !== null && reported !== null && previous !== reported) {
     throw new ZoteroSnapshotError(
       'Zotero changed the result count during pagination.',
     );
   }
-  return reported ?? previous;
 }
 
 /**
@@ -223,12 +216,12 @@ const PAGE_LIMIT = 100;
 // for the JSON and ordered key lists, including when dates tie.
 const ITEM_SORT = 'sort=dateModified&direction=desc';
 
-export class ZoteroLocalApiClient {
+class ZoteroLibraryReader {
   readonly baseUrl: string;
 
   constructor(
     baseUrl: string | undefined,
-    private get: ZoteroHttpGetFn,
+    protected readonly get: ZoteroHttpGetFn,
   ) {
     this.baseUrl =
       baseUrl?.trim().replace(/\/+$/, '') || ZOTERO_LOCAL_API_DEFAULT_BASE;
@@ -241,11 +234,226 @@ export class ZoteroLocalApiClient {
   }
 
   /** Share the scoped endpoint between connection tests, version probes, and full fetches. */
-  private topItemsPath(scope: ZoteroApiScope): string {
+  protected topItemsPath(scope: ZoteroApiScope): string {
     const prefix = this.libraryPrefix(scope);
     return scope.collectionKey
       ? `${prefix}/collections/${encodeURIComponent(scope.collectionKey)}/items/top`
       : `${prefix}/items/top`;
+  }
+
+  /** Fetch a full scope with top-level CSL projections, child items, and collection names. */
+  async fetchLibrary(
+    scope: ZoteroApiScope = {},
+    signal?: AbortSignal,
+    options: { includeAnnotations?: boolean } = {},
+  ): Promise<ZoteroApiLibraryData> {
+    const { items, version } = await this.fetchAllPages(
+      this.itemListUrl(scope, 'items', 'json'),
+      signal,
+    );
+    // Read attachments from the library-wide endpoint to include child
+    // attachments. A collection-scoped fetch keeps only the fetched parents'
+    // attachments so the adapter and cache carry only relevant child data.
+    const { items: allAttachments } = await this.fetchAllPages(
+      this.itemListUrl(scope, 'attachments', 'json'),
+      signal,
+    );
+    const attachments = scope.collectionKey
+      ? childrenOf(allAttachments, items)
+      : allAttachments;
+
+    let annotations: ZoteroApiItem[] = [];
+    if (options.includeAnnotations) {
+      const { items: allAnnotations } = await this.fetchAllPages(
+        this.itemListUrl(scope, 'annotations', 'json'),
+        signal,
+      );
+      // Keep the entire inventory for a tracked, unfiltered baseline. The
+      // adapter links children only if their parent chain reaches an entry.
+      const preserveInventory = !scope.collectionKey && this.tracksVersions;
+      annotations = preserveInventory
+        ? allAnnotations
+        : childrenOf(allAnnotations, attachments);
+    }
+
+    return {
+      items,
+      attachments,
+      annotations,
+      collectionNames: await this.fetchCollectionNames(scope, signal),
+      libraryVersion: version,
+    };
+  }
+
+  /** Resolve current collection names independently of item versions. */
+  async fetchCollectionNames(
+    scope: ZoteroApiScope,
+    signal?: AbortSignal,
+  ): Promise<Record<string, string>> {
+    const { items } = await this.fetchAllPages(
+      `${this.baseUrl}/api/${this.libraryPrefix(scope)}/collections?format=json`,
+      signal,
+    );
+    const names: Record<string, string> = {};
+    for (const collection of items) {
+      const name = collection.data.name;
+      if (typeof name === 'string') names[collection.key] = name;
+      else if (this.tracksVersions) {
+        throw new ZoteroApiError(
+          'Zotero returned a collection without a name.',
+        );
+      }
+    }
+    return names;
+  }
+
+  protected itemListUrl(
+    scope: ZoteroApiScope,
+    list: ZoteroApiItemList,
+    format: 'json' | 'keys',
+  ): string {
+    const route =
+      list === 'items'
+        ? `${this.topItemsPath(scope)}?format=${format}`
+        : `${this.libraryPrefix(scope)}/items?itemType=${list === 'attachments' ? 'attachment' : 'annotation'}&format=${format}`;
+    const include =
+      list === 'items' && format === 'json' ? '&include=csljson,data' : '';
+    return `${this.baseUrl}/api/${route}${include}&${ITEM_SORT}`;
+  }
+
+  protected get requestServerId(): string | null {
+    return null;
+  }
+
+  protected get tracksVersions(): boolean {
+    return false;
+  }
+
+  protected async fetchAllPages(
+    url: string,
+    signal?: AbortSignal,
+  ): Promise<{ items: ZoteroApiItem[]; version: number | null }> {
+    const items: ZoteroApiItem[] = [];
+    const { version } = await this.readPages(
+      url,
+      (page) => {
+        for (const item of page) {
+          if (isZoteroRecord(item) && typeof item.key === 'string') {
+            items.push(item as unknown as ZoteroApiItem);
+          }
+        }
+      },
+      signal,
+    );
+    return { items, version };
+  }
+
+  /** Share offset pagination between lenient and version-tracked readers. */
+  protected async readPages(
+    url: string,
+    accept: (
+      page: unknown[],
+      previousTotal: number | null,
+      reportedTotal: number | null,
+    ) => void,
+    signal?: AbortSignal,
+  ): Promise<{ version: number | null; total: number | null }> {
+    let start = 0;
+    let version: number | null = null;
+    let total: number | null = null;
+
+    for (;;) {
+      const response = await this.request(
+        `${url}&limit=${PAGE_LIMIT}&start=${start}`,
+        signal,
+      );
+      const page = await response.json();
+      checkAborted(signal);
+      if (!Array.isArray(page)) {
+        throw new ZoteroApiError(
+          'Zotero local API returned an unexpected (non-array) items response.',
+        );
+      }
+
+      const reportedTotal = numericHeader(response, 'total-results');
+      accept(page, total, reportedTotal);
+      version = numericHeader(response, 'last-modified-version') ?? version;
+      total = reportedTotal ?? total;
+      // Advance by the records actually returned. A server or proxy with a
+      // smaller page cap can return a short page followed by more results.
+      start += page.length;
+      if (!hasMoreResults(page.length, start, total)) break;
+    }
+    return { version, total };
+  }
+
+  protected async request(
+    url: string,
+    signal?: AbortSignal,
+  ): Promise<ZoteroHttpResponse> {
+    checkAborted(signal);
+    const response = await this.sendRequest(url, signal, this.requestServerId);
+    checkAborted(signal);
+    this.validateResponse(response, url, readState(response));
+    return response;
+  }
+
+  protected validateResponse(
+    response: ZoteroHttpResponse,
+    url: string,
+    state: ZoteroApiLibraryState,
+  ): void {
+    this.checkStatus(response.status, url, state.serverId);
+  }
+
+  /** Send Zotero's required request header and pin the instance when known. */
+  private async sendRequest(
+    url: string,
+    signal?: AbortSignal,
+    serverId?: string | null,
+  ): Promise<ZoteroHttpResponse> {
+    try {
+      return await this.get(url, {
+        ...ZOTERO_ALLOWED_REQUEST_HEADERS,
+        Accept: 'application/json, text/plain',
+        ...(serverId ? { 'Zotero-Server-ID': serverId } : {}),
+      });
+    } catch (error) {
+      checkAborted(signal);
+      const message = error instanceof Error ? error.message : String(error);
+      throw new ZoteroApiError(
+        `Could not reach Zotero at ${this.baseUrl}. Is Zotero (7 or later) running? (${message})`,
+      );
+    }
+  }
+
+  private checkStatus(
+    status: number,
+    url: string,
+    serverId: string | null,
+  ): void {
+    if (status === 403) {
+      throw new ZoteroLocalApiError(
+        'Zotero rejected the request (HTTP 403). Enable "Allow other ' +
+          'applications on this computer to communicate with Zotero" in ' +
+          'Zotero Settings → Advanced.',
+        status,
+        serverId,
+      );
+    }
+    if (status < 200 || status >= 300) {
+      throw new ZoteroLocalApiError(
+        `Zotero local API returned HTTP ${status} for ${url}.`,
+        status,
+        serverId,
+      );
+    }
+  }
+}
+
+export class ZoteroLocalApiClient extends ZoteroLibraryReader {
+  pinnedTo(state: ZoteroApiLibraryState): PinnedZoteroReader {
+    return new PinnedZoteroReader(this.baseUrl, this.get, state);
   }
 
   /**
@@ -287,69 +495,37 @@ export class ZoteroLocalApiClient {
   ): Promise<number | null> {
     return (await this.getLibraryState(scope, signal)).libraryVersion;
   }
+}
 
-  /** Fetch a full scope with top-level CSL projections, child items, and collection names. */
-  async fetchLibrary(
-    scope: ZoteroApiScope = {},
-    signal?: AbortSignal,
-    options: {
-      includeAnnotations?: boolean;
-      expected?: ZoteroApiLibraryState;
-    } = {},
-  ): Promise<ZoteroApiLibraryData> {
-    const { expected } = options;
-    const { items, version } = await this.fetchAllPages(
-      this.itemListUrl(scope, 'items', 'json'),
-      signal,
-      expected,
-    );
-    // Read attachments from the library-wide endpoint to include child
-    // attachments. A collection-scoped fetch keeps only the fetched parents'
-    // attachments so the adapter and cache carry only relevant child data.
-    const { items: allAttachments } = await this.fetchAllPages(
-      this.itemListUrl(scope, 'attachments', 'json'),
-      signal,
-      expected,
-    );
-    const attachments = scope.collectionKey
-      ? childrenOf(allAttachments, items)
-      : allAttachments;
+/** A reader bound to one synchronization attempt and its probed state. */
+export class PinnedZoteroReader extends ZoteroLibraryReader {
+  readonly state: Readonly<ZoteroApiLibraryState>;
 
-    let annotations: ZoteroApiItem[] = [];
-    if (options.includeAnnotations) {
-      const { items: allAnnotations } = await this.fetchAllPages(
-        this.itemListUrl(scope, 'annotations', 'json'),
-        signal,
-        expected,
-      );
-      // Keep the entire inventory for a tracked, unfiltered baseline. The
-      // adapter links children only if their parent chain reaches an entry.
-      const preserveInventory =
-        !scope.collectionKey && expected && supportsLocalVersions(expected);
-      annotations = preserveInventory
-        ? allAnnotations
-        : childrenOf(allAnnotations, attachments);
-    }
+  constructor(
+    baseUrl: string,
+    get: ZoteroHttpGetFn,
+    state: ZoteroApiLibraryState,
+  ) {
+    super(baseUrl, get);
+    this.state = Object.freeze({ ...state });
+  }
 
-    return {
-      items,
-      attachments,
-      annotations,
-      collectionNames: await this.fetchCollectionNames(scope, signal, expected),
-      libraryVersion: version,
-    };
+  protected override get requestServerId(): string | null {
+    return this.state.serverId;
+  }
+
+  protected override get tracksVersions(): boolean {
+    return supportsLocalVersions(this.state);
   }
 
   async fetchOrderedItemKeys(
     scope: ZoteroApiScope,
     list: ZoteroApiItemList,
-    expected: ZoteroApiLibraryState,
     signal?: AbortSignal,
   ): Promise<string[]> {
     const response = await this.request(
       this.itemListUrl(scope, list, 'keys'),
       signal,
-      expected,
     );
     const body = (await response.text()).trim();
     checkAborted(signal);
@@ -366,15 +542,13 @@ export class ZoteroLocalApiClient {
     scope: ZoteroApiScope,
     list: ZoteroApiItemList,
     since: number,
-    expected: ZoteroApiLibraryState,
     signal?: AbortSignal,
   ): Promise<ZoteroApiItem[]> {
     const { items } = await this.fetchAllPages(
       `${this.itemListUrl(scope, list, 'json')}&since=${since}`,
       signal,
-      expected,
     );
-    const pinnedVersion = expected.libraryVersion;
+    const pinnedVersion = this.state.libraryVersion;
     if (
       pinnedVersion === null ||
       items.some((item) => item.version > pinnedVersion)
@@ -386,124 +560,50 @@ export class ZoteroLocalApiClient {
     return items;
   }
 
-  /** Resolve current collection names independently of item versions. */
-  async fetchCollectionNames(
-    scope: ZoteroApiScope,
-    signal?: AbortSignal,
-    expected?: ZoteroApiLibraryState,
-  ): Promise<Record<string, string>> {
-    const { items } = await this.fetchAllPages(
-      `${this.baseUrl}/api/${this.libraryPrefix(scope)}/collections?format=json`,
-      signal,
-      expected,
-    );
-    const names: Record<string, string> = {};
-    for (const collection of items) {
-      const name = collection.data.name;
-      if (typeof name === 'string') names[collection.key] = name;
-      else if (expected?.libraryVersion != null) {
-        throw new ZoteroApiError(
-          'Zotero returned a collection without a name.',
-        );
-      }
-    }
-    return names;
-  }
-
-  private itemListUrl(
-    scope: ZoteroApiScope,
-    list: ZoteroApiItemList,
-    format: 'json' | 'keys',
-  ): string {
-    const route =
-      list === 'items'
-        ? `${this.topItemsPath(scope)}?format=${format}`
-        : `${this.libraryPrefix(scope)}/items?itemType=${list === 'attachments' ? 'attachment' : 'annotation'}&format=${format}`;
-    const include =
-      list === 'items' && format === 'json' ? '&include=csljson,data' : '';
-    return `${this.baseUrl}/api/${route}${include}&${ITEM_SORT}`;
-  }
-
-  /** Keep the existing offset pagination for full fetches and short pages. */
-  private async fetchAllPages(
+  protected override async fetchAllPages(
     url: string,
     signal?: AbortSignal,
-    expected?: ZoteroApiLibraryState,
   ): Promise<{ items: ZoteroApiItem[]; version: number | null }> {
+    if (!this.tracksVersions) return super.fetchAllPages(url, signal);
     const items: ZoteroApiItem[] = [];
-    const seen = expected?.libraryVersion == null ? null : new Set<string>();
-    let start = 0;
-    let version: number | null = null;
-    let total: number | null = null;
-
-    for (;;) {
-      const response = await this.request(
-        `${url}&limit=${PAGE_LIMIT}&start=${start}`,
-        signal,
-        expected,
-      );
-      const page = await response.json();
-      checkAborted(signal);
-      if (!Array.isArray(page)) {
-        throw new ZoteroApiError(
-          'Zotero local API returned an unexpected (non-array) items response.',
-        );
-      }
-      this.appendPage(page, items, seen);
-
-      version = numericHeader(response, 'last-modified-version') ?? version;
-      total = updateTotal(
-        total,
-        numericHeader(response, 'total-results'),
-        seen !== null,
-      );
-      // Advance by the records actually returned. A server or proxy with a
-      // smaller page cap can return a short page followed by more results.
-      start += page.length;
-      if (!hasMoreResults(page.length, start, total)) break;
-    }
-    if (seen) checkInventoryCount(total, items.length);
+    const seen = new Set<string>();
+    const { version, total } = await this.readPages(
+      url,
+      (page, previous, reported) => {
+        checkStableTotal(previous, reported);
+        for (const item of page) items.push(this.parseRecord(item, seen));
+      },
+      signal,
+    );
+    checkInventoryCount(total, items.length);
     return { items, version };
   }
 
-  private appendPage(
-    page: unknown[],
-    items: ZoteroApiItem[],
-    seen: Set<string> | null,
-  ): void {
-    for (const item of page) {
-      if (seen) {
-        if (!isZoteroApiItem(item) || seen.has(item.key)) {
-          throw new ZoteroSnapshotError(
-            'Zotero returned an invalid or duplicate object.',
-          );
-        }
-        // Keep adapter inputs and drop the rest of the API envelope before
-        // caching. In a delta, unchanged records are already compact.
-        const { key, version, data, csljson, meta } = item;
-        seen.add(key);
-        items.push({ key, version, data, csljson, meta });
-      } else if (isZoteroRecord(item) && typeof item.key === 'string') {
-        items.push(item as unknown as ZoteroApiItem);
-      }
+  private parseRecord(item: unknown, seen: Set<string>): ZoteroApiItem {
+    if (!isZoteroApiItem(item) || seen.has(item.key)) {
+      throw new ZoteroSnapshotError(
+        'Zotero returned an invalid or duplicate object.',
+      );
     }
+    // Keep adapter inputs and drop the rest of the API envelope before
+    // caching. In a delta, unchanged records are already compact.
+    const { key, version, data, csljson, meta } = item;
+    seen.add(key);
+    return { key, version, data, csljson, meta };
   }
 
-  private async request(
+  protected override validateResponse(
+    response: ZoteroHttpResponse,
     url: string,
-    signal?: AbortSignal,
-    expected?: ZoteroApiLibraryState,
-  ): Promise<ZoteroHttpResponse> {
-    checkAborted(signal);
-    const response = await this.sendRequest(url, signal, expected?.serverId);
-    checkAborted(signal);
-    const { serverId, libraryVersion } = readState(response);
-    this.checkIdentity(response.status, serverId, expected);
-    this.checkStatus(response.status, url, serverId);
+    state: ZoteroApiLibraryState,
+  ): void {
+    const { serverId, libraryVersion } = state;
+    this.checkIdentity(response.status, serverId);
+    super.validateResponse(response, url, state);
     if (
-      expected?.libraryVersion != null &&
+      this.tracksVersions &&
       header(response, 'last-modified-version') !== null &&
-      libraryVersion !== expected.libraryVersion
+      libraryVersion !== this.state.libraryVersion
     ) {
       throw new ZoteroSnapshotError(
         'Zotero library changed during synchronization.',
@@ -511,65 +611,16 @@ export class ZoteroLocalApiClient {
         serverId,
       );
     }
-    return response;
   }
 
-  /** Send Zotero's required request header and pin the instance when known. */
-  private async sendRequest(
-    url: string,
-    signal?: AbortSignal,
-    serverId?: string | null,
-  ): Promise<ZoteroHttpResponse> {
-    try {
-      return await this.get(url, {
-        ...ZOTERO_ALLOWED_REQUEST_HEADERS,
-        Accept: 'application/json, text/plain',
-        ...(serverId ? { 'Zotero-Server-ID': serverId } : {}),
-      });
-    } catch (error) {
-      checkAborted(signal);
-      const message = error instanceof Error ? error.message : String(error);
-      throw new ZoteroApiError(
-        `Could not reach Zotero at ${this.baseUrl}. Is Zotero (7 or later) running? (${message})`,
-      );
-    }
-  }
-
-  private checkIdentity(
-    status: number,
-    serverId: string | null,
-    expected?: ZoteroApiLibraryState,
-  ): void {
+  private checkIdentity(status: number, serverId: string | null): void {
+    const expected = this.state.serverId;
     if (
-      expected &&
-      ((status === 412 && expected.serverId !== null) ||
-        (serverId !== null && serverId !== expected.serverId))
+      (status === 412 && expected !== null) ||
+      (serverId !== null && serverId !== expected)
     ) {
       throw new ZoteroServerChangedError(
         'Zotero server identity changed during synchronization.',
-        status,
-        serverId,
-      );
-    }
-  }
-
-  private checkStatus(
-    status: number,
-    url: string,
-    serverId: string | null,
-  ): void {
-    if (status === 403) {
-      throw new ZoteroLocalApiError(
-        'Zotero rejected the request (HTTP 403). Enable "Allow other ' +
-          'applications on this computer to communicate with Zotero" in ' +
-          'Zotero Settings → Advanced.',
-        status,
-        serverId,
-      );
-    }
-    if (status < 200 || status >= 300) {
-      throw new ZoteroLocalApiError(
-        `Zotero local API returned HTTP ${status} for ${url}.`,
         status,
         serverId,
       );

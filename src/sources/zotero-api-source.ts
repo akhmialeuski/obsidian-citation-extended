@@ -312,19 +312,18 @@ export class ZoteroApiSource implements DataSource {
     diagnostic: SyncDiagnostic,
   ) {
     const { importAnnotations } = this.config;
+    const reader = this.client.pinnedTo(state);
     if (typeof plan === 'string') {
       diagnostic.mode = 'full';
       diagnostic.fullReason = plan;
-      return this.client.fetchLibrary(this.scope, signal, {
+      return reader.fetchLibrary(this.scope, signal, {
         includeAnnotations: importAnnotations,
-        expected: state.serverId ? state : UNKNOWN_LIBRARY_STATE,
       });
     }
     const { library, changes } = await fetchZoteroDelta(
-      this.client,
+      reader,
       this.scope,
       plan,
-      state,
       { includeAnnotations: importAnnotations, signal },
     );
     diagnostic.mode = 'incremental';

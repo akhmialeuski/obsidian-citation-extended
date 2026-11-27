@@ -505,6 +505,92 @@ describe('ZoteroLocalApiClient', () => {
   describe('tracked reads', () => {
     const expected = { serverId: 'test-server', libraryVersion: 20 };
 
+    it('keeps unbound and identity-only pages lenient', async () => {
+      const get = jest.fn<
+        ReturnType<ZoteroHttpGetFn>,
+        Parameters<ZoteroHttpGetFn>
+      >(() =>
+        Promise.resolve(
+          response(200, [item('COLL0001', { name: 'A' }), { data: {} }], {
+            'Zotero-Server-ID': 'test-server',
+            'Last-Modified-Version': 'invalid',
+            'Total-Results': '2',
+          }),
+        ),
+      );
+      const client = new ZoteroLocalApiClient(undefined, get);
+      const reader = client.pinnedTo({
+        serverId: 'test-server',
+        libraryVersion: null,
+      });
+      await expect(client.fetchCollectionNames({})).resolves.toEqual({
+        COLL0001: 'A',
+      });
+      await expect(reader.fetchCollectionNames({})).resolves.toEqual({
+        COLL0001: 'A',
+      });
+      expect(get.mock.calls[0][1]).not.toHaveProperty('Zotero-Server-ID');
+      expect(get.mock.calls[1][1]).toHaveProperty(
+        'Zotero-Server-ID',
+        'test-server',
+      );
+      await expect(
+        client
+          .pinnedTo({ serverId: 'other-server', libraryVersion: null })
+          .fetchCollectionNames({}),
+      ).rejects.toBeInstanceOf(ZoteroServerChangedError);
+    });
+
+    it('binds concurrent readers to independent copies of the probed state', async () => {
+      const get: ZoteroHttpGetFn = (_url, headers) => {
+        const serverId = headers['Zotero-Server-ID'];
+        const version = serverId === 'test-server' ? 20 : 21;
+        return Promise.resolve(
+          response(200, [zoteroItem('ITEM0001', version)], {
+            'Zotero-Server-ID': serverId,
+            'Last-Modified-Version': String(version),
+          }),
+        );
+      };
+      const client = new ZoteroLocalApiClient(undefined, get);
+      const initial = { ...expected };
+      const first = client.pinnedTo(initial);
+      initial.serverId = 'other-server';
+      initial.libraryVersion = 21;
+      const second = client.pinnedTo(initial);
+      const [firstItems, secondItems] = await Promise.all([
+        first.fetchItemsSince({}, 'items', 19),
+        second.fetchItemsSince({}, 'items', 20),
+      ]);
+      expect(first.state).toEqual(expected);
+      expect(Object.isFrozen(first.state)).toBe(true);
+      expect(firstItems[0].version).toBe(20);
+      expect(secondItems[0].version).toBe(21);
+    });
+
+    it('rejects a snapshot when the library version changes between pages', async () => {
+      const get = jest.fn<
+        ReturnType<ZoteroHttpGetFn>,
+        Parameters<ZoteroHttpGetFn>
+      >((address) => {
+        const first = new URL(address).searchParams.get('start') === '0';
+        return Promise.resolve(
+          response(200, [zoteroItem(first ? 'ITEM0001' : 'ITEM0002', 20)], {
+            'Zotero-Server-ID': expected.serverId,
+            'Last-Modified-Version': first ? '20' : '21',
+            'Total-Results': '2',
+          }),
+        );
+      });
+      const reader = new ZoteroLocalApiClient(undefined, get).pinnedTo(
+        expected,
+      );
+      await expect(reader.fetchItemsSince({}, 'items', 19)).rejects.toThrow(
+        /library changed/,
+      );
+      expect(get).toHaveBeenCalledTimes(2);
+    });
+
     it('probes mixed-case library headers without requesting a full record', async () => {
       const get = jest.fn<
         ReturnType<ZoteroHttpGetFn>,
@@ -585,12 +671,11 @@ describe('ZoteroLocalApiClient', () => {
         items: [zoteroItem('ITEM0001', 15), zoteroItem('ITEM0002', 20)],
       });
       const client = new ZoteroLocalApiClient(undefined, api.get);
-      expect(await client.fetchOrderedItemKeys({}, 'items', expected)).toEqual([
-        'ITEM0001',
-        'ITEM0002',
-      ]);
       expect(
-        await client.fetchOrderedItemKeys({}, 'attachments', expected),
+        await client.pinnedTo(expected).fetchOrderedItemKeys({}, 'items'),
+      ).toEqual(['ITEM0001', 'ITEM0002']);
+      expect(
+        await client.pinnedTo(expected).fetchOrderedItemKeys({}, 'attachments'),
       ).toEqual([]);
       expect(
         api.requests.every(
@@ -611,10 +696,10 @@ describe('ZoteroLocalApiClient', () => {
         );
       const client = new ZoteroLocalApiClient(undefined, get);
       await expect(
-        client.fetchItemsSince({}, 'items', 14, expected),
+        client.pinnedTo(expected).fetchItemsSince({}, 'items', 14),
       ).rejects.toThrow(/incomplete/);
       await expect(
-        client.fetchOrderedItemKeys({}, 'items', expected),
+        client.pinnedTo(expected).fetchOrderedItemKeys({}, 'items'),
       ).rejects.toThrow(/invalid/i);
     });
 
@@ -624,7 +709,7 @@ describe('ZoteroLocalApiClient', () => {
       const client = new ZoteroLocalApiClient(undefined, get);
       await expect(client.fetchCollectionNames({})).resolves.toEqual({});
       await expect(
-        client.fetchCollectionNames({}, undefined, expected),
+        client.pinnedTo(expected).fetchCollectionNames({}),
       ).rejects.toThrow(/collection without a name/);
     });
 
@@ -643,7 +728,9 @@ describe('ZoteroLocalApiClient', () => {
       };
       const client = new ZoteroLocalApiClient(undefined, get);
       expect(
-        await client.fetchItemsSince({ groupId: '42' }, 'items', 14, expected),
+        await client
+          .pinnedTo(expected)
+          .fetchItemsSince({ groupId: '42' }, 'items', 14),
       ).toEqual(items);
       expect(
         api.requests.map(({ url }) => url.searchParams.get('start')),
@@ -665,9 +752,9 @@ describe('ZoteroLocalApiClient', () => {
         items: [old],
       });
       const client = new ZoteroLocalApiClient(undefined, api.get);
-      expect(await client.fetchItemsSince({}, 'items', 0, expected)).toEqual([
-        old,
-      ]);
+      expect(
+        await client.pinnedTo(expected).fetchItemsSince({}, 'items', 0),
+      ).toEqual([old]);
     });
 
     it('preserves HTTP error status and cancels an in-flight read', async () => {
@@ -681,13 +768,9 @@ describe('ZoteroLocalApiClient', () => {
         return get('', {});
       };
       await expect(
-        new ZoteroLocalApiClient(undefined, abortingGet).fetchItemsSince(
-          {},
-          'items',
-          14,
-          expected,
-          controller.signal,
-        ),
+        new ZoteroLocalApiClient(undefined, abortingGet)
+          .pinnedTo(expected)
+          .fetchItemsSince({}, 'items', 14, controller.signal),
       ).rejects.toThrow(ZoteroAbortError);
     });
 
@@ -710,7 +793,9 @@ describe('ZoteroLocalApiClient', () => {
           ),
         );
         const client = new ZoteroLocalApiClient(undefined, get);
-        const result = client.fetchItemsSince({}, 'items', 14, expected);
+        const result = client
+          .pinnedTo(expected)
+          .fetchItemsSince({}, 'items', 14);
         await expect(result).rejects.toBeInstanceOf(ZoteroServerChangedError);
         await expect(result).rejects.toMatchObject({
           statusCode: status,
@@ -734,7 +819,7 @@ describe('ZoteroLocalApiClient', () => {
           }),
         );
       const client = new ZoteroLocalApiClient(undefined, get);
-      const result = client.fetchItemsSince({}, 'items', 14, expected);
+      const result = client.pinnedTo(expected).fetchItemsSince({}, 'items', 14);
       await expect(result).rejects.toBeInstanceOf(ZoteroSnapshotError);
       await expect(result).rejects.not.toBeInstanceOf(ZoteroServerChangedError);
       await expect(result).rejects.toMatchObject({
