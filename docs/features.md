@@ -184,6 +184,25 @@ Manually reloads all configured citation databases.
 
 **When to use:** You generally don't need this: the plugin auto-reloads when the bibliography file changes on disk. Use manual refresh if: (1) you edited the `.bib`/`.json` file in another application and changes aren't appearing, (2) you switched to a different exported file, or (3) you deleted items in Readwise and want them removed from the library. For routine Readwise updates, data is synced automatically and incrementally at a configurable interval (default: every 30 minutes). Use the **Sync now** button in the database card for an immediate fetch.
 
+## Parse Warnings
+
+A BibLaTeX database can load with problems the parser recovers from, such as a custom LaTeX macro the plugin has no Unicode mapping for. The entry still loads and the unknown command is dropped from its text. Only a syntax error the parser cannot recover from leaves an entry out of the library.
+
+The status bar shows how many parse warnings the last load produced, next to the entry count:
+
+```
+Citations: 1234 entries, 57 parse warnings
+```
+
+The count disappears once the database loads without warnings. A load also shows a notice when it brings a warning the previous load did not have, and the notice names the first such warning on its second line:
+
+```
+Citations: Loaded 1234 entries with 57 parse warnings. Check console for details.
+Unhandled command: \mymacro
+```
+
+A database that repeats the same warnings on every reload therefore shows the notice once, and later reloads update only the status bar. The same list also carries a database that failed to load while others loaded, a Readwise outage served from the cache and a failed PDF annotation fetch, so each of these shows a notice when it first appears and again when it returns after a load without it. A syntax error message contains its line number, so it counts as new when an edit above it shifts the line. When every database fails to load, the plugin shows its error notice every time. The messages themselves are written to the developer console, which opens with `Ctrl+Shift+I` on Windows and Linux or `Cmd+Option+I` on macOS.
+
 ## Search Features
 
 The search modal supports:

@@ -322,14 +322,9 @@ export class LibraryService implements ILibraryService {
     // it owns the state transitions from here on.
     if (signal.aborted) return;
 
-    const parseErrorMessages =
-      totalParseErrors > 0
-        ? allParseErrors.slice(0, 10).map((pe) => pe.message)
-        : [];
-
     if (totalParseErrors > 0) {
       console.warn(
-        `Citation plugin: ${totalParseErrors} entries skipped due to parse errors.`,
+        `Citation plugin: ${totalParseErrors} parse warning(s) while loading the library.`,
         allParseErrors.slice(0, 5),
       );
     }
@@ -338,7 +333,7 @@ export class LibraryService implements ILibraryService {
       status: LoadingStatus.Success,
       lastLoaded: new Date(),
       progress: { current: this.library.size, total: this.library.size },
-      parseErrors: parseErrorMessages,
+      parseErrors: allParseErrors.map((pe) => pe.message),
     });
   }
 
