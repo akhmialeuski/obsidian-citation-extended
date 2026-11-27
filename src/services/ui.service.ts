@@ -51,6 +51,7 @@ export class UIService implements IUIService {
   private statusBarItem!: IStatusBarItem;
   private unsubscribe: (() => void) | null = null;
   private lastNotifiedStatus?: LoadingStatus;
+  private previousLoadWarnings = new Set<string>();
 
   private commandRegistry!: CommandRegistry;
   private contextMenuHandler!: ContextMenuHandler;
@@ -223,20 +224,27 @@ export class UIService implements IUIService {
     }
   }
 
-  /** Shows user-facing notices on state transitions (errors, partial loads). Deduplicates by status. */
+  /**
+   * Shows user-facing notices on state transitions, deduplicated by status. A load failure is
+   * reported on every transition. Warnings of a successful load are reported only when one of
+   * them was absent from the previous successful load: a parser warning repeats on every reload,
+   * while a failed source or a Readwise cache fallback arrives through the same list and must
+   * not be silenced by it.
+   */
   private showStateNotices(state: LibraryState): void {
     if (state.status === this.lastNotifiedStatus) return;
     this.lastNotifiedStatus = state.status;
 
     if (state.status === LoadingStatus.Error && state.parseErrors.length > 0) {
       this.plugin.platform.notifications.show(state.parseErrors[0]);
-    } else if (
-      state.status === LoadingStatus.Success &&
-      state.parseErrors.length > 0
-    ) {
+    } else if (state.status === LoadingStatus.Success) {
+      const previous = this.previousLoadWarnings;
+      this.previousLoadWarnings = new Set(state.parseErrors);
+      const firstNew = state.parseErrors.find((m) => !previous.has(m));
+      if (firstNew === undefined) return;
       const entryCount = state.progress?.current ?? 0;
       this.plugin.platform.notifications.show(
-        `Citations: Loaded ${entryCount} entries with ${formatParseWarnings(state.parseErrors.length)}. Check console for details.`,
+        `Citations: Loaded ${entryCount} entries with ${formatParseWarnings(state.parseErrors.length)}. Check console for details.\n${firstNew}`,
       );
     }
   }

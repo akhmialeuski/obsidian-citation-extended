@@ -194,7 +194,14 @@ The status bar shows how many parse warnings the last load produced, next to the
 Citations: 1234 entries, 57 parse warnings
 ```
 
-The count disappears once the database loads without warnings. The messages themselves, with line numbers for syntax errors, are written to the developer console, which opens with `Ctrl+Shift+I` on Windows and Linux or `Cmd+Option+I` on macOS.
+The count disappears once the database loads without warnings. A load also shows a notice when it brings a warning the previous load did not have, and the notice names the first such warning on its second line:
+
+```
+Citations: Loaded 1234 entries with 57 parse warnings. Check console for details.
+Unhandled command: \mymacro
+```
+
+A database that repeats the same warnings on every reload therefore shows the notice once, and later reloads update only the status bar. The same list also carries a database that failed to load while others loaded, a Readwise outage served from the cache and a failed PDF annotation fetch, so each of these shows a notice when it first appears and again when it returns after a load without it. A syntax error message contains its line number, so it counts as new when an edit above it shifts the line. When every database fails to load, the plugin shows its error notice every time. The messages themselves are written to the developer console, which opens with `Ctrl+Shift+I` on Windows and Linux or `Cmd+Option+I` on macOS.
 
 ## Search Features
 

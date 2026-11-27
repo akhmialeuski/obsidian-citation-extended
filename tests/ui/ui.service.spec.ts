@@ -189,7 +189,7 @@ describe('UIService', () => {
       service.init();
 
       expect(mockNotificationsShow).toHaveBeenCalledWith(
-        'Citations: Loaded 10 entries with 1 parse warning. Check console for details.',
+        'Citations: Loaded 10 entries with 1 parse warning. Check console for details.\nskipped entry 1',
       );
     });
 
@@ -295,6 +295,92 @@ describe('UIService', () => {
       expect(mockNotificationsShow).toHaveBeenCalledWith(
         expect.stringContaining('0 entries'),
       );
+    });
+
+    it('shows the parse warning notice only once across reloads (#103)', () => {
+      const withWarnings: LibraryState = {
+        status: LoadingStatus.Success,
+        parseErrors: ['Unhandled command: \\mymacro'],
+        progress: { current: 5, total: 5 },
+      };
+      const { plugin, emit } = makePlugin(withWarnings);
+
+      const service = new UIService(plugin as never);
+      service.init();
+      expect(mockNotificationsShow).toHaveBeenCalledTimes(1);
+
+      emit({ status: LoadingStatus.Loading, parseErrors: [] });
+      emit(withWarnings);
+      emit({ status: LoadingStatus.Loading, parseErrors: [] });
+      emit(withWarnings);
+
+      expect(mockNotificationsShow).toHaveBeenCalledTimes(1);
+    });
+
+    it('notifies a database failure that a reload adds to repeating warnings', () => {
+      const macroWarning = 'Unhandled command: \\mymacro';
+      const failedDatabase =
+        'Failed to load "Zotero export": ENOENT: no such file or directory';
+      const { plugin, emit } = makePlugin({
+        status: LoadingStatus.Success,
+        parseErrors: [macroWarning],
+        progress: { current: 5, total: 5 },
+      });
+
+      const service = new UIService(plugin as never);
+      service.init();
+
+      emit({ status: LoadingStatus.Loading, parseErrors: [] });
+      emit({
+        status: LoadingStatus.Success,
+        parseErrors: [macroWarning, failedDatabase],
+        progress: { current: 3, total: 3 },
+      });
+
+      expect(mockNotificationsShow).toHaveBeenCalledTimes(2);
+      expect(mockNotificationsShow).toHaveBeenLastCalledWith(
+        `Citations: Loaded 3 entries with 2 parse warnings. Check console for details.\n${failedDatabase}`,
+      );
+    });
+
+    it('notifies a warning again when it returns after a load without it', () => {
+      const withFailure: LibraryState = {
+        status: LoadingStatus.Success,
+        parseErrors: ['Readwise API unavailable (using cache): timeout'],
+        progress: { current: 5, total: 5 },
+      };
+      const { plugin, emit } = makePlugin(withFailure);
+
+      const service = new UIService(plugin as never);
+      service.init();
+
+      emit({ status: LoadingStatus.Loading, parseErrors: [] });
+      emit({
+        status: LoadingStatus.Success,
+        parseErrors: [],
+        progress: { current: 5, total: 5 },
+      });
+      emit({ status: LoadingStatus.Loading, parseErrors: [] });
+      emit(withFailure);
+
+      expect(mockNotificationsShow).toHaveBeenCalledTimes(2);
+    });
+
+    it('still shows load failures after the parse warning notice was shown', () => {
+      const { plugin, emit } = makePlugin({
+        status: LoadingStatus.Success,
+        parseErrors: ['warn1'],
+        progress: { current: 5, total: 5 },
+      });
+
+      const service = new UIService(plugin as never);
+      service.init();
+
+      emit({ status: LoadingStatus.Loading, parseErrors: [] });
+      emit({ status: LoadingStatus.Error, parseErrors: ['load failed'] });
+
+      expect(mockNotificationsShow).toHaveBeenCalledTimes(2);
+      expect(mockNotificationsShow).toHaveBeenLastCalledWith('load failed');
     });
   });
 
