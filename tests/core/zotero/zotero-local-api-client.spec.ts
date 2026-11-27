@@ -2,6 +2,8 @@ jest.mock('obsidian', () => ({}), { virtual: true });
 
 import {
   ZoteroLocalApiClient,
+  ZoteroServerChangedError,
+  ZoteroSnapshotError,
   ZOTERO_LOCAL_API_DEFAULT_BASE,
 } from '../../../src/core/zotero/zotero-local-api-client';
 import {
@@ -687,6 +689,58 @@ describe('ZoteroLocalApiClient', () => {
           controller.signal,
         ),
       ).rejects.toThrow(ZoteroAbortError);
+    });
+
+    it.each([
+      [412, null],
+      [200, 'other-server'],
+    ])(
+      'reports a server identity mismatch with the actual HTTP %i status',
+      async (status, serverId) => {
+        const get = jest.fn<
+          ReturnType<ZoteroHttpGetFn>,
+          Parameters<ZoteroHttpGetFn>
+        >(() =>
+          Promise.resolve(
+            response(
+              status,
+              [],
+              serverId ? { 'Zotero-Server-ID': serverId } : {},
+            ),
+          ),
+        );
+        const client = new ZoteroLocalApiClient(undefined, get);
+        const result = client.fetchItemsSince({}, 'items', 14, expected);
+        await expect(result).rejects.toBeInstanceOf(ZoteroServerChangedError);
+        await expect(result).rejects.toMatchObject({
+          statusCode: status,
+          serverId,
+        });
+        expect(get).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({
+            'Zotero-Server-ID': expected.serverId,
+          }),
+        );
+      },
+    );
+
+    it('reports an advancing version on the same server as a snapshot error', async () => {
+      const get: ZoteroHttpGetFn = () =>
+        Promise.resolve(
+          response(200, [], {
+            'Zotero-Server-ID': expected.serverId,
+            'Last-Modified-Version': String(expected.libraryVersion + 1),
+          }),
+        );
+      const client = new ZoteroLocalApiClient(undefined, get);
+      const result = client.fetchItemsSince({}, 'items', 14, expected);
+      await expect(result).rejects.toBeInstanceOf(ZoteroSnapshotError);
+      await expect(result).rejects.not.toBeInstanceOf(ZoteroServerChangedError);
+      await expect(result).rejects.toMatchObject({
+        statusCode: 200,
+        serverId: expected.serverId,
+      });
     });
   });
 });

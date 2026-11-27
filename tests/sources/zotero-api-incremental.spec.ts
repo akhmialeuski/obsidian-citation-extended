@@ -707,6 +707,51 @@ describe('Zotero Local API sync', () => {
     expect(records[0].url.searchParams.has('since')).toBe(false);
   });
 
+  it('retries with a full fetch when the final probe observes a different server at the same version', async () => {
+    const original = zoteroItem('ITEM0001');
+    const api = new MockZoteroLocalApi({
+      ...emptyZoteroLibrary(),
+      items: [original],
+    });
+    const cache = setup(api);
+    await cache.source.load();
+    api.library = {
+      ...api.library,
+      libraryVersion: 2,
+      items: [zoteroItem('ITEM0002', 2), original],
+    };
+    let probes = 0;
+    const get: ZoteroHttpGetFn = (url, headers) => {
+      if (url.includes('limit=1&format=versions') && ++probes === 2) {
+        api.serverId = 'other-server';
+        api.library = {
+          ...emptyZoteroLibrary(2),
+          items: [zoteroItem('ITEM0003', 2)],
+        };
+      }
+      return api.get(url, headers);
+    };
+    const debug = jest.spyOn(console, 'debug').mockImplementation(() => {});
+    try {
+      await setup(api, { get }, cache).source.load();
+      expect(debug).toHaveBeenLastCalledWith(
+        'ZoteroApiSource: synchronization complete',
+        expect.objectContaining({
+          mode: 'full',
+          reason: 'server identity changed during synchronization',
+        }),
+      );
+    } finally {
+      debug.mockRestore();
+    }
+    expect(probes).toBe(4);
+    expect(cache.snapshot()).toMatchObject({
+      serverId: 'other-server',
+      libraryVersion: 2,
+      entries: [{ key: 'ITEM0003' }],
+    });
+  });
+
   it('rejects a known foreign cache even on a later offline load', async () => {
     const api = new MockZoteroLocalApi({
       ...emptyZoteroLibrary(),

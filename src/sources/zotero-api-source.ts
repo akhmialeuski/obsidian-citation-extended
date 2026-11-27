@@ -21,6 +21,7 @@ import {
   supportsLocalVersions,
   ZOTERO_LOCAL_API_DEFAULT_BASE,
   ZoteroLocalApiError,
+  ZoteroServerChangedError,
   ZoteroSnapshotError,
 } from '../core/zotero/zotero-local-api-client';
 import type {
@@ -269,7 +270,7 @@ export class ZoteroApiSource implements DataSource {
     if (error instanceof ZoteroLocalApiError)
       this.observeServer(error.serverId);
     if (!(error instanceof ZoteroSnapshotError)) throw error;
-    if (error.statusCode !== 412) return null;
+    if (!(error instanceof ZoteroServerChangedError)) return null;
     // Keep the rejection if the replacement fetch fails and the instance
     // is unreachable on the next load.
     this.observed.rejectedServerId = state.serverId;
@@ -338,12 +339,20 @@ export class ZoteroApiSource implements DataSource {
     if (state.serverId === null) return;
     const finalState = await this.probe(signal);
     if (sameState(state, finalState)) return;
-    const identityChanged =
-      finalState.serverId !== null && finalState.serverId !== state.serverId;
+    if (
+      finalState.serverId !== null &&
+      finalState.serverId !== state.serverId
+    ) {
+      throw new ZoteroServerChangedError(
+        'Zotero server identity changed during synchronization.',
+        undefined,
+        finalState.serverId,
+      );
+    }
     throw new ZoteroSnapshotError(
       'Zotero library changed during synchronization.',
+      undefined,
       finalState.serverId,
-      identityChanged ? 412 : undefined,
     );
   }
 

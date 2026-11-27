@@ -91,12 +91,15 @@ export class ZoteroLocalApiError extends ZoteroApiError {
 export class ZoteroSnapshotError extends ZoteroLocalApiError {
   constructor(
     message: string,
-    serverId: string | null = null,
     statusCode?: number,
+    serverId: string | null = null,
   ) {
     super(message, statusCode, serverId);
   }
 }
+
+/** The request reached a different Zotero instance than the snapshot expected. */
+export class ZoteroServerChangedError extends ZoteroSnapshotError {}
 
 export function isZoteroRecord(
   value: unknown,
@@ -504,6 +507,7 @@ export class ZoteroLocalApiClient {
     ) {
       throw new ZoteroSnapshotError(
         'Zotero library changed during synchronization.',
+        response.status,
         serverId,
       );
     }
@@ -541,10 +545,10 @@ export class ZoteroLocalApiClient {
       ((status === 412 && expected.serverId !== null) ||
         (serverId !== null && serverId !== expected.serverId))
     ) {
-      throw new ZoteroSnapshotError(
+      throw new ZoteroServerChangedError(
         'Zotero server identity changed during synchronization.',
+        status,
         serverId,
-        412,
       );
     }
   }
