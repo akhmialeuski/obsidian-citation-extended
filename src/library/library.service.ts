@@ -324,7 +324,7 @@ export class LibraryService implements ILibraryService {
 
     if (totalParseErrors > 0) {
       console.warn(
-        `Citation plugin: ${totalParseErrors} entries skipped due to parse errors.`,
+        `Citation plugin: ${totalParseErrors} parse warning(s) while loading the library.`,
         allParseErrors.slice(0, 5),
       );
     }

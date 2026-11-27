@@ -27,6 +27,10 @@ import {
 } from '../application/actions';
 import { ModalTemplateSelectionPresenter } from '../ui/modals/replace-selection-modal';
 
+function formatParseWarnings(count: number): string {
+  return `${count} parse warning${count === 1 ? '' : 's'}`;
+}
+
 /**
  * Initializes all user-facing UI surfaces: command palette, context menu,
  * and status bar.
@@ -225,7 +229,7 @@ export class UIService implements IUIService {
     ) {
       const entryCount = state.progress?.current ?? 0;
       this.plugin.platform.notifications.show(
-        `Citations: Loaded ${entryCount} entries. ${state.parseErrors.length} entries skipped due to parse errors. Check console for details.`,
+        `Citations: Loaded ${entryCount} entries with ${formatParseWarnings(state.parseErrors.length)}. Check console for details.`,
       );
     }
   }

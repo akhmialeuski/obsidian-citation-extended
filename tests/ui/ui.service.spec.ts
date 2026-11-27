@@ -189,10 +189,22 @@ describe('UIService', () => {
       service.init();
 
       expect(mockNotificationsShow).toHaveBeenCalledWith(
-        expect.stringContaining('10 entries'),
+        'Citations: Loaded 10 entries with 1 parse warning. Check console for details.',
       );
+    });
+
+    it('uses the plural for several parse warnings', () => {
+      const { plugin } = makePlugin({
+        status: LoadingStatus.Success,
+        parseErrors: ['warn1', 'warn2'],
+        progress: { current: 10, total: 10 },
+      });
+
+      const service = new UIService(plugin as never);
+      service.init();
+
       expect(mockNotificationsShow).toHaveBeenCalledWith(
-        expect.stringContaining('1 entries skipped'),
+        expect.stringContaining('with 2 parse warnings.'),
       );
     });
 

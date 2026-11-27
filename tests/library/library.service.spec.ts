@@ -585,7 +585,7 @@ describe('LibraryService', () => {
 
       await service.load();
       expect(console.warn).toHaveBeenCalledWith(
-        expect.stringContaining('1 entries skipped'),
+        expect.stringContaining('1 parse warning(s)'),
         expect.anything(),
       );
     });
