@@ -59,6 +59,7 @@ export {
   ZoteroConnectorClient,
   ZoteroApiError,
   ZoteroAbortError,
+  throwIfAborted,
   ZOTERO_ANNOTATION_COLOR_NAMES,
   zoteroColorName,
   normalizeZoteroAttachments,
@@ -80,6 +81,7 @@ export { ZoteroLocalApiClient, ZOTERO_LOCAL_API_DEFAULT_BASE } from './zotero';
 export type {
   ZoteroApiItem,
   ZoteroApiLibraryData,
+  ZoteroApiLibraryState,
   ZoteroApiScope,
   ZoteroApiPingResult,
 } from './zotero';

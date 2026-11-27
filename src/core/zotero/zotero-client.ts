@@ -80,6 +80,10 @@ export class ZoteroAbortError extends Error {
   }
 }
 
+export function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new ZoteroAbortError();
+}
+
 export class ZoteroConnectorClient {
   /**
    * @param pullUrl  The Better BibTeX pull-export URL copied from Zotero via
@@ -104,7 +108,7 @@ export class ZoteroConnectorClient {
     exportNotes?: boolean;
     signal?: AbortSignal;
   }): Promise<string> {
-    this.throwIfAborted(opts?.signal);
+    throwIfAborted(opts?.signal);
 
     const url = this.buildPullUrl(opts?.exportNotes ?? false);
     let response: ZoteroHttpResponse;
@@ -121,7 +125,7 @@ export class ZoteroConnectorClient {
       );
     }
 
-    this.throwIfAborted(opts?.signal);
+    throwIfAborted(opts?.signal);
 
     if (response.status < 200 || response.status >= 300) {
       throw new ZoteroApiError(
@@ -146,7 +150,7 @@ export class ZoteroConnectorClient {
    * versions. Used by the settings "Test connection" button.
    */
   async ping(signal?: AbortSignal): Promise<ZoteroVersions> {
-    this.throwIfAborted(signal);
+    throwIfAborted(signal);
 
     const url = this.jsonRpcUrl();
     const requestBody = JSON.stringify({
@@ -171,7 +175,7 @@ export class ZoteroConnectorClient {
       );
     }
 
-    this.throwIfAborted(signal);
+    throwIfAborted(signal);
 
     if (response.status < 200 || response.status >= 300) {
       throw new ZoteroApiError(
@@ -222,7 +226,7 @@ export class ZoteroConnectorClient {
     const batchSize = ZoteroConnectorClient.ATTACHMENTS_BATCH_SIZE;
 
     for (let start = 0; start < citekeys.length; start += batchSize) {
-      this.throwIfAborted(opts?.signal);
+      throwIfAborted(opts?.signal);
       const chunk = citekeys.slice(start, start + batchSize);
       const requestBody = JSON.stringify(
         chunk.map((citekey, i) => ({
@@ -248,7 +252,7 @@ export class ZoteroConnectorClient {
         );
       }
 
-      this.throwIfAborted(opts?.signal);
+      throwIfAborted(opts?.signal);
 
       if (response.status < 200 || response.status >= 300) {
         throw new ZoteroApiError(
@@ -332,9 +336,5 @@ export class ZoteroConnectorClient {
     } catch {
       return this.pullUrl;
     }
-  }
-
-  private throwIfAborted(signal?: AbortSignal): void {
-    if (signal?.aborted) throw new ZoteroAbortError();
   }
 }

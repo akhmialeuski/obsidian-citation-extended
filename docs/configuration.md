@@ -57,8 +57,8 @@ The **Database source** dropdown lists every way to load references:
 **Zotero (local API)** is not a file format: it reads a running Zotero (7 or later) directly through the local HTTP API built into Zotero itself. No Better BibTeX and no export file needed. Enable one checkbox in Zotero's Advanced settings. Citation keys come from Zotero's native Citation Key field (with Extra-field and generated fallbacks).
 
 - **Best for:** users without Better BibTeX, group libraries, maximum resilience to Zotero updates
-- **Advantages:** zero extensions, live data, collection/group scoping, native citekeys
-- **Limitations:** requires Zotero 7+, no Zotero notes import, custom BBT citekey formulas only via pinned/native keys (see [Data Sources: Zotero (local API)](data-sources.md#zotero-local-api-without-better-bibtex))
+- **Advantages:** zero extensions, live data, collection/group scoping, native citekeys, and optional PDF annotation import
+- **Limitations:** incremental sync requires Zotero 10+ and a whole personal or group library. For live Zotero child note import, use the Better BibTeX source. Custom BBT citekey formulas are available through pinned or native keys. See [Data Sources: Zotero (local API)](data-sources.md#zotero-local-api-without-better-bibtex).
 
 ### Setting Up Multiple Databases
 
@@ -107,12 +107,12 @@ Shown on a database card whose **Database source** is **Zotero (local API)**. Th
 | **Zotero API base URL** | Address of the Zotero local server. Leave empty for `http://127.0.0.1:23119` | (empty) |
 | **Group library ID** | Numeric Zotero group id to load a group library instead of your personal library | (empty) |
 | **Collection key** | The 8-character key of one collection to restrict the import to | (empty) |
-| **Import PDF annotations** | Fetch native Zotero PDF annotations for every entry. Exposed in templates as `{{annotations}}` and `{{attachments}}` | `false` |
+| **Import PDF annotations** | Fetch structured PDF annotations through the Local API on Zotero 7+. Templates can use `{{annotations}}`, `{{attachments}}`, and `{{annotationCount}}` | `false` |
 | **Auto-sync interval (minutes)** | How often to re-fetch from Zotero. Set to `0` to disable. Shared with the Zotero (Better BibTeX) source | `0` |
 | **Test connection** | Reports how many items Zotero makes visible with the current scope, or the error | |
-| **Sync now** | Fetches the library from Zotero and reloads it | |
+| **Sync now** | Immediately reloads all configured citation sources. Whole personal and group libraries on Zotero 10+ can sync incrementally | |
 
-See [Data Sources: Zotero (local API)](data-sources.md#zotero-local-api-without-better-bibtex) for how citation keys are resolved.
+Use **Refresh citation database** to force a full Zotero fetch. See [Data Sources: Zotero (local API)](data-sources.md#zotero-local-api-without-better-bibtex) for citation keys, sync behavior, and offline cache migration.
 
 ---
 

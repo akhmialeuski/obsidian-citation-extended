@@ -4,6 +4,7 @@ import {
   ZoteroConnectorClient,
   ZoteroApiError,
   ZoteroAbortError,
+  throwIfAborted,
 } from '../../../src/core/zotero/zotero-client';
 import type {
   ZoteroHttpResponse,
@@ -13,6 +14,19 @@ import type {
 
 const PULL_URL =
   'http://127.0.0.1:23119/better-bibtex/collection?/0/ABCD1234.json';
+
+describe('throwIfAborted', () => {
+  it('accepts an undefined or active signal', () => {
+    expect(() => throwIfAborted()).not.toThrow();
+    expect(() => throwIfAborted(new AbortController().signal)).not.toThrow();
+  });
+
+  it('throws ZoteroAbortError for an aborted signal', () => {
+    const controller = new AbortController();
+    controller.abort();
+    expect(() => throwIfAborted(controller.signal)).toThrow(ZoteroAbortError);
+  });
+});
 
 function jsonResponse(status: number, body: unknown): ZoteroHttpResponse {
   return {

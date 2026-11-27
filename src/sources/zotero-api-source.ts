@@ -1,4 +1,4 @@
-import {
+import type {
   DataSource,
   DataSourceLoadOptions,
   DataSourceLoadResult,
@@ -8,9 +8,28 @@ import {
   convertToEntries,
   buildZoteroApiEntries,
   ZoteroAbortError,
+  throwIfAborted,
 } from '../core';
-import type { ParseErrorInfo, ZoteroApiEntryData } from '../core';
-import type { ZoteroLocalApiClient, ZoteroApiScope } from '../core';
+import {
+  fetchZoteroDelta,
+  MissingZoteroDeltaRecordError,
+} from '../core/zotero/zotero-api-delta';
+import type {
+  ZoteroApiRawLibrary,
+  ZoteroChangeCounts,
+} from '../core/zotero/zotero-api-delta';
+import {
+  supportsLocalVersions,
+  ZOTERO_LOCAL_API_DEFAULT_BASE,
+  ZoteroLocalApiError,
+  ZoteroServerChangedError,
+  ZoteroSnapshotError,
+} from '../core/zotero/zotero-local-api-client';
+import type {
+  ZoteroApiLibraryState,
+  ZoteroApiScope,
+  ZoteroLocalApiClient,
+} from '../core/zotero/zotero-local-api-client';
 import type { IFileSystem } from '../platform/platform-adapter';
 import {
   createLinkedAbortController,
@@ -18,204 +37,407 @@ import {
   readVersionedJsonCache,
   writeVersionedJsonCache,
 } from './source-utils';
+import { isZoteroApiCache, snapshotToCache } from './zotero-api-cache';
+import type { ZoteroApiCache, ZoteroApiCacheV3 } from './zotero-api-cache';
 
-/** Versioned on-disk cache of the last successful fetch. */
-interface ZoteroApiCacheStateV2 {
-  version: 2;
-  /** Pre-built entry DTOs (the same shape the adapter consumes). */
-  entries: ZoteroApiEntryData[];
-  /** Zotero library version at fetch time, or null. */
-  libraryVersion: number | null;
-  /**
-   * Fetch parameters that determine WHICH content was cached. The cache file
-   * is keyed by the stable database id, so a later scope or annotation-flag
-   * change reuses the same file — these fields let the loader detect that the
-   * cached content belongs to a different configuration and must be re-fetched
-   * rather than served (which would otherwise show the wrong collection's
-   * items, or serve annotation-less entries after annotations were enabled,
-   * because the library-version probe alone cannot see a parameter change).
-   */
-  groupId: string;
-  collectionKey: string;
-  importAnnotations: boolean;
+/** In-process evidence that a compatible cache may belong to an obsolete instance or version. */
+interface ServerObservation {
+  serverId?: string;
+  rejectedServerId?: string | null;
+  rolledBack?: ZoteroApiLibraryState;
 }
 
-function isZoteroApiCacheState(
-  parsed: unknown,
-): parsed is ZoteroApiCacheStateV2 {
-  if (parsed === null || typeof parsed !== 'object') return false;
-  const c = parsed as Record<string, unknown>;
+interface SyncDiagnostic {
+  startedAt: number;
+  mode: 'full' | 'incremental' | 'unchanged' | 'offline';
+  libraryVersion: number | null;
+  fullReason?: string;
+  changes?: ZoteroChangeCounts;
+}
+
+function logSync(
+  diagnostic: SyncDiagnostic,
+  cache: ZoteroApiCache | null,
+): void {
+  const { mode, startedAt, libraryVersion, fullReason, changes } = diagnostic;
+  const summary = {
+    mode,
+    cachedVersion: cache?.libraryVersion ?? null,
+    libraryVersion,
+    durationMs: Math.round(performance.now() - startedAt),
+    ...(mode === 'full' ? { reason: fullReason } : {}),
+    ...(mode === 'incremental' ? { changes } : {}),
+  };
+  if (mode === 'offline') {
+    console.warn('ZoteroApiSource: using cached library', summary);
+  } else {
+    console.debug('ZoteroApiSource: synchronization complete', summary);
+  }
+}
+
+const UNKNOWN_LIBRARY_STATE: ZoteroApiLibraryState = {
+  serverId: null,
+  libraryVersion: null,
+};
+
+function sameState(
+  a: ZoteroApiLibraryState,
+  b: ZoteroApiLibraryState,
+): boolean {
+  return a.serverId === b.serverId && a.libraryVersion === b.libraryVersion;
+}
+
+function hasRawBaseline(
+  cache: ZoteroApiCache | null,
+): cache is ZoteroApiCacheV3 & {
+  rawLibrary: ZoteroApiRawLibrary;
+  serverId: string;
+  libraryVersion: number;
+} {
   return (
-    c.version === 2 &&
-    Array.isArray(c.entries) &&
-    typeof c.groupId === 'string' &&
-    typeof c.collectionKey === 'string' &&
-    typeof c.importAnnotations === 'boolean'
+    cache?.version === 3 &&
+    cache.rawLibrary !== undefined &&
+    supportsLocalVersions(cache)
   );
 }
 
 /**
- * Data source backed by the **native Zotero local API** (Zotero 7+) — no
- * Better BibTeX required. Items are fetched from the local HTTP server
- * (`http://127.0.0.1:23119/api/`), converted to self-contained entry DTOs
- * (citekey resolution, CSL payload, attachment file synthesis, collection
- * names), and wrapped in adapters:
+ * Data source backed by Zotero's native Local API (Zotero 7+). The adapter
+ * resolves citekeys from the native `citationKey` field (Zotero 7.0.31+), a
+ * legacy `Citation Key:` line in Extra, or a generated fallback.
  *
- *   local API JSON -> buildZoteroApiEntries -> convertToEntries('zotero-api')
+ * Full fetches and merged incremental fetches both pass through
+ * `buildZoteroApiEntries` and then `convertToEntries('zotero-api')`. The
+ * builder resolves collections and attachment paths and exposes enabled PDF
+ * annotations through the common `entry.annotations` and `entry.attachments`
+ * interfaces.
  *
- * Citekeys resolve from the native `citationKey` field (Zotero 7.0.31+),
- * a legacy `Citation Key:` line in Extra, or a generated fallback — so the
- * source works with or without Better BibTeX installed.
+ * The last successful compatible snapshot keeps the library usable when
+ * Zotero is closed. For eligible whole-library sources, a matching server ID
+ * and library version also let an online load reuse the cached DTOs.
  *
- * **PDF annotations:** when enabled, annotation items are fetched in the
- * same library sweep and mapped onto entries through the uniform
- * `entry.annotations` / `entry.attachments` interface.
- *
- * **Offline cache:** the last successful fetch is cached on disk (as DTOs).
- * If Zotero is closed on a later load, the cache keeps the library usable.
- * The cache also short-circuits online loads: a cheap library-version probe
- * against `Last-Modified-Version` serves the cache unchanged when the
- * library has not moved since the last fetch.
- *
- * **Periodic sync:** no file to watch, so the source optionally polls on a
- * configurable interval (same mechanism as the Better BibTeX source).
+ * The source has no local file to watch and uses the same optional polling
+ * mechanism as the Better BibTeX source.
  */
 export class ZoteroApiSource implements DataSource {
   private abortController: AbortController | null = null;
   private readonly poller: PeriodicSync | null;
+  private readonly config: Pick<
+    ZoteroApiCacheV3,
+    'baseUrl' | 'groupId' | 'collectionKey' | 'importAnnotations'
+  >;
+  private readonly observed: ServerObservation = {};
 
   constructor(
     public readonly id: string,
-    private client: ZoteroLocalApiClient,
-    private scope: ZoteroApiScope,
-    private fileSystem?: IFileSystem,
-    private cachePath?: string,
-    /** Current periodic-sync interval in ms (0 = disabled); read each cycle. */
+    private readonly client: ZoteroLocalApiClient,
+    private readonly scope: ZoteroApiScope,
+    private readonly fileSystem?: IFileSystem,
+    private readonly cachePath?: string,
+    /** Periodic sync interval in milliseconds (0 disables polling), read each cycle. */
     syncIntervalProvider?: () => number,
-    /** Fetch native PDF annotations and attach them to entries. */
-    private importAnnotations = false,
+    /** Import native PDF annotations and associate them with their entries. */
+    importAnnotations = false,
   ) {
     this.poller = syncIntervalProvider
       ? new PeriodicSync(syncIntervalProvider, 'ZoteroApiSource')
       : null;
+    this.config = {
+      baseUrl: client.baseUrl,
+      groupId: scope.groupId ?? '',
+      collectionKey: scope.collectionKey ?? '',
+      importAnnotations,
+    };
   }
 
   async load(
     externalSignal?: AbortSignal,
     options?: DataSourceLoadOptions,
   ): Promise<DataSourceLoadResult> {
+    const diagnostic: SyncDiagnostic = {
+      startedAt: performance.now(),
+      mode: 'offline',
+      libraryVersion: null,
+    };
     this.abortController?.abort();
     const controller = createLinkedAbortController(externalSignal);
     this.abortController = controller;
-    const signal = controller.signal;
+    const { signal } = controller;
 
     try {
-      let dtos: ZoteroApiEntryData[];
-      let libraryVersion: number | null = null;
-      const priorErrors: ParseErrorInfo[] = [];
+      throwIfAborted(signal);
+      // Read and validate the saved snapshot once. Missing or corrupt files
+      // are cache misses.
+      const cache = await readVersionedJsonCache(
+        this.fileSystem,
+        this.cachePath,
+        isZoteroApiCache,
+      );
+      throwIfAborted(signal);
+      const compatible = cache && this.cacheMatchesConfig(cache) ? cache : null;
 
-      // Read the cache once. Only a cache written for the CURRENT scope +
-      // annotation flag is usable — the file is shared per database, so a cache
-      // from a different configuration must never be served.
-      const cached = await this.readCache();
-      const usableCache =
-        cached && this.cacheMatchesConfig(cached) ? cached : null;
-
-      try {
-        // Cheap change probe: when the cached library version still matches AND
-        // the caller did not force a full refresh, serve the cache and skip the
-        // full multi-sweep re-fetch (items + attachments + annotations +
-        // collections). A `fullRefresh` (the manual "Refresh citation
-        // database") bypasses this so a stale/wrong cache can always be
-        // recovered from.
-        const unchanged =
-          !options?.fullRefresh &&
-          usableCache?.libraryVersion != null &&
-          (await this.client.getLibraryVersion(this.scope, signal)) ===
-            usableCache.libraryVersion;
-        if (usableCache && unchanged) {
-          dtos = usableCache.entries;
-          libraryVersion = usableCache.libraryVersion;
-        } else {
-          const library = await this.client.fetchLibrary(this.scope, signal, {
-            includeAnnotations: this.importAnnotations,
-          });
-          dtos = buildZoteroApiEntries(library, this.scope);
-          libraryVersion = library.libraryVersion;
-          await this.writeCache(dtos, libraryVersion);
-        }
-      } catch (error) {
-        // A cancelled load is not a failure — let the caller's abort logic run.
-        if (error instanceof ZoteroAbortError || signal.aborted) {
-          throw error;
-        }
-        const message = error instanceof Error ? error.message : String(error);
-        // Offline fallback: only a cache for the current configuration is safe
-        // to serve — a stale-scope cache would show the wrong items.
-        if (!usableCache) {
-          throw new Error(`Failed to load from Zotero local API: ${message}`);
-        }
-        console.warn(
-          `ZoteroApiSource: Zotero unavailable, using cached library (${message})`,
-        );
-        dtos = usableCache.entries;
-        priorErrors.push({
-          message: `Zotero unavailable (using cache): ${message}`,
-        });
-      }
-
-      const entries = convertToEntries(DATABASE_FORMATS.ZoteroApi, dtos);
-
-      return {
-        sourceId: this.id,
-        entries,
-        modifiedAt: new Date(),
-        parseErrors: priorErrors,
-      };
+      return await this.loadWithFallback(
+        compatible,
+        signal,
+        options?.fullRefresh ?? false,
+        diagnostic,
+      );
     } finally {
-      if (this.abortController?.signal === signal) {
-        this.abortController = null;
+      if (this.abortController === controller) this.abortController = null;
+    }
+  }
+
+  private async loadWithFallback(
+    cache: ZoteroApiCache | null,
+    signal: AbortSignal,
+    forceFull: boolean,
+    diagnostic: SyncDiagnostic,
+  ): Promise<DataSourceLoadResult> {
+    try {
+      const snapshot = await this.synchronize(
+        cache,
+        signal,
+        forceFull,
+        diagnostic,
+      );
+      throwIfAborted(signal);
+      const result = this.result(snapshot);
+      if (snapshot !== cache) await this.commit(snapshot, signal);
+      throwIfAborted(signal);
+      diagnostic.libraryVersion = snapshot.libraryVersion;
+      logSync(diagnostic, cache);
+      return result;
+    } catch (error) {
+      // Let the caller handle cancellation before considering offline fallback.
+      if (error instanceof ZoteroAbortError) throw error;
+      throwIfAborted(signal);
+      const message = error instanceof Error ? error.message : String(error);
+      if (!cache || !this.cacheMatchesServer(cache)) {
+        throw new Error(`Failed to load from Zotero local API: ${message}`);
+      }
+      diagnostic.mode = 'offline';
+      logSync(diagnostic, cache);
+      return this.result(
+        cache,
+        `Zotero synchronization failed (using cache): ${message}`,
+      );
+    }
+  }
+
+  private async synchronize(
+    cache: ZoteroApiCache | null,
+    signal: AbortSignal,
+    forceFull: boolean,
+    diagnostic: SyncDiagnostic,
+  ): Promise<ZoteroApiCacheV3> {
+    let fullReason = forceFull ? 'manual refresh' : null;
+    let consistencyRetryAvailable = true;
+    for (;;) {
+      throwIfAborted(signal);
+      let state = UNKNOWN_LIBRARY_STATE;
+      try {
+        state = await this.probe(signal);
+        diagnostic.libraryVersion = state.libraryVersion;
+        return await this.syncSnapshot(
+          state,
+          cache,
+          signal,
+          fullReason,
+          diagnostic,
+        );
+      } catch (error) {
+        throwIfAborted(signal);
+        if (error instanceof MissingZoteroDeltaRecordError) {
+          // Only a delta can have missing records. The next attempt uses a
+          // full fetch, leaving the consistency retry budget available.
+          fullReason = error.message;
+          continue;
+        }
+        fullReason = this.snapshotRetryReason(error, state) ?? fullReason;
+        if (!consistencyRetryAvailable) throw error;
+        consistencyRetryAvailable = false;
       }
     }
   }
 
-  /** Read and validate the cache file, or null when missing/corrupt. */
-  private readCache(): Promise<ZoteroApiCacheStateV2 | null> {
-    return readVersionedJsonCache(
-      this.fileSystem,
-      this.cachePath,
-      isZoteroApiCacheState,
+  private snapshotRetryReason(
+    error: unknown,
+    state: ZoteroApiLibraryState,
+  ): string | null {
+    if (error instanceof ZoteroLocalApiError)
+      this.observeServer(error.serverId);
+    if (!(error instanceof ZoteroSnapshotError)) throw error;
+    if (!(error instanceof ZoteroServerChangedError)) return null;
+    // Keep the rejection if the replacement fetch fails and the instance
+    // is unreachable on the next load.
+    this.observed.rejectedServerId = state.serverId;
+    return 'server identity changed during synchronization';
+  }
+
+  private async syncSnapshot(
+    state: ZoteroApiLibraryState,
+    cache: ZoteroApiCache | null,
+    signal: AbortSignal,
+    fullReason: string | null,
+    diagnostic: SyncDiagnostic,
+  ): Promise<ZoteroApiCacheV3> {
+    // The manual "Refresh citation database" command bypasses both the
+    // unchanged fast path and delta retrieval so it can rebuild the snapshot.
+    const baseline = this.incrementalBaseline(state, cache);
+    const plan = fullReason ?? baseline;
+    if (typeof plan !== 'string' && sameState(plan, state)) {
+      diagnostic.mode = 'unchanged';
+      return plan;
+    }
+
+    const library = await this.fetchSnapshot(plan, state, signal, diagnostic);
+    const entries = buildZoteroApiEntries(library, this.scope);
+
+    // A tracked full fetch also needs this check before it can establish an
+    // incremental baseline. Its separate sweeps can span a Zotero edit.
+    await this.verifySnapshot(state, signal);
+    const cacheState = state.serverId
+      ? state
+      : { ...state, libraryVersion: library.libraryVersion };
+    return snapshotToCache(library, entries, cacheState, this.config);
+  }
+
+  private async fetchSnapshot(
+    plan: string | { rawLibrary: ZoteroApiRawLibrary; libraryVersion: number },
+    state: ZoteroApiLibraryState,
+    signal: AbortSignal,
+    diagnostic: SyncDiagnostic,
+  ) {
+    const { importAnnotations } = this.config;
+    const reader = this.client.pinnedTo(state);
+    if (typeof plan === 'string') {
+      diagnostic.mode = 'full';
+      diagnostic.fullReason = plan;
+      return reader.fetchLibrary(this.scope, signal, {
+        includeAnnotations: importAnnotations,
+      });
+    }
+    const { library, changes } = await fetchZoteroDelta(
+      reader,
+      this.scope,
+      plan,
+      { includeAnnotations: importAnnotations, signal },
     );
+    diagnostic.mode = 'incremental';
+    diagnostic.changes = changes;
+    return library;
+  }
+
+  private async verifySnapshot(
+    state: ZoteroApiLibraryState,
+    signal: AbortSignal,
+  ): Promise<void> {
+    if (state.serverId === null) return;
+    const finalState = await this.probe(signal);
+    if (sameState(state, finalState)) return;
+    if (
+      finalState.serverId !== null &&
+      finalState.serverId !== state.serverId
+    ) {
+      throw new ZoteroServerChangedError(
+        'Zotero server identity changed during synchronization.',
+        undefined,
+        finalState.serverId,
+      );
+    }
+    throw new ZoteroSnapshotError(
+      'Zotero library changed during synchronization.',
+      undefined,
+      finalState.serverId,
+    );
+  }
+
+  private async probe(signal: AbortSignal): Promise<ZoteroApiLibraryState> {
+    const state = await this.client.getLibraryState(this.scope, signal);
+    throwIfAborted(signal);
+    this.observeServer(state.serverId);
+    return state;
+  }
+
+  private observeServer(serverId: string | null): void {
+    if (serverId) this.observed.serverId = serverId;
+  }
+
+  private incrementalBaseline(
+    state: ZoteroApiLibraryState,
+    cache: ZoteroApiCache | null,
+  ) {
+    if (this.config.collectionKey) return 'collection scope';
+    if (!supportsLocalVersions(state))
+      return 'local version tracking unavailable';
+    if (!hasRawBaseline(cache)) return 'no compatible incremental baseline';
+    if (!this.cacheMatchesServer(cache)) return 'server identity changed';
+    if (state.libraryVersion < cache.libraryVersion) {
+      // Require a new baseline even if the version reaches this value again
+      // before the source manages to save a replacement.
+      this.observed.rolledBack = {
+        serverId: cache.serverId,
+        libraryVersion: cache.libraryVersion,
+      };
+    }
+    if (this.observed.rolledBack && sameState(cache, this.observed.rolledBack))
+      return 'library version rolled back';
+    return cache;
   }
 
   /**
-   * True when a cache was written for the source's CURRENT scope + annotation
-   * flag. The cache file is keyed by the stable database id, so a scope or
-   * flag change reuses the same file; without this guard the version fast-path
-   * (or the offline fallback) would serve content fetched for a different
-   * configuration.
+   * The cache filename follows the stable database ID across configuration
+   * changes. Check the fetch parameters before online reuse or offline fallback.
    */
-  private cacheMatchesConfig(cached: ZoteroApiCacheStateV2): boolean {
+  private cacheMatchesConfig(cache: ZoteroApiCache): boolean {
+    const { baseUrl, groupId, collectionKey, importAnnotations } = this.config;
     return (
-      cached.groupId === (this.scope.groupId ?? '') &&
-      cached.collectionKey === (this.scope.collectionKey ?? '') &&
-      cached.importAnnotations === this.importAnnotations
+      cache.groupId === groupId &&
+      cache.collectionKey === collectionKey &&
+      cache.importAnnotations === importAnnotations &&
+      (cache.version === 2
+        ? baseUrl === ZOTERO_LOCAL_API_DEFAULT_BASE
+        : cache.baseUrl === baseUrl)
     );
   }
 
-  /** Persist the fetched DTOs for offline use (best-effort). */
-  private writeCache(
-    entries: ZoteroApiEntryData[],
-    libraryVersion: number | null,
+  private cacheMatchesServer(cache: ZoteroApiCache): boolean {
+    if (cache.version === 2 || cache.serverId === null) return true;
+    const { serverId, rejectedServerId } = this.observed;
+    return (
+      cache.serverId !== rejectedServerId &&
+      (!serverId || cache.serverId === serverId)
+    );
+  }
+
+  private result(
+    cache: ZoteroApiCache,
+    warning?: string,
+  ): DataSourceLoadResult {
+    return {
+      sourceId: this.id,
+      entries: convertToEntries(DATABASE_FORMATS.ZoteroApi, cache.entries),
+      modifiedAt: new Date(),
+      parseErrors: warning ? [{ message: warning }] : [],
+    };
+  }
+
+  /** Persist the validated snapshot as a best-effort cache update. */
+  private async commit(
+    snapshot: ZoteroApiCacheV3,
+    signal: AbortSignal,
   ): Promise<void> {
-    return writeVersionedJsonCache(this.fileSystem, this.cachePath, {
-      version: 2,
-      entries,
-      libraryVersion,
-      groupId: this.scope.groupId ?? '',
-      collectionKey: this.scope.collectionKey ?? '',
-      importAnnotations: this.importAnnotations,
-    } satisfies ZoteroApiCacheStateV2);
+    if (
+      await writeVersionedJsonCache(
+        this.fileSystem,
+        this.cachePath,
+        snapshot,
+        signal,
+      )
+    ) {
+      this.observed.rejectedServerId = undefined;
+      this.observed.rolledBack = undefined;
+    }
   }
 
   watch(callback: () => void): void {

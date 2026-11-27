@@ -169,7 +169,7 @@ export class ZoteroSource implements DataSource {
         result = await this.parseRaw(raw, this.format, [], signal);
       } catch (parseError) {
         const prior = this.importAnnotations ? await this.readCache() : null;
-        await this.writeCache(raw, prior?.attachments);
+        await this.writeCache(raw, signal, prior?.attachments);
         throw parseError;
       }
 
@@ -231,7 +231,7 @@ export class ZoteroSource implements DataSource {
       // Persist the successful export (and annotations) for offline use, unless
       // the cache already holds exactly this content.
       if (!attachmentsUnchanged) {
-        await this.writeCache(raw, attachments);
+        await this.writeCache(raw, signal, attachments);
       }
 
       return result;
@@ -338,17 +338,23 @@ export class ZoteroSource implements DataSource {
   /** Write the raw export to the cache file (best-effort, errors are silent). */
   private writeCache(
     raw: string,
+    signal: AbortSignal,
     attachments?: Record<string, unknown[]>,
-  ): Promise<void> {
-    return writeVersionedJsonCache(this.fileSystem, this.cachePath, {
-      // Keep version 1: the annotations payload is an OPTIONAL superset, so
-      // a rolled-back build (which accepts only version === 1 and ignores
-      // unknown fields) can still read this cache for its offline fallback.
-      version: 1,
-      format: this.format,
-      raw,
-      ...(attachments ? { attachments } : {}),
-    } satisfies ZoteroCacheStateV2);
+  ): Promise<boolean> {
+    return writeVersionedJsonCache(
+      this.fileSystem,
+      this.cachePath,
+      {
+        // Keep version 1: the annotations payload is an OPTIONAL superset, so
+        // a rolled-back build (which accepts only version === 1 and ignores
+        // unknown fields) can still read this cache for its offline fallback.
+        version: 1,
+        format: this.format,
+        raw,
+        ...(attachments ? { attachments } : {}),
+      } satisfies ZoteroCacheStateV2,
+      signal,
+    );
   }
 
   watch(callback: () => void): void {

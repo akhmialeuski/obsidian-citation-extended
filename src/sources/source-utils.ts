@@ -10,6 +10,30 @@ import type { IFileSystem } from '../platform/platform-adapter';
 /** Characters not allowed in a cache filename segment. */
 const CACHE_NAME_SANITIZE_RE = /[^a-zA-Z0-9_-]/g;
 
+// Replacement sources can share a cache file. The adapter cannot cancel an
+// in-progress write, so order writes to each file and let readers wait for them.
+const pendingCacheWrites = new WeakMap<
+  IFileSystem,
+  Map<string, Promise<boolean>>
+>();
+
+function cacheWritesFor(
+  fileSystem: IFileSystem,
+): Map<string, Promise<boolean>> {
+  const pending = pendingCacheWrites.get(fileSystem);
+  if (pending) return pending;
+  const writes = new Map<string, Promise<boolean>>();
+  pendingCacheWrites.set(fileSystem, writes);
+  return writes;
+}
+
+function pendingCacheWrite(
+  fileSystem: IFileSystem,
+  cachePath: string,
+): Promise<boolean> | undefined {
+  return pendingCacheWrites.get(fileSystem)?.get(cachePath);
+}
+
 /**
  * Offline-cache filename for a data source, derived from the STABLE database
  * id — never the volatile source key.
@@ -47,6 +71,13 @@ export async function readVersionedJsonCache<T>(
 ): Promise<T | null> {
   if (!fileSystem || !cachePath) return null;
   try {
+    for (
+      let write = pendingCacheWrite(fileSystem, cachePath);
+      write;
+      write = pendingCacheWrite(fileSystem, cachePath)
+    ) {
+      await write;
+    }
     if (!(await fileSystem.exists(cachePath))) return null;
     const parsed: unknown = JSON.parse(await fileSystem.readFile(cachePath));
     if (validate(parsed)) return parsed;
@@ -57,19 +88,38 @@ export async function readVersionedJsonCache<T>(
 }
 
 /**
- * Serialize and write a JSON cache file. Best-effort: a failed write keeps
- * the previous cache on disk and is never a load failure.
+ * Queue a best-effort JSON cache write. Returns true when the adapter writes
+ * successfully, or false if caching is disabled, cancelled, or fails.
  */
 export async function writeVersionedJsonCache(
   fileSystem: IFileSystem | undefined,
   cachePath: string | undefined,
   state: unknown,
-): Promise<void> {
-  if (!fileSystem || !cachePath) return;
+  signal?: AbortSignal,
+): Promise<boolean> {
+  if (!fileSystem || !cachePath) return false;
+  const writes = cacheWritesFor(fileSystem);
+  const write: Promise<boolean> = (writes.get(cachePath) ?? Promise.resolve())
+    .then(() => persistCache(fileSystem, cachePath, state, signal))
+    .finally(() => {
+      if (writes.get(cachePath) === write) writes.delete(cachePath);
+    });
+  writes.set(cachePath, write);
+  return write;
+}
+
+async function persistCache(
+  fileSystem: IFileSystem,
+  cachePath: string,
+  state: unknown,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  if (signal?.aborted) return false;
   try {
     await fileSystem.writeFile(cachePath, JSON.stringify(state));
+    return true;
   } catch {
-    // Cache write failure is not critical.
+    return false;
   }
 }
 

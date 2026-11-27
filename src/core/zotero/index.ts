@@ -2,6 +2,7 @@ export {
   ZoteroConnectorClient,
   ZoteroApiError,
   ZoteroAbortError,
+  throwIfAborted,
 } from './zotero-client';
 export type {
   ZoteroHttpResponse,
@@ -23,6 +24,7 @@ export {
 export type {
   ZoteroApiItem,
   ZoteroApiLibraryData,
+  ZoteroApiLibraryState,
   ZoteroApiScope,
   ZoteroApiPingResult,
 } from './zotero-local-api-client';

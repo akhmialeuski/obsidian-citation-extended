@@ -143,6 +143,58 @@ describe('ZoteroSource.load', () => {
     expect(result.parseErrors?.[0].message).toMatch(/using cache/);
   });
 
+  it('reads the completed export when a replacement source loads offline during a write', async () => {
+    const { fs } = createMockFileSystem();
+    const worker = createMockWorkerManager();
+    const path = '/cache/zotero.json';
+    let markStarted!: () => void;
+    let release!: () => void;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const write = fs.writeFile;
+    jest.mocked(write).mockImplementationOnce(async (path, data) => {
+      markStarted();
+      await gate;
+      await write(path, data);
+    });
+    const online = new ZoteroSource(
+      'z1',
+      makeClient(() => Promise.resolve(CSL)),
+      worker as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      fs,
+      path,
+    );
+    const pending = online.load();
+    await started;
+    online.dispose();
+
+    const offline = new ZoteroSource(
+      'z2',
+      makeClient(() => Promise.reject(new ZoteroApiError('offline'))),
+      worker as never,
+      DATABASE_FORMATS.CslJson,
+      false,
+      fs,
+      path,
+    );
+    const loading = offline.load();
+    await Promise.resolve();
+    expect(fs.exists).not.toHaveBeenCalled();
+    release();
+    const [, result] = await Promise.all([pending, loading]);
+    expect(result.entries.map((entry) => entry.id)).toEqual([
+      'smith2023',
+      'doe2024',
+    ]);
+    expect(result.parseErrors?.[0].message).toContain('using cache');
+  });
+
   it('falls back to the pre-upgrade (legacy) cache path when the new path is missing', async () => {
     // After the cache-filename scheme change, the new (databaseId) path is
     // empty on first launch; the legacy (source-key) file must still be read

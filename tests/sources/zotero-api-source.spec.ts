@@ -6,12 +6,16 @@
 jest.mock('obsidian', () => ({}), { virtual: true });
 
 import { ZoteroApiSource } from '../../src/sources/zotero-api-source';
-import { ZoteroApiError } from '../../src/core/zotero';
+import {
+  ZOTERO_LOCAL_API_DEFAULT_BASE,
+  ZoteroApiError,
+} from '../../src/core/zotero';
 import type {
   ZoteroApiItem,
   ZoteroApiLibraryData,
+  ZoteroApiLibraryState,
 } from '../../src/core/zotero';
-import type { IFileSystem } from '../../src/platform/platform-adapter';
+import { mockZoteroCache } from '../helpers/zotero-local-api';
 
 function makeItem(key: string, citekey: string, title: string): ZoteroApiItem {
   return {
@@ -42,32 +46,23 @@ function makeLibrary(): ZoteroApiLibraryData {
 function makeClient(
   impl: () => Promise<ZoteroApiLibraryData>,
   versionImpl: () => Promise<number | null> = () => Promise.resolve(null),
+  serverId: string | null = null,
 ) {
+  const fetchLibrary = jest.fn(impl);
   return {
-    fetchLibrary: jest.fn(impl),
-    getLibraryVersion: jest.fn(versionImpl),
+    baseUrl: ZOTERO_LOCAL_API_DEFAULT_BASE,
+    fetchLibrary,
+    pinnedTo: jest.fn(() => ({ fetchLibrary })),
+    getLibraryState: jest.fn(async (): Promise<ZoteroApiLibraryState> => ({
+      serverId,
+      libraryVersion: await versionImpl(),
+    })),
     ping: jest.fn(),
   } as never;
 }
 
 function fetchLibraryMock(client: unknown): jest.Mock {
   return (client as { fetchLibrary: jest.Mock }).fetchLibrary;
-}
-
-function createMockFileSystem(initial?: string): {
-  fs: IFileSystem;
-  written: { value?: string };
-} {
-  const written: { value?: string } = { value: initial };
-  const fs = {
-    exists: jest.fn(() => Promise.resolve(written.value !== undefined)),
-    readFile: jest.fn(() => Promise.resolve(written.value ?? '')),
-    writeFile: jest.fn((_p: string, data: string) => {
-      written.value = data;
-      return Promise.resolve();
-    }),
-  } as unknown as IFileSystem;
-  return { fs, written };
 }
 
 describe('ZoteroApiSource.load', () => {
@@ -93,7 +88,7 @@ describe('ZoteroApiSource.load', () => {
     expect(fetchLibraryMock(client)).toHaveBeenCalledWith(
       scope,
       expect.anything(),
-      { includeAnnotations: false },
+      expect.objectContaining({ includeAnnotations: false }),
     );
   });
 
@@ -114,13 +109,13 @@ describe('ZoteroApiSource.load', () => {
     expect(fetchLibraryMock(client)).toHaveBeenCalledWith(
       {},
       expect.anything(),
-      { includeAnnotations: true },
+      expect.objectContaining({ includeAnnotations: true }),
     );
   });
 
   it('writes the fetched entries to the cache', async () => {
     const client = makeClient(() => Promise.resolve(makeLibrary()));
-    const { fs, written } = createMockFileSystem();
+    const { fs, file } = mockZoteroCache();
     const source = new ZoteroApiSource(
       'za1',
       client,
@@ -131,7 +126,7 @@ describe('ZoteroApiSource.load', () => {
 
     await source.load();
 
-    const cache = JSON.parse(written.value!) as {
+    const cache = JSON.parse(file.content!) as {
       version: number;
       entries: unknown[];
       libraryVersion: number;
@@ -139,7 +134,7 @@ describe('ZoteroApiSource.load', () => {
       collectionKey: string;
       importAnnotations: boolean;
     };
-    expect(cache.version).toBe(2);
+    expect(cache.version).toBe(3);
     expect(cache.entries).toHaveLength(2);
     expect(cache.libraryVersion).toBe(7);
     // Fetch parameters are recorded so a later scope/flag change invalidates.
@@ -150,7 +145,7 @@ describe('ZoteroApiSource.load', () => {
 
   it('falls back to the cache when Zotero is unreachable', async () => {
     const goodClient = makeClient(() => Promise.resolve(makeLibrary()));
-    const { fs } = createMockFileSystem();
+    const { fs } = mockZoteroCache();
     const online = new ZoteroApiSource(
       'za1',
       goodClient,
@@ -182,10 +177,14 @@ describe('ZoteroApiSource.load', () => {
   });
 
   it('serves the cache without a full fetch when the library version is unchanged', async () => {
-    const { fs } = createMockFileSystem();
+    const { fs } = mockZoteroCache();
     const seeder = new ZoteroApiSource(
       'za1',
-      makeClient(() => Promise.resolve(makeLibrary())),
+      makeClient(
+        () => Promise.resolve(makeLibrary()),
+        () => Promise.resolve(7),
+        'serverA',
+      ),
       {},
       fs,
       '/cache/zotero-api.json',
@@ -195,6 +194,7 @@ describe('ZoteroApiSource.load', () => {
     const client = makeClient(
       () => Promise.reject(new Error('full fetch must not run')),
       () => Promise.resolve(7),
+      'serverA',
     );
     const source = new ZoteroApiSource(
       'za1',
@@ -212,7 +212,7 @@ describe('ZoteroApiSource.load', () => {
   });
 
   it('re-fetches when the library version has moved on', async () => {
-    const { fs } = createMockFileSystem();
+    const { fs } = mockZoteroCache();
     const seeder = new ZoteroApiSource(
       'za1',
       makeClient(() => Promise.resolve(makeLibrary())),
@@ -246,7 +246,7 @@ describe('ZoteroApiSource.load', () => {
   });
 
   it('re-fetches on a fullRefresh even when the library version is unchanged', async () => {
-    const { fs } = createMockFileSystem();
+    const { fs } = mockZoteroCache();
     const seeder = new ZoteroApiSource(
       'za1',
       makeClient(() => Promise.resolve(makeLibrary())),
@@ -276,7 +276,7 @@ describe('ZoteroApiSource.load', () => {
   });
 
   it('ignores a cache written for a different scope', async () => {
-    const { fs } = createMockFileSystem();
+    const { fs } = mockZoteroCache();
     // Seed a cache for the personal library at version 7.
     const seeder = new ZoteroApiSource(
       'za1',
@@ -312,7 +312,7 @@ describe('ZoteroApiSource.load', () => {
   });
 
   it('re-fetches when the annotation flag differs from the cache', async () => {
-    const { fs } = createMockFileSystem();
+    const { fs } = mockZoteroCache();
     // Seed a cache WITHOUT annotations.
     const seeder = new ZoteroApiSource(
       'za1',
@@ -344,12 +344,12 @@ describe('ZoteroApiSource.load', () => {
     expect(fetchLibraryMock(client)).toHaveBeenCalledWith(
       {},
       expect.anything(),
-      { includeAnnotations: true },
+      expect.objectContaining({ includeAnnotations: true }),
     );
   });
 
   it('does not serve a different-scope cache on offline fallback', async () => {
-    const { fs } = createMockFileSystem();
+    const { fs } = mockZoteroCache();
     const seeder = new ZoteroApiSource(
       'za1',
       makeClient(() => Promise.resolve(makeLibrary())),
@@ -389,19 +389,24 @@ describe('ZoteroApiSource.load', () => {
     );
   });
 
-  it('ignores a corrupt cache and reports the fetch error', async () => {
-    const client = makeClient(() => Promise.reject(new ZoteroApiError('down')));
-    const { fs } = createMockFileSystem('not-json{');
-    const source = new ZoteroApiSource(
-      'za1',
-      client,
-      {},
-      fs,
-      '/cache/zotero-api.json',
-    );
+  it.each(['not-json{', 'null', '{}'])(
+    'ignores a corrupt cache %p and reports the fetch error',
+    async (invalid) => {
+      const client = makeClient(() =>
+        Promise.reject(new ZoteroApiError('down')),
+      );
+      const { fs } = mockZoteroCache(invalid);
+      const source = new ZoteroApiSource(
+        'za1',
+        client,
+        {},
+        fs,
+        '/cache/zotero-api.json',
+      );
 
-    await expect(source.load()).rejects.toThrow(/down/);
-  });
+      await expect(source.load()).rejects.toThrow(/down/);
+    },
+  );
 });
 
 describe('ZoteroApiSource.watch', () => {
