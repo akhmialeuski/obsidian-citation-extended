@@ -340,6 +340,38 @@ describe('UIService', () => {
       expect(statusBar.setText).toHaveBeenCalledWith('Citations: 42 entries');
     });
 
+    it('appends the parse warning count to the Success text', () => {
+      const { plugin } = makePlugin({
+        status: LoadingStatus.Success,
+        parseErrors: ['warn1', 'warn2', 'warn3'],
+        progress: { current: 42, total: 42 },
+      });
+
+      const service = new UIService(plugin as never);
+      service.init();
+
+      const statusBar = plugin.platform.addStatusBarItem.mock.results[0].value;
+      expect(statusBar.setText).toHaveBeenCalledWith(
+        'Citations: 42 entries, 3 parse warnings',
+      );
+    });
+
+    it('uses the singular for one parse warning in the status bar', () => {
+      const { plugin } = makePlugin({
+        status: LoadingStatus.Success,
+        parseErrors: ['warn1'],
+        progress: { current: 42, total: 42 },
+      });
+
+      const service = new UIService(plugin as never);
+      service.init();
+
+      const statusBar = plugin.platform.addStatusBarItem.mock.results[0].value;
+      expect(statusBar.setText).toHaveBeenCalledWith(
+        'Citations: 42 entries, 1 parse warning',
+      );
+    });
+
     it('sets Success text with 0 entries when no progress', () => {
       const { plugin } = makePlugin({
         status: LoadingStatus.Success,

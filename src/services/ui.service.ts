@@ -31,6 +31,13 @@ function formatParseWarnings(count: number): string {
   return `${count} parse warning${count === 1 ? '' : 's'}`;
 }
 
+function loadedStatusText(state: LibraryState): string {
+  const text = `Citations: ${state.progress?.current || 0} entries`;
+  return state.parseErrors.length > 0
+    ? `${text}, ${formatParseWarnings(state.parseErrors.length)}`
+    : text;
+}
+
 /**
  * Initializes all user-facing UI surfaces: command palette, context menu,
  * and status bar.
@@ -200,7 +207,7 @@ export class UIService implements IUIService {
         text = 'Citations: Loading...';
         break;
       case LoadingStatus.Success:
-        text = `Citations: ${state.progress?.current || 0} entries`;
+        text = loadedStatusText(state);
         break;
       case LoadingStatus.Error:
         text = 'Citations: Error';
