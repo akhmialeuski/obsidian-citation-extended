@@ -8,6 +8,7 @@ import {
   convertToEntries,
   buildZoteroApiEntries,
   ZoteroAbortError,
+  throwIfAborted,
 } from '../core';
 import {
   fetchZoteroDelta,
@@ -78,10 +79,6 @@ const UNKNOWN_LIBRARY_STATE: ZoteroApiLibraryState = {
   serverId: null,
   libraryVersion: null,
 };
-
-function checkAborted(signal: AbortSignal): void {
-  if (signal.aborted) throw new ZoteroAbortError();
-}
 
 function sameState(
   a: ZoteroApiLibraryState,
@@ -168,7 +165,7 @@ export class ZoteroApiSource implements DataSource {
     const { signal } = controller;
 
     try {
-      checkAborted(signal);
+      throwIfAborted(signal);
       // Read and validate the saved snapshot once. Missing or corrupt files
       // are cache misses.
       const cache = await readVersionedJsonCache(
@@ -176,7 +173,7 @@ export class ZoteroApiSource implements DataSource {
         this.cachePath,
         isZoteroApiCache,
       );
-      checkAborted(signal);
+      throwIfAborted(signal);
       const compatible = cache && this.cacheMatchesConfig(cache) ? cache : null;
 
       return await this.loadWithFallback(
@@ -203,17 +200,17 @@ export class ZoteroApiSource implements DataSource {
         forceFull,
         diagnostic,
       );
-      checkAborted(signal);
+      throwIfAborted(signal);
       const result = this.result(snapshot);
       if (snapshot !== cache) await this.commit(snapshot, signal);
-      checkAborted(signal);
+      throwIfAborted(signal);
       diagnostic.libraryVersion = snapshot.libraryVersion;
       logSync(diagnostic, cache);
       return result;
     } catch (error) {
       // Let the caller handle cancellation before considering offline fallback.
       if (error instanceof ZoteroAbortError) throw error;
-      checkAborted(signal);
+      throwIfAborted(signal);
       const message = error instanceof Error ? error.message : String(error);
       if (!cache || !this.cacheMatchesServer(cache)) {
         throw new Error(`Failed to load from Zotero local API: ${message}`);
@@ -236,7 +233,7 @@ export class ZoteroApiSource implements DataSource {
     let fullReason = forceFull ? 'manual refresh' : null;
     let consistencyRetryAvailable = true;
     for (;;) {
-      checkAborted(signal);
+      throwIfAborted(signal);
       let state = UNKNOWN_LIBRARY_STATE;
       try {
         state = await this.probe(signal);
@@ -249,7 +246,7 @@ export class ZoteroApiSource implements DataSource {
           diagnostic,
         );
       } catch (error) {
-        checkAborted(signal);
+        throwIfAborted(signal);
         if (error instanceof MissingZoteroDeltaRecordError) {
           // Only a delta can have missing records. The next attempt uses a
           // full fetch, leaving the consistency retry budget available.
@@ -357,7 +354,7 @@ export class ZoteroApiSource implements DataSource {
 
   private async probe(signal: AbortSignal): Promise<ZoteroApiLibraryState> {
     const state = await this.client.getLibraryState(this.scope, signal);
-    checkAborted(signal);
+    throwIfAborted(signal);
     this.observeServer(state.serverId);
     return state;
   }

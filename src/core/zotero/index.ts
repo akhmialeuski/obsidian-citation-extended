@@ -2,6 +2,7 @@ export {
   ZoteroConnectorClient,
   ZoteroApiError,
   ZoteroAbortError,
+  throwIfAborted,
 } from './zotero-client';
 export type {
   ZoteroHttpResponse,

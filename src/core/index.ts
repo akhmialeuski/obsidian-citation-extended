@@ -59,6 +59,7 @@ export {
   ZoteroConnectorClient,
   ZoteroApiError,
   ZoteroAbortError,
+  throwIfAborted,
   ZOTERO_ANNOTATION_COLOR_NAMES,
   zoteroColorName,
   normalizeZoteroAttachments,

@@ -20,7 +20,7 @@
 
 import {
   ZoteroApiError,
-  ZoteroAbortError,
+  throwIfAborted,
   ZOTERO_ALLOWED_REQUEST_HEADERS,
 } from './zotero-client';
 import type { ZoteroHttpGetFn, ZoteroHttpResponse } from './zotero-client';
@@ -195,10 +195,6 @@ function hasMoreResults(
   );
 }
 
-function checkAborted(signal?: AbortSignal): void {
-  if (signal?.aborted) throw new ZoteroAbortError();
-}
-
 function childrenOf(
   records: ZoteroApiItem[],
   parents: ZoteroApiItem[],
@@ -368,7 +364,7 @@ class ZoteroLibraryReader {
         signal,
       );
       const page = await response.json();
-      checkAborted(signal);
+      throwIfAborted(signal);
       if (!Array.isArray(page)) {
         throw new ZoteroApiError(
           'Zotero local API returned an unexpected (non-array) items response.',
@@ -391,9 +387,9 @@ class ZoteroLibraryReader {
     url: string,
     signal?: AbortSignal,
   ): Promise<ZoteroHttpResponse> {
-    checkAborted(signal);
+    throwIfAborted(signal);
     const response = await this.sendRequest(url, signal, this.requestServerId);
-    checkAborted(signal);
+    throwIfAborted(signal);
     this.validateResponse(response, url, readState(response));
     return response;
   }
@@ -419,7 +415,7 @@ class ZoteroLibraryReader {
         ...(serverId ? { 'Zotero-Server-ID': serverId } : {}),
       });
     } catch (error) {
-      checkAborted(signal);
+      throwIfAborted(signal);
       const message = error instanceof Error ? error.message : String(error);
       throw new ZoteroApiError(
         `Could not reach Zotero at ${this.baseUrl}. Is Zotero (7 or later) running? (${message})`,
@@ -528,7 +524,7 @@ export class PinnedZoteroReader extends ZoteroLibraryReader {
       signal,
     );
     const body = (await response.text()).trim();
-    checkAborted(signal);
+    throwIfAborted(signal);
     const keys = body ? body.split(/\r?\n/) : [];
     if (!keys.every(isObjectKey) || new Set(keys).size !== keys.length) {
       throw new ZoteroApiError('Invalid Zotero ordered item inventory.');
