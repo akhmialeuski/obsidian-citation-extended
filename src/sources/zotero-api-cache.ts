@@ -1,3 +1,15 @@
+/**
+ * Persistent snapshots for Zotero Local API sources.
+ *
+ * V3 stores normalized entries for offline use and keeps ordered raw
+ * records for incremental reconciliation of tracked whole libraries. It
+ * records the endpoint, scope, annotation setting, server ID, and library
+ * version so the source can check compatibility before reusing a snapshot.
+ *
+ * V2 stores entries without an endpoint or server ID. The source accepts
+ * it as an offline fallback only at the default endpoint with matching
+ * settings. A successful online full fetch replaces it with V3.
+ */
 import type { ZoteroApiEntryData } from '../core/adapters/zotero-api-adapter';
 import type { ZoteroApiRawLibrary } from '../core/zotero/zotero-api-delta';
 import {

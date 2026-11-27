@@ -1,3 +1,15 @@
+/**
+ * Incremental reconciliation for the Zotero Local API.
+ *
+ * Zotero 10 introduced reliable local version tracking, so `since` can
+ * retrieve records changed since the last successful library snapshot.
+ * The Local API lacks a `/deleted` endpoint. Complete ordered key lists
+ * reveal deletions and preserve the order used by the adapter.
+ *
+ * Reads are pinned to one server ID and library version. The source checks
+ * that state again before saving. If an inventory key has no record in the
+ * cache or delta, the source falls back to a full fetch.
+ */
 import { ZoteroSnapshotError } from './zotero-local-api-client';
 import type {
   ZoteroApiItem,
