@@ -15,7 +15,7 @@ import type {
   ZoteroApiLibraryData,
   ZoteroApiLibraryState,
 } from '../../src/core/zotero';
-import type { IFileSystem } from '../../src/platform/platform-adapter';
+import { mockZoteroCache } from '../helpers/zotero-local-api';
 
 function makeItem(key: string, citekey: string, title: string): ZoteroApiItem {
   return {
@@ -63,22 +63,6 @@ function makeClient(
 
 function fetchLibraryMock(client: unknown): jest.Mock {
   return (client as { fetchLibrary: jest.Mock }).fetchLibrary;
-}
-
-function createMockFileSystem(initial?: string): {
-  fs: IFileSystem;
-  written: { value?: string };
-} {
-  const written: { value?: string } = { value: initial };
-  const fs = {
-    exists: jest.fn(() => Promise.resolve(written.value !== undefined)),
-    readFile: jest.fn(() => Promise.resolve(written.value ?? '')),
-    writeFile: jest.fn((_p: string, data: string) => {
-      written.value = data;
-      return Promise.resolve();
-    }),
-  } as unknown as IFileSystem;
-  return { fs, written };
 }
 
 describe('ZoteroApiSource.load', () => {
@@ -131,7 +115,7 @@ describe('ZoteroApiSource.load', () => {
 
   it('writes the fetched entries to the cache', async () => {
     const client = makeClient(() => Promise.resolve(makeLibrary()));
-    const { fs, written } = createMockFileSystem();
+    const { fs, file } = mockZoteroCache();
     const source = new ZoteroApiSource(
       'za1',
       client,
@@ -142,7 +126,7 @@ describe('ZoteroApiSource.load', () => {
 
     await source.load();
 
-    const cache = JSON.parse(written.value!) as {
+    const cache = JSON.parse(file.content!) as {
       version: number;
       entries: unknown[];
       libraryVersion: number;
@@ -161,7 +145,7 @@ describe('ZoteroApiSource.load', () => {
 
   it('falls back to the cache when Zotero is unreachable', async () => {
     const goodClient = makeClient(() => Promise.resolve(makeLibrary()));
-    const { fs } = createMockFileSystem();
+    const { fs } = mockZoteroCache();
     const online = new ZoteroApiSource(
       'za1',
       goodClient,
@@ -193,7 +177,7 @@ describe('ZoteroApiSource.load', () => {
   });
 
   it('serves the cache without a full fetch when the library version is unchanged', async () => {
-    const { fs } = createMockFileSystem();
+    const { fs } = mockZoteroCache();
     const seeder = new ZoteroApiSource(
       'za1',
       makeClient(
@@ -228,7 +212,7 @@ describe('ZoteroApiSource.load', () => {
   });
 
   it('re-fetches when the library version has moved on', async () => {
-    const { fs } = createMockFileSystem();
+    const { fs } = mockZoteroCache();
     const seeder = new ZoteroApiSource(
       'za1',
       makeClient(() => Promise.resolve(makeLibrary())),
@@ -262,7 +246,7 @@ describe('ZoteroApiSource.load', () => {
   });
 
   it('re-fetches on a fullRefresh even when the library version is unchanged', async () => {
-    const { fs } = createMockFileSystem();
+    const { fs } = mockZoteroCache();
     const seeder = new ZoteroApiSource(
       'za1',
       makeClient(() => Promise.resolve(makeLibrary())),
@@ -292,7 +276,7 @@ describe('ZoteroApiSource.load', () => {
   });
 
   it('ignores a cache written for a different scope', async () => {
-    const { fs } = createMockFileSystem();
+    const { fs } = mockZoteroCache();
     // Seed a cache for the personal library at version 7.
     const seeder = new ZoteroApiSource(
       'za1',
@@ -328,7 +312,7 @@ describe('ZoteroApiSource.load', () => {
   });
 
   it('re-fetches when the annotation flag differs from the cache', async () => {
-    const { fs } = createMockFileSystem();
+    const { fs } = mockZoteroCache();
     // Seed a cache WITHOUT annotations.
     const seeder = new ZoteroApiSource(
       'za1',
@@ -365,7 +349,7 @@ describe('ZoteroApiSource.load', () => {
   });
 
   it('does not serve a different-scope cache on offline fallback', async () => {
-    const { fs } = createMockFileSystem();
+    const { fs } = mockZoteroCache();
     const seeder = new ZoteroApiSource(
       'za1',
       makeClient(() => Promise.resolve(makeLibrary())),
@@ -411,7 +395,7 @@ describe('ZoteroApiSource.load', () => {
       const client = makeClient(() =>
         Promise.reject(new ZoteroApiError('down')),
       );
-      const { fs } = createMockFileSystem(invalid);
+      const { fs } = mockZoteroCache(invalid);
       const source = new ZoteroApiSource(
         'za1',
         client,
